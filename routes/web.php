@@ -24,6 +24,7 @@ use App\Http\Controllers\ItConcernController;
 use App\Http\Controllers\LeaveCreditController;
 use App\Http\Controllers\LeaveRequestController;
 use App\Http\Controllers\MedicationRequestController;
+use App\Http\Controllers\NotificationAnalyticsController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PcMaintenanceController;
 use App\Http\Controllers\PcSpecController;
@@ -492,6 +493,11 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
         Route::post('/{notification}/read', [NotificationController::class, 'markAsRead'])->name('mark-as-read');
         Route::delete('/{notification}', [NotificationController::class, 'destroy'])->name('destroy');
     });
+
+    // Notification Analytics
+    Route::get('/notification-analytics', [NotificationAnalyticsController::class, 'index'])
+        ->middleware('permission:notifications.send')
+        ->name('notification-analytics.index');
 
     // Break Timer
     Route::prefix('break-timer')->name('break-timer.')->group(function () {

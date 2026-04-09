@@ -7,39 +7,83 @@ use App\Models\LeaveRequest;
 use App\Models\Notification;
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class NotificationService
 {
     /**
-     * Create a notification for a user.
+     * Check if a user has opted in to receive a specific notification type.
      */
-    public function create(User|int $user, string $type, string $title, string $message, ?array $data = null): Notification
+    public function shouldNotify(User|int $user, string $type): bool
     {
-        $userId = $user instanceof User ? $user->id : $user;
+        $userModel = $user instanceof User ? $user : User::find($user);
 
-        return Notification::create([
-            'user_id' => $userId,
-            'type' => $type,
-            'title' => $title,
-            'message' => $message,
-            'data' => $data,
-        ]);
+        if (! $userModel) {
+            return false;
+        }
+
+        $preferences = $userModel->notification_preferences;
+
+        // If no preferences set, default to receiving all notifications
+        if (empty($preferences)) {
+            return true;
+        }
+
+        return $preferences[$type] ?? true;
     }
 
     /**
-     * Create notifications for multiple users.
+     * Create a notification for a user.
+     */
+    public function create(User|int $user, string $type, string $title, string $message, ?array $data = null): ?Notification
+    {
+        $userId = $user instanceof User ? $user->id : $user;
+
+        // Check user preferences before creating notification
+        if (! $this->shouldNotify($user, $type)) {
+            return null;
+        }
+
+        try {
+            return Notification::create([
+                'user_id' => $userId,
+                'type' => $type,
+                'title' => $title,
+                'message' => $message,
+                'data' => $data,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('NotificationService::create failed', [
+                'user_id' => $userId,
+                'type' => $type,
+                'title' => $title,
+                'error' => $e->getMessage(),
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
+     * Create notifications for multiple users within a database transaction.
      */
     public function createForMultipleUsers(array $userIds, string $type, string $title, string $message, ?array $data = null): void
     {
-        foreach ($userIds as $userId) {
-            $this->create($userId, $type, $title, $message, $data);
+        if (empty($userIds)) {
+            return;
         }
+
+        DB::transaction(function () use ($userIds, $type, $title, $message, $data) {
+            foreach ($userIds as $userId) {
+                $this->create($userId, $type, $title, $message, $data);
+            }
+        });
     }
 
     /**
      * Notify about maintenance due.
      */
-    public function notifyMaintenanceDue(User|int $user, string $stationName, string $dueDate): Notification
+    public function notifyMaintenanceDue(User|int $user, string $stationName, string $dueDate): ?Notification
     {
         return $this->create(
             $user,
@@ -53,7 +97,7 @@ class NotificationService
     /**
      * Notify about new leave request.
      */
-    public function notifyLeaveRequest(User|int $user, string $requesterName, string $leaveType, int $requestId): Notification
+    public function notifyLeaveRequest(User|int $user, string $requesterName, string $leaveType, int $requestId): ?Notification
     {
         return $this->create(
             $user,
@@ -67,7 +111,7 @@ class NotificationService
     /**
      * Notify about leave request status change.
      */
-    public function notifyLeaveRequestStatusChange(User|int $user, string $status, string $leaveType, int $requestId): Notification
+    public function notifyLeaveRequestStatusChange(User|int $user, string $status, string $leaveType, int $requestId): ?Notification
     {
         $statusText = ucfirst($status);
 
@@ -88,7 +132,7 @@ class NotificationService
     /**
      * Notify about new IT concern.
      */
-    public function notifyItConcern(User|int $user, string $stationName, string $category, int $concernId): Notification
+    public function notifyItConcern(User|int $user, string $stationName, string $category, int $concernId): ?Notification
     {
         return $this->create(
             $user,
@@ -102,7 +146,7 @@ class NotificationService
     /**
      * Notify about IT concern status change.
      */
-    public function notifyItConcernStatusChange(User|int $user, string $status, string $stationName, int $concernId): Notification
+    public function notifyItConcernStatusChange(User|int $user, string $status, string $stationName, int $concernId): ?Notification
     {
         $statusText = ucfirst(str_replace('_', ' ', $status));
 
@@ -118,7 +162,7 @@ class NotificationService
     /**
      * Notify about new medication request.
      */
-    public function notifyMedicationRequest(User|int $user, string $requesterName, int $requestId): Notification
+    public function notifyMedicationRequest(User|int $user, string $requesterName, int $requestId): ?Notification
     {
         return $this->create(
             $user,
@@ -132,7 +176,7 @@ class NotificationService
     /**
      * Notify about PC assignment.
      */
-    public function notifyPcAssignment(User|int $user, string $pcNumber, string $stationName): Notification
+    public function notifyPcAssignment(User|int $user, string $pcNumber, string $stationName): ?Notification
     {
         return $this->create(
             $user,
@@ -146,7 +190,7 @@ class NotificationService
     /**
      * Notify about system message.
      */
-    public function notifySystemMessage(User|int $user, string $title, string $message, ?array $data = null): Notification
+    public function notifySystemMessage(User|int $user, string $title, string $message, ?array $data = null): ?Notification
     {
         return $this->create(
             $user,
@@ -220,7 +264,7 @@ class NotificationService
     /**
      * Notify about attendance status.
      */
-    public function notifyAttendanceStatus(User|int $user, string $status, string $date, ?float $points = null): Notification
+    public function notifyAttendanceStatus(User|int $user, string $status, string $date, ?float $points = null): ?Notification
     {
         $statusText = ucfirst(str_replace('_', ' ', $status));
         $message = "Your attendance for {$date} has been verified as {$statusText}.";
@@ -246,7 +290,7 @@ class NotificationService
     /**
      * Notify about manual attendance point entry.
      */
-    public function notifyManualAttendancePoint(User|int $user, string $pointType, string $date, float $points): Notification
+    public function notifyManualAttendancePoint(User|int $user, string $pointType, string $date, float $points): ?Notification
     {
         // Format point type for display
         $typeText = match ($pointType) {
@@ -280,7 +324,7 @@ class NotificationService
     /**
      * Notify about attendance point expiration (SRO or GBRO).
      */
-    public function notifyAttendancePointExpired(User|int $user, string $pointType, string $shiftDate, float $points, string $expirationType): Notification
+    public function notifyAttendancePointExpired(User|int $user, string $pointType, string $shiftDate, float $points, string $expirationType): ?Notification
     {
         // Format point type for display
         $typeText = match ($pointType) {
@@ -469,7 +513,7 @@ class NotificationService
     /**
      * Notify the employee that their leave request has been fully approved (by both Admin and HR).
      */
-    public function notifyLeaveRequestFullyApproved(int $userId, string $leaveType, int $requestId): Notification
+    public function notifyLeaveRequestFullyApproved(int $userId, string $leaveType, int $requestId): ?Notification
     {
         return $this->create(
             $userId,
@@ -489,7 +533,7 @@ class NotificationService
      * Notify the employee that their VL request was submitted with insufficient credits.
      * Informational only — the request is still pending, but some days may become UPTO.
      */
-    public function notifyLeaveRequestInsufficientVlCredits(int $userId, float $daysRequested, int $requestId): Notification
+    public function notifyLeaveRequestInsufficientVlCredits(int $userId, float $daysRequested, int $requestId): ?Notification
     {
         return $this->create(
             $userId,
@@ -510,7 +554,7 @@ class NotificationService
      * Notify the employee that their leave request was approved with UPTO conversion.
      * Some days used credits, while remaining days were converted to UPTO (unpaid).
      */
-    public function notifyLeaveRequestApprovedWithUptoConversion(int $userId, string $leaveType, int $creditedDays, int $uptoDays, int $totalDays, int $requestId): Notification
+    public function notifyLeaveRequestApprovedWithUptoConversion(int $userId, string $leaveType, int $creditedDays, int $uptoDays, int $totalDays, int $requestId): ?Notification
     {
         return $this->create(
             $userId,
@@ -532,7 +576,7 @@ class NotificationService
     /**
      * Notify Team Lead about a new leave request from their campaign agent.
      */
-    public function notifyTeamLeadAboutNewLeaveRequest(int $teamLeadId, string $agentName, string $leaveType, string $startDate, string $endDate, int $requestId): Notification
+    public function notifyTeamLeadAboutNewLeaveRequest(int $teamLeadId, string $agentName, string $leaveType, string $startDate, string $endDate, int $requestId): ?Notification
     {
         return $this->create(
             $teamLeadId,
@@ -554,7 +598,7 @@ class NotificationService
     /**
      * Notify agent that their leave request has been approved by Team Lead.
      */
-    public function notifyAgentAboutTLApproval(int $userId, string $leaveType, string $teamLeadName, int $requestId): Notification
+    public function notifyAgentAboutTLApproval(int $userId, string $leaveType, string $teamLeadName, int $requestId): ?Notification
     {
         return $this->create(
             $userId,
@@ -574,7 +618,7 @@ class NotificationService
     /**
      * Notify agent that their leave request has been rejected by Team Lead.
      */
-    public function notifyAgentAboutTLRejection(int $userId, string $leaveType, string $teamLeadName, int $requestId): Notification
+    public function notifyAgentAboutTLRejection(int $userId, string $leaveType, string $teamLeadName, int $requestId): ?Notification
     {
         return $this->create(
             $userId,
@@ -662,7 +706,7 @@ class NotificationService
     /**
      * Notify about medication request status change.
      */
-    public function notifyMedicationRequestStatusChange(User|int $user, string $status, string $medicationType, int $requestId): Notification
+    public function notifyMedicationRequestStatusChange(User|int $user, string $status, string $medicationType, int $requestId): ?Notification
     {
         $statusText = ucfirst($status);
 
@@ -740,7 +784,7 @@ class NotificationService
     /**
      * Notify a user that their account has been restored by an admin.
      */
-    public function notifyAccountRestored(User|int $user): Notification
+    public function notifyAccountRestored(User|int $user): ?Notification
     {
         return $this->create(
             $user,
@@ -1015,7 +1059,7 @@ class NotificationService
     /**
      * Notify coachee that a new coaching session was created for them.
      */
-    public function notifyCoachingSessionCreated(int $coacheeId, string $coachName, string $sessionDate, int $sessionId): Notification
+    public function notifyCoachingSessionCreated(int $coacheeId, string $coachName, string $sessionDate, int $sessionId): ?Notification
     {
         return $this->create(
             $coacheeId,
@@ -1034,7 +1078,7 @@ class NotificationService
     /**
      * Notify coach that coachee acknowledged a coaching session.
      */
-    public function notifyCoachingAcknowledged(int $coachId, string $coacheeName, string $sessionDate, int $sessionId): Notification
+    public function notifyCoachingAcknowledged(int $coachId, string $coacheeName, string $sessionDate, int $sessionId): ?Notification
     {
         return $this->create(
             $coachId,
@@ -1053,7 +1097,7 @@ class NotificationService
     /**
      * Notify coach that coaching session was reviewed by compliance.
      */
-    public function notifyCoachingReviewed(int $coachId, string $coacheeName, string $sessionDate, string $complianceStatus, int $sessionId): Notification
+    public function notifyCoachingReviewed(int $coachId, string $coacheeName, string $sessionDate, string $complianceStatus, int $sessionId): ?Notification
     {
         $statusLabel = $complianceStatus === 'Verified' ? 'Verified' : 'Rejected';
 
@@ -1105,7 +1149,7 @@ class NotificationService
     /**
      * Notify coachee (agent or TL) that their coaching session was reviewed.
      */
-    public function notifyCoacheeCoachingReviewed(int $coacheeId, string $coachName, string $sessionDate, string $complianceStatus, int $sessionId): Notification
+    public function notifyCoacheeCoachingReviewed(int $coacheeId, string $coachName, string $sessionDate, string $complianceStatus, int $sessionId): ?Notification
     {
         $statusLabel = $complianceStatus === 'Verified' ? 'Verified' : 'Rejected';
 
@@ -1127,7 +1171,7 @@ class NotificationService
     /**
      * Notify coachee about pending coaching acknowledgement reminder.
      */
-    public function notifyCoachingPendingReminder(int $coacheeId, array $sessionIds): Notification
+    public function notifyCoachingPendingReminder(int $coacheeId, array $sessionIds): ?Notification
     {
         $count = count($sessionIds);
         $plural = $count > 1 ? 'sessions' : 'session';
@@ -1148,7 +1192,7 @@ class NotificationService
     /**
      * Notify coach about unacknowledged coaching sessions.
      */
-    public function notifyCoachingUnacknowledgedAlert(int $coachId, string $coacheeName, string $sessionDate, int $sessionId): Notification
+    public function notifyCoachingUnacknowledgedAlert(int $coachId, string $coacheeName, string $sessionDate, int $sessionId): ?Notification
     {
         return $this->create(
             $coachId,
@@ -1167,16 +1211,17 @@ class NotificationService
     /**
      * Notify a user that their break session ended with overage.
      */
-    public function notifyBreakOverage(User|int $user, string $breakType, int $overageSeconds, string $date): Notification
+    public function notifyBreakOverage(User|int $user, string $breakType, int $overageSeconds, string $date): ?Notification
     {
         $typeText = ucfirst(str_replace('_', ' ', $breakType));
         $minutes = round($overageSeconds / 60, 1);
+        $formattedDate = Carbon::parse($date)->format('M d, Y');
 
         return $this->create(
             $user,
             'break_overage',
             'Break Overage',
-            "Your {$typeText} on {$date} exceeded the allowed duration by {$minutes} minute(s).",
+            "Your {$typeText} break on {$formattedDate} exceeded the allowed duration by {$minutes} minute(s).",
             [
                 'break_type' => $breakType,
                 'overage_seconds' => $overageSeconds,
@@ -1194,9 +1239,10 @@ class NotificationService
         $agentName = $agent ? "{$agent->first_name} {$agent->last_name}" : 'Unknown';
         $typeText = ucfirst(str_replace('_', ' ', $breakType));
         $minutes = round($overageSeconds / 60, 1);
+        $formattedDate = Carbon::parse($date)->format('M d, Y');
 
         $title = 'Agent Break Overage';
-        $message = "{$agentName} exceeded their {$typeText} on {$date} by {$minutes} minute(s).";
+        $message = "{$agentName} exceeded their {$typeText} break on {$formattedDate} by {$minutes} minute(s).";
         $data = [
             'user_id' => $agent?->id,
             'agent_name' => $agentName,

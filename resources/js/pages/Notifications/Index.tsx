@@ -6,14 +6,16 @@ import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Bell, Check, Trash2, RefreshCw, Play, Pause, Send } from 'lucide-react';
+import { Bell, Check, Trash2, RefreshCw, Play, Pause, Send, X, BarChart3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import type { BreadcrumbItem } from '@/types';
 import notificationRoutes from '@/routes/notifications';
 import { send as notificationsSendRoute } from '@/routes/notifications';
+import { index as notificationAnalyticsRoute } from '@/routes/notification-analytics';
 import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
 import { Can } from '@/components/authorization';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Notifications', href: '/notifications' }
@@ -39,9 +41,14 @@ interface PageProps {
         total: number;
     };
     unreadCount: number;
+    availableTypes: string[];
+    filters: {
+        type: string;
+        status: string;
+    };
 }
 
-export default function NotificationsIndex({ notifications, unreadCount }: PageProps) {
+export default function NotificationsIndex({ notifications, unreadCount, availableTypes, filters }: PageProps) {
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
 
@@ -68,6 +75,27 @@ export default function NotificationsIndex({ notifications, unreadCount }: PageP
 
         return () => clearInterval(interval);
     }, [autoRefreshEnabled]);
+
+    const handleFilterChange = (key: 'type' | 'status', value: string) => {
+        router.get('/notifications', {
+            ...filters,
+            [key]: value === 'all' ? '' : value,
+        }, {
+            preserveState: true,
+            preserveScroll: true,
+            only: ['notifications', 'unreadCount', 'availableTypes', 'filters'],
+        });
+    };
+
+    const handleClearFilters = () => {
+        router.get('/notifications', {}, {
+            preserveState: true,
+            preserveScroll: true,
+            only: ['notifications', 'unreadCount', 'availableTypes', 'filters'],
+        });
+    };
+
+    const hasActiveFilters = filters.type !== '' || filters.status !== '';
 
     const handleMarkAsRead = async (notificationId: number) => {
         try {
@@ -180,6 +208,17 @@ export default function NotificationsIndex({ notifications, unreadCount }: PageP
             reminder: 'bg-amber-500',
             alert: 'bg-red-500',
             custom: 'bg-indigo-500',
+            coaching_session: 'bg-teal-500',
+            coaching_acknowledged: 'bg-teal-500',
+            coaching_reviewed: 'bg-teal-500',
+            coaching_ready_for_review: 'bg-teal-500',
+            coaching_pending_reminder: 'bg-amber-500',
+            coaching_unacknowledged_alert: 'bg-red-500',
+            break_overage: 'bg-rose-500',
+            undertime_approval: 'bg-yellow-600',
+            account_deletion: 'bg-red-600',
+            account_reactivation: 'bg-green-600',
+            account_restored: 'bg-green-500',
         };
         return colors[type] || 'bg-gray-500';
     };
@@ -197,6 +236,17 @@ export default function NotificationsIndex({ notifications, unreadCount }: PageP
             reminder: 'Reminder',
             alert: 'Alert',
             custom: 'Custom',
+            coaching_session: 'Coaching',
+            coaching_acknowledged: 'Coaching',
+            coaching_reviewed: 'Coaching',
+            coaching_ready_for_review: 'Coaching',
+            coaching_pending_reminder: 'Coaching',
+            coaching_unacknowledged_alert: 'Coaching',
+            break_overage: 'Break Overage',
+            undertime_approval: 'Undertime',
+            account_deletion: 'Account',
+            account_reactivation: 'Account',
+            account_restored: 'Account',
         };
         return labels[type] || 'Notification';
     };
@@ -214,6 +264,10 @@ export default function NotificationsIndex({ notifications, unreadCount }: PageP
                                 <Button onClick={() => router.visit(notificationsSendRoute().url)}>
                                     <Send className="h-4 w-4 mr-2" />
                                     Send Notification
+                                </Button>
+                                <Button variant="outline" onClick={() => router.visit(notificationAnalyticsRoute().url)}>
+                                    <BarChart3 className="h-4 w-4 mr-2" />
+                                    Analytics
                                 </Button>
                             </Can>
                             <div className="flex gap-2">
@@ -245,6 +299,49 @@ export default function NotificationsIndex({ notifications, unreadCount }: PageP
                     }
                 />
 
+                {/* Filter Bar */}
+                <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+                    <div className="flex flex-wrap gap-2 flex-1">
+                        <Select
+                            value={filters.type || 'all'}
+                            onValueChange={(value) => handleFilterChange('type', value)}
+                        >
+                            <SelectTrigger className="w-full sm:w-[180px]">
+                                <SelectValue placeholder="All Types" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Types</SelectItem>
+                                {availableTypes.map((type) => (
+                                    <SelectItem key={type} value={type}>
+                                        {getNotificationTypeLabel(type)}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+
+                        <Select
+                            value={filters.status || 'all'}
+                            onValueChange={(value) => handleFilterChange('status', value)}
+                        >
+                            <SelectTrigger className="w-full sm:w-[150px]">
+                                <SelectValue placeholder="All Status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Status</SelectItem>
+                                <SelectItem value="unread">Unread</SelectItem>
+                                <SelectItem value="read">Read</SelectItem>
+                            </SelectContent>
+                        </Select>
+
+                        {hasActiveFilters && (
+                            <Button variant="ghost" size="sm" onClick={handleClearFilters}>
+                                <X className="h-4 w-4 mr-1" />
+                                Clear
+                            </Button>
+                        )}
+                    </div>
+                </div>
+
                 {notifications.data.length === 0 ? (
                     <Card className="flex flex-col items-center justify-center py-16">
                         <Bell className="h-16 w-16 text-muted-foreground/50 mb-4" />
@@ -252,71 +349,141 @@ export default function NotificationsIndex({ notifications, unreadCount }: PageP
                         <p className="text-sm text-muted-foreground">You're all caught up!</p>
                     </Card>
                 ) : (
-                    <div className="space-y-2">
-                        {notifications.data.map((notification) => (
-                            <Card
-                                key={notification.id}
-                                className={cn(
-                                    'p-4 transition-colors hover:bg-muted/50 cursor-pointer',
-                                    !notification.read_at && 'border-l-4 border-l-blue-500 bg-blue-50/50 dark:bg-blue-950/10'
-                                )}
-                                onClick={() => handleNotificationClick(notification)}
-                            >
-                                <div className="flex gap-4">
-                                    <div className={cn('h-10 w-10 rounded-full flex items-center justify-center shrink-0', getNotificationColor(notification.type))}>
-                                        <Bell className="h-5 w-5 text-white" />
-                                    </div>
-                                    <div className="flex-1 space-y-1">
-                                        <div className="flex items-start justify-between gap-2">
-                                            <div className="flex-1">
-                                                <div className="flex items-center gap-2 flex-wrap">
-                                                    <p className="font-semibold">{notification.title}</p>
-                                                    <Badge variant="outline" className="text-xs">
-                                                        {getNotificationTypeLabel(notification.type)}
-                                                    </Badge>
-                                                    {!notification.read_at && (
-                                                        <Badge variant="secondary" className="text-xs">New</Badge>
-                                                    )}
+                    <>
+                        {/* Desktop View */}
+                        <div className="hidden md:block space-y-2">
+                            {notifications.data.map((notification) => (
+                                <Card
+                                    key={notification.id}
+                                    className={cn(
+                                        'p-4 transition-colors hover:bg-muted/50 cursor-pointer',
+                                        !notification.read_at && 'border-l-4 border-l-blue-500 bg-blue-50/50 dark:bg-blue-950/10'
+                                    )}
+                                    onClick={() => handleNotificationClick(notification)}
+                                >
+                                    <div className="flex gap-4">
+                                        <div className={cn('h-10 w-10 rounded-full flex items-center justify-center shrink-0', getNotificationColor(notification.type))}>
+                                            <Bell className="h-5 w-5 text-white" />
+                                        </div>
+                                        <div className="flex-1 space-y-1">
+                                            <div className="flex items-start justify-between gap-2">
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        <p className="font-semibold">{notification.title}</p>
+                                                        <Badge variant="outline" className="text-xs">
+                                                            {getNotificationTypeLabel(notification.type)}
+                                                        </Badge>
+                                                        {!notification.read_at && (
+                                                            <Badge variant="secondary" className="text-xs">New</Badge>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-sm text-muted-foreground mt-1">
+                                                        {notification.message}
+                                                    </p>
+                                                    <p className="text-xs text-muted-foreground mt-2">
+                                                        {formatDistanceToNow(new Date(notification.created_at), {
+                                                            addSuffix: true,
+                                                        })}
+                                                    </p>
                                                 </div>
-                                                <p className="text-sm text-muted-foreground mt-1">
-                                                    {notification.message}
-                                                </p>
-                                                <p className="text-xs text-muted-foreground mt-2">
-                                                    {formatDistanceToNow(new Date(notification.created_at), {
-                                                        addSuffix: true,
-                                                    })}
-                                                </p>
-                                            </div>
-                                            <div className="flex gap-2 shrink-0">
-                                                {!notification.read_at && (
+                                                <div className="flex gap-2 shrink-0">
+                                                    {!notification.read_at && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleMarkAsRead(notification.id);
+                                                            }}
+                                                        >
+                                                            <Check className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
                                                     <Button
                                                         variant="ghost"
                                                         size="sm"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            handleMarkAsRead(notification.id);
+                                                            handleDelete(notification.id);
                                                         }}
                                                     >
-                                                        <Check className="h-4 w-4" />
+                                                        <Trash2 className="h-4 w-4 text-destructive" />
                                                     </Button>
-                                                )}
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        handleDelete(notification.id);
-                                                    }}
-                                                >
-                                                    <Trash2 className="h-4 w-4 text-destructive" />
-                                                </Button>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
+                                </Card>
+                            ))}
+                        </div>
+
+                        {/* Mobile Card View */}
+                        <div className="md:hidden space-y-3">
+                            {notifications.data.map((notification) => (
+                                <div
+                                    key={notification.id}
+                                    className={cn(
+                                        'bg-card border rounded-lg p-4 shadow-sm space-y-3 cursor-pointer',
+                                        !notification.read_at && 'border-l-4 border-l-blue-500 bg-blue-50/50 dark:bg-blue-950/10'
+                                    )}
+                                    onClick={() => handleNotificationClick(notification)}
+                                >
+                                    <div className="flex items-start gap-3">
+                                        <div className={cn('h-8 w-8 rounded-full flex items-center justify-center shrink-0', getNotificationColor(notification.type))}>
+                                            <Bell className="h-4 w-4 text-white" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <p className="font-semibold text-sm">{notification.title}</p>
+                                                {!notification.read_at && (
+                                                    <Badge variant="secondary" className="text-xs">New</Badge>
+                                                )}
+                                            </div>
+                                            <Badge variant="outline" className="text-xs mt-1">
+                                                {getNotificationTypeLabel(notification.type)}
+                                            </Badge>
+                                        </div>
+                                    </div>
+                                    <p className="text-sm text-muted-foreground line-clamp-3">
+                                        {notification.message}
+                                    </p>
+                                    <div className="flex items-center justify-between">
+                                        <p className="text-xs text-muted-foreground">
+                                            {formatDistanceToNow(new Date(notification.created_at), {
+                                                addSuffix: true,
+                                            })}
+                                        </p>
+                                        <div className="flex gap-1">
+                                            {!notification.read_at && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-7 px-2"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleMarkAsRead(notification.id);
+                                                    }}
+                                                >
+                                                    <Check className="h-3 w-3" />
+                                                </Button>
+                                            )}
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-7 px-2"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleDelete(notification.id);
+                                                }}
+                                            >
+                                                <Trash2 className="h-3 w-3 text-destructive" />
+                                            </Button>
+                                        </div>
+                                    </div>
                                 </div>
-                            </Card>
-                        ))}
-                    </div>
+                            ))}
+                        </div>
+                    </>
                 )}
 
                 {/* Pagination */}

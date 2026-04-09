@@ -24,6 +24,7 @@ class SendNotificationRequest extends FormRequest
             'message' => ['required', 'string', 'max:5000'],
             'type' => ['nullable', 'string', 'in:system,announcement,reminder,alert,custom'],
             'recipient_type' => ['required', 'in:all,role,specific_users,single_user'],
+            'scheduled_at' => ['nullable', 'date', 'after:now'],
         ];
 
         // Add conditional validation based on recipient_type

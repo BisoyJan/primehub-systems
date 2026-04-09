@@ -23,6 +23,8 @@ interface NotificationDropdownProps {
     notifications: Notification[];
     unreadCount: number;
     canSend?: boolean;
+    confirmingClearAll?: boolean;
+    onCancelClearAll?: () => void;
     onMarkAsRead: (id: number) => void;
     onMarkAllAsRead: () => void;
     onDelete: (id: number) => void;
@@ -35,6 +37,8 @@ export function NotificationDropdown({
     notifications,
     unreadCount,
     canSend = false,
+    confirmingClearAll = false,
+    onCancelClearAll,
     onMarkAsRead,
     onMarkAllAsRead,
     onDelete,
@@ -60,6 +64,17 @@ export function NotificationDropdown({
             reminder: 'text-amber-500',
             alert: 'text-red-500',
             custom: 'text-indigo-500',
+            coaching_session: 'text-teal-500',
+            coaching_acknowledged: 'text-teal-500',
+            coaching_reviewed: 'text-teal-500',
+            coaching_ready_for_review: 'text-teal-500',
+            coaching_pending_reminder: 'text-amber-500',
+            coaching_unacknowledged_alert: 'text-red-500',
+            break_overage: 'text-rose-500',
+            undertime_approval: 'text-yellow-600',
+            account_deletion: 'text-red-600',
+            account_reactivation: 'text-green-600',
+            account_restored: 'text-green-500',
         };
         return colors[type] || 'text-gray-500';
     };
@@ -77,6 +92,17 @@ export function NotificationDropdown({
             reminder: 'Reminder',
             alert: 'Alert',
             custom: 'Custom',
+            coaching_session: 'Coaching',
+            coaching_acknowledged: 'Coaching',
+            coaching_reviewed: 'Coaching',
+            coaching_ready_for_review: 'Coaching',
+            coaching_pending_reminder: 'Coaching',
+            coaching_unacknowledged_alert: 'Coaching',
+            break_overage: 'Break',
+            undertime_approval: 'Undertime',
+            account_deletion: 'Account',
+            account_reactivation: 'Account',
+            account_restored: 'Account',
         };
         return labels[type] || 'Notification';
     };
@@ -155,13 +181,14 @@ export function NotificationDropdown({
                                     </div>
                                 </div>
 
-                                {/* Action buttons on hover */}
-                                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                                {/* Action buttons — always visible on touch, hover on desktop */}
+                                <div className="absolute top-2 right-2 flex gap-1 md:opacity-0 md:group-hover:opacity-100 md:transition-opacity">
                                     {!notification.read_at && (
                                         <Button
                                             variant="ghost"
                                             size="icon"
                                             className="h-6 w-6"
+                                            aria-label="Mark as read"
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 onMarkAsRead(notification.id);
@@ -174,6 +201,7 @@ export function NotificationDropdown({
                                         variant="ghost"
                                         size="icon"
                                         className="h-6 w-6 text-destructive"
+                                        aria-label="Delete notification"
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             onDelete(notification.id);
@@ -193,22 +221,45 @@ export function NotificationDropdown({
             <div className="p-2 flex flex-col gap-2">
                 {notifications.length > 0 && (
                     <div className="grid grid-cols-2 gap-2">
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
-                            onClick={onDeleteAll}
-                        >
-                            Clear all
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="w-full"
-                            onClick={onViewAll}
-                        >
-                            View all
-                        </Button>
+                        {confirmingClearAll ? (
+                            <div className="col-span-2 flex gap-2">
+                                <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    className="flex-1"
+                                    onClick={onDeleteAll}
+                                >
+                                    Confirm Clear All
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="flex-1"
+                                    onClick={onCancelClearAll}
+                                >
+                                    Cancel
+                                </Button>
+                            </div>
+                        ) : (
+                            <>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
+                                    onClick={onDeleteAll}
+                                >
+                                    Clear all
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="w-full"
+                                    onClick={onViewAll}
+                                >
+                                    View all
+                                </Button>
+                            </>
+                        )}
                     </div>
                 )}
                 {notifications.length === 0 && (

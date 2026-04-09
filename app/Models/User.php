@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
-use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Services\PermissionService;
 use Database\Factories\UserFactory;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -48,6 +48,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'password',
         'role',
         'inactivity_timeout',
+        'notification_preferences',
         'hired_date',
         'is_approved',
         'is_active',
@@ -93,6 +94,7 @@ class User extends Authenticatable implements MustVerifyEmail
             'approved_at' => 'datetime',
             'deleted_at' => 'datetime',
             'deletion_confirmed_at' => 'datetime',
+            'notification_preferences' => 'array',
         ];
     }
 

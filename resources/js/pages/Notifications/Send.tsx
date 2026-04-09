@@ -29,7 +29,8 @@ import {
     PopoverTrigger,
 } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
-import { X, ChevronsUpDown, Check, Send, AlertCircle } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { X, ChevronsUpDown, Check, Send, AlertCircle, Clock, Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
@@ -71,6 +72,8 @@ export default function SendNotification({ users, roles }: Props) {
     const [openUserSelect, setOpenUserSelect] = useState(false);
     const [openMultiUserSelect, setOpenMultiUserSelect] = useState(false);
     const [selectedUsers, setSelectedUsers] = useState<User[]>([]);
+    const [scheduleEnabled, setScheduleEnabled] = useState(false);
+    const [showPreview, setShowPreview] = useState(false);
 
     const { data, setData, post, processing, errors } = useForm({
         title: '',
@@ -80,10 +83,14 @@ export default function SendNotification({ users, roles }: Props) {
         role: '',
         user_id: null as number | null,
         user_ids: [] as number[],
+        scheduled_at: '' as string,
     });
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        if (!scheduleEnabled) {
+            setData('scheduled_at', '');
+        }
         post(notificationsStoreRoute().url);
     };
 
@@ -412,11 +419,98 @@ export default function SendNotification({ users, roles }: Props) {
                                 <Alert>
                                     <AlertCircle className="h-4 w-4" />
                                     <AlertDescription>
-                                        This notification will be sent to <strong>{getRecipientCount()}</strong> user(s).
+                                        This notification will be {scheduleEnabled ? 'scheduled for' : 'sent to'}{' '}
+                                        <strong>{getRecipientCount()}</strong> user(s).
                                     </AlertDescription>
                                 </Alert>
                             )}
                         </CardContent>
+                    </Card>
+
+                    {/* Schedule Card */}
+                    <Card className="mt-4">
+                        <CardHeader className="pb-3">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <Clock className="h-5 w-5" />
+                                    <div>
+                                        <CardTitle>Schedule</CardTitle>
+                                        <CardDescription>Send this notification at a later time</CardDescription>
+                                    </div>
+                                </div>
+                                <Switch
+                                    checked={scheduleEnabled}
+                                    onCheckedChange={(checked) => {
+                                        setScheduleEnabled(checked);
+                                        if (!checked) {
+                                            setData('scheduled_at', '');
+                                        }
+                                    }}
+                                />
+                            </div>
+                        </CardHeader>
+                        {scheduleEnabled && (
+                            <CardContent>
+                                <div className="space-y-2">
+                                    <Label htmlFor="scheduled_at">Schedule Date & Time</Label>
+                                    <Input
+                                        id="scheduled_at"
+                                        type="datetime-local"
+                                        value={data.scheduled_at}
+                                        onChange={(e) => setData('scheduled_at', e.target.value)}
+                                        min={new Date().toISOString().slice(0, 16)}
+                                        className={errors.scheduled_at ? 'border-destructive' : ''}
+                                    />
+                                    {errors.scheduled_at && (
+                                        <p className="text-sm text-destructive">{errors.scheduled_at}</p>
+                                    )}
+                                </div>
+                            </CardContent>
+                        )}
+                    </Card>
+
+                    {/* Preview Card */}
+                    <Card className="mt-4">
+                        <CardHeader className="pb-3">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <Eye className="h-5 w-5" />
+                                    <CardTitle>Preview</CardTitle>
+                                </div>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setShowPreview(!showPreview)}
+                                >
+                                    {showPreview ? 'Hide' : 'Show'}
+                                </Button>
+                            </div>
+                        </CardHeader>
+                        {showPreview && (
+                            <CardContent>
+                                <div className="rounded-lg border p-4 space-y-2">
+                                    <div className="flex items-center gap-2">
+                                        <Badge variant="outline">{data.type}</Badge>
+                                        {scheduleEnabled && data.scheduled_at && (
+                                            <Badge variant="secondary">
+                                                <Clock className="mr-1 h-3 w-3" />
+                                                {new Date(data.scheduled_at).toLocaleString()}
+                                            </Badge>
+                                        )}
+                                    </div>
+                                    <h4 className="font-semibold">
+                                        {data.title || <span className="text-muted-foreground italic">No title</span>}
+                                    </h4>
+                                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                                        {data.message || <span className="italic">No message</span>}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                        Recipients: {getRecipientCount()} user(s)
+                                    </p>
+                                </div>
+                            </CardContent>
+                        )}
                     </Card>
 
                     {/* Submit Buttons */}
@@ -430,8 +524,17 @@ export default function SendNotification({ users, roles }: Props) {
                             Cancel
                         </Button>
                         <Button type="submit" disabled={processing || getRecipientCount() === 0}>
-                            <Send className="mr-2 h-4 w-4" />
-                            {processing ? 'Sending...' : 'Send Notification'}
+                            {scheduleEnabled ? (
+                                <>
+                                    <Clock className="mr-2 h-4 w-4" />
+                                    {processing ? 'Scheduling...' : 'Schedule Notification'}
+                                </>
+                            ) : (
+                                <>
+                                    <Send className="mr-2 h-4 w-4" />
+                                    {processing ? 'Sending...' : 'Send Notification'}
+                                </>
+                            )}
                         </Button>
                     </div>
                 </form>

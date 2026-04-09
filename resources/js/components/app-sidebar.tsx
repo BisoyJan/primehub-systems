@@ -233,17 +233,17 @@ const getNavigationConfig = (userId: number, userRole: string, coachingPendingAc
                     icon: User,
                     permission: 'accounts.view',
                 },
+            ],
+        },
+        systemAdmin: {
+            label: 'System',
+            items: [
                 {
                     title: 'Activity Logs',
                     href: '/activity-logs',
                     icon: Activity,
                     permission: 'activity_logs.view',
                 },
-            ],
-        },
-        systemAdmin: {
-            label: 'System',
-            items: [
                 {
                     title: 'Database Backups',
                     href: databaseBackupsIndex.url(),

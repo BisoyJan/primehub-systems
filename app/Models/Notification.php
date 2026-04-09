@@ -4,8 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 class Notification extends Model
 {
@@ -31,6 +31,8 @@ class Notification extends Model
         'message',
         'data',
         'read_at',
+        'scheduled_at',
+        'is_scheduled',
     ];
 
     /**
@@ -43,6 +45,8 @@ class Notification extends Model
         return [
             'data' => 'array',
             'read_at' => 'datetime',
+            'scheduled_at' => 'datetime',
+            'is_scheduled' => 'boolean',
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
         ];
@@ -71,7 +75,7 @@ class Notification extends Model
      */
     public function markAsUnread()
     {
-        if (!is_null($this->read_at)) {
+        if (! is_null($this->read_at)) {
             $this->forceFill(['read_at' => null])->save();
         }
     }
@@ -106,5 +110,28 @@ class Notification extends Model
     public function scopeRead($query)
     {
         return $query->whereNotNull('read_at');
+    }
+
+    /**
+     * Scope a query to only include delivered (non-scheduled or past-scheduled) notifications.
+     */
+    public function scopeDelivered($query)
+    {
+        return $query->where(function ($q) {
+            $q->where('is_scheduled', false)
+                ->orWhere(function ($q2) {
+                    $q2->where('is_scheduled', true)
+                        ->where('scheduled_at', '<=', now());
+                });
+        });
+    }
+
+    /**
+     * Scope a query to only include pending scheduled notifications.
+     */
+    public function scopeScheduledPending($query)
+    {
+        return $query->where('is_scheduled', true)
+            ->where('scheduled_at', '>', now());
     }
 }

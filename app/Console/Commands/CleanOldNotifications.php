@@ -15,8 +15,8 @@ class CleanOldNotifications extends Command
      */
     protected $signature = 'notifications:clean
                             {--force : Skip confirmation prompt}
-                            {--days=90 : Delete read notifications older than this many days}
-                            {--unread-days=180 : Delete unread notifications older than this many days}
+                            {--days=30 : Delete read notifications older than this many days}
+                            {--unread-days=30 : Delete unread notifications older than this many days}
                             {--dry-run : Simulate the cleanup without deleting records}';
 
     /**
@@ -24,7 +24,7 @@ class CleanOldNotifications extends Command
      *
      * @var string
      */
-    protected $description = 'Delete old notifications based on retention policy (read: 90 days, unread: 180 days)';
+    protected $description = 'Delete old notifications based on retention policy (read: 30 days, unread: 30 days)';
 
     /**
      * Execute the console command.

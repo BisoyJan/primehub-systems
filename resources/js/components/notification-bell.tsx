@@ -42,6 +42,7 @@ export function NotificationBell() {
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const [isOpen, setIsOpen] = useState(false);
+    const [confirmingClearAll, setConfirmingClearAll] = useState(false);
     const { can } = usePermission();
     const abortRef = useRef<AbortController | null>(null);
 
@@ -151,6 +152,12 @@ export function NotificationBell() {
     };
 
     const handleDeleteAll = async () => {
+        if (!confirmingClearAll) {
+            setConfirmingClearAll(true);
+            return;
+        }
+        setConfirmingClearAll(false);
+
         try {
             const response = await fetch('/notifications/all', {
                 method: 'DELETE',
@@ -247,10 +254,15 @@ export function NotificationBell() {
                     variant="ghost"
                     size="icon"
                     className="relative h-9 w-9"
+                    aria-label={unreadCount > 0 ? `Notifications (${unreadCount} unread)` : 'Notifications'}
                 >
                     <Bell className="h-5 w-5" />
                     {unreadCount > 0 && (
-                        <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+                        <span
+                            className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white"
+                            aria-live="polite"
+                            role="status"
+                        >
                             {unreadCount > 9 ? '9+' : unreadCount}
                         </span>
                     )}
@@ -261,6 +273,8 @@ export function NotificationBell() {
                     notifications={notifications}
                     unreadCount={unreadCount}
                     canSend={can('notifications.send')}
+                    confirmingClearAll={confirmingClearAll}
+                    onCancelClearAll={() => setConfirmingClearAll(false)}
                     onMarkAsRead={handleMarkAsRead}
                     onMarkAllAsRead={handleMarkAllAsRead}
                     onDelete={handleDelete}

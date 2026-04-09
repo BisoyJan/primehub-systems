@@ -71,7 +71,7 @@ Schedule::command('break-timer:clean-old-sessions --force')
     ->withoutOverlapping()
     ->onOneServer();
 
-// Clean old notifications (read: 90 days, unread: 180 days) - runs daily at 8:20 AM
+// Clean old notifications (read: 30 days, unread: 30 days) - runs daily at 8:20 AM
 // Priority: MEDIUM - Keeps notifications table from growing unbounded
 Schedule::command('notifications:clean --force')
     ->dailyAt('08:20')

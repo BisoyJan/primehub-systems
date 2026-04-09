@@ -20,7 +20,7 @@ import { Switch } from '@/components/ui/switch';
 import AppLayout from '@/layouts/app-layout';
 import SettingsLayout from '@/layouts/settings/layout';
 import { useFlashMessage } from '@/hooks';
-import { Timer } from 'lucide-react';
+import { Timer, Bell } from 'lucide-react';
 import { useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -34,16 +34,45 @@ interface User {
     inactivity_timeout: number | null;
 }
 
-interface PreferencesProps {
-    user: User;
+interface NotificationPreferences {
+    [key: string]: boolean;
 }
 
-export default function Preferences({ user }: PreferencesProps) {
+interface PreferencesProps {
+    user: User;
+    notificationPreferences: NotificationPreferences;
+}
+
+const notificationTypeLabels: Record<string, { label: string; description: string; category: string }> = {
+    system: { label: 'System', description: 'General system messages and announcements', category: 'General' },
+    leave_request: { label: 'Leave Requests', description: 'Updates on leave request submissions and status changes', category: 'Leave & Attendance' },
+    attendance_status: { label: 'Attendance Status', description: 'Daily attendance status and point notifications', category: 'Leave & Attendance' },
+    undertime_approval: { label: 'Undertime Approval', description: 'Undertime request approvals and rejections', category: 'Leave & Attendance' },
+    it_concern: { label: 'IT Concerns', description: 'IT support ticket updates and status changes', category: 'IT & Equipment' },
+    maintenance_due: { label: 'Maintenance Due', description: 'Station maintenance schedule reminders', category: 'IT & Equipment' },
+    pc_assignment: { label: 'PC Assignment', description: 'PC/station assignment changes', category: 'IT & Equipment' },
+    medication_request: { label: 'Medication Requests', description: 'Medication request submissions and approvals', category: 'Requests' },
+    coaching_session: { label: 'Coaching Sessions', description: 'New coaching session assignments', category: 'Coaching' },
+    coaching_acknowledged: { label: 'Coaching Acknowledged', description: 'Coaching session acknowledgment confirmations', category: 'Coaching' },
+    coaching_reviewed: { label: 'Coaching Reviewed', description: 'Coaching session review completions', category: 'Coaching' },
+    coaching_ready_for_review: { label: 'Coaching Ready for Review', description: 'Coaching sessions ready for your review', category: 'Coaching' },
+    coaching_pending_reminder: { label: 'Coaching Reminders', description: 'Reminders for pending coaching sessions', category: 'Coaching' },
+    coaching_unacknowledged_alert: { label: 'Coaching Alerts', description: 'Alerts for unacknowledged coaching sessions', category: 'Coaching' },
+    break_overage: { label: 'Break Overage', description: 'Notifications when break time is exceeded', category: 'Leave & Attendance' },
+    account_deletion: { label: 'Account Deletion', description: 'Account deletion notifications', category: 'General' },
+    account_reactivation: { label: 'Account Reactivation', description: 'Account reactivation notifications', category: 'General' },
+    account_restored: { label: 'Account Restored', description: 'Account restoration notifications', category: 'General' },
+};
+
+const categories = ['General', 'Leave & Attendance', 'IT & Equipment', 'Requests', 'Coaching'];
+
+export default function Preferences({ user, notificationPreferences }: PreferencesProps) {
     useFlashMessage();
     const [autoLogoutEnabled, setAutoLogoutEnabled] = useState(user.inactivity_timeout !== null);
     const [inactivityTimeout, setInactivityTimeout] = useState<string>(
         user.inactivity_timeout?.toString() || '15'
     );
+    const [notifPrefs, setNotifPrefs] = useState<NotificationPreferences>(notificationPreferences);
 
     const timeoutOptions = [
         { value: '5', label: '5 minutes' },
@@ -168,6 +197,73 @@ export default function Preferences({ user }: PreferencesProps) {
                                                     </p>
                                                 </div>
                                             </div>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+
+                                {/* Hidden inputs for notification preferences */}
+                                {Object.entries(notifPrefs).map(([type, enabled]) => (
+                                    <input
+                                        key={type}
+                                        type="hidden"
+                                        name={`notification_preferences[${type}]`}
+                                        value={enabled ? '1' : '0'}
+                                    />
+                                ))}
+
+                                {/* Notification Preferences Card */}
+                                <Card>
+                                    <CardHeader>
+                                        <div className="flex items-center gap-2">
+                                            <Bell className="h-5 w-5" />
+                                            <div>
+                                                <CardTitle>Notification Preferences</CardTitle>
+                                                <CardDescription>
+                                                    Choose which types of notifications you want to receive
+                                                </CardDescription>
+                                            </div>
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="space-y-6">
+                                            {categories.map((category) => {
+                                                const typesInCategory = Object.entries(notificationTypeLabels)
+                                                    .filter(([, meta]) => meta.category === category);
+
+                                                if (typesInCategory.length === 0) return null;
+
+                                                return (
+                                                    <div key={category} className="space-y-3">
+                                                        <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                                                            {category}
+                                                        </h4>
+                                                        <div className="space-y-3">
+                                                            {typesInCategory.map(([type, meta]) => (
+                                                                <div key={type} className="flex items-center justify-between">
+                                                                    <div className="space-y-0.5">
+                                                                        <Label htmlFor={`notif_${type}`}>
+                                                                            {meta.label}
+                                                                        </Label>
+                                                                        <p className="text-sm text-muted-foreground">
+                                                                            {meta.description}
+                                                                        </p>
+                                                                    </div>
+                                                                    <Switch
+                                                                        id={`notif_${type}`}
+                                                                        checked={notifPrefs[type] ?? true}
+                                                                        onCheckedChange={(checked) =>
+                                                                            setNotifPrefs((prev) => ({
+                                                                                ...prev,
+                                                                                [type]: checked,
+                                                                            }))
+                                                                        }
+                                                                    />
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
                                     </CardContent>
                                 </Card>

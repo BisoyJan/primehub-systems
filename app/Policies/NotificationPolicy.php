@@ -8,8 +8,22 @@ use App\Services\PermissionService;
 
 class NotificationPolicy
 {
-    public function __construct(protected PermissionService $permissionService)
+    public function __construct(protected PermissionService $permissionService) {}
+
+    /**
+     * Determine whether the user can view their own notifications.
+     */
+    public function view(User $user, Notification $notification): bool
     {
+        return $user->id === $notification->user_id;
+    }
+
+    /**
+     * Determine whether the user can delete a notification.
+     */
+    public function delete(User $user, Notification $notification): bool
+    {
+        return $user->id === $notification->user_id;
     }
 
     /**

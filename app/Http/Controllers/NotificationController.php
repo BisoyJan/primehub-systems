@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\SendNotificationRequest;
+use App\Http\Traits\RedirectsWithFlashMessages;
 use App\Models\Notification;
 use App\Models\User;
 use App\Services\NotificationService;
@@ -10,15 +11,13 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
-use App\Http\Traits\RedirectsWithFlashMessages;
 
 class NotificationController extends Controller
 {
     use RedirectsWithFlashMessages;
 
-    public function __construct(protected NotificationService $notificationService)
-    {
-    }
+    public function __construct(protected NotificationService $notificationService) {}
+
     /**
      * Display a listing of the user's notifications.
      */
@@ -26,13 +25,38 @@ class NotificationController extends Controller
     {
         $user = $request->user();
 
-        $notifications = $user->notifications()
-            ->orderBy('created_at', 'desc')
-            ->paginate(20);
+        $query = $user->notifications()->delivered()->orderBy('created_at', 'desc');
+
+        if ($request->filled('type')) {
+            $query->where('type', $request->input('type'));
+        }
+
+        if ($request->filled('status')) {
+            if ($request->input('status') === 'read') {
+                $query->whereNotNull('read_at');
+            } elseif ($request->input('status') === 'unread') {
+                $query->whereNull('read_at');
+            }
+        }
+
+        $notifications = $query->paginate(20)->withQueryString();
+
+        // Get available types for the filter dropdown
+        $availableTypes = $user->notifications()
+            ->reorder()
+            ->select('type')
+            ->distinct()
+            ->orderBy('type')
+            ->pluck('type');
 
         return Inertia::render('Notifications/Index', [
             'notifications' => $notifications,
             'unreadCount' => $user->unreadNotifications()->count(),
+            'availableTypes' => $availableTypes,
+            'filters' => [
+                'type' => $request->input('type', ''),
+                'status' => $request->input('status', ''),
+            ],
         ]);
     }
 
@@ -54,6 +78,7 @@ class NotificationController extends Controller
         $user = $request->user();
 
         $notifications = $user->notifications()
+            ->delivered()
             ->orderBy('created_at', 'desc')
             ->limit(10)
             ->get();
@@ -69,10 +94,7 @@ class NotificationController extends Controller
      */
     public function markAsRead(Request $request, Notification $notification)
     {
-        // Ensure the notification belongs to the authenticated user
-        if ($notification->user_id !== $request->user()->id) {
-            abort(403);
-        }
+        $this->authorize('view', $notification);
 
         $notification->markAsRead();
 
@@ -94,10 +116,7 @@ class NotificationController extends Controller
      */
     public function destroy(Request $request, Notification $notification)
     {
-        // Ensure the notification belongs to the authenticated user
-        if ($notification->user_id !== $request->user()->id) {
-            abort(403);
-        }
+        $this->authorize('delete', $notification);
 
         $notification->delete();
 
@@ -136,7 +155,7 @@ class NotificationController extends Controller
             ->orderBy('first_name')
             ->orderBy('last_name')
             ->get(['id', 'first_name', 'last_name', 'email', 'role'])
-            ->map(fn($user) => [
+            ->map(fn ($user) => [
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
@@ -150,7 +169,7 @@ class NotificationController extends Controller
             ->pluck('count', 'role');
 
         // Get available roles with user counts
-        $roles = collect(config('permissions.roles'))->map(fn($label, $value) => [
+        $roles = collect(config('permissions.roles'))->map(fn ($label, $value) => [
             'value' => $label, // Use label as value since that's what's stored in the database
             'label' => $label,
             'count' => $userCountsByRole->get($label, 0),
@@ -177,46 +196,75 @@ class NotificationController extends Controller
             $title = $validated['title'];
             $message = $validated['message'];
             $type = $validated['type'] ?? 'system';
+            $scheduledAt = $validated['scheduled_at'] ?? null;
+            $isScheduled = ! empty($scheduledAt);
 
             $recipientCount = 0;
+            $notificationData = ['sent_by' => auth()->id()];
 
-            switch ($recipientType) {
-                case 'all':
-                    $this->notificationService->notifyAllUsers($title, $message, ['sent_by' => auth()->id()], $type);
-                    $recipientCount = User::where('is_approved', true)->count();
-                    break;
+            // Helper to get user IDs based on recipient type
+            $userIds = match ($recipientType) {
+                'all' => User::where('is_approved', true)->pluck('id')->toArray(),
+                'role' => User::where('role', $validated['role'])->where('is_approved', true)->pluck('id')->toArray(),
+                'specific_users' => $validated['user_ids'],
+                'single_user' => [$validated['user_id']],
+                default => [],
+            };
 
-                case 'role':
-                    $role = $validated['role'];
-                    $this->notificationService->notifyUsersByRole($role, $type, $title, $message, ['sent_by' => auth()->id()]);
-                    $recipientCount = User::where('role', $role)->where('is_approved', true)->count();
-                    break;
+            if ($isScheduled) {
+                // Create scheduled notifications directly (bypass preferences — they'll be checked at delivery time)
+                foreach ($userIds as $userId) {
+                    Notification::create([
+                        'user_id' => $userId,
+                        'type' => $type,
+                        'title' => $title,
+                        'message' => $message,
+                        'data' => $notificationData,
+                        'scheduled_at' => $scheduledAt,
+                        'is_scheduled' => true,
+                    ]);
+                }
+                $recipientCount = count($userIds);
+            } else {
+                // Send immediately using existing service methods
+                switch ($recipientType) {
+                    case 'all':
+                        $this->notificationService->notifyAllUsers($title, $message, $notificationData, $type);
+                        $recipientCount = count($userIds);
+                        break;
 
-                case 'specific_users':
-                    $userIds = $validated['user_ids'];
-                    foreach ($userIds as $userId) {
-                        $this->notificationService->create($userId, $type, $title, $message, ['sent_by' => auth()->id()]);
-                    }
-                    $recipientCount = count($userIds);
-                    break;
+                    case 'role':
+                        $this->notificationService->notifyUsersByRole($validated['role'], $type, $title, $message, $notificationData);
+                        $recipientCount = count($userIds);
+                        break;
 
-                case 'single_user':
-                    $userId = $validated['user_id'];
-                    $this->notificationService->create($userId, $type, $title, $message, ['sent_by' => auth()->id()]);
-                    $recipientCount = 1;
-                    break;
+                    case 'specific_users':
+                        foreach ($userIds as $userId) {
+                            $this->notificationService->create($userId, $type, $title, $message, $notificationData);
+                        }
+                        $recipientCount = count($userIds);
+                        break;
+
+                    case 'single_user':
+                        $this->notificationService->create($validated['user_id'], $type, $title, $message, $notificationData);
+                        $recipientCount = 1;
+                        break;
+                }
             }
 
             DB::commit();
 
+            $actionText = $isScheduled ? 'scheduled' : 'sent';
+
             return $this->redirectWithFlash(
                 'notifications.index',
-                "Notification sent successfully to {$recipientCount} user(s).",
+                "Notification {$actionText} successfully to {$recipientCount} user(s).",
                 'success'
             );
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('NotificationController store Error: ' . $e->getMessage());
+            Log::error('NotificationController store Error: '.$e->getMessage());
+
             return $this->backWithFlash('Failed to send notification. Please try again.', 'error');
         }
     }

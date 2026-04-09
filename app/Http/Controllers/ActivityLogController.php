@@ -28,7 +28,7 @@ class ActivityLogController extends Controller
         $event = $request->input('event');
         $causer = $request->input('causer');
 
-        $query = Activity::with('causer', 'subject')
+        $query = Activity::with('causer')
             ->orderBy('created_at', 'desc');
 
         if ($search) {
