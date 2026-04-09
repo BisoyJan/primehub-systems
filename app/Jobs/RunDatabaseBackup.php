@@ -91,6 +91,28 @@ class RunDatabaseBackup implements ShouldQueue
         }
     }
 
+    public function failed(?\Throwable $exception): void
+    {
+        $cacheKey = "database_backup:{$this->jobId}";
+        $backup = DatabaseBackup::find($this->backupId);
+
+        if ($backup && $backup->status !== 'completed') {
+            $backup->update([
+                'status' => 'failed',
+                'error_message' => $exception?->getMessage() ?? 'Job failed after all retries.',
+            ]);
+        }
+
+        Cache::put($cacheKey, [
+            'percent' => 0,
+            'status' => 'Backup failed: '.($exception?->getMessage() ?? 'Unknown error'),
+            'finished' => true,
+            'error' => true,
+        ], 3600);
+
+        Log::error('Database Backup Job Failed: '.($exception?->getMessage() ?? 'Unknown error'));
+    }
+
     protected function updateProgress(string $cacheKey, int $percent, string $status, bool $finished = false): void
     {
         Cache::put($cacheKey, [

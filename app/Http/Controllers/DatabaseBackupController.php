@@ -17,6 +17,14 @@ class DatabaseBackupController extends Controller
 
     public function index(Request $request)
     {
+        // Auto-mark stale in-progress backups as failed (stuck longer than 15 minutes)
+        DatabaseBackup::where('status', 'in_progress')
+            ->where('updated_at', '<', now()->subMinutes(15))
+            ->update([
+                'status' => 'failed',
+                'error_message' => 'Backup timed out or the queue worker was interrupted.',
+            ]);
+
         $backups = DatabaseBackup::with('creator')
             ->when($request->input('search'), function ($query, $search) {
                 $query->where('filename', 'like', "%{$search}%")
