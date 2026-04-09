@@ -389,6 +389,66 @@ export const THEMES: TimerTheme[] = [
         btnResume: { from: '#8e72c0', to: '#b39ddb' },
         btnEnd: { from: '#00897b', to: '#4db6ac' },
     },
+    {
+        id: 'cyberpunk',
+        name: 'Cyberpunk',
+        icon: '🌃',
+        quote: 'Wake up, samurai. Time to work.',
+        alwaysDark: true,
+        bgLight: 'radial-gradient(circle at 10% 20%, rgb(30, 0, 45) 0%, rgb(9, 9, 14) 90%)',
+        bgDark: 'radial-gradient(circle at 10% 20%, rgb(30, 0, 45) 0%, rgb(9, 9, 14) 90%)',
+        glassLight: 'rgba(255, 0, 100, 0.1)',
+        glassDark: 'rgba(255, 0, 100, 0.1)',
+        ringActive: '#00ffcc', // Neon Cyan
+        ringPaused: '#ff00ff', // Neon Pink
+        ringOverage: '#ffff00', // Yellow Danger
+        ringDanger: '#ff0033', // Red Danger
+        ringTrack: 'rgba(0, 255, 204, 0.15)',
+        ringTrackDark: 'rgba(0, 255, 204, 0.15)',
+        ringGlow: true,
+        ringAnimated: false,
+        statusActive: ['#00ffcc', '#00ffcc'],
+        statusPaused: ['#ff00ff', '#ff00ff'],
+        statusOverage: ['#ffff00', '#ffff00'],
+        statusDanger: ['#ff0033', '#ff0033'],
+        btnBreak: { from: '#00ffcc', to: '#00ccaa' },
+        btnLunch: { from: '#ff00ff', to: '#cc00cc' },
+        btnCombined: { from: '#ffff00', to: '#cccc00' },
+        btnCombinedBreak: { from: '#ffaa00', to: '#cc8800' },
+        btnPause: { from: '#ff00ff', to: '#cc00cc' },
+        btnResume: { from: '#00ffcc', to: '#00ccaa' },
+        btnEnd: { from: '#330066', to: '#220044' },
+    },
+    {
+        id: 'synthwave',
+        name: 'Synthwave',
+        icon: '🌇',
+        quote: '80s Retro Drive',
+        alwaysDark: true,
+        bgLight: 'linear-gradient(180deg, #1f013d 0%, #3d0043 50%, #900a6e 100%)',
+        bgDark: 'linear-gradient(180deg, #1f013d 0%, #3d0043 50%, #900a6e 100%)',
+        glassLight: 'rgba(255, 105, 180, 0.15)',
+        glassDark: 'rgba(255, 105, 180, 0.15)',
+        ringActive: '#ff71ce', // Hot Pink
+        ringPaused: '#01cdfe', // Cyan
+        ringOverage: '#fffb96', // Yellow
+        ringDanger: '#ff0055', // Red
+        ringTrack: 'rgba(255, 113, 206, 0.2)',
+        ringTrackDark: 'rgba(255, 113, 206, 0.2)',
+        ringGlow: true,
+        ringAnimated: false,
+        statusActive: ['#ff71ce', '#ff71ce'],
+        statusPaused: ['#01cdfe', '#01cdfe'],
+        statusOverage: ['#fffb96', '#fffb96'],
+        statusDanger: ['#ff0055', '#ff0055'],
+        btnBreak: { from: '#ff71ce', to: '#cc5ba5' },
+        btnLunch: { from: '#01cdfe', to: '#01a4cb' },
+        btnCombined: { from: '#05ffa1', to: '#04cc81' },
+        btnCombinedBreak: { from: '#b967ff', to: '#9452cc' },
+        btnPause: { from: '#01cdfe', to: '#01a4cb' },
+        btnResume: { from: '#ff71ce', to: '#cc5ba5' },
+        btnEnd: { from: '#3f015c', to: '#280142' },
+    },
 ];
 
 // ─── Hooks ──────────────────────────────────────────────────

@@ -8,6 +8,9 @@ export interface AlarmOption {
 
 export const ALARM_OPTIONS: AlarmOption[] = [
     { id: 'none', name: 'No Sound', icon: '🔇' },
+    { id: 'zen', name: 'Zen Bell', icon: '🎐' },
+    { id: 'corporate', name: 'Corporate', icon: '🏢' },
+    { id: 'arcade', name: '8-Bit', icon: '👾' },
     { id: 'beep', name: 'Beep', icon: '🔔' },
     { id: 'urgent', name: 'Urgent', icon: '🚨' },
     { id: 'chime', name: 'Chime', icon: '🎵' },
@@ -26,26 +29,57 @@ function getAudioContext(): AudioContext | null {
     }
 }
 
-function playTone(ctx: AudioContext, freq: number, duration: number, type: OscillatorType = 'sine', gain = 0.3) {
-    const osc = ctx.createOscillator();
-    const vol = ctx.createGain();
-    osc.type = type;
-    osc.frequency.value = freq;
-    vol.gain.value = gain;
-    vol.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration);
-    osc.connect(vol);
-    vol.connect(ctx.destination);
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + duration);
+function playTone(ctx: AudioContext, freq: number | number[], duration: number, type: OscillatorType = 'sine', gain = 0.3, attack = 0.05) {
+    const freqs = Array.isArray(freq) ? freq : [freq];
+
+    freqs.forEach(f => {
+        const osc = ctx.createOscillator();
+        const vol = ctx.createGain();
+        osc.type = type;
+        osc.frequency.value = f;
+
+        // Attack (fade in to prevent harsh popping)
+        vol.gain.setValueAtTime(0, ctx.currentTime);
+        vol.gain.linearRampToValueAtTime(gain, ctx.currentTime + attack);
+
+        // Decay (fade out smoothly)
+        vol.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+
+        osc.connect(vol);
+        vol.connect(ctx.destination);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + duration);
+    });
 }
 
 function playSoundPattern(alarmId: string, volume: number) {
     const ctx = getAudioContext();
     if (!ctx) return;
 
-    const v = volume * 0.5;
+    const v = volume * 0.4; // Slightly reduced global volume for smoother sound
 
     switch (alarmId) {
+        case 'zen': {
+            // Very soft meditation bowl sound (sine wave chord)
+            playTone(ctx, [392, 494 * 2], 3.0, 'sine', v * 0.8, 0.4);
+            break;
+        }
+        case 'corporate': {
+            // Smooth transit/airport notification chord
+            const notes = [330, 440, 554]; // E4, A4, C#5
+            notes.forEach((freq, i) => {
+                setTimeout(() => playTone(ctx, freq, 1.2, 'sine', v, 0.05), i * 150);
+            });
+            break;
+        }
+        case 'arcade': {
+            // Fast 8-bit retro video game sequence
+            const notes = [440, 554, 659, 880, 1109];
+            notes.forEach((freq, i) => {
+                setTimeout(() => playTone(ctx, freq, 0.1, 'square', v * 0.3, 0.01), i * 80);
+            });
+            break;
+        }
         case 'beep': {
             // Three short beeps
             playTone(ctx, 880, 0.15, 'sine', v);
@@ -54,31 +88,32 @@ function playSoundPattern(alarmId: string, volume: number) {
             break;
         }
         case 'urgent': {
-            // Rapid alternating high-low
+            // Less piercing alternating tones
             for (let i = 0; i < 6; i++) {
-                setTimeout(() => playTone(ctx, i % 2 === 0 ? 1000 : 700, 0.12, 'square', v * 0.6), i * 150);
+                setTimeout(() => playTone(ctx, i % 2 === 0 ? 800 : 600, 0.15, 'square', v * 0.4, 0.02), i * 180);
             }
             break;
         }
         case 'chime': {
-            // Ascending musical notes
-            const notes = [523, 659, 784, 1047]; // C5, E5, G5, C6
+            // Ascending notes resolving to a chord
+            const notes = [523, 659, 784]; // C5, E5, G5
             notes.forEach((freq, i) => {
-                setTimeout(() => playTone(ctx, freq, 0.3, 'sine', v), i * 250);
+                setTimeout(() => playTone(ctx, freq, 0.4, 'sine', v), i * 200);
             });
+            setTimeout(() => playTone(ctx, [523, 659, 784, 1047], 1.5, 'sine', v * 0.8), 600);
             break;
         }
         case 'alert': {
-            // Two-tone siren
+            // Two-tone siren, lower frequency and longer sweeps
             for (let i = 0; i < 4; i++) {
-                setTimeout(() => playTone(ctx, i % 2 === 0 ? 600 : 900, 0.2, 'sawtooth', v * 0.4), i * 250);
+                setTimeout(() => playTone(ctx, [i % 2 === 0 ? 500 : 700, i % 2 === 0 ? 505 : 705], 0.25, 'sawtooth', v * 0.3, 0.05), i * 300);
             }
             break;
         }
         case 'buzzer': {
-            // Long buzzing tone
-            playTone(ctx, 220, 0.8, 'square', v * 0.5);
-            setTimeout(() => playTone(ctx, 220, 0.8, 'square', v * 0.5), 1000);
+            // Low, smooth buzzing
+            playTone(ctx, 180, 0.8, 'square', v * 0.4, 0.1);
+            setTimeout(() => playTone(ctx, 180, 0.8, 'square', v * 0.4, 0.1), 1000);
             break;
         }
     }
@@ -134,22 +169,25 @@ export function useAlarmSound() {
     const showBrowserNotification = useCallback(() => {
         if (!('Notification' in window)) return;
 
-        if (Notification.permission === 'granted') {
-            new Notification('⚠️ Break Timer Overage!', {
+        const createNotification = () => {
+            const n = new Notification('⚠️ Break Timer Overage!', {
                 body: 'Your break time has ended. Please return to work.',
                 icon: '/favicon.ico',
                 tag: 'break-timer-overage', // prevents duplicate notifications
                 requireInteraction: true,
             });
+            n.onclick = () => {
+                window.focus();
+                n.close();
+            };
+        };
+
+        if (Notification.permission === 'granted') {
+            createNotification();
         } else if (Notification.permission !== 'denied') {
             Notification.requestPermission().then((perm) => {
                 if (perm === 'granted') {
-                    new Notification('⚠️ Break Timer Overage!', {
-                        body: 'Your break time has ended. Please return to work.',
-                        icon: '/favicon.ico',
-                        tag: 'break-timer-overage',
-                        requireInteraction: true,
-                    });
+                    createNotification();
                 }
             });
         }
@@ -174,6 +212,9 @@ export function useAlarmSound() {
         stopAlarm();
         startTitleFlash(); // restart after stopAlarm clears it
         const repeatMs: Record<string, number> = {
+            zen: 5000,
+            corporate: 4000,
+            arcade: 3000,
             beep: 4000,
             urgent: 2500,
             chime: 3500,

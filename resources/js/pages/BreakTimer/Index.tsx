@@ -143,7 +143,7 @@ export default function BreakTimerIndex() {
 
     const toggleFullscreen = useCallback(() => {
         if (!document.fullscreenElement) {
-            containerRef.current?.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => { });
+            document.documentElement.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => { });
         } else {
             document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => { });
         }
@@ -343,6 +343,9 @@ export default function BreakTimerIndex() {
 
     const overageSeconds = hasSession && remainingSeconds < 0 ? Math.abs(remainingSeconds) : 0;
 
+    // Overage intensity level: escalates the longer they're overbreak
+    const overageLevel = isOverage ? (overageSeconds >= 60 ? 2 : overageSeconds >= 30 ? 1 : 0) : -1;
+
     // Theme-derived ring + text colors
     const currentRingColor = getRingColor(theme, hasSession, isOverage, overageSeconds, isPaused);
     const currentTrackColor = isDark ? theme.ringTrackDark : theme.ringTrack;
@@ -351,8 +354,14 @@ export default function BreakTimerIndex() {
 
     const glowFilter = useMemo(() => {
         if (!theme.ringGlow || !hasSession) return 'none';
+        if (isOverage && overageLevel >= 2) {
+            return `drop-shadow(0 0 20px ${currentRingColor}) drop-shadow(0 0 50px ${currentRingColor}aa) drop-shadow(0 0 80px ${currentRingColor}55)`;
+        }
+        if (isOverage && overageLevel >= 1) {
+            return `drop-shadow(0 0 16px ${currentRingColor}cc) drop-shadow(0 0 40px ${currentRingColor}66)`;
+        }
         return `drop-shadow(0 0 10px ${currentRingColor}80) drop-shadow(0 0 24px ${currentRingColor}40)`;
-    }, [theme.ringGlow, hasSession, currentRingColor]);
+    }, [theme.ringGlow, hasSession, currentRingColor, isOverage, overageLevel]);
 
     const statusText = !hasSession
         ? 'Ready'
@@ -395,9 +404,18 @@ export default function BreakTimerIndex() {
             {/* ─── Themed Background ─── */}
             <div
                 ref={containerRef}
-                className={`relative -mx-4 -mb-4 mt-0 min-h-[calc(100vh-4rem)] overflow-x-clip p-4 ${isFullscreen ? 'overflow-y-auto' : ''} ${forceDarkText ? 'text-white' : ''}`}
+                className={`p-4 ${isFullscreen ? 'fixed inset-0 z-50 overflow-y-auto' : 'relative -mx-4 -mb-4 mt-0 min-h-[calc(100vh-4rem)] overflow-x-clip'} ${forceDarkText ? 'text-white' : ''}`}
                 style={pageBg}
             >
+                {/* ─── Overage red vignette overlay ─── */}
+                {isOverage && overageLevel >= 1 && (
+                    <motion.div
+                        className="pointer-events-none absolute inset-0 z-10"
+                        animate={{ opacity: [0.15, overageLevel >= 2 ? 0.45 : 0.3, 0.15] }}
+                        transition={{ duration: overageLevel >= 2 ? 0.6 : 1.2, repeat: Infinity, ease: 'easeInOut' }}
+                        style={{ boxShadow: `inset 0 0 ${overageLevel >= 2 ? '120' : '80'}px ${overageLevel >= 2 ? '40' : '20'}px rgba(239,68,68,0.6)` }}
+                    />
+                )}
                 <ThemeDecor theme={theme} isDark={isDark || theme.alwaysDark} />
                 <div className="relative mx-auto flex max-w-lg flex-col items-center gap-4 px-4 py-3 md:max-w-2xl md:py-4">
 
@@ -414,8 +432,13 @@ export default function BreakTimerIndex() {
                         <div className="flex items-center gap-1.5 rounded-full border border-white/20 px-3 py-1 backdrop-blur-md dark:border-white/10" style={glassStyle}>
                             <Volume2 className="h-3.5 w-3.5 opacity-60" />
                             <Select value={alarmId} onValueChange={(v) => { setAlarmId(v); if (v !== 'none') preview(v); }}>
-                                <SelectTrigger className="h-7 w-28 border-none bg-transparent px-1 text-xs shadow-none">
-                                    <SelectValue />
+                                <SelectTrigger className="h-7 w-36 border-none bg-transparent px-1 text-xs shadow-none">
+                                    <SelectValue>
+                                        <span className="flex items-center gap-1.5">
+                                            <span>{ALARM_OPTIONS.find(a => a.id === alarmId)?.icon}</span>
+                                            <span className="truncate">{ALARM_OPTIONS.find(a => a.id === alarmId)?.name}</span>
+                                        </span>
+                                    </SelectValue>
                                 </SelectTrigger>
                                 <SelectContent align="end">
                                     {ALARM_OPTIONS.map((a) => (
@@ -432,8 +455,13 @@ export default function BreakTimerIndex() {
                         <div className="flex items-center gap-1.5 rounded-full border border-white/20 px-3 py-1 backdrop-blur-md dark:border-white/10" style={glassStyle}>
                             <Palette className="h-3.5 w-3.5 opacity-60" />
                             <Select value={themeId} onValueChange={setTheme}>
-                                <SelectTrigger className="h-7 w-32 border-none bg-transparent px-1 text-xs shadow-none">
-                                    <SelectValue />
+                                <SelectTrigger className="h-7 w-36 border-none bg-transparent px-1 text-xs shadow-none">
+                                    <SelectValue>
+                                        <span className="flex items-center gap-1.5">
+                                            <span>{themes.find(t => t.id === themeId)?.icon}</span>
+                                            <span className="truncate">{themes.find(t => t.id === themeId)?.name}</span>
+                                        </span>
+                                    </SelectValue>
                                 </SelectTrigger>
                                 <SelectContent align="end">
                                     {themes.map((t) => (
@@ -459,29 +487,48 @@ export default function BreakTimerIndex() {
                         <motion.div
                             className="relative flex items-center justify-center"
                             animate={
-                                isOverage
-                                    ? { x: [0, -4, 4, -3, 3, -1, 1, 0] }
-                                    : isPaused
-                                        ? { scale: [1, 1.02, 1] }
-                                        : {}
+                                isOverage && overageLevel >= 2
+                                    ? { x: [0, -8, 8, -6, 6, -4, 4, -2, 2, 0], y: [0, 2, -2, 3, -3, 1, -1, 0], scale: [1, 1.03, 0.97, 1.04, 0.96, 1.02, 0.98, 1], rotate: [0, -2, 2, -1.5, 1.5, -0.5, 0.5, 0] }
+                                    : isOverage && overageLevel >= 1
+                                        ? { x: [0, -5, 5, -4, 4, -2, 2, 0], scale: [1, 1.02, 0.98, 1.01, 0.99, 1], rotate: [0, -1, 1, -0.5, 0.5, 0] }
+                                        : isOverage
+                                            ? { x: [0, -4, 4, -3, 3, -1, 1, 0] }
+                                            : isPaused
+                                                ? { scale: [1, 1.02, 1] }
+                                                : {}
                             }
                             transition={
-                                isOverage
-                                    ? { duration: 0.5, repeat: Infinity, repeatDelay: 2 }
-                                    : isPaused
-                                        ? { duration: 2.5, repeat: Infinity, ease: 'easeInOut' }
-                                        : {}
+                                isOverage && overageLevel >= 2
+                                    ? { duration: 0.4, repeat: Infinity, repeatDelay: 0.2, ease: 'easeInOut' }
+                                    : isOverage && overageLevel >= 1
+                                        ? { duration: 0.5, repeat: Infinity, repeatDelay: 0.8, ease: 'easeInOut' }
+                                        : isOverage
+                                            ? { duration: 0.5, repeat: Infinity, repeatDelay: 2 }
+                                            : isPaused
+                                                ? { duration: 2.5, repeat: Infinity, ease: 'easeInOut' }
+                                                : {}
                             }
                         >
                             {/* Aurora animated gradient keyframe */}
                             {theme.ringAnimated && (
                                 <style>{`@keyframes aurora-hue{0%{filter:hue-rotate(0deg) saturate(1.5)}50%{filter:hue-rotate(180deg) saturate(1.8)}100%{filter:hue-rotate(360deg) saturate(1.5)}}`}</style>
                             )}
+                            {/* Overage pulse keyframes */}
+                            {isOverage && (
+                                <style>{`
+                                    @keyframes overage-ring-pulse{0%,100%{opacity:1}50%{opacity:${overageLevel >= 2 ? '0.3' : '0.55'}}}
+                                    @keyframes overage-glow-pulse{0%,100%{filter:drop-shadow(0 0 8px rgba(239,68,68,0.6))}50%{filter:drop-shadow(0 0 ${overageLevel >= 2 ? '35' : '20'}px rgba(239,68,68,${overageLevel >= 2 ? '1' : '0.8'}))}}
+                                `}</style>
+                            )}
                             {/* SVG Ring */}
                             <svg
                                 viewBox={`0 0 ${ringSize} ${ringSize}`}
                                 className="h-65 w-65 -rotate-90 md:h-125 md:w-125"
-                                style={{ filter: glowFilter, transition: 'filter 0.5s ease' }}
+                                style={{
+                                    filter: glowFilter,
+                                    transition: 'filter 0.5s ease',
+                                    ...(isOverage ? { animation: `overage-glow-pulse ${overageLevel >= 2 ? '0.6' : overageLevel >= 1 ? '1' : '1.5'}s ease-in-out infinite` } : {}),
+                                }}
                                 role="img"
                                 aria-label={`Break timer: ${hasSession ? formatTime(remainingSeconds) : 'Ready'}`}
                             >
@@ -500,17 +547,19 @@ export default function BreakTimerIndex() {
                                     cy={ringSize / 2}
                                     r={radius}
                                     fill="none"
-                                    strokeWidth={strokeWidth}
+                                    strokeWidth={isOverage && overageLevel >= 1 ? strokeWidth * 1.5 : strokeWidth}
                                     strokeLinecap="round"
                                     strokeDasharray={circumference}
                                     strokeDashoffset={strokeDashoffset}
                                     className="transition-[stroke-dashoffset] duration-1000 ease-linear"
                                     style={{
                                         stroke: currentRingColor,
-                                        transition: 'stroke 0.4s ease, stroke-dashoffset 1s linear',
-                                        ...(theme.ringAnimated && hasSession && !isPaused && !isOverage
-                                            ? { animation: 'aurora-hue 6s linear infinite' }
-                                            : {}),
+                                        transition: 'stroke 0.4s ease, stroke-dashoffset 1s linear, stroke-width 0.4s ease',
+                                        ...(isOverage
+                                            ? { animation: `overage-ring-pulse ${overageLevel >= 2 ? '0.5' : overageLevel >= 1 ? '0.8' : '1.2'}s ease-in-out infinite` }
+                                            : theme.ringAnimated && hasSession && !isPaused
+                                                ? { animation: 'aurora-hue 6s linear infinite' }
+                                                : {}),
                                     }}
                                 />
                             </svg>
@@ -529,7 +578,15 @@ export default function BreakTimerIndex() {
                                             className="block text-xs font-semibold uppercase tracking-widest md:text-xl"
                                             style={{ color: statusColor, transition: 'color 0.4s ease' }}
                                         >
-                                            {statusText}
+                                            {isOverage && overageLevel >= 1 ? (
+                                                <motion.span
+                                                    animate={{ opacity: [1, 0.4, 1], scale: [1, 1.1, 1] }}
+                                                    transition={{ duration: overageLevel >= 2 ? 0.5 : 0.8, repeat: Infinity, ease: 'easeInOut' }}
+                                                    className="inline-block"
+                                                >
+                                                    {statusText}
+                                                </motion.span>
+                                            ) : statusText}
                                         </motion.span>
                                     </AnimatePresence>
                                 </div>
@@ -541,9 +598,27 @@ export default function BreakTimerIndex() {
                                     animate={{ scale: 1 }}
                                     transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
                                     className={`mt-1 font-mono font-medium tabular-nums leading-none tracking-tight ${timerFontClass}`}
-                                    style={{ color: timerColor, transition: 'color 0.4s ease' }}
+                                    style={{
+                                        color: timerColor,
+                                        textShadow: isOverage ? `0 0 15px ${timerColor}` : theme.alwaysDark ? `0 0 8px ${timerColor}` : 'none',
+                                        transition: 'color 0.4s ease, text-shadow 0.4s ease'
+                                    }}
                                 >
-                                    {hasSession ? formatTime(remainingSeconds) : '00:00'}
+                                    {isOverage && overageLevel >= 1 ? (
+                                        <motion.span
+                                            animate={
+                                                overageLevel >= 2
+                                                    ? { scale: [1, 1.08, 1], opacity: [1, 0.6, 1] }
+                                                    : { scale: [1, 1.05, 1] }
+                                            }
+                                            transition={{ duration: overageLevel >= 2 ? 0.4 : 0.7, repeat: Infinity, ease: 'easeInOut' }}
+                                            className="inline-block"
+                                        >
+                                            {hasSession ? formatTime(remainingSeconds) : '00:00'}
+                                        </motion.span>
+                                    ) : (
+                                        hasSession ? formatTime(remainingSeconds) : '00:00'
+                                    )}
                                 </motion.span>
                                 {hasSession && (
                                     <span className="text-muted-foreground mt-2 text-xs md:mt-3 md:text-lg">
