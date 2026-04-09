@@ -11,6 +11,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class RunDatabaseBackup implements ShouldQueue
 {
@@ -55,8 +56,10 @@ class RunDatabaseBackup implements ShouldQueue
             $this->updateProgress($cacheKey, 80, 'Verifying backup file...');
 
             // Verify the backup file was created at the expected path
+            // Spatie writes to the 'local' disk, which in Laravel 11+ defaults to storage/app/private
             $backupName = config('backup.backup.name', 'backups');
-            $filePath = storage_path("app/{$backupName}/{$backup->filename}");
+            $diskPath = "{$backupName}/{$backup->filename}";
+            $filePath = Storage::disk('local')->path($diskPath);
 
             if (! file_exists($filePath)) {
                 throw new \RuntimeException('Backup file not found at: '.$filePath);
@@ -69,7 +72,7 @@ class RunDatabaseBackup implements ShouldQueue
             $backup->update([
                 'status' => 'completed',
                 'size' => $fileSize,
-                'path' => "{$backupName}/{$backup->filename}",
+                'path' => $diskPath,
                 'completed_at' => now(),
             ]);
 

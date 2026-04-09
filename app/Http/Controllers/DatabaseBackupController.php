@@ -93,7 +93,7 @@ class DatabaseBackupController extends Controller
             return $this->redirectWithFlash('database-backups.index', 'Backup is not ready for download.', 'error');
         }
 
-        $filePath = storage_path("app/{$databaseBackup->path}");
+        $filePath = Storage::disk('local')->path($databaseBackup->path);
 
         if (! file_exists($filePath)) {
             return $this->redirectWithFlash('database-backups.index', 'Backup file not found.', 'error');
@@ -106,9 +106,8 @@ class DatabaseBackupController extends Controller
     {
         try {
             // Delete the file from storage
-            $filePath = storage_path("app/{$databaseBackup->path}");
-            if (file_exists($filePath)) {
-                @unlink($filePath);
+            if (Storage::disk('local')->exists($databaseBackup->path)) {
+                Storage::disk('local')->delete($databaseBackup->path);
             }
 
             $databaseBackup->delete();
@@ -133,9 +132,8 @@ class DatabaseBackupController extends Controller
             $count = $oldBackups->count();
 
             foreach ($oldBackups as $backup) {
-                $filePath = storage_path("app/{$backup->path}");
-                if (file_exists($filePath)) {
-                    @unlink($filePath);
+                if (Storage::disk('local')->exists($backup->path)) {
+                    Storage::disk('local')->delete($backup->path);
                 }
                 $backup->delete();
             }
