@@ -55,12 +55,14 @@ class CoachingDashboardController extends Controller
         $summary = $this->dashboardService->getCoacheeSummary($user->id);
 
         $sessions = CoachingSession::with(['coach'])
+            ->submitted()
             ->forCoachee($user->id)
             ->orderByDesc('session_date')
             ->paginate(15)
             ->withQueryString();
 
-        $pendingSessions = CoachingSession::forCoachee($user->id)
+        $pendingSessions = CoachingSession::submitted()
+            ->forCoachee($user->id)
             ->pending()
             ->count();
 
@@ -90,6 +92,7 @@ class CoachingDashboardController extends Controller
 
         // Get recent sessions created by this TL
         $recentSessions = CoachingSession::with(['coachee'])
+            ->submitted()
             ->forCoach($user->id)
             ->orderByDesc('session_date')
             ->paginate(15)

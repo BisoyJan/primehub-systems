@@ -14,11 +14,12 @@ const statusConfig: { label: CoachingStatusLabel; key: string; bg: string; text:
     { label: 'Badly Needs Coaching', key: 'Badly Needs Coaching', bg: 'bg-orange-50 dark:bg-orange-950/20', text: 'text-orange-700 dark:text-orange-400', border: 'border-orange-200 dark:border-orange-800' },
     { label: 'Please Coach ASAP', key: 'Please Coach ASAP', bg: 'bg-red-50 dark:bg-red-950/20', text: 'text-red-700 dark:text-red-400', border: 'border-red-200 dark:border-red-800' },
     { label: 'No Record', key: 'No Record', bg: 'bg-gray-50 dark:bg-gray-950/20', text: 'text-gray-600 dark:text-gray-400', border: 'border-gray-200 dark:border-gray-700' },
+    { label: 'Draft', key: 'Draft', bg: 'bg-blue-50 dark:bg-blue-950/20', text: 'text-blue-700 dark:text-blue-400', border: 'border-blue-200 dark:border-blue-800' },
 ];
 
 export function CoachingSummaryCards({ totalAgents, statusCounts, totalLabel, className }: CoachingSummaryCardsProps) {
     return (
-        <div className={cn('grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6', className)}>
+        <div className={cn('grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7', className)}>
             {/* Total Agents card */}
             <div className="rounded-lg border bg-card p-3 shadow-sm">
                 <p className="text-xs text-muted-foreground font-medium">{totalLabel ?? 'Total Agents'}</p>

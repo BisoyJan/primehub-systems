@@ -71,7 +71,8 @@ export type CoachingStatusLabel =
     | 'Needs Coaching'
     | 'Badly Needs Coaching'
     | 'Please Coach ASAP'
-    | 'No Record';
+    | 'No Record'
+    | 'Draft';
 
 export interface CoachingSessionAttachment {
     id: number;
@@ -135,6 +136,9 @@ export interface CoachingSession {
     // Other
     severity_flag: SeverityFlag;
     attachment_url: string | null;
+    // Draft
+    is_draft: boolean;
+    submitted_at: string | null;
     created_at: string;
     updated_at: string;
     // Relationships (loaded via with())

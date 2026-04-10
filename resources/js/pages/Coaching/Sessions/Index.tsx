@@ -98,6 +98,7 @@ interface Props extends InertiaPageProps {
     activeTab: string | null;
     pendingAckCount: number | null;
     pendingReviewCount: number | null;
+    draftCount: number | null;
 }
 
 const purposes: CoachingPurposeLabels = {
@@ -120,6 +121,7 @@ export default function CoachingSessionsIndex() {
         activeTab,
         pendingAckCount,
         pendingReviewCount,
+        draftCount,
     } = usePage<Props>().props;
 
     const { title, breadcrumbs } = usePageMeta({
@@ -287,6 +289,14 @@ export default function CoachingSessionsIndex() {
                                     </span>
                                 )}
                             </TabsTrigger>
+                            <TabsTrigger value="drafts">
+                                Drafts
+                                {(draftCount ?? 0) > 0 && (
+                                    <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold leading-none text-white">
+                                        {draftCount}
+                                    </span>
+                                )}
+                            </TabsTrigger>
                         </TabsList>
                     </Tabs>
                 )}
@@ -301,6 +311,14 @@ export default function CoachingSessionsIndex() {
                                 {(pendingReviewCount ?? 0) > 0 && (
                                     <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white">
                                         {pendingReviewCount}
+                                    </span>
+                                )}
+                            </TabsTrigger>
+                            <TabsTrigger value="drafts">
+                                Drafts
+                                {(draftCount ?? 0) > 0 && (
+                                    <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold leading-none text-white">
+                                        {draftCount}
                                     </span>
                                 )}
                             </TabsTrigger>
@@ -583,6 +601,11 @@ export default function CoachingSessionsIndex() {
                                                 <TableRow className="cursor-pointer" onClick={() => setExpandedId(expandedId === session.id ? null : session.id)}>
                                                     <TableCell className="whitespace-nowrap">
                                                         {new Date(session.session_date).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
+                                                        {session.is_draft && (
+                                                            <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+                                                                Draft
+                                                            </span>
+                                                        )}
                                                     </TableCell>
                                                     {!isAgent && activeTab !== 'my' && (
                                                         <TableCell className="font-medium">

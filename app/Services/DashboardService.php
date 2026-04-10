@@ -1328,6 +1328,7 @@ class DashboardService
             'Badly Needs Coaching' => 0,
             'Please Coach ASAP' => 0,
             'No Record' => 0,
+            'Draft' => 0,
         ];
         $totalAgents = 0;
 
@@ -1341,12 +1342,12 @@ class DashboardService
                 'status_counts' => $statusCounts,
                 'total_agents' => $totalAgents,
                 'coaching_status' => $status,
-                'total_sessions' => CoachingSession::where('coachee_id', $user->id)->count(),
-                'pending_acks' => CoachingSession::where('coachee_id', $user->id)
+                'total_sessions' => CoachingSession::submitted()->where('coachee_id', $user->id)->count(),
+                'pending_acks' => CoachingSession::submitted()->where('coachee_id', $user->id)
                     ->where('ack_status', 'Pending')->count(),
-                'pending_reviews' => CoachingSession::where('coachee_id', $user->id)
+                'pending_reviews' => CoachingSession::submitted()->where('coachee_id', $user->id)
                     ->where('compliance_status', 'For_Review')->count(),
-                'sessions_this_month' => CoachingSession::where('coachee_id', $user->id)
+                'sessions_this_month' => CoachingSession::submitted()->where('coachee_id', $user->id)
                     ->whereMonth('session_date', Carbon::now()->month)
                     ->whereYear('session_date', Carbon::now()->year)
                     ->count(),
@@ -1364,21 +1365,21 @@ class DashboardService
             $totalAgents = $dashboardData['total_agents'];
         }
 
-        $pendingAcks = CoachingSession::where('ack_status', 'Pending')->count();
-        $pendingReviews = CoachingSession::where('compliance_status', 'For_Review')->count();
-        $sessionsThisMonth = CoachingSession::whereMonth('session_date', Carbon::now()->month)
+        $pendingAcks = CoachingSession::submitted()->where('ack_status', 'Pending')->count();
+        $pendingReviews = CoachingSession::submitted()->where('compliance_status', 'For_Review')->count();
+        $sessionsThisMonth = CoachingSession::submitted()->whereMonth('session_date', Carbon::now()->month)
             ->whereYear('session_date', Carbon::now()->year)
             ->count();
 
         // Scope pending counts for Team Lead (sessions they coached)
         if ($role === 'Team Lead') {
-            $pendingAcks = CoachingSession::where('coach_id', $user->id)
+            $pendingAcks = CoachingSession::submitted()->where('coach_id', $user->id)
                 ->where('ack_status', 'Pending')
                 ->count();
-            $pendingReviews = CoachingSession::where('coach_id', $user->id)
+            $pendingReviews = CoachingSession::submitted()->where('coach_id', $user->id)
                 ->where('compliance_status', 'For_Review')
                 ->count();
-            $sessionsThisMonth = CoachingSession::where('coach_id', $user->id)
+            $sessionsThisMonth = CoachingSession::submitted()->where('coach_id', $user->id)
                 ->whereMonth('session_date', Carbon::now()->month)
                 ->whereYear('session_date', Carbon::now()->year)
                 ->count();
@@ -1410,14 +1411,14 @@ class DashboardService
                 ->where('is_approved', true)
                 ->pluck('id');
 
-            $result['tl_sessions_this_month'] = CoachingSession::whereIn('coachee_id', $tlIds)
+            $result['tl_sessions_this_month'] = CoachingSession::submitted()->whereIn('coachee_id', $tlIds)
                 ->whereMonth('session_date', Carbon::now()->month)
                 ->whereYear('session_date', Carbon::now()->year)
                 ->count();
-            $result['tl_pending_acks'] = CoachingSession::whereIn('coachee_id', $tlIds)
+            $result['tl_pending_acks'] = CoachingSession::submitted()->whereIn('coachee_id', $tlIds)
                 ->where('ack_status', 'Pending')
                 ->count();
-            $result['tl_pending_reviews'] = CoachingSession::whereIn('coachee_id', $tlIds)
+            $result['tl_pending_reviews'] = CoachingSession::submitted()->whereIn('coachee_id', $tlIds)
                 ->where('compliance_status', 'For_Review')
                 ->count();
         }
@@ -1440,7 +1441,8 @@ class DashboardService
 
         // ─── Agent: personal follow-ups only ────────────────────────
         if ($role === 'Agent') {
-            $followUps = CoachingSession::with(['coachee:id,first_name,last_name', 'coach:id,first_name,last_name'])
+            $followUps = CoachingSession::submitted()
+                ->with(['coachee:id,first_name,last_name', 'coach:id,first_name,last_name'])
                 ->where('coachee_id', $user->id)
                 ->whereNotNull('follow_up_date')
                 ->whereBetween('follow_up_date', [$today, $sevenDaysFromNow])
@@ -1466,7 +1468,8 @@ class DashboardService
         }
 
         // ─── Upcoming follow-ups ────────────────────────────────────
-        $followUpQuery = CoachingSession::with(['coachee:id,first_name,last_name', 'coach:id,first_name,last_name'])
+        $followUpQuery = CoachingSession::submitted()
+            ->with(['coachee:id,first_name,last_name', 'coach:id,first_name,last_name'])
             ->whereNotNull('follow_up_date')
             ->whereBetween('follow_up_date', [$today, $sevenDaysFromNow])
             ->orderBy('follow_up_date');
@@ -1516,7 +1519,8 @@ class DashboardService
         }
 
         // Agent IDs who HAVE been coached this week
-        $coachedThisWeek = CoachingSession::whereBetween('session_date', [$weekStart, $weekEnd])
+        $coachedThisWeek = CoachingSession::submitted()
+            ->whereBetween('session_date', [$weekStart, $weekEnd])
             ->whereIn('coachee_id', $agentIds)
             ->pluck('coachee_id')
             ->unique();
@@ -1539,7 +1543,7 @@ class DashboardService
                     'campaign' => $agent->activeSchedule?->campaign?->name ?? 'N/A',
                     'coaching_status' => $status,
                     'status_color' => CoachingDashboardService::STATUS_COLORS[$status] ?? 'gray',
-                    'last_coached_date' => CoachingSession::where('coachee_id', $agent->id)
+                    'last_coached_date' => CoachingSession::submitted()->where('coachee_id', $agent->id)
                         ->orderByDesc('session_date')
                         ->value('session_date')?->format('Y-m-d'),
                 ];
@@ -1564,7 +1568,7 @@ class DashboardService
                     'campaign' => $agent->activeSchedule?->campaign?->name ?? 'N/A',
                     'coaching_status' => $status,
                     'status_color' => CoachingDashboardService::STATUS_COLORS[$status] ?? 'gray',
-                    'last_coached_date' => CoachingSession::where('coachee_id', $agent->id)
+                    'last_coached_date' => CoachingSession::submitted()->where('coachee_id', $agent->id)
                         ->orderByDesc('session_date')
                         ->value('session_date')?->format('Y-m-d'),
                 ];
@@ -1593,7 +1597,8 @@ class DashboardService
             ->where('is_approved', true)
             ->pluck('id');
 
-        $coachedTlsThisWeek = CoachingSession::whereBetween('session_date', [$weekStart, $weekEnd])
+        $coachedTlsThisWeek = CoachingSession::submitted()
+            ->whereBetween('session_date', [$weekStart, $weekEnd])
             ->whereIn('coachee_id', $tlIds)
             ->pluck('coachee_id')
             ->unique();
@@ -1614,7 +1619,7 @@ class DashboardService
                     'campaign' => $tl->activeSchedule?->campaign?->name ?? 'N/A',
                     'coaching_status' => $status,
                     'status_color' => CoachingDashboardService::STATUS_COLORS[$status] ?? 'gray',
-                    'last_coached_date' => CoachingSession::where('coachee_id', $tl->id)
+                    'last_coached_date' => CoachingSession::submitted()->where('coachee_id', $tl->id)
                         ->orderByDesc('session_date')
                         ->value('session_date')?->format('Y-m-d'),
                 ];
@@ -1634,7 +1639,8 @@ class DashboardService
             ->where('is_approved', true)
             ->pluck('id');
 
-        $coachedTlsThisWeek = CoachingSession::whereBetween('session_date', [$weekStart, $weekEnd])
+        $coachedTlsThisWeek = CoachingSession::submitted()
+            ->whereBetween('session_date', [$weekStart, $weekEnd])
             ->whereIn('coachee_id', $tlIds)
             ->pluck('coachee_id')
             ->unique();
@@ -1653,7 +1659,7 @@ class DashboardService
                     'campaign' => $tl->activeSchedule?->campaign?->name ?? 'N/A',
                     'coaching_status' => $status,
                     'status_color' => CoachingDashboardService::STATUS_COLORS[$status] ?? 'gray',
-                    'last_coached_date' => CoachingSession::where('coachee_id', $tl->id)
+                    'last_coached_date' => CoachingSession::submitted()->where('coachee_id', $tl->id)
                         ->orderByDesc('session_date')
                         ->value('session_date')?->format('Y-m-d'),
                 ];

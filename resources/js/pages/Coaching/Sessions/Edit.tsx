@@ -1,7 +1,7 @@
 import React from 'react';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, SendHorizonal } from 'lucide-react';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,7 @@ import {
     index as sessionsIndex,
     show as sessionsShow,
     update as sessionsUpdate,
+    submit as sessionsSubmit,
     attachment as sessionsAttachment,
 } from '@/routes/coaching/sessions';
 
@@ -95,10 +96,20 @@ export default function CoachingSessionsEdit() {
         return `${user.first_name} ${user.last_name}`;
     };
 
+    const [submittingDraft, setSubmittingDraft] = useState(false);
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         put(sessionsUpdate(session.id).url, {
             forceFormData: true,
+        });
+    };
+
+    const handleSubmitDraft = () => {
+        setSubmittingDraft(true);
+        put(sessionsSubmit(session.id).url, {
+            forceFormData: true,
+            onFinish: () => setSubmittingDraft(false),
         });
     };
 
@@ -142,9 +153,20 @@ export default function CoachingSessionsEdit() {
                                 Cancel
                             </Button>
                         </Link>
-                        <Button type="submit" disabled={processing} className="bg-blue-600 hover:bg-blue-700 text-white">
-                            {processing ? 'Updating...' : 'Update Coaching Session'}
+                        <Button type="submit" disabled={processing || submittingDraft} className="bg-blue-600 hover:bg-blue-700 text-white">
+                            {processing ? 'Updating...' : session.is_draft ? 'Save Draft' : 'Update Coaching Session'}
                         </Button>
+                        {session.is_draft && (
+                            <Button
+                                type="button"
+                                disabled={processing || submittingDraft}
+                                onClick={handleSubmitDraft}
+                                className="bg-green-600 hover:bg-green-700 text-white"
+                            >
+                                <SendHorizonal className="mr-2 h-4 w-4" />
+                                {submittingDraft ? 'Submitting...' : 'Submit Coaching Session'}
+                            </Button>
+                        )}
                     </div>
                 </form>
             </div>

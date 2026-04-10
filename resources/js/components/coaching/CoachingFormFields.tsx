@@ -52,6 +52,7 @@ interface CoachingFormFieldsProps {
     onAgentAddToQueue?: (agent: User) => void;
     queueAgentIds?: number[];
     coachedThisWeekIds?: number[];
+    draftedThisWeekIds?: number[];
     existingAttachments?: CoachingSessionAttachment[];
     removedAttachmentIds?: number[];
     onRemoveExistingAttachment?: (id: number) => void;
@@ -389,6 +390,7 @@ export function CoachingFormFields({
     onAgentAddToQueue,
     queueAgentIds = [],
     coachedThisWeekIds = [],
+    draftedThisWeekIds = [],
     existingAttachments = [],
     removedAttachmentIds = [],
     onRemoveExistingAttachment,
@@ -652,6 +654,7 @@ export function CoachingFormFields({
                                                 {filteredAgents.map((agent) => {
                                                     const isInQueue = queueAgentIds.includes(agent.id);
                                                     const isCoachedThisWeek = coachedThisWeekIds.includes(agent.id);
+                                                    const isDraftedThisWeek = !isCoachedThisWeek && draftedThisWeekIds.includes(agent.id);
                                                     const isSelected = selectedAgent?.id === agent.id;
                                                     return (
                                                         <CommandItem
@@ -686,6 +689,11 @@ export function CoachingFormFields({
                                                                             Coached
                                                                         </span>
                                                                     )}
+                                                                    {isDraftedThisWeek && (
+                                                                        <span className="inline-flex items-center gap-0.5 rounded bg-blue-500/10 px-1 py-0.5 text-[9px] font-medium text-blue-600 dark:text-blue-400">
+                                                                            Draft
+                                                                        </span>
+                                                                    )}
                                                                 </div>
                                                                 {getAgentCampaign(agent) && (
                                                                     <span className="text-xs text-muted-foreground">{getAgentCampaign(agent)!.name}</span>
@@ -704,6 +712,12 @@ export function CoachingFormFields({
                                 <div className="mt-1.5 flex items-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-400">
                                     <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                                     <span>This agent has already been coached this week.</span>
+                                </div>
+                            )}
+                            {selectedAgent && !coachedThisWeekIds.includes(selectedAgent.id) && draftedThisWeekIds.includes(selectedAgent.id) && (
+                                <div className="mt-1.5 flex items-center gap-1.5 rounded-md border border-blue-300 bg-blue-50 px-2.5 py-1.5 text-xs text-blue-700 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-400">
+                                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                                    <span>This agent has a draft coaching session this week.</span>
                                 </div>
                             )}
                         </div>

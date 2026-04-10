@@ -24,6 +24,8 @@ class CoachingDashboardService
 
     public const STATUS_NO_RECORD = 'No Record';
 
+    public const STATUS_DRAFT = 'Draft';
+
     /**
      * Status color mapping for frontend.
      */
@@ -33,6 +35,7 @@ class CoachingDashboardService
         self::STATUS_BADLY_NEEDS_COACHING => 'orange',
         self::STATUS_PLEASE_COACH_ASAP => 'red',
         self::STATUS_NO_RECORD => 'gray',
+        self::STATUS_DRAFT => 'blue',
     ];
 
     /**
@@ -44,6 +47,7 @@ class CoachingDashboardService
         self::STATUS_NEEDS_COACHING => 3,
         self::STATUS_NO_RECORD => 4,
         self::STATUS_COACHING_DONE => 5,
+        self::STATUS_DRAFT => 6,
     ];
 
     /**
@@ -55,12 +59,18 @@ class CoachingDashboardService
     public function getCoachingStatus(int $coacheeId): string
     {
         $thresholds = CoachingStatusSetting::getThresholds();
-        $lastSession = CoachingSession::where('coachee_id', $coacheeId)
+        $lastSession = CoachingSession::submitted()
+            ->where('coachee_id', $coacheeId)
             ->orderByDesc('session_date')
             ->first();
 
         if (! $lastSession) {
-            return self::STATUS_NO_RECORD;
+            // Check if agent has any draft sessions
+            $hasDraft = CoachingSession::draft()
+                ->where('coachee_id', $coacheeId)
+                ->exists();
+
+            return $hasDraft ? self::STATUS_DRAFT : self::STATUS_NO_RECORD;
         }
 
         $daysSinceLastCoaching = Carbon::parse($lastSession->session_date)
@@ -98,17 +108,20 @@ class CoachingDashboardService
      */
     public function getCoacheeSummary(int $coacheeId): array
     {
-        $recentSessions = CoachingSession::where('coachee_id', $coacheeId)
+        $recentSessions = CoachingSession::submitted()
+            ->where('coachee_id', $coacheeId)
             ->orderByDesc('session_date')
             ->limit(3)
             ->pluck('session_date')
             ->toArray();
 
-        $pendingCount = CoachingSession::where('coachee_id', $coacheeId)
+        $pendingCount = CoachingSession::submitted()
+            ->where('coachee_id', $coacheeId)
             ->where('ack_status', 'Pending')
             ->count();
 
-        $totalSessions = CoachingSession::where('coachee_id', $coacheeId)
+        $totalSessions = CoachingSession::submitted()
+            ->where('coachee_id', $coacheeId)
             ->whereYear('session_date', now()->year)
             ->count();
 
@@ -196,7 +209,8 @@ class CoachingDashboardService
         $agents = collect();
 
         // Batch query for trend data (current vs previous 30-day window)
-        $trendData = CoachingSession::whereIn('coachee_id', $coacheeIds)
+        $trendData = CoachingSession::submitted()
+            ->whereIn('coachee_id', $coacheeIds)
             ->where('session_date', '>=', now()->subDays(60))
             ->selectRaw('coachee_id,
                 SUM(CASE WHEN session_date >= ? THEN 1 ELSE 0 END) as current_count,
@@ -271,11 +285,13 @@ class CoachingDashboardService
      */
     public function getComplianceQueueData(?array $filters = null): array
     {
-        $unacknowledgedQuery = CoachingSession::with(['coachee', 'coach'])
+        $unacknowledgedQuery = CoachingSession::submitted()
+            ->with(['coachee', 'coach'])
             ->where('ack_status', 'Pending')
             ->orderBy('session_date');
 
-        $forReviewQuery = CoachingSession::with(['coachee', 'coach'])
+        $forReviewQuery = CoachingSession::submitted()
+            ->with(['coachee', 'coach'])
             ->where('compliance_status', 'For_Review')
             ->orderBy('session_date');
 
@@ -383,6 +399,7 @@ class CoachingDashboardService
             self::STATUS_BADLY_NEEDS_COACHING => 0,
             self::STATUS_PLEASE_COACH_ASAP => 0,
             self::STATUS_NO_RECORD => 0,
+            self::STATUS_DRAFT => 0,
         ];
     }
 
@@ -395,7 +412,8 @@ class CoachingDashboardService
      */
     public function getFollowUpComplianceRate(?int $coachId = null, ?int $campaignId = null): array
     {
-        $query = CoachingSession::whereNotNull('follow_up_date')
+        $query = CoachingSession::submitted()
+            ->whereNotNull('follow_up_date')
             ->where('follow_up_date', '<=', now());
 
         if ($coachId) {
@@ -419,7 +437,8 @@ class CoachingDashboardService
 
         // Batch: get all follow-up sessions for relevant coachees to avoid N+1
         $coacheeIds = $sessionsWithFollowUp->pluck('coachee_id')->unique();
-        $allSessions = CoachingSession::whereIn('coachee_id', $coacheeIds)
+        $allSessions = CoachingSession::submitted()
+            ->whereIn('coachee_id', $coacheeIds)
             ->orderBy('session_date')
             ->get(['coachee_id', 'session_date'])
             ->groupBy('coachee_id');
@@ -454,7 +473,8 @@ class CoachingDashboardService
         $today = Carbon::today();
         $thirtyDaysFromNow = Carbon::today()->addDays(30);
 
-        $baseQuery = CoachingSession::with(['coachee:id,first_name,last_name', 'coach:id,first_name,last_name'])
+        $baseQuery = CoachingSession::submitted()
+            ->with(['coachee:id,first_name,last_name', 'coach:id,first_name,last_name'])
             ->whereNotNull('follow_up_date');
 
         if ($user->role === 'Team Lead') {

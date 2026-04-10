@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\AcknowledgeCoachingSessionRequest;
 use App\Http\Requests\ReviewCoachingSessionRequest;
 use App\Http\Requests\StoreCoachingSessionRequest;
+use App\Http\Requests\StoreDraftCoachingSessionRequest;
 use App\Http\Requests\UpdateCoachingSessionRequest;
 use App\Http\Traits\RedirectsWithFlashMessages;
 use App\Models\Campaign;
@@ -15,6 +16,7 @@ use App\Models\User;
 use App\Services\CoachingDashboardService;
 use App\Services\NotificationService;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -50,10 +52,19 @@ class CoachingSessionController extends Controller
 
         $query = CoachingSession::with(['coachee', 'coach', 'complianceReviewer']);
 
-        // Role-based filtering
-        if ($isAgent) {
+        // Handle drafts tab — coaches see their own drafts
+        $showDrafts = $request->input('tab') === 'drafts';
+        if ($showDrafts) {
+            $query->draft()->where('coach_id', $user->id);
+        } else {
+            // Exclude drafts from all non-draft views
+            $query->submitted();
+        }
+
+        // Role-based filtering (only when not in drafts tab)
+        if ($isAgent && ! $showDrafts) {
             $query->forCoachee($user->id);
-        } elseif ($isTeamLead) {
+        } elseif ($isTeamLead && ! $showDrafts) {
             $activeTab = $request->input('tab', 'team');
 
             if ($activeTab === 'my') {
@@ -73,7 +84,7 @@ class CoachingSessionController extends Controller
                     $query->where('coach_id', $user->id);
                 }
             }
-        } elseif ($isAdmin) {
+        } elseif ($isAdmin && ! $showDrafts) {
             $activeTab = $request->input('tab', 'all');
 
             if ($activeTab === 'needs_review') {
@@ -165,13 +176,16 @@ class CoachingSessionController extends Controller
         // Tab badge counts
         $pendingAckCount = null;
         $pendingReviewCount = null;
+        $draftCount = null;
         $activeTabValue = null;
 
         if ($isTeamLead) {
-            $pendingAckCount = CoachingSession::forCoachee($user->id)->where('ack_status', 'Pending')->count();
+            $pendingAckCount = CoachingSession::submitted()->forCoachee($user->id)->where('ack_status', 'Pending')->count();
+            $draftCount = CoachingSession::draft()->where('coach_id', $user->id)->count();
             $activeTabValue = $request->input('tab', 'team');
         } elseif ($isAdmin) {
-            $pendingReviewCount = CoachingSession::where('compliance_status', 'For_Review')->count();
+            $pendingReviewCount = CoachingSession::submitted()->where('compliance_status', 'For_Review')->count();
+            $draftCount = CoachingSession::draft()->where('coach_id', $user->id)->count();
             $activeTabValue = $request->input('tab', 'all');
         }
 
@@ -191,6 +205,7 @@ class CoachingSessionController extends Controller
             'activeTab' => $activeTabValue,
             'pendingAckCount' => $pendingAckCount,
             'pendingReviewCount' => $pendingReviewCount,
+            'draftCount' => $draftCount,
         ]);
     }
 
@@ -282,6 +297,14 @@ class CoachingSessionController extends Controller
         $startOfWeek = now()->startOfWeek();
         $endOfWeek = now()->endOfWeek();
         $coachedThisWeekIds = CoachingSession::whereBetween('session_date', [$startOfWeek, $endOfWeek])
+            ->where('is_draft', false)
+            ->pluck('coachee_id')
+            ->unique()
+            ->values()
+            ->all();
+
+        $draftedThisWeekIds = CoachingSession::whereBetween('session_date', [$startOfWeek, $endOfWeek])
+            ->where('is_draft', true)
             ->pluck('coachee_id')
             ->unique()
             ->values()
@@ -299,6 +322,7 @@ class CoachingSessionController extends Controller
             'severityFlags' => CoachingSession::SEVERITY_FLAGS,
             'clone_data' => $cloneData,
             'coachedThisWeekIds' => $coachedThisWeekIds,
+            'draftedThisWeekIds' => $draftedThisWeekIds,
         ]);
     }
 
@@ -332,6 +356,8 @@ class CoachingSessionController extends Controller
 
                 $validated['ack_status'] = 'Pending';
                 $validated['compliance_status'] = 'Awaiting_Agent_Ack';
+                $validated['is_draft'] = false;
+                $validated['submitted_at'] = now();
 
                 return CoachingSession::create($validated);
             });
@@ -372,6 +398,190 @@ class CoachingSessionController extends Controller
     }
 
     /**
+     * Save a coaching session as a draft (relaxed validation).
+     */
+    public function storeDraft(StoreDraftCoachingSessionRequest $request)
+    {
+        $this->authorize('create', CoachingSession::class);
+
+        try {
+            $session = DB::transaction(function () use ($request) {
+                $validated = $request->validated();
+
+                $user = auth()->user();
+                $isAdmin = in_array($user->role, ['Super Admin', 'Admin']);
+                $coachingMode = $validated['coaching_mode'] ?? 'assign';
+
+                if ($coachingMode === 'direct' && $isAdmin) {
+                    $validated['coach_id'] = $user->id;
+                } else {
+                    $validated['coach_id'] = $isAdmin
+                        ? ($validated['coach_id'] ?? $user->id)
+                        : $user->id;
+                }
+
+                unset($validated['coaching_mode'], $validated['attachments']);
+
+                $validated['is_draft'] = true;
+                $validated['ack_status'] = 'Pending';
+                $validated['compliance_status'] = 'Awaiting_Agent_Ack';
+
+                return CoachingSession::create($validated);
+            });
+
+            // Handle file uploads outside transaction
+            if ($request->hasFile('attachments')) {
+                foreach ($request->file('attachments') as $file) {
+                    $filename = 'coaching_'.$session->id.'_'.time().'_'.uniqid().'.'.$file->getClientOriginalExtension();
+                    $path = $file->storeAs('coaching_attachments', $filename, 'local');
+
+                    $session->attachments()->create([
+                        'file_path' => $path,
+                        'original_filename' => $file->getClientOriginalName(),
+                        'mime_type' => $file->getMimeType(),
+                        'file_size' => $file->getSize(),
+                    ]);
+                }
+            }
+
+            return redirect()->route('coaching.sessions.show', $session)
+                ->with('message', 'Coaching session saved as draft.')
+                ->with('type', 'success');
+        } catch (\Exception $e) {
+            Log::error('CoachingSessionController@storeDraft Error: '.$e->getMessage());
+
+            return $this->backWithFlash('Failed to save coaching session draft.', 'error');
+        }
+    }
+
+    /**
+     * Auto-save a coaching session draft (silent JSON response for background saves).
+     */
+    public function autoSaveDraft(StoreDraftCoachingSessionRequest $request): JsonResponse
+    {
+        $this->authorize('create', CoachingSession::class);
+
+        try {
+            $validated = $request->validated();
+
+            $user = auth()->user();
+            $isAdmin = in_array($user->role, ['Super Admin', 'Admin']);
+            $coachingMode = $validated['coaching_mode'] ?? 'assign';
+
+            if ($coachingMode === 'direct' && $isAdmin) {
+                $validated['coach_id'] = $user->id;
+            } else {
+                $validated['coach_id'] = $isAdmin
+                    ? ($validated['coach_id'] ?? $user->id)
+                    : $user->id;
+            }
+
+            unset($validated['coaching_mode'], $validated['attachments']);
+
+            $draftId = $request->input('draft_id');
+
+            if ($draftId) {
+                $session = CoachingSession::findOrFail($draftId);
+
+                if (! $session->is_draft) {
+                    return response()->json(['error' => 'Cannot update a submitted session.'], 403);
+                }
+
+                if ($session->coach_id !== $user->id && ! $isAdmin) {
+                    return response()->json(['error' => 'Unauthorized.'], 403);
+                }
+
+                unset($validated['coach_id'], $validated['coachee_id']);
+                $session->update($validated);
+            } else {
+                $validated['is_draft'] = true;
+                $validated['ack_status'] = 'Pending';
+                $validated['compliance_status'] = 'Awaiting_Agent_Ack';
+
+                $session = CoachingSession::create($validated);
+            }
+
+            return response()->json([
+                'draft_id' => $session->id,
+                'saved_at' => now()->toIso8601String(),
+            ]);
+        } catch (\Exception $e) {
+            Log::error('CoachingSessionController@autoSaveDraft Error: '.$e->getMessage());
+
+            return response()->json(['error' => 'Failed to auto-save draft.'], 500);
+        }
+    }
+
+    /**
+     * Submit a draft coaching session (applies full validation).
+     */
+    public function submitDraft(StoreCoachingSessionRequest $request, CoachingSession $session)
+    {
+        $this->authorize('update', $session);
+
+        if (! $session->is_draft) {
+            return $this->backWithFlash('This session has already been submitted.', 'error');
+        }
+
+        try {
+            DB::transaction(function () use ($request, $session) {
+                $validated = $request->validated();
+
+                unset($validated['coaching_mode'], $validated['attachments'], $validated['coach_id'], $validated['coachee_id']);
+
+                $validated['is_draft'] = false;
+                $validated['submitted_at'] = now();
+
+                $session->update($validated);
+            });
+
+            // Handle removed attachments
+            if ($request->filled('removed_attachments')) {
+                $attachmentsToRemove = $session->attachments()
+                    ->whereIn('id', $request->input('removed_attachments'))
+                    ->get();
+
+                foreach ($attachmentsToRemove as $attachment) {
+                    Storage::disk('local')->delete($attachment->file_path);
+                    $attachment->delete();
+                }
+            }
+
+            // Handle new file uploads
+            if ($request->hasFile('attachments')) {
+                foreach ($request->file('attachments') as $file) {
+                    $filename = 'coaching_'.$session->id.'_'.time().'_'.uniqid().'.'.$file->getClientOriginalExtension();
+                    $path = $file->storeAs('coaching_attachments', $filename, 'local');
+
+                    $session->attachments()->create([
+                        'file_path' => $path,
+                        'original_filename' => $file->getClientOriginalName(),
+                        'mime_type' => $file->getMimeType(),
+                        'file_size' => $file->getSize(),
+                    ]);
+                }
+            }
+
+            // Notify the coachee
+            $session->load('coachee', 'coach');
+            $this->notificationService->notifyCoachingSessionCreated(
+                $session->coachee_id,
+                $session->coach->name,
+                $session->session_date->format('Y-m-d'),
+                $session->id,
+            );
+
+            return redirect()->route('coaching.sessions.show', $session)
+                ->with('message', 'Draft submitted successfully.')
+                ->with('type', 'success');
+        } catch (\Exception $e) {
+            Log::error('CoachingSessionController@submitDraft Error: '.$e->getMessage());
+
+            return $this->backWithFlash('Failed to submit draft.', 'error');
+        }
+    }
+
+    /**
      * Display the specified coaching session.
      */
     public function show(CoachingSession $session)
@@ -385,14 +595,17 @@ class CoachingSessionController extends Controller
         $canReview = $user->can('review', $session);
         $canEdit = $user->can('update', $session);
 
-        // Load last 5 coaching sessions for the same coachee (excluding current)
+        // Load last 5 coaching sessions for the same coachee (excluding current, submitted only)
         $coachingHistory = CoachingSession::where('coachee_id', $session->coachee_id)
             ->where('id', '!=', $session->id)
+            ->submitted()
             ->orderByDesc('session_date')
             ->limit(5)
             ->select(['id', 'session_date', 'purpose', 'severity_flag', 'compliance_status', 'ack_status'])
             ->with(['coach:id,first_name,last_name'])
             ->get();
+
+        $canSubmitDraft = $session->is_draft && $user->can('update', $session);
 
         return Inertia::render('Coaching/Sessions/Show', [
             'session' => $session,
@@ -400,6 +613,7 @@ class CoachingSessionController extends Controller
             'canAcknowledge' => $canAcknowledge,
             'canReview' => $canReview,
             'canEdit' => $canEdit,
+            'canSubmitDraft' => $canSubmitDraft,
             'purposes' => CoachingSession::PURPOSE_LABELS,
         ]);
     }

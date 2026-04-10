@@ -36,7 +36,8 @@ class GenerateCoachingLogsExportExcel implements ShouldQueue
         try {
             $this->updateProgress($cacheKey, 5, 'Fetching coaching sessions...');
 
-            $query = CoachingSession::with(['coachee', 'coach', 'complianceReviewer']);
+            $query = CoachingSession::with(['coachee', 'coach', 'complianceReviewer'])
+                ->submitted();
 
             if ($this->dateFrom) {
                 $query->where('session_date', '>=', Carbon::parse($this->dateFrom)->toDateString());

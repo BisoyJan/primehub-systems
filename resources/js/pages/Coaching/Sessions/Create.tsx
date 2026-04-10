@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Head, Link, useForm, usePage, router } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
-import { ArrowLeft, CheckCircle2, Circle, Users, UserPlus, X } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Circle, Users, UserPlus, X, Save, CloudUpload, Check, AlertTriangle } from 'lucide-react';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,8 @@ import {
     index as sessionsIndex,
     create as sessionsCreate,
     store as sessionsStore,
+    draft as sessionsDraft,
+    autoSaveDraft as sessionsAutoSaveDraft,
 } from '@/routes/coaching/sessions';
 
 import type { CoachingMode, CoachingPurposeLabels, User, Campaign } from '@/types';
@@ -30,10 +32,11 @@ interface Props extends InertiaPageProps {
     purposes: CoachingPurposeLabels;
     severityFlags: string[];
     coachedThisWeekIds: number[];
+    draftedThisWeekIds: number[];
 }
 
 export default function CoachingSessionsCreate() {
-    const { agents, teamLeads, coachableTeamLeads, isAdmin, coachingMode, selectedAgentId, purposes, severityFlags, coachedThisWeekIds } = usePage<Props>().props;
+    const { agents, teamLeads, coachableTeamLeads, isAdmin, coachingMode, selectedAgentId, purposes, severityFlags, coachedThisWeekIds, draftedThisWeekIds } = usePage<Props>().props;
 
     const { title, breadcrumbs } = usePageMeta({
         title: 'Create Coaching Session',
@@ -124,8 +127,123 @@ export default function CoachingSessionsCreate() {
         }
     }, [getQueue]);
 
+    // ─── Auto-save draft logic ──────────────────────────────────────
+    const [draftId, setDraftId] = useState<number | null>(null);
+    const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+    const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+    const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const isSubmittingRef = useRef(false);
+    const isNavigatingRef = useRef(false);
+    const formDataRef = useRef(data);
+    const initialDataRef = useRef(JSON.stringify(data));
+
+    // Keep formDataRef in sync
+    useEffect(() => {
+        formDataRef.current = data;
+    }, [data]);
+
+    const isFormDirty = useCallback(() => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { attachments: _a, ...currentWithout } = formDataRef.current;
+        const initialParsed = JSON.parse(initialDataRef.current);
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { attachments: _b, ...initialWithout } = initialParsed;
+        return JSON.stringify(currentWithout) !== JSON.stringify(initialWithout);
+    }, []);
+
+    const performAutoSave = useCallback(async () => {
+        if (isSubmittingRef.current || !formDataRef.current.coachee_id || processing) return;
+
+        const csrfToken = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content;
+        if (!csrfToken) return;
+
+        setAutoSaveStatus('saving');
+
+        try {
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { attachments, ...formFields } = formDataRef.current;
+
+            const response = await fetch(sessionsAutoSaveDraft().url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({
+                    ...formFields,
+                    draft_id: draftId,
+                }),
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                setDraftId(result.draft_id);
+                setAutoSaveStatus('saved');
+                setLastSavedAt(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+            } else {
+                setAutoSaveStatus('error');
+            }
+        } catch {
+            setAutoSaveStatus('error');
+        }
+    }, [draftId, processing]);
+
+    // Debounced auto-save: trigger 5 seconds after the last form change
+    useEffect(() => {
+        if (!data.coachee_id || isSubmittingRef.current) return;
+
+        // Don't auto-save if form hasn't been meaningfully changed
+        if (!isFormDirty() && !draftId) return;
+
+        if (autoSaveTimerRef.current) {
+            clearTimeout(autoSaveTimerRef.current);
+        }
+
+        autoSaveTimerRef.current = setTimeout(() => {
+            performAutoSave();
+        }, 5000);
+
+        return () => {
+            if (autoSaveTimerRef.current) {
+                clearTimeout(autoSaveTimerRef.current);
+            }
+        };
+    }, [data, performAutoSave, isFormDirty, draftId]);
+
+    // Warn on browser tab close / refresh
+    useEffect(() => {
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (isSubmittingRef.current) return;
+            if (isFormDirty() || draftId) {
+                e.preventDefault();
+            }
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [isFormDirty, draftId]);
+
+    // Warn on Inertia in-app navigation
+    useEffect(() => {
+        const removeListener = router.on('before', (event) => {
+            if (isSubmittingRef.current || isNavigatingRef.current) return true;
+            if (isFormDirty() || draftId) {
+                if (!window.confirm('You have unsaved changes. Your draft has been auto-saved, but any recent changes may be lost. Leave anyway?')) {
+                    event.preventDefault();
+                    return false;
+                }
+            }
+            return true;
+        });
+
+        return removeListener;
+    }, [isFormDirty, draftId]);
+    // ─── End auto-save logic ────────────────────────────────────────
+
     const handleModeSwitch = (mode: CoachingMode) => {
         if (mode === coachingMode) return;
+        isNavigatingRef.current = true;
         router.get(sessionsCreate.url({ query: { coaching_mode: mode } }), {}, { preserveState: false });
     };
 
@@ -137,10 +255,14 @@ export default function CoachingSessionsCreate() {
         return formFields;
     };
 
+    const [savingDraft, setSavingDraft] = useState(false);
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        isSubmittingRef.current = true;
         post(sessionsStore().url, {
             forceFormData: true,
+            onError: () => { isSubmittingRef.current = false; },
             onSuccess: () => {
                 // Mark current agent as done in the queue
                 const queue = getQueue();
@@ -166,11 +288,22 @@ export default function CoachingSessionsCreate() {
         });
     };
 
+    const handleSaveDraft = () => {
+        isSubmittingRef.current = true;
+        setSavingDraft(true);
+        post(sessionsDraft().url, {
+            forceFormData: true,
+            onError: () => { isSubmittingRef.current = false; },
+            onFinish: () => setSavingDraft(false),
+        });
+    };
+
     const handleSwitchToAgent = (agentId: number) => {
         // Save current agent's form data before switching
         if (selectedAgentId) {
             sessionStorage.setItem(`coaching_form_${selectedAgentId}`, JSON.stringify(getFormFieldsToSave()));
         }
+        isNavigatingRef.current = true;
         router.visit(sessionsCreate().url + `?coachee_id=${agentId}`);
     };
 
@@ -203,6 +336,7 @@ export default function CoachingSessionsCreate() {
             sessionStorage.setItem(`coaching_form_${selectedAgentId}`, JSON.stringify(getFormFieldsToSave()));
         }
 
+        isNavigatingRef.current = true;
         router.visit(sessionsCreate().url + `?coachee_id=${agent.id}`);
     };
 
@@ -218,14 +352,17 @@ export default function CoachingSessionsCreate() {
                 if (key.startsWith('coaching_form_')) sessionStorage.removeItem(key);
             });
             if (updated.length === 1 && updated[0].id !== selectedAgentId) {
+                isNavigatingRef.current = true;
                 router.visit(sessionsCreate().url + `?coachee_id=${updated[0].id}`);
             } else {
+                isNavigatingRef.current = true;
                 window.location.reload();
             }
         } else if (agentId === selectedAgentId) {
             // Removing the currently active agent — switch to next undone or first
             sessionStorage.setItem('coaching_queue', JSON.stringify(updated));
             const next = updated.find(a => !a.done) ?? updated[0];
+            isNavigatingRef.current = true;
             router.visit(sessionsCreate().url + `?coachee_id=${next.id}`);
         } else {
             sessionStorage.setItem('coaching_queue', JSON.stringify(updated));
@@ -371,17 +508,51 @@ export default function CoachingSessionsCreate() {
                         onAgentAddToQueue={handleAddAgentToQueue}
                         queueAgentIds={queueAgents.map(a => a.id)}
                         coachedThisWeekIds={coachedThisWeekIds ?? []}
+                        draftedThisWeekIds={draftedThisWeekIds ?? []}
                     />
 
-                    <div className="flex justify-end gap-3 pt-6">
-                        <Link href={sessionsIndex().url}>
-                            <Button type="button" variant="outline">
-                                Cancel
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-6">
+                        {/* Auto-save status indicator */}
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            {autoSaveStatus === 'saving' && (
+                                <>
+                                    <CloudUpload className="h-3.5 w-3.5 animate-pulse text-blue-500" />
+                                    <span>Auto-saving draft...</span>
+                                </>
+                            )}
+                            {autoSaveStatus === 'saved' && lastSavedAt && (
+                                <>
+                                    <Check className="h-3.5 w-3.5 text-green-500" />
+                                    <span>Draft auto-saved at {lastSavedAt}</span>
+                                </>
+                            )}
+                            {autoSaveStatus === 'error' && (
+                                <>
+                                    <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                                    <span>Auto-save failed</span>
+                                </>
+                            )}
+                        </div>
+
+                        <div className="flex gap-3">
+                            <Link href={sessionsIndex().url}>
+                                <Button type="button" variant="outline">
+                                    Cancel
+                                </Button>
+                            </Link>
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                disabled={processing || savingDraft || !data.coachee_id}
+                                onClick={handleSaveDraft}
+                            >
+                                <Save className="mr-2 h-4 w-4" />
+                                {savingDraft ? 'Saving Draft...' : 'Save as Draft'}
                             </Button>
-                        </Link>
-                        <Button type="submit" disabled={processing} className="bg-blue-600 hover:bg-blue-700 text-white">
-                            {processing ? 'Saving...' : 'Create Coaching Session'}
-                        </Button>
+                            <Button type="submit" disabled={processing || savingDraft} className="bg-blue-600 hover:bg-blue-700 text-white">
+                                {processing ? 'Saving...' : 'Create Coaching Session'}
+                            </Button>
+                        </div>
                     </div>
                 </form>
             </div>

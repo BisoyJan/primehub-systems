@@ -32,6 +32,15 @@ class CoachingSessionPolicy
      */
     public function view(User $user, CoachingSession $coachingSession): bool
     {
+        // Drafts are only visible to the coach who created them or admins
+        if ($coachingSession->is_draft) {
+            if ($coachingSession->coach_id === $user->id) {
+                return true;
+            }
+
+            return in_array($user->role, ['Super Admin', 'Admin']);
+        }
+
         // Coachee can view their own sessions
         if ($coachingSession->coachee_id === $user->id) {
             return $this->permissionService->userHasPermission($user, 'coaching.view_own');
@@ -115,6 +124,11 @@ class CoachingSessionPolicy
      */
     public function acknowledge(User $user, CoachingSession $coachingSession): bool
     {
+        // Cannot acknowledge drafts
+        if ($coachingSession->is_draft) {
+            return false;
+        }
+
         // Only the coachee of this session can acknowledge
         if ($coachingSession->coachee_id !== $user->id) {
             return false;
@@ -133,6 +147,11 @@ class CoachingSessionPolicy
      */
     public function review(User $user, CoachingSession $coachingSession): bool
     {
+        // Cannot review drafts
+        if ($coachingSession->is_draft) {
+            return false;
+        }
+
         // Session must be in For_Review status
         if ($coachingSession->compliance_status !== 'For_Review') {
             return false;

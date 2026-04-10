@@ -71,6 +71,9 @@ class CoachingSession extends Model
         // Other
         'severity_flag',
         'attachment_url',
+        // Draft
+        'is_draft',
+        'submitted_at',
     ];
 
     protected function casts(): array
@@ -81,6 +84,8 @@ class CoachingSession extends Model
             'ack_timestamp' => 'datetime',
             'agent_response_at' => 'datetime',
             'compliance_review_timestamp' => 'datetime',
+            'submitted_at' => 'datetime',
+            'is_draft' => 'boolean',
             // Booleans - Agent Profile
             'profile_new_hire' => 'boolean',
             'profile_tenured' => 'boolean',
@@ -215,6 +220,22 @@ class CoachingSession extends Model
                 $sq->where('campaign_id', $campaignId);
             });
         });
+    }
+
+    /**
+     * Scope to only draft sessions.
+     */
+    public function scopeDraft(Builder $query): Builder
+    {
+        return $query->where('is_draft', true);
+    }
+
+    /**
+     * Scope to only submitted (non-draft) sessions.
+     */
+    public function scopeSubmitted(Builder $query): Builder
+    {
+        return $query->where('is_draft', false);
     }
 
     /**

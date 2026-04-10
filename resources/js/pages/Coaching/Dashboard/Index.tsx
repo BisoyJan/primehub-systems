@@ -125,6 +125,7 @@ const STATUS_PRIORITY: Record<string, number> = {
     'Needs Coaching': 2,
     'Coaching Done': 3,
     'No Record': 4,
+    'Draft': 5,
 };
 
 function getStatusRowClass(status: string): string {
@@ -133,6 +134,7 @@ function getStatusRowClass(status: string): string {
         case 'Needs Coaching': return 'bg-yellow-50/50 dark:bg-yellow-950/20';
         case 'Badly Needs Coaching': return 'bg-orange-50/50 dark:bg-orange-950/20';
         case 'Please Coach ASAP': return 'bg-red-50/50 dark:bg-red-950/20';
+        case 'Draft': return 'bg-blue-50/50 dark:bg-blue-950/20';
         default: return '';
     }
 }
@@ -355,7 +357,7 @@ export default function CoachingDashboardIndex() {
                         <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted">
                             <div
                                 className={`h-full rounded-full transition-all ${followUpComplianceRate.rate >= 80 ? 'bg-green-500' :
-                                        followUpComplianceRate.rate >= 50 ? 'bg-amber-500' : 'bg-red-500'
+                                    followUpComplianceRate.rate >= 50 ? 'bg-amber-500' : 'bg-red-500'
                                     }`}
                                 style={{ width: `${followUpComplianceRate.rate}%` }}
                             />
@@ -417,6 +419,7 @@ export default function CoachingDashboardIndex() {
                                     <SelectItem value="Badly Needs Coaching">Badly Needs Coaching</SelectItem>
                                     <SelectItem value="Please Coach ASAP">Please Coach ASAP</SelectItem>
                                     <SelectItem value="No Record">No Record</SelectItem>
+                                    <SelectItem value="Draft">Draft</SelectItem>
                                 </SelectContent>
                             </Select>
                             <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} placeholder="Date from" />

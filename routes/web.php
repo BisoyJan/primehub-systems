@@ -447,6 +447,21 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
         Route::resource('sessions', CoachingSessionController::class)
             ->middleware('permission:coaching.view_own,coaching.view_team,coaching.view_all,coaching.create,coaching.edit,coaching.delete');
 
+        // Save as draft
+        Route::post('/sessions/draft', [CoachingSessionController::class, 'storeDraft'])
+            ->middleware('permission:coaching.create')
+            ->name('sessions.draft');
+
+        // Auto-save draft (background JSON endpoint)
+        Route::post('/sessions/auto-save-draft', [CoachingSessionController::class, 'autoSaveDraft'])
+            ->middleware('permission:coaching.create')
+            ->name('sessions.auto-save-draft');
+
+        // Submit a draft
+        Route::patch('/sessions/{session}/submit', [CoachingSessionController::class, 'submitDraft'])
+            ->middleware('permission:coaching.create,coaching.edit')
+            ->name('sessions.submit');
+
         // Session attachment viewing
         Route::get('/sessions/{session}/attachments/{attachment}', [CoachingSessionController::class, 'viewAttachment'])
             ->middleware('permission:coaching.view_own,coaching.view_team,coaching.view_all')

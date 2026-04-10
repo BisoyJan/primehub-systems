@@ -692,7 +692,7 @@ export default function StationIndex() {
 
                 {/* Desktop Table View - hidden on mobile */}
                 <div className="hidden md:block shadow rounded-md overflow-hidden">
-                    {isLoading ? (
+                    {isPageLoading ? (
                         <TableSkeleton columns={11} rows={8} />
                     ) : (
                         <div className="overflow-x-auto">

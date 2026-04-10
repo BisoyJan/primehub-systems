@@ -159,6 +159,7 @@ const getStatusRowClass = (status: string): string => {
         case 'Badly Needs Coaching': return 'bg-orange-50/50 dark:bg-orange-950/20';
         case 'Needs Coaching': return 'bg-yellow-50/50 dark:bg-yellow-950/20';
         case 'Coaching Done': return 'bg-green-50/50 dark:bg-green-950/20';
+        case 'Draft': return 'bg-blue-50/50 dark:bg-blue-950/20';
         default: return '';
     }
 };
@@ -334,7 +335,7 @@ export default function CoachingAdminIndex() {
                         <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted">
                             <div
                                 className={`h-full rounded-full transition-all ${followUpComplianceRate.rate >= 80 ? 'bg-green-500' :
-                                        followUpComplianceRate.rate >= 50 ? 'bg-amber-500' : 'bg-red-500'
+                                    followUpComplianceRate.rate >= 50 ? 'bg-amber-500' : 'bg-red-500'
                                     }`}
                                 style={{ width: `${followUpComplianceRate.rate}%` }}
                             />
@@ -378,6 +379,7 @@ export default function CoachingAdminIndex() {
                             <SelectItem value="Badly Needs Coaching">Badly Needs Coaching</SelectItem>
                             <SelectItem value="Please Coach ASAP">Please Coach ASAP</SelectItem>
                             <SelectItem value="No Record">No Record</SelectItem>
+                            <SelectItem value="Draft">Draft</SelectItem>
                         </SelectContent>
                     </Select>
                     <Select value={coacheeRole} onValueChange={handleCoacheeRoleChange}>

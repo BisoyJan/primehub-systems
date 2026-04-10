@@ -7,7 +7,7 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\CoachingSession>
+ * @extends Factory<CoachingSession>
  */
 class CoachingSessionFactory extends Factory
 {
@@ -60,6 +60,8 @@ class CoachingSessionFactory extends Factory
             'ack_status' => 'Pending',
             'compliance_status' => 'Awaiting_Agent_Ack',
             'severity_flag' => fake()->randomElement(['Normal', 'Normal', 'Normal', 'Critical']),
+            'is_draft' => false,
+            'submitted_at' => now(),
         ];
     }
 
@@ -136,6 +138,37 @@ class CoachingSessionFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'severity_flag' => 'Critical',
+        ]);
+    }
+
+    /**
+     * State: draft coaching session (not yet submitted).
+     */
+    public function draft(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'is_draft' => true,
+            'submitted_at' => null,
+            'ack_status' => 'Pending',
+            'compliance_status' => 'Awaiting_Agent_Ack',
+        ]);
+    }
+
+    /**
+     * State: minimal draft with only required fields.
+     */
+    public function minimalDraft(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'is_draft' => true,
+            'submitted_at' => null,
+            'purpose' => null,
+            'performance_description' => null,
+            'smart_action_plan' => null,
+            'agent_strengths_wins' => null,
+            'follow_up_date' => null,
+            'ack_status' => 'Pending',
+            'compliance_status' => 'Awaiting_Agent_Ack',
         ]);
     }
 }

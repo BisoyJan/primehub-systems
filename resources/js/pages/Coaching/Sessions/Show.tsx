@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
-import { ArrowLeft, Pencil, Printer, CheckCircle2, ShieldCheck, ShieldX, ZoomIn, ZoomOut, RotateCcw, History } from 'lucide-react';
+import { ArrowLeft, Pencil, Printer, CheckCircle2, ShieldCheck, ShieldX, ZoomIn, ZoomOut, RotateCcw, History, SendHorizonal } from 'lucide-react';
 import DOMPurify from 'dompurify';
 
 import AppLayout from '@/layouts/app-layout';
@@ -39,6 +39,7 @@ import {
     edit as sessionsEdit,
     acknowledge as sessionsAcknowledge,
     review as sessionsReview,
+    submit as sessionsSubmit,
     attachment as sessionsAttachment,
 } from '@/routes/coaching/sessions';
 
@@ -66,6 +67,7 @@ interface Props extends InertiaPageProps {
     canAcknowledge: boolean;
     canReview: boolean;
     canEdit: boolean;
+    canSubmitDraft: boolean;
     purposes: CoachingPurposeLabels;
     coaching_history: CoachingHistoryItem[];
 }
@@ -102,7 +104,7 @@ function SectionCard({ title, children }: { title: string; children: React.React
 }
 
 export default function CoachingSessionsShow() {
-    const { session, canAcknowledge, canReview, canEdit, purposes, coaching_history } = usePage<Props>().props;
+    const { session, canAcknowledge, canReview, canEdit, canSubmitDraft, purposes, coaching_history } = usePage<Props>().props;
 
     const { title, breadcrumbs } = usePageMeta({
         title: 'Coaching Session Details',
@@ -204,6 +206,28 @@ export default function CoachingSessionsShow() {
                         </div>
                     }
                 />
+
+                {/* Draft Banner */}
+                {session.is_draft && (
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 p-4 shadow-sm dark:border-amber-800 dark:bg-amber-950/30">
+                        <div className="flex items-center gap-2">
+                            <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800 dark:bg-amber-900/50 dark:text-amber-400">
+                                Draft
+                            </span>
+                            <span className="text-sm text-amber-800 dark:text-amber-300">
+                                This coaching session has not been submitted yet. The coachee will not see it until it is submitted.
+                            </span>
+                        </div>
+                        {canSubmitDraft && (
+                            <Link href={sessionsEdit.url(session.id)}>
+                                <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white">
+                                    <SendHorizonal className="mr-2 h-4 w-4" />
+                                    Edit &amp; Submit
+                                </Button>
+                            </Link>
+                        )}
+                    </div>
+                )}
 
                 {/* Status Bar */}
                 <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-card p-3 shadow-sm">
