@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Head, Link, useForm, usePage, router } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
-import { ArrowLeft, CheckCircle2, Circle, Users, UserPlus, X, Save, CloudUpload, Check, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Circle, Users, UserPlus, X, Save, SaveAll, CloudUpload, Check, AlertTriangle } from 'lucide-react';
+import { toast } from 'sonner';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -33,10 +34,11 @@ interface Props extends InertiaPageProps {
     severityFlags: string[];
     coachedThisWeekIds: number[];
     draftedThisWeekIds: number[];
+    existingDraft: Record<string, unknown> | null;
 }
 
 export default function CoachingSessionsCreate() {
-    const { agents, teamLeads, coachableTeamLeads, isAdmin, coachingMode, selectedAgentId, purposes, severityFlags, coachedThisWeekIds, draftedThisWeekIds } = usePage<Props>().props;
+    const { agents, teamLeads, coachableTeamLeads, isAdmin, coachingMode, selectedAgentId, purposes, severityFlags, coachedThisWeekIds, draftedThisWeekIds, existingDraft } = usePage<Props>().props;
 
     const { title, breadcrumbs } = usePageMeta({
         title: 'Create Coaching Session',
@@ -62,44 +64,47 @@ export default function CoachingSessionsCreate() {
     };
     const savedForm = getSavedFormData();
 
+    // Priority: savedForm (queue session storage) > existingDraft (server draft) > defaults
+    const prefill = savedForm ?? existingDraft;
+
     const { data, setData, post, errors, processing } = useForm({
         coaching_mode: coachingMode ?? 'assign',
         coach_id: '' as number | '',
         coachee_id: selectedAgentId ?? ('' as number | ''),
-        session_date: savedForm?.session_date ?? new Date().toISOString().split('T')[0],
+        session_date: prefill?.session_date ?? new Date().toISOString().split('T')[0],
         // Agent Profile
-        profile_new_hire: savedForm?.profile_new_hire ?? false,
-        profile_tenured: savedForm?.profile_tenured ?? false,
-        profile_returning: savedForm?.profile_returning ?? false,
-        profile_previously_coached_same_issue: savedForm?.profile_previously_coached_same_issue ?? false,
+        profile_new_hire: prefill?.profile_new_hire ?? false,
+        profile_tenured: prefill?.profile_tenured ?? false,
+        profile_returning: prefill?.profile_returning ?? false,
+        profile_previously_coached_same_issue: prefill?.profile_previously_coached_same_issue ?? false,
         // Purpose
-        purpose: savedForm?.purpose ?? ('' as string),
+        purpose: prefill?.purpose ?? ('' as string),
         // Focus Areas
-        focus_attendance_tardiness: savedForm?.focus_attendance_tardiness ?? false,
-        focus_productivity: savedForm?.focus_productivity ?? false,
-        focus_compliance: savedForm?.focus_compliance ?? false,
-        focus_callouts: savedForm?.focus_callouts ?? false,
-        focus_recognition_milestones: savedForm?.focus_recognition_milestones ?? false,
-        focus_growth_development: savedForm?.focus_growth_development ?? false,
-        focus_other: savedForm?.focus_other ?? false,
-        focus_other_notes: savedForm?.focus_other_notes ?? '',
+        focus_attendance_tardiness: prefill?.focus_attendance_tardiness ?? false,
+        focus_productivity: prefill?.focus_productivity ?? false,
+        focus_compliance: prefill?.focus_compliance ?? false,
+        focus_callouts: prefill?.focus_callouts ?? false,
+        focus_recognition_milestones: prefill?.focus_recognition_milestones ?? false,
+        focus_growth_development: prefill?.focus_growth_development ?? false,
+        focus_other: prefill?.focus_other ?? false,
+        focus_other_notes: prefill?.focus_other_notes ?? '',
         // Narrative
-        performance_description: savedForm?.performance_description ?? '',
+        performance_description: prefill?.performance_description ?? '',
         // Root Causes
-        root_cause_lack_of_skills: savedForm?.root_cause_lack_of_skills ?? false,
-        root_cause_lack_of_clarity: savedForm?.root_cause_lack_of_clarity ?? false,
-        root_cause_personal_issues: savedForm?.root_cause_personal_issues ?? false,
-        root_cause_motivation_engagement: savedForm?.root_cause_motivation_engagement ?? false,
-        root_cause_health_fatigue: savedForm?.root_cause_health_fatigue ?? false,
-        root_cause_workload_process: savedForm?.root_cause_workload_process ?? false,
-        root_cause_peer_conflict: savedForm?.root_cause_peer_conflict ?? false,
-        root_cause_others: savedForm?.root_cause_others ?? false,
-        root_cause_others_notes: savedForm?.root_cause_others_notes ?? '',
+        root_cause_lack_of_skills: prefill?.root_cause_lack_of_skills ?? false,
+        root_cause_lack_of_clarity: prefill?.root_cause_lack_of_clarity ?? false,
+        root_cause_personal_issues: prefill?.root_cause_personal_issues ?? false,
+        root_cause_motivation_engagement: prefill?.root_cause_motivation_engagement ?? false,
+        root_cause_health_fatigue: prefill?.root_cause_health_fatigue ?? false,
+        root_cause_workload_process: prefill?.root_cause_workload_process ?? false,
+        root_cause_peer_conflict: prefill?.root_cause_peer_conflict ?? false,
+        root_cause_others: prefill?.root_cause_others ?? false,
+        root_cause_others_notes: prefill?.root_cause_others_notes ?? '',
         // More Narrative
-        agent_strengths_wins: savedForm?.agent_strengths_wins ?? '',
-        smart_action_plan: savedForm?.smart_action_plan ?? '',
-        follow_up_date: savedForm?.follow_up_date ?? '',
-        severity_flag: savedForm?.severity_flag ?? 'Normal',
+        agent_strengths_wins: prefill?.agent_strengths_wins ?? '',
+        smart_action_plan: prefill?.smart_action_plan ?? '',
+        follow_up_date: prefill?.follow_up_date ?? '',
+        severity_flag: prefill?.severity_flag ?? 'Normal',
         attachments: [] as File[],
     });
 
@@ -108,6 +113,7 @@ export default function CoachingSessionsCreate() {
         name: string;
         coaching_status: string;
         done: boolean;
+        status?: 'done' | 'draft';
     }
 
     const getQueue = useCallback((): QueueAgent[] => {
@@ -128,10 +134,13 @@ export default function CoachingSessionsCreate() {
     }, [getQueue]);
 
     // ─── Auto-save draft logic ──────────────────────────────────────
-    const [draftId, setDraftId] = useState<number | null>(null);
-    const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+    const [draftId, setDraftId] = useState<number | null>(existingDraft?.id as number | null ?? null);
+    const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>(existingDraft ? 'saved' : 'idle');
+    const [autoSaveError, setAutoSaveError] = useState<string | null>(null);
     const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
     const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const autoSaveAbortRef = useRef<AbortController | null>(null);
+    const isSavingRef = useRef(false);
     const isSubmittingRef = useRef(false);
     const isNavigatingRef = useRef(false);
     const formDataRef = useRef(data);
@@ -157,7 +166,13 @@ export default function CoachingSessionsCreate() {
         const csrfToken = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content;
         if (!csrfToken) return;
 
+        // Abort any previous in-flight auto-save
+        autoSaveAbortRef.current?.abort();
+        const controller = new AbortController();
+        autoSaveAbortRef.current = controller;
+
         setAutoSaveStatus('saving');
+        isSavingRef.current = true;
 
         try {
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -174,18 +189,28 @@ export default function CoachingSessionsCreate() {
                     ...formFields,
                     draft_id: draftId,
                 }),
+                signal: controller.signal,
             });
 
             if (response.ok) {
                 const result = await response.json();
                 setDraftId(result.draft_id);
                 setAutoSaveStatus('saved');
+                setAutoSaveError(null);
+                isSavingRef.current = false;
                 setLastSavedAt(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
             } else {
+                const errorBody = await response.json().catch(() => null);
+                const message = errorBody?.message || `Server error (${response.status})`;
+                setAutoSaveError(message);
                 setAutoSaveStatus('error');
+                isSavingRef.current = false;
             }
-        } catch {
+        } catch (err) {
+            if (err instanceof DOMException && err.name === 'AbortError') return;
+            setAutoSaveError('Network error');
             setAutoSaveStatus('error');
+            isSavingRef.current = false;
         }
     }, [draftId, processing]);
 
@@ -214,21 +239,21 @@ export default function CoachingSessionsCreate() {
     // Warn on browser tab close / refresh
     useEffect(() => {
         const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-            if (isSubmittingRef.current) return;
-            if (isFormDirty() || draftId) {
+            if (isSubmittingRef.current || isNavigatingRef.current) return;
+            if (isFormDirty() || isSavingRef.current) {
                 e.preventDefault();
             }
         };
 
         window.addEventListener('beforeunload', handleBeforeUnload);
         return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-    }, [isFormDirty, draftId]);
+    }, [isFormDirty]);
 
     // Warn on Inertia in-app navigation
     useEffect(() => {
         const removeListener = router.on('before', (event) => {
             if (isSubmittingRef.current || isNavigatingRef.current) return true;
-            if (isFormDirty() || draftId) {
+            if (isFormDirty()) {
                 if (!window.confirm('You have unsaved changes. Your draft has been auto-saved, but any recent changes may be lost. Leave anyway?')) {
                     event.preventDefault();
                     return false;
@@ -238,7 +263,7 @@ export default function CoachingSessionsCreate() {
         });
 
         return removeListener;
-    }, [isFormDirty, draftId]);
+    }, [isFormDirty]);
     // ─── End auto-save logic ────────────────────────────────────────
 
     const handleModeSwitch = (mode: CoachingMode) => {
@@ -264,10 +289,10 @@ export default function CoachingSessionsCreate() {
             forceFormData: true,
             onError: () => { isSubmittingRef.current = false; },
             onSuccess: () => {
-                // Mark current agent as done in the queue
+                // Mark current agent as done (submitted) in the queue
                 const queue = getQueue();
                 if (queue.length > 0) {
-                    const updated = queue.map(a => a.id === selectedAgentId ? { ...a, done: true } : a);
+                    const updated = queue.map(a => a.id === selectedAgentId ? { ...a, done: true, status: 'done' as const } : a);
                     const nextAgent = updated.find(a => !a.done);
                     if (nextAgent) {
                         sessionStorage.setItem('coaching_queue', JSON.stringify(updated));
@@ -295,10 +320,99 @@ export default function CoachingSessionsCreate() {
             forceFormData: true,
             onError: () => { isSubmittingRef.current = false; },
             onFinish: () => setSavingDraft(false),
+            onSuccess: () => {
+                // Mark current agent as draft in the queue and move to next
+                const queue = getQueue();
+                if (queue.length > 0) {
+                    const updated = queue.map(a => a.id === selectedAgentId ? { ...a, done: true, status: 'draft' as const } : a);
+                    const nextAgent = updated.find(a => !a.done);
+                    if (nextAgent) {
+                        sessionStorage.setItem('coaching_queue', JSON.stringify(updated));
+                        if (selectedAgentId) {
+                            sessionStorage.setItem(`coaching_form_${selectedAgentId}`, JSON.stringify(getFormFieldsToSave()));
+                        }
+                        isNavigatingRef.current = true;
+                        router.visit(sessionsCreate().url + `?coachee_id=${nextAgent.id}`);
+                        return;
+                    } else {
+                        sessionStorage.removeItem('coaching_queue');
+                        Object.keys(sessionStorage).forEach(key => {
+                            if (key.startsWith('coaching_form_')) sessionStorage.removeItem(key);
+                        });
+                    }
+                }
+            },
+        });
+    };
+
+    const handleSaveAllAsDraft = () => {
+        isSubmittingRef.current = true;
+        setSavingDraft(true);
+        post(sessionsDraft().url, {
+            forceFormData: true,
+            onError: () => { isSubmittingRef.current = false; },
+            onFinish: () => setSavingDraft(false),
+            onSuccess: async () => {
+                const queue = getQueue();
+                const remainingAgents = queue.filter(a => a.id !== selectedAgentId && !a.done);
+                const failedAgents: string[] = [];
+
+                if (remainingAgents.length > 0) {
+                    const csrfToken = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content;
+                    if (csrfToken) {
+                        for (const agent of remainingAgents) {
+                            try {
+                                // Use saved form data if available, otherwise minimal data
+                                const savedRaw = sessionStorage.getItem(`coaching_form_${agent.id}`);
+                                const savedData = savedRaw ? JSON.parse(savedRaw) : {};
+
+                                const response = await fetch(sessionsAutoSaveDraft().url, {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'X-CSRF-TOKEN': csrfToken,
+                                        'Accept': 'application/json',
+                                    },
+                                    body: JSON.stringify({
+                                        coachee_id: agent.id,
+                                        coaching_mode: data.coaching_mode,
+                                        coach_id: data.coach_id || undefined,
+                                        session_date: savedData.session_date || data.session_date,
+                                        ...savedData,
+                                    }),
+                                });
+
+                                if (!response.ok) {
+                                    failedAgents.push(agent.name);
+                                }
+                            } catch {
+                                failedAgents.push(agent.name);
+                            }
+                        }
+                    }
+                }
+
+                if (failedAgents.length > 0) {
+                    toast.error(`Failed to save drafts for: ${failedAgents.join(', ')}. Please save them individually.`);
+                }
+
+                // Clear queue entirely
+                sessionStorage.removeItem('coaching_queue');
+                Object.keys(sessionStorage).forEach(key => {
+                    if (key.startsWith('coaching_form_')) sessionStorage.removeItem(key);
+                });
+
+                isNavigatingRef.current = true;
+                router.visit(sessionsIndex().url + '?tab=drafts');
+            },
         });
     };
 
     const handleSwitchToAgent = (agentId: number) => {
+        // Cancel pending auto-save timer and abort in-flight request
+        if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+        autoSaveAbortRef.current?.abort();
+
         // Save current agent's form data before switching
         if (selectedAgentId) {
             sessionStorage.setItem(`coaching_form_${selectedAgentId}`, JSON.stringify(getFormFieldsToSave()));
@@ -395,7 +509,7 @@ export default function CoachingSessionsCreate() {
                         <div className="flex items-center justify-between">
                             <span className="flex items-center gap-2 text-sm font-medium">
                                 <Users className="h-4 w-4 text-primary" />
-                                Bulk Coaching Queue ({queueAgents.filter(a => a.done).length}/{queueAgents.length} done)
+                                Bulk Coaching Queue ({queueAgents.filter(a => a.done).length}/{queueAgents.length} completed)
                             </span>
                             <button
                                 type="button"
@@ -420,12 +534,16 @@ export default function CoachingSessionsCreate() {
                                         onClick={() => agent.id !== selectedAgentId && handleSwitchToAgent(agent.id)}
                                         className={`flex items-center gap-1.5 rounded-l-md border px-2.5 py-1.5 text-xs transition-colors ${agent.id === selectedAgentId
                                             ? 'border-primary bg-primary/10 font-medium text-primary'
-                                            : agent.done
-                                                ? 'border-green-300 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950/30 dark:text-green-400 cursor-pointer hover:border-green-400 hover:bg-green-100 dark:hover:bg-green-950/50'
-                                                : 'border-muted-foreground/20 hover:border-primary/50 hover:bg-primary/5 cursor-pointer'
+                                            : agent.done && agent.status === 'draft'
+                                                ? 'border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-400 cursor-pointer hover:border-blue-400 hover:bg-blue-100 dark:hover:bg-blue-950/50'
+                                                : agent.done
+                                                    ? 'border-green-300 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950/30 dark:text-green-400 cursor-pointer hover:border-green-400 hover:bg-green-100 dark:hover:bg-green-950/50'
+                                                    : 'border-muted-foreground/20 hover:border-primary/50 hover:bg-primary/5 cursor-pointer'
                                             }`}
                                     >
-                                        {agent.done ? (
+                                        {agent.done && agent.status === 'draft' ? (
+                                            <Save className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                                        ) : agent.done ? (
                                             <CheckCircle2 className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
                                         ) : agent.id === selectedAgentId ? (
                                             <Circle className="h-3.5 w-3.5 fill-primary text-primary" />
@@ -438,7 +556,10 @@ export default function CoachingSessionsCreate() {
                                                 {agent.coaching_status}
                                             </Badge>
                                         )}
-                                        {agent.done && (
+                                        {agent.done && agent.status === 'draft' && (
+                                            <Badge variant="secondary" className="px-1 py-0 text-[9px] bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400">Draft</Badge>
+                                        )}
+                                        {agent.done && agent.status !== 'draft' && (
                                             <span className="text-[9px] text-green-600 dark:text-green-400">Done</span>
                                         )}
                                     </button>
@@ -450,9 +571,11 @@ export default function CoachingSessionsCreate() {
                                         }}
                                         className={`flex items-center rounded-r-md border border-l-0 px-1 py-1.5 text-xs transition-colors hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-950/30 dark:hover:text-red-400 ${agent.id === selectedAgentId
                                             ? 'border-primary text-primary/50'
-                                            : agent.done
-                                                ? 'border-green-300 text-green-600/50 dark:border-green-800 dark:text-green-400/50'
-                                                : 'border-muted-foreground/20 text-muted-foreground/50'
+                                            : agent.done && agent.status === 'draft'
+                                                ? 'border-blue-300 text-blue-600/50 dark:border-blue-800 dark:text-blue-400/50'
+                                                : agent.done
+                                                    ? 'border-green-300 text-green-600/50 dark:border-green-800 dark:text-green-400/50'
+                                                    : 'border-muted-foreground/20 text-muted-foreground/50'
                                             }`}
                                         title={`Remove ${agent.name} from queue`}
                                     >
@@ -529,7 +652,7 @@ export default function CoachingSessionsCreate() {
                             {autoSaveStatus === 'error' && (
                                 <>
                                     <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
-                                    <span>Auto-save failed</span>
+                                    <span>Auto-save failed{autoSaveError ? `: ${autoSaveError}` : ''}</span>
                                 </>
                             )}
                         </div>
@@ -540,15 +663,39 @@ export default function CoachingSessionsCreate() {
                                     Cancel
                                 </Button>
                             </Link>
-                            <Button
-                                type="button"
-                                variant="secondary"
-                                disabled={processing || savingDraft || !data.coachee_id}
-                                onClick={handleSaveDraft}
-                            >
-                                <Save className="mr-2 h-4 w-4" />
-                                {savingDraft ? 'Saving Draft...' : 'Save as Draft'}
-                            </Button>
+                            {queueAgents.length > 0 ? (
+                                <>
+                                    <Button
+                                        type="button"
+                                        variant="secondary"
+                                        disabled={processing || savingDraft || !data.coachee_id}
+                                        onClick={handleSaveDraft}
+                                    >
+                                        <Save className="mr-2 h-4 w-4" />
+                                        {savingDraft ? 'Saving...' : 'Save Draft & Next'}
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="secondary"
+                                        disabled={processing || savingDraft || !data.coachee_id}
+                                        onClick={handleSaveAllAsDraft}
+                                        className="border-dashed"
+                                    >
+                                        <SaveAll className="mr-2 h-4 w-4" />
+                                        {savingDraft ? 'Saving...' : 'Save All as Draft'}
+                                    </Button>
+                                </>
+                            ) : (
+                                <Button
+                                    type="button"
+                                    variant="secondary"
+                                    disabled={processing || savingDraft || !data.coachee_id}
+                                    onClick={handleSaveDraft}
+                                >
+                                    <Save className="mr-2 h-4 w-4" />
+                                    {savingDraft ? 'Saving Draft...' : 'Save as Draft'}
+                                </Button>
+                            )}
                             <Button type="submit" disabled={processing || savingDraft} className="bg-blue-600 hover:bg-blue-700 text-white">
                                 {processing ? 'Saving...' : 'Create Coaching Session'}
                             </Button>

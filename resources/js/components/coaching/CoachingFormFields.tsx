@@ -487,6 +487,10 @@ export function CoachingFormFields({
         setData(field, checked === true);
     };
 
+    const hasProfile = !!(data.profile_new_hire || data.profile_tenured || data.profile_returning || data.profile_previously_coached_same_issue);
+    const hasFocus = !!(data.focus_attendance_tardiness || data.focus_productivity || data.focus_compliance || data.focus_callouts || data.focus_recognition_milestones || data.focus_growth_development || data.focus_other);
+    const hasRootCause = !!(data.root_cause_lack_of_skills || data.root_cause_lack_of_clarity || data.root_cause_personal_issues || data.root_cause_motivation_engagement || data.root_cause_health_fatigue || data.root_cause_workload_process || data.root_cause_peer_conflict || data.root_cause_others);
+
     return (
         <div className="space-y-8">
             {/* Section 1: Agent & Date */}
@@ -757,6 +761,7 @@ export function CoachingFormFields({
                     ))}
                 </div>
                 {errors.profile && <p className="text-red-600 text-sm mt-1">{errors.profile}</p>}
+                {!errors.profile && !hasProfile && <p className="text-amber-600 text-sm mt-1">At least one profile selection is required.</p>}
             </section>
 
             {/* Section 3: Purpose */}
@@ -820,6 +825,7 @@ export function CoachingFormFields({
                     </div>
                 )}
                 {errors.focus && <p className="text-red-600 text-sm mt-1">{errors.focus}</p>}
+                {!errors.focus && !hasFocus && <p className="text-amber-600 text-sm mt-1">At least one focus area is required.</p>}
             </section>
 
             {/* Section 5: Performance Description */}
@@ -875,6 +881,7 @@ export function CoachingFormFields({
                     ))}
                 </div>
                 {errors.root_cause && <p className="text-red-600 text-sm mt-1">{errors.root_cause}</p>}
+                {!errors.root_cause && !hasRootCause && <p className="text-amber-600 text-sm mt-1">At least one root cause is required.</p>}
             </section>
 
             {/* Section 7: Agent Strengths */}

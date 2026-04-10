@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Traits\SanitizesHtmlInput;
 use App\Models\CoachingSession;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -10,6 +11,13 @@ use Illuminate\Validation\Validator;
 
 class UpdateCoachingSessionRequest extends FormRequest
 {
+    use SanitizesHtmlInput;
+
+    protected function prepareForValidation(): void
+    {
+        $this->sanitizeHtmlFields();
+    }
+
     /**
      * Determine if the user is authorized to make this request.
      */
@@ -25,15 +33,17 @@ class UpdateCoachingSessionRequest extends FormRequest
      */
     public function rules(): array
     {
+        $isDraft = $this->route('session')?->is_draft;
+
         return [
-            'session_date' => ['required', 'date', 'before_or_equal:today'],
+            'session_date' => [$isDraft ? 'nullable' : 'required', 'date', 'before_or_equal:today'],
             // Agent Profile
             'profile_new_hire' => ['sometimes', 'boolean'],
             'profile_tenured' => ['sometimes', 'boolean'],
             'profile_returning' => ['sometimes', 'boolean'],
             'profile_previously_coached_same_issue' => ['sometimes', 'boolean'],
             // Purpose
-            'purpose' => ['required', Rule::in(CoachingSession::PURPOSES)],
+            'purpose' => [$isDraft ? 'nullable' : 'required', Rule::in(CoachingSession::PURPOSES)],
             // Focus Areas
             'focus_attendance_tardiness' => ['sometimes', 'boolean'],
             'focus_productivity' => ['sometimes', 'boolean'],
@@ -42,9 +52,9 @@ class UpdateCoachingSessionRequest extends FormRequest
             'focus_recognition_milestones' => ['sometimes', 'boolean'],
             'focus_growth_development' => ['sometimes', 'boolean'],
             'focus_other' => ['sometimes', 'boolean'],
-            'focus_other_notes' => ['nullable', 'required_if:focus_other,true', 'string', 'max:100000'],
+            'focus_other_notes' => ['nullable', $isDraft ? 'sometimes' : 'required_if:focus_other,true', 'string', 'max:100000'],
             // Narrative
-            'performance_description' => ['required', 'string', 'min:10', 'max:100000'],
+            'performance_description' => array_filter([$isDraft ? 'nullable' : 'required', 'string', 'max:100000', $isDraft ? null : $this->richTextMinLength(10)]),
             // Root Causes
             'root_cause_lack_of_skills' => ['sometimes', 'boolean'],
             'root_cause_lack_of_clarity' => ['sometimes', 'boolean'],
@@ -57,8 +67,8 @@ class UpdateCoachingSessionRequest extends FormRequest
             'root_cause_others_notes' => ['nullable', 'string', 'max:7000'],
             // More Narrative
             'agent_strengths_wins' => ['nullable', 'string', 'max:100000'],
-            'smart_action_plan' => ['required', 'string', 'min:10', 'max:100000'],
-            'follow_up_date' => ['nullable', 'date'],
+            'smart_action_plan' => array_filter([$isDraft ? 'nullable' : 'required', 'string', 'max:100000', $isDraft ? null : $this->richTextMinLength(10)]),
+            'follow_up_date' => array_filter(['nullable', 'date', $isDraft ? null : 'after_or_equal:today']),
             // Other
             'severity_flag' => ['sometimes', Rule::in(CoachingSession::SEVERITY_FLAGS)],
             // Attachments
@@ -84,6 +94,7 @@ class UpdateCoachingSessionRequest extends FormRequest
             'smart_action_plan.required' => 'SMART action plan is required.',
             'smart_action_plan.min' => 'SMART action plan must be at least 10 characters.',
             'focus_other_notes.required_if' => 'Please specify the other focus area.',
+            'follow_up_date.after_or_equal' => 'Follow-up date must be today or later.',
             'attachments.max' => 'You can upload a maximum of 10 images.',
             'attachments.*.image' => 'Each attachment must be an image.',
             'attachments.*.mimes' => 'Only JPEG, PNG, GIF, and WebP images are allowed.',
@@ -98,6 +109,13 @@ class UpdateCoachingSessionRequest extends FormRequest
     {
         return [
             function (Validator $validator) {
+                $isDraft = $this->route('session')?->is_draft;
+
+                // Skip checkbox group validation for drafts (relaxed validation)
+                if ($isDraft) {
+                    return;
+                }
+
                 // Require at least one Agent Profile checkbox
                 if (! $this->boolean('profile_new_hire')
                     && ! $this->boolean('profile_tenured')

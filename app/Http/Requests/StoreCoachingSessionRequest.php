@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Traits\SanitizesHtmlInput;
 use App\Models\CoachingSession;
 use App\Models\EmployeeSchedule;
 use App\Models\User;
@@ -12,6 +13,13 @@ use Illuminate\Validation\Validator;
 
 class StoreCoachingSessionRequest extends FormRequest
 {
+    use SanitizesHtmlInput;
+
+    protected function prepareForValidation(): void
+    {
+        $this->sanitizeHtmlFields();
+    }
+
     /**
      * Determine if the user is authorized to make this request.
      */
@@ -51,7 +59,7 @@ class StoreCoachingSessionRequest extends FormRequest
             'focus_other' => ['sometimes', 'boolean'],
             'focus_other_notes' => ['nullable', 'required_if:focus_other,true', 'string', 'max:100000'],
             // Narrative
-            'performance_description' => ['required', 'string', 'min:10', 'max:100000'],
+            'performance_description' => ['required', 'string', 'max:100000', $this->richTextMinLength(10)],
             // Root Causes
             'root_cause_lack_of_skills' => ['sometimes', 'boolean'],
             'root_cause_lack_of_clarity' => ['sometimes', 'boolean'],
@@ -64,7 +72,7 @@ class StoreCoachingSessionRequest extends FormRequest
             'root_cause_others_notes' => ['nullable', 'string', 'max:7000'],
             // More Narrative
             'agent_strengths_wins' => ['nullable', 'string', 'max:100000'],
-            'smart_action_plan' => ['required', 'string', 'min:10', 'max:100000'],
+            'smart_action_plan' => ['required', 'string', 'max:100000', $this->richTextMinLength(10)],
             'follow_up_date' => ['nullable', 'date', 'after_or_equal:today'],
             // Other
             'severity_flag' => ['sometimes', Rule::in(CoachingSession::SEVERITY_FLAGS)],
@@ -160,6 +168,13 @@ class StoreCoachingSessionRequest extends FormRequest
                         return;
                     }
 
+                    // Prevent self-coaching
+                    if ((int) $coacheeId === (int) $this->user()->id) {
+                        $validator->errors()->add('coachee_id', 'You cannot coach yourself.');
+
+                        return;
+                    }
+
                     $coachee = User::find($coacheeId);
                     if (! $coachee) {
                         return;
@@ -198,6 +213,13 @@ class StoreCoachingSessionRequest extends FormRequest
                 $coachId = $isAdmin ? $this->input('coach_id') : $user->id;
 
                 if (! $coachId) {
+                    return;
+                }
+
+                // Prevent self-coaching
+                if ((int) $coachId === (int) $coacheeId) {
+                    $validator->errors()->add('coachee_id', 'You cannot coach yourself.');
+
                     return;
                 }
 

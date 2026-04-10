@@ -220,13 +220,96 @@ class CoachingDashboardService
             ->get()
             ->keyBy('coachee_id');
 
+        // Batch load all users with their active schedules and campaigns
+        $users = User::whereIn('id', $coacheeIds)
+            ->with('activeSchedule.campaign')
+            ->get()
+            ->keyBy('id');
+
+        // Batch query: last 3 session dates per coachee (for summary)
+        $recentSessions = CoachingSession::submitted()
+            ->whereIn('coachee_id', $coacheeIds)
+            ->orderByDesc('session_date')
+            ->get(['coachee_id', 'session_date'])
+            ->groupBy('coachee_id')
+            ->map(fn ($sessions) => $sessions->take(3)->pluck('session_date')->toArray());
+
+        // Batch query: pending acknowledgement counts per coachee
+        $pendingCounts = CoachingSession::submitted()
+            ->whereIn('coachee_id', $coacheeIds)
+            ->where('ack_status', 'Pending')
+            ->selectRaw('coachee_id, COUNT(*) as cnt')
+            ->groupBy('coachee_id')
+            ->pluck('cnt', 'coachee_id');
+
+        // Batch query: total sessions YTD per coachee
+        $totalSessionCounts = CoachingSession::submitted()
+            ->whereIn('coachee_id', $coacheeIds)
+            ->whereYear('session_date', now()->year)
+            ->selectRaw('coachee_id, COUNT(*) as cnt')
+            ->groupBy('coachee_id')
+            ->pluck('cnt', 'coachee_id');
+
+        // Batch query: last session date per coachee (for status calculation)
+        $lastSessionDates = CoachingSession::submitted()
+            ->whereIn('coachee_id', $coacheeIds)
+            ->selectRaw('coachee_id, MAX(session_date) as last_date')
+            ->groupBy('coachee_id')
+            ->pluck('last_date', 'coachee_id');
+
+        // Batch query: coachees with draft sessions (for status)
+        $coacheesWithDrafts = CoachingSession::draft()
+            ->whereIn('coachee_id', $coacheeIds)
+            ->distinct()
+            ->pluck('coachee_id')
+            ->flip();
+
+        // Get thresholds once
+        $thresholds = CoachingStatusSetting::getThresholds();
+        $coachingDoneMax = $thresholds['coaching_done_max_days'] ?? 15;
+        $needsCoachingMax = $thresholds['needs_coaching_max_days'] ?? 30;
+        $badlyNeedsMax = $thresholds['badly_needs_coaching_max_days'] ?? 45;
+        $noRecordDays = $thresholds['no_record_days'] ?? 60;
+
         foreach ($coacheeIds as $coacheeId) {
-            $summary = $this->getCoacheeSummary($coacheeId);
-            $user = User::find($coacheeId);
+            $user = $users->get($coacheeId);
 
             if (! $user) {
                 continue;
             }
+
+            // Calculate status from batch data
+            $lastDate = $lastSessionDates->get($coacheeId);
+            if (! $lastDate) {
+                $status = $coacheesWithDrafts->has($coacheeId) ? self::STATUS_DRAFT : self::STATUS_NO_RECORD;
+            } else {
+                $daysSince = Carbon::parse($lastDate)->startOfDay()->diffInDays(Carbon::today());
+                if ($daysSince >= $noRecordDays) {
+                    $status = self::STATUS_NO_RECORD;
+                } elseif ($daysSince > $badlyNeedsMax) {
+                    $status = self::STATUS_PLEASE_COACH_ASAP;
+                } elseif ($daysSince > $needsCoachingMax) {
+                    $status = self::STATUS_BADLY_NEEDS_COACHING;
+                } elseif ($daysSince > $coachingDoneMax) {
+                    $status = self::STATUS_NEEDS_COACHING;
+                } else {
+                    $status = self::STATUS_COACHING_DONE;
+                }
+            }
+
+            $statusColor = self::STATUS_COLORS[$status] ?? 'gray';
+            $dates = $recentSessions->get($coacheeId, []);
+
+            // Build summary from batch data
+            $summary = [
+                'coaching_status' => $status,
+                'status_color' => $statusColor,
+                'last_coached_date' => $dates[0] ?? null,
+                'previous_coached_date' => $dates[1] ?? null,
+                'older_coached_date' => $dates[2] ?? null,
+                'pending_acknowledgements' => $pendingCounts->get($coacheeId, 0),
+                'total_sessions' => $totalSessionCounts->get($coacheeId, 0),
+            ];
 
             // Apply status filter if set
             if (isset($filters['coaching_status']) && $summary['coaching_status'] !== $filters['coaching_status']) {
@@ -432,7 +515,7 @@ class CoachingDashboardService
         $total = $sessionsWithFollowUp->count();
 
         if ($total === 0) {
-            return ['rate' => 100, 'completed' => 0, 'total' => 0];
+            return ['rate' => null, 'completed' => 0, 'total' => 0];
         }
 
         // Batch: get all follow-up sessions for relevant coachees to avoid N+1

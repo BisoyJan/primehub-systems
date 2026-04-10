@@ -158,7 +158,7 @@ export const CoachingTab: React.FC<CoachingTabProps> = ({
                 </motion.div>
 
                 {/* Stat Cards */}
-                <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
+                <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
                     <StatCard
                         title="Sessions This Month"
                         value={sessions_this_month}
@@ -352,7 +352,7 @@ export const CoachingTab: React.FC<CoachingTabProps> = ({
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+                            <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
                                 {Object.entries(tlStatusCounts).map(([status, count]) => {
                                     const badgeClass = STATUS_BADGE_STYLES[status] ?? STATUS_BADGE_STYLES['No Record'];
                                     return (
@@ -371,7 +371,7 @@ export const CoachingTab: React.FC<CoachingTabProps> = ({
             )}
 
             {/* Agent Status Stat Cards */}
-            <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+            <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
                 {Object.entries(status_counts).map(([status, count], index) => (
                     <StatCard
                         key={status}
@@ -412,7 +412,7 @@ export const CoachingTab: React.FC<CoachingTabProps> = ({
                 </motion.div>
             )}
 
-            {/* Main Content Grid */}
+            {/* Main Content Grid: Coached/Not Coached Lists */}
             <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
                 {/* Not Coached This Week */}
                 <motion.div
@@ -539,52 +539,115 @@ export const CoachingTab: React.FC<CoachingTabProps> = ({
                         </CardContent>
                     </Card>
                 </motion.div>
+            </div>
 
-                {/* Quick Stats & Actions */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.4, delay: 0.3 }}
-                    className={`space-y-4 ${isAdmin && tlTotal > 0 ? 'lg:col-span-2' : ''}`}
-                >
-                    {/* Summary Cards */}
-                    <div className={`grid gap-4 grid-cols-1 ${isAdmin && tlTotal > 0 ? 'lg:grid-cols-2' : ''}`}>
-                        {/* Coaching Summary */}
+            {/* Coaching Summary Section */}
+            <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, delay: 0.3 }}
+            >
+                <div className={`grid gap-4 grid-cols-1 ${isAdmin && tlTotal > 0 ? 'md:grid-cols-2' : ''}`}>
+                    {/* Coaching Summary */}
+                    <Card className="h-full">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <ClipboardCheck className="h-5 w-5" />
+                                Coaching Summary
+                            </CardTitle>
+                            <CardDescription>
+                                Overview of coaching activity and pending actions
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="flex flex-col items-center rounded-lg border p-4">
+                                    <Users className="h-5 w-5 text-muted-foreground mb-1" />
+                                    <span className="text-2xl font-bold">{total_agents}</span>
+                                    <span className="text-xs text-muted-foreground">Total Agents</span>
+                                </div>
+                                <div className="flex flex-col items-center rounded-lg border p-4">
+                                    <TrendingUp className="h-5 w-5 text-muted-foreground mb-1" />
+                                    <span className="text-2xl font-bold">{sessions_this_month}</span>
+                                    <span className="text-xs text-muted-foreground">Sessions This Month</span>
+                                </div>
+                            </div>
+
+                            {/* Pending Actions */}
+                            <div className="space-y-2">
+                                <p className="text-sm font-medium text-muted-foreground">Pending Actions</p>
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between rounded-lg border p-3">
+                                        <span className="flex items-center gap-2 text-sm">
+                                            <Clock className="h-4 w-4 text-yellow-600" />
+                                            Awaiting Acknowledgement
+                                        </span>
+                                        <Badge variant="outline" className={`${pending_acks > 0 ? 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30' : ''}`}>
+                                            {pending_acks}
+                                        </Badge>
+                                    </div>
+                                    <div className="flex items-center justify-between rounded-lg border p-3">
+                                        <span className="flex items-center gap-2 text-sm">
+                                            <FileCheck className="h-4 w-4 text-blue-600" />
+                                            Pending Reviews
+                                        </span>
+                                        <Badge variant="outline" className={`${pending_reviews > 0 ? 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30' : ''}`}>
+                                            {pending_reviews}
+                                        </Badge>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Urgency Alert */}
+                            {urgentCount > 0 && (
+                                <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3">
+                                    <div className="flex items-center gap-2">
+                                        <ShieldAlert className="h-4 w-4 text-red-600" />
+                                        <span className="text-sm font-medium text-red-700 dark:text-red-400">
+                                            {urgentCount} {urgentCount === 1 ? 'agent needs' : 'agents need'} urgent coaching
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    {/* TL Coaching Summary (Admin only) */}
+                    {isAdmin && tlTotal > 0 && (
                         <Card className="h-full">
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2">
-                                    <ClipboardCheck className="h-5 w-5" />
-                                    Coaching Summary
+                                    <Users className="h-5 w-5" />
+                                    TL Coaching Summary
                                 </CardTitle>
                                 <CardDescription>
-                                    Overview of coaching activity and pending actions
+                                    Overview of team lead coaching activity
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4">
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="flex flex-col items-center rounded-lg border p-4">
                                         <Users className="h-5 w-5 text-muted-foreground mb-1" />
-                                        <span className="text-2xl font-bold">{total_agents}</span>
-                                        <span className="text-xs text-muted-foreground">Total Agents</span>
+                                        <span className="text-2xl font-bold">{tlTotal}</span>
+                                        <span className="text-xs text-muted-foreground">Total Team Leads</span>
                                     </div>
                                     <div className="flex flex-col items-center rounded-lg border p-4">
                                         <TrendingUp className="h-5 w-5 text-muted-foreground mb-1" />
-                                        <span className="text-2xl font-bold">{sessions_this_month}</span>
-                                        <span className="text-xs text-muted-foreground">Sessions This Month</span>
+                                        <span className="text-2xl font-bold">{tlSessionsThisMonth}</span>
+                                        <span className="text-xs text-muted-foreground">TL Sessions This Month</span>
                                     </div>
                                 </div>
 
-                                {/* Pending Actions */}
                                 <div className="space-y-2">
-                                    <p className="text-sm font-medium text-muted-foreground">Pending Actions</p>
+                                    <p className="text-sm font-medium text-muted-foreground">TL Pending Actions</p>
                                     <div className="space-y-2">
                                         <div className="flex items-center justify-between rounded-lg border p-3">
                                             <span className="flex items-center gap-2 text-sm">
                                                 <Clock className="h-4 w-4 text-yellow-600" />
                                                 Awaiting Acknowledgement
                                             </span>
-                                            <Badge variant="outline" className={`${pending_acks > 0 ? 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30' : ''}`}>
-                                                {pending_acks}
+                                            <Badge variant="outline" className={`${tlPendingAcks > 0 ? 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30' : ''}`}>
+                                                {tlPendingAcks}
                                             </Badge>
                                         </div>
                                         <div className="flex items-center justify-between rounded-lg border p-3">
@@ -592,111 +655,52 @@ export const CoachingTab: React.FC<CoachingTabProps> = ({
                                                 <FileCheck className="h-4 w-4 text-blue-600" />
                                                 Pending Reviews
                                             </span>
-                                            <Badge variant="outline" className={`${pending_reviews > 0 ? 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30' : ''}`}>
-                                                {pending_reviews}
+                                            <Badge variant="outline" className={`${tlPendingReviews > 0 ? 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30' : ''}`}>
+                                                {tlPendingReviews}
                                             </Badge>
                                         </div>
                                     </div>
                                 </div>
 
-                                {/* Urgency Alert */}
-                                {urgentCount > 0 && (
+                                {tlUrgentCount > 0 && (
                                     <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3">
                                         <div className="flex items-center gap-2">
                                             <ShieldAlert className="h-4 w-4 text-red-600" />
                                             <span className="text-sm font-medium text-red-700 dark:text-red-400">
-                                                {urgentCount} {urgentCount === 1 ? 'agent needs' : 'agents need'} urgent coaching
+                                                {tlUrgentCount} {tlUrgentCount === 1 ? 'TL needs' : 'TLs need'} urgent coaching
                                             </span>
                                         </div>
                                     </div>
                                 )}
                             </CardContent>
                         </Card>
+                    )}
+                </div>
+            </motion.div>
 
-                        {/* TL Coaching Summary (Admin only) */}
-                        {isAdmin && tlTotal > 0 && (
-                            <Card className="h-full">
-                                <CardHeader>
-                                    <CardTitle className="flex items-center gap-2">
-                                        <Users className="h-5 w-5" />
-                                        TL Coaching Summary
-                                    </CardTitle>
-                                    <CardDescription>
-                                        Overview of team lead coaching activity
-                                    </CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-4">
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="flex flex-col items-center rounded-lg border p-4">
-                                            <Users className="h-5 w-5 text-muted-foreground mb-1" />
-                                            <span className="text-2xl font-bold">{tlTotal}</span>
-                                            <span className="text-xs text-muted-foreground">Total Team Leads</span>
-                                        </div>
-                                        <div className="flex flex-col items-center rounded-lg border p-4">
-                                            <TrendingUp className="h-5 w-5 text-muted-foreground mb-1" />
-                                            <span className="text-2xl font-bold">{tlSessionsThisMonth}</span>
-                                            <span className="text-xs text-muted-foreground">TL Sessions This Month</span>
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <p className="text-sm font-medium text-muted-foreground">TL Pending Actions</p>
-                                        <div className="space-y-2">
-                                            <div className="flex items-center justify-between rounded-lg border p-3">
-                                                <span className="flex items-center gap-2 text-sm">
-                                                    <Clock className="h-4 w-4 text-yellow-600" />
-                                                    Awaiting Acknowledgement
-                                                </span>
-                                                <Badge variant="outline" className={`${tlPendingAcks > 0 ? 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30' : ''}`}>
-                                                    {tlPendingAcks}
-                                                </Badge>
-                                            </div>
-                                            <div className="flex items-center justify-between rounded-lg border p-3">
-                                                <span className="flex items-center gap-2 text-sm">
-                                                    <FileCheck className="h-4 w-4 text-blue-600" />
-                                                    Pending Reviews
-                                                </span>
-                                                <Badge variant="outline" className={`${tlPendingReviews > 0 ? 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30' : ''}`}>
-                                                    {tlPendingReviews}
-                                                </Badge>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {tlUrgentCount > 0 && (
-                                        <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3">
-                                            <div className="flex items-center gap-2">
-                                                <ShieldAlert className="h-4 w-4 text-red-600" />
-                                                <span className="text-sm font-medium text-red-700 dark:text-red-400">
-                                                    {tlUrgentCount} {tlUrgentCount === 1 ? 'TL needs' : 'TLs need'} urgent coaching
-                                                </span>
-                                            </div>
-                                        </div>
-                                    )}
-                                </CardContent>
-                            </Card>
-                        )}
-                    </div>
-
-                    {/* Quick Links */}
-                    <div className="flex flex-col sm:flex-row gap-2">
-                        <Button variant="outline" asChild className="flex-1">
-                            <Link href="/coaching/dashboard" className="flex items-center gap-2">
-                                <ClipboardCheck className="h-4 w-4" />
-                                Coaching Dashboard
-                                <ExternalLink className="h-3 w-3 ml-auto" />
-                            </Link>
-                        </Button>
-                        <Button variant="outline" asChild className="flex-1">
-                            <Link href="/coaching/sessions" className="flex items-center gap-2">
-                                <FileCheck className="h-4 w-4" />
-                                All Sessions
-                                <ExternalLink className="h-3 w-3 ml-auto" />
-                            </Link>
-                        </Button>
-                    </div>
-                </motion.div>
-            </div>
+            {/* Quick Links */}
+            <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, delay: 0.35 }}
+            >
+                <div className="flex flex-col sm:flex-row gap-2">
+                    <Button variant="outline" asChild className="flex-1">
+                        <Link href="/coaching/dashboard" className="flex items-center gap-2">
+                            <ClipboardCheck className="h-4 w-4" />
+                            Coaching Dashboard
+                            <ExternalLink className="h-3 w-3 ml-auto" />
+                        </Link>
+                    </Button>
+                    <Button variant="outline" asChild className="flex-1">
+                        <Link href="/coaching/sessions" className="flex items-center gap-2">
+                            <FileCheck className="h-4 w-4" />
+                            All Sessions
+                            <ExternalLink className="h-3 w-3 ml-auto" />
+                        </Link>
+                    </Button>
+                </div>
+            </motion.div>
         </div>
     );
 };

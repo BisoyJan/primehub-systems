@@ -122,7 +122,7 @@ interface Props extends InertiaPageProps {
     queueData: QueueData;
     upcomingFollowUps: FollowUp[];
     overdueFollowUps: FollowUp[];
-    followUpComplianceRate?: { rate: number; completed: number; total: number };
+    followUpComplianceRate?: { rate: number | null; completed: number; total: number };
     campaigns: Campaign[];
     teamLeads: User[];
     filters: Filters;
@@ -325,7 +325,7 @@ export default function CoachingAdminIndex() {
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-sm font-medium text-muted-foreground">Follow-up Compliance</p>
-                                <p className="text-2xl font-bold">{followUpComplianceRate.rate}%</p>
+                                <p className="text-2xl font-bold">{followUpComplianceRate.rate ?? 0}%</p>
                             </div>
                             <div className="text-right text-xs text-muted-foreground">
                                 <p>{followUpComplianceRate.completed} of {followUpComplianceRate.total}</p>
@@ -334,10 +334,10 @@ export default function CoachingAdminIndex() {
                         </div>
                         <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted">
                             <div
-                                className={`h-full rounded-full transition-all ${followUpComplianceRate.rate >= 80 ? 'bg-green-500' :
-                                    followUpComplianceRate.rate >= 50 ? 'bg-amber-500' : 'bg-red-500'
+                                className={`h-full rounded-full transition-all ${(followUpComplianceRate.rate ?? 0) >= 80 ? 'bg-green-500' :
+                                    (followUpComplianceRate.rate ?? 0) >= 50 ? 'bg-amber-500' : 'bg-red-500'
                                     }`}
-                                style={{ width: `${followUpComplianceRate.rate}%` }}
+                                style={{ width: `${followUpComplianceRate.rate ?? 0}%` }}
                             />
                         </div>
                     </div>

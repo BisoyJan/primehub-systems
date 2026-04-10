@@ -59,8 +59,7 @@ class GenerateCoachingLogsExportExcel implements ShouldQueue
                 });
             }
 
-            $records = $query->orderByDesc('session_date')->get();
-            $total = $records->count();
+            $total = (clone $query)->count();
 
             $this->updateProgress($cacheKey, 15, "Processing {$total} records...");
 
@@ -98,49 +97,51 @@ class GenerateCoachingLogsExportExcel implements ShouldQueue
             $row = 2;
             $processed = 0;
 
-            foreach ($records as $record) {
-                $agentName = $record->coachee
-                    ? $record->coachee->first_name.' '.$record->coachee->last_name
-                    : 'N/A';
+            $query->orderByDesc('session_date')->chunk(200, function ($records) use ($cacheKey, $total, $sheet, &$row, &$processed) {
+                foreach ($records as $record) {
+                    $agentName = $record->coachee
+                        ? $record->coachee->first_name.' '.$record->coachee->last_name
+                        : 'N/A';
 
-                $teamLeadName = $record->coach
-                    ? $record->coach->first_name.' '.$record->coach->last_name
-                    : 'N/A';
+                    $teamLeadName = $record->coach
+                        ? $record->coach->first_name.' '.$record->coach->last_name
+                        : 'N/A';
 
-                $reviewerName = $record->complianceReviewer
-                    ? $record->complianceReviewer->first_name.' '.$record->complianceReviewer->last_name
-                    : '';
+                    $reviewerName = $record->complianceReviewer
+                        ? $record->complianceReviewer->first_name.' '.$record->complianceReviewer->last_name
+                        : '';
 
-                $sheet->fromArray([
-                    Carbon::parse($record->session_date)->format('Y-m-d'),
-                    $agentName,
-                    $teamLeadName,
-                    CoachingSession::PURPOSE_LABELS[$record->purpose] ?? $record->purpose,
-                    $record->severity_flag,
-                    $this->buildProfileString($record),
-                    $this->buildFocusAreasString($record),
-                    $record->performance_description,
-                    $this->buildRootCausesString($record),
-                    $record->agent_strengths_wins ?? '',
-                    $record->smart_action_plan,
-                    $record->follow_up_date ? Carbon::parse($record->follow_up_date)->format('Y-m-d') : '',
-                    $record->ack_status,
-                    $record->ack_timestamp ? Carbon::parse($record->ack_timestamp)->format('Y-m-d H:i:s') : '',
-                    $record->ack_comment ?? '',
-                    str_replace('_', ' ', $record->compliance_status),
-                    $reviewerName,
-                    $record->compliance_notes ?? '',
-                    Carbon::parse($record->created_at)->format('Y-m-d H:i:s'),
-                ], null, 'A'.$row);
+                    $sheet->fromArray([
+                        Carbon::parse($record->session_date)->format('Y-m-d'),
+                        $agentName,
+                        $teamLeadName,
+                        CoachingSession::PURPOSE_LABELS[$record->purpose] ?? $record->purpose,
+                        $record->severity_flag,
+                        $this->buildProfileString($record),
+                        $this->buildFocusAreasString($record),
+                        $record->performance_description,
+                        $this->buildRootCausesString($record),
+                        $record->agent_strengths_wins ?? '',
+                        $record->smart_action_plan,
+                        $record->follow_up_date ? Carbon::parse($record->follow_up_date)->format('Y-m-d') : '',
+                        $record->ack_status,
+                        $record->ack_timestamp ? Carbon::parse($record->ack_timestamp)->format('Y-m-d H:i:s') : '',
+                        $record->ack_comment ?? '',
+                        str_replace('_', ' ', $record->compliance_status),
+                        $reviewerName,
+                        $record->compliance_notes ?? '',
+                        Carbon::parse($record->created_at)->format('Y-m-d H:i:s'),
+                    ], null, 'A'.$row);
 
-                $row++;
-                $processed++;
+                    $row++;
+                    $processed++;
 
-                if ($processed % 50 === 0) {
-                    $percent = 25 + intval(($processed / max($total, 1)) * 50);
-                    $this->updateProgress($cacheKey, $percent, "Processing record {$processed}/{$total}...");
+                    if ($processed % 50 === 0) {
+                        $percent = 25 + intval(($processed / max($total, 1)) * 50);
+                        $this->updateProgress($cacheKey, $percent, "Processing record {$processed}/{$total}...");
+                    }
                 }
-            }
+            });
 
             $this->updateProgress($cacheKey, 80, 'Auto-sizing columns...');
 

@@ -1,6 +1,7 @@
 import { Fragment, useState, useMemo } from 'react';
 import { Head, Link, useForm, usePage, router } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
+import DOMPurify from 'dompurify';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -254,7 +255,16 @@ export default function CoachingSessionsIndex() {
     };
 
     const handleDelete = (id: number) => {
-        deleteForm.delete(sessionsDestroy(id).url, { preserveScroll: true });
+        deleteForm.delete(sessionsDestroy(id).url, {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => {
+                // Navigate to previous page if we just deleted the last item on this page
+                if (sessions.data.length === 1 && sessions.current_page > 1) {
+                    router.reload({ data: { page: sessions.current_page - 1 } });
+                }
+            },
+        });
     };
 
     const formatName = (user?: { first_name: string; last_name: string } | null) => {
@@ -672,11 +682,11 @@ export default function CoachingSessionsIndex() {
                                                             <div className="grid gap-3 sm:grid-cols-2">
                                                                 <div>
                                                                     <p className="text-xs font-semibold text-muted-foreground mb-1">Performance Description</p>
-                                                                    <p className="text-sm line-clamp-3" dangerouslySetInnerHTML={{ __html: session.performance_description || 'N/A' }} />
+                                                                    <p className="text-sm line-clamp-3" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(session.performance_description || 'N/A') }} />
                                                                 </div>
                                                                 <div>
                                                                     <p className="text-xs font-semibold text-muted-foreground mb-1">SMART Action Plan</p>
-                                                                    <p className="text-sm line-clamp-3" dangerouslySetInnerHTML={{ __html: session.smart_action_plan || 'N/A' }} />
+                                                                    <p className="text-sm line-clamp-3" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(session.smart_action_plan || 'N/A') }} />
                                                                 </div>
                                                             </div>
                                                             <div className="mt-2 flex gap-2">

@@ -46,7 +46,8 @@ import {
 import type { CoachingSession, CoachingPurposeLabels } from '@/types';
 
 /** Strip near-black inline color styles that break dark mode readability */
-function sanitizeRichHtml(html: string): string {
+function sanitizeRichHtml(html: string | null | undefined): string {
+    if (!html) return '';
     return DOMPurify.sanitize(
         html.replace(/color:\s*(?:#(?:1a1a1a|000000|111|222|333)|rgb\(\s*26,\s*26,\s*26\s*\))/gi, 'color: inherit')
     );

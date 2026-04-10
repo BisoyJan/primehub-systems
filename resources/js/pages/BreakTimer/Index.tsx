@@ -121,6 +121,7 @@ export default function BreakTimerIndex() {
     const [isPauseDialogOpen, setIsPauseDialogOpen] = useState(false);
     const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
     const [isStartDialogOpen, setIsStartDialogOpen] = useState(false);
+    const [isEndDialogOpen, setIsEndDialogOpen] = useState(false);
     const [pendingStartType, setPendingStartType] = useState<'break' | 'lunch' | { combined: number } | { combinedBreak: number } | null>(null);
     const [pauseReason, setPauseReason] = useState('');
     const [resetApproval, setResetApproval] = useState('');
@@ -173,17 +174,19 @@ export default function BreakTimerIndex() {
 
     // Timer tick
     useEffect(() => {
-        if (activeSession && activeSession.status === 'active') {
+        if (timerRef.current) clearInterval(timerRef.current);
+
+        const dialogOpen = isEndDialogOpen || isPauseDialogOpen;
+
+        if (activeSession && activeSession.status === 'active' && !dialogOpen) {
             setRemainingSeconds(calculateRemaining());
             timerRef.current = setInterval(() => {
                 const r = calculateRemaining();
                 setRemainingSeconds(r);
                 checkOverage(r, true);
             }, 1000);
-
-            return () => {
-                if (timerRef.current) clearInterval(timerRef.current);
-            };
+        } else if (activeSession && activeSession.status === 'active' && dialogOpen) {
+            // Timer frozen while confirmation dialog is open
         } else if (activeSession && activeSession.status === 'paused') {
             setRemainingSeconds(activeSession.remaining_seconds ?? 0);
             stopAlarm();
@@ -195,7 +198,7 @@ export default function BreakTimerIndex() {
         return () => {
             if (timerRef.current) clearInterval(timerRef.current);
         };
-    }, [activeSession, calculateRemaining]);
+    }, [activeSession, calculateRemaining, isEndDialogOpen, isPauseDialogOpen]);
 
     // Periodic server sync every 60s to correct client-side drift
     const isSyncingRef = useRef(false);
@@ -302,6 +305,29 @@ export default function BreakTimerIndex() {
             preserveScroll: true,
             onFinish: () => setIsSubmitting(false),
         });
+    }
+
+    function handleEndClick() {
+        if (!activeSession) return;
+        // If overbreak, end directly without confirmation
+        if (remainingSeconds < 0) {
+            handleEnd();
+            return;
+        }
+        // Has remaining time — freeze timer and show confirmation
+        setIsEndDialogOpen(true);
+    }
+
+    function handleEndCancel() {
+        // Re-baseline timer from the frozen value so it resumes correctly
+        propsReceivedAtRef.current = Date.now();
+        serverRemainingRef.current = remainingSeconds;
+        setIsEndDialogOpen(false);
+    }
+
+    function handleEndConfirm() {
+        setIsEndDialogOpen(false);
+        handleEnd();
     }
 
     function handleReset() {
@@ -772,7 +798,7 @@ export default function BreakTimerIndex() {
                             {hasSession && (
                                 <Button
                                     size="lg"
-                                    onClick={handleEnd}
+                                    onClick={handleEndClick}
                                     disabled={isSubmitting}
                                     className="h-12 gap-2 rounded-full px-7 text-sm font-semibold text-white shadow-lg transition-[filter] hover:brightness-110"
                                     style={btnStyle(theme.btnEnd)}
@@ -935,7 +961,15 @@ export default function BreakTimerIndex() {
             </div>
 
             {/* Pause Reason Dialog */}
-            <Dialog open={isPauseDialogOpen} onOpenChange={setIsPauseDialogOpen}>
+            <Dialog open={isPauseDialogOpen} onOpenChange={(open) => {
+                if (!open) {
+                    // Re-baseline timer from frozen value so it resumes correctly
+                    propsReceivedAtRef.current = Date.now();
+                    serverRemainingRef.current = remainingSeconds;
+                    setIsPauseDialogOpen(false);
+                    setPauseReason('');
+                }
+            }}>
                 <DialogContent className="max-w-[90vw] sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle>Pause Timer</DialogTitle>
@@ -963,7 +997,12 @@ export default function BreakTimerIndex() {
                             />
                         )}
                         <div className="flex justify-end gap-2">
-                            <Button variant="outline" onClick={() => setIsPauseDialogOpen(false)}>
+                            <Button variant="outline" onClick={() => {
+                                propsReceivedAtRef.current = Date.now();
+                                serverRemainingRef.current = remainingSeconds;
+                                setIsPauseDialogOpen(false);
+                                setPauseReason('');
+                            }}>
                                 Cancel
                             </Button>
                             <Button onClick={handlePause} disabled={!pauseReason.trim() || isSubmitting}>
@@ -1001,6 +1040,26 @@ export default function BreakTimerIndex() {
                                 Reset Shift
                             </Button>
                         </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* End Confirmation Dialog */}
+            <Dialog open={isEndDialogOpen} onOpenChange={(open) => { if (!open) handleEndCancel(); }}>
+                <DialogContent className="max-w-[90vw] sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>End Break Early?</DialogTitle>
+                        <DialogDescription>
+                            You still have {formatTime(remainingSeconds)} remaining. Are you sure you want to end now?
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex justify-end gap-2">
+                        <Button variant="outline" onClick={handleEndCancel}>
+                            Cancel
+                        </Button>
+                        <Button onClick={handleEndConfirm} disabled={isSubmitting} variant="destructive">
+                            End Now
+                        </Button>
                     </div>
                 </DialogContent>
             </Dialog>

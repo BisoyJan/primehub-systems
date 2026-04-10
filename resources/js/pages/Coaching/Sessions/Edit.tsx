@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
 import { ArrowLeft, SendHorizonal } from 'lucide-react';
+import { toast } from 'sonner';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -19,7 +20,6 @@ import {
 } from '@/routes/coaching/sessions';
 
 import type { CoachingSession, CoachingPurposeLabels } from '@/types';
-import { useState, useCallback } from 'react';
 
 interface Props extends InertiaPageProps {
     session: CoachingSession;
@@ -41,7 +41,7 @@ export default function CoachingSessionsEdit() {
     useFlashMessage();
     const isPageLoading = usePageLoading();
 
-    const { data, setData, put, errors, processing } = useForm({
+    const { data, setData, put, patch, errors, processing } = useForm({
         session_date: session.session_date ? session.session_date.split('T')[0] : '',
         // Agent Profile
         profile_new_hire: session.profile_new_hire,
@@ -83,9 +83,12 @@ export default function CoachingSessionsEdit() {
     const [removedAttachmentIds, setRemovedAttachmentIds] = useState<number[]>([]);
 
     const handleRemoveExistingAttachment = useCallback((id: number) => {
-        setRemovedAttachmentIds((prev) => [...prev, id]);
-        setData('removed_attachments', [...(data.removed_attachments as number[] || []), id]);
-    }, [data.removed_attachments, setData]);
+        setRemovedAttachmentIds((prev) => {
+            const updated = [...prev, id];
+            setData('removed_attachments', updated);
+            return updated;
+        });
+    }, [setData]);
 
     const getAttachmentViewUrl = useCallback((sessionId: number, attachmentId: number) => {
         return sessionsAttachment.url({ session: sessionId, attachment: attachmentId });
@@ -106,8 +109,29 @@ export default function CoachingSessionsEdit() {
     };
 
     const handleSubmitDraft = () => {
+        // Frontend precheck for required fields before server round-trip
+        const missing: string[] = [];
+        if (!data.performance_description || data.performance_description.replace(/<[^>]*>/g, '').trim().length < 10) {
+            missing.push('Performance Description (min 10 characters)');
+        }
+        if (!data.smart_action_plan || data.smart_action_plan.replace(/<[^>]*>/g, '').trim().length < 10) {
+            missing.push('SMART Action Plan (min 10 characters)');
+        }
+        if (!data.purpose) {
+            missing.push('Purpose');
+        }
+        if (!data.session_date) {
+            missing.push('Session Date');
+        }
+        if (missing.length > 0) {
+            toast.error('Please complete required fields before submitting', {
+                description: missing.join(', '),
+            });
+            return;
+        }
+
         setSubmittingDraft(true);
-        put(sessionsSubmit(session.id).url, {
+        patch(sessionsSubmit(session.id).url, {
             forceFormData: true,
             onFinish: () => setSubmittingDraft(false),
         });

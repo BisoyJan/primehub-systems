@@ -85,7 +85,7 @@ interface Props extends InertiaPageProps {
     campaignName: string;
     upcomingFollowUps: FollowUp[];
     overdueFollowUps: FollowUp[];
-    followUpComplianceRate?: { rate: number; completed: number; total: number };
+    followUpComplianceRate?: { rate: number | null; completed: number; total: number };
     filters: Filters;
     statusColors: CoachingStatusColors;
     purposes: CoachingPurposeLabels;
@@ -214,7 +214,10 @@ export default function CoachingDashboardIndex() {
 
     const selectedDateFollowUps = useMemo(() => {
         if (!calendarSelectedDate) return allFollowUps;
-        const dateStr = calendarSelectedDate.toISOString().split('T')[0];
+        const y = calendarSelectedDate.getFullYear();
+        const m = String(calendarSelectedDate.getMonth() + 1).padStart(2, '0');
+        const d = String(calendarSelectedDate.getDate()).padStart(2, '0');
+        const dateStr = `${y}-${m}-${d}`;
         return allFollowUps.filter((item) => item.follow_up_date === dateStr);
     }, [calendarSelectedDate, allFollowUps]);
 
@@ -347,7 +350,7 @@ export default function CoachingDashboardIndex() {
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-sm font-medium text-muted-foreground">Follow-up Compliance</p>
-                                <p className="text-2xl font-bold">{followUpComplianceRate.rate}%</p>
+                                <p className="text-2xl font-bold">{followUpComplianceRate.rate ?? 0}%</p>
                             </div>
                             <div className="text-right text-xs text-muted-foreground">
                                 <p>{followUpComplianceRate.completed} of {followUpComplianceRate.total}</p>
@@ -356,10 +359,10 @@ export default function CoachingDashboardIndex() {
                         </div>
                         <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted">
                             <div
-                                className={`h-full rounded-full transition-all ${followUpComplianceRate.rate >= 80 ? 'bg-green-500' :
-                                    followUpComplianceRate.rate >= 50 ? 'bg-amber-500' : 'bg-red-500'
+                                className={`h-full rounded-full transition-all ${(followUpComplianceRate.rate ?? 0) >= 80 ? 'bg-green-500' :
+                                    (followUpComplianceRate.rate ?? 0) >= 50 ? 'bg-amber-500' : 'bg-red-500'
                                     }`}
-                                style={{ width: `${followUpComplianceRate.rate}%` }}
+                                style={{ width: `${followUpComplianceRate.rate ?? 0}%` }}
                             />
                         </div>
                     </div>

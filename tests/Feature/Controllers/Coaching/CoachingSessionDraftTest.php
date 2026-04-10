@@ -595,7 +595,7 @@ class CoachingSessionDraftTest extends TestCase
         $response = $this->actingAs($team['teamLead'])
             ->delete(route('coaching.sessions.destroy', $draft));
 
-        $response->assertRedirect(route('coaching.sessions.index'));
+        $response->assertRedirect();
         $this->assertDatabaseMissing('coaching_sessions', ['id' => $draft->id]);
     }
 
@@ -613,7 +613,7 @@ class CoachingSessionDraftTest extends TestCase
         $response = $this->actingAs($admin)
             ->delete(route('coaching.sessions.destroy', $draft));
 
-        $response->assertRedirect(route('coaching.sessions.index'));
+        $response->assertRedirect();
         $this->assertDatabaseMissing('coaching_sessions', ['id' => $draft->id]);
     }
 

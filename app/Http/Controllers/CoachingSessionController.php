@@ -21,6 +21,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 class CoachingSessionController extends Controller
@@ -275,11 +276,38 @@ class CoachingSessionController extends Controller
         // Pre-select agent if provided via query param
         $selectedAgentId = $request->input('agent_id') ?? $request->input('coachee_id');
 
+        // Week boundaries used for draft lookups and coached-this-week checks
+        $startOfWeek = now()->startOfWeek();
+        $endOfWeek = now()->endOfWeek();
+
+        // Load existing draft for the selected agent this week
+        $existingDraft = null;
+        if ($selectedAgentId) {
+            $draft = CoachingSession::where('coachee_id', $selectedAgentId)
+                ->where('coach_id', $user->id)
+                ->where('is_draft', true)
+                ->whereBetween('session_date', [$startOfWeek, $endOfWeek])
+                ->first();
+
+            if ($draft) {
+                $existingDraft = $draft->only([
+                    'id', 'coachee_id', 'session_date', 'purpose', 'severity_flag',
+                    'profile_new_hire', 'profile_tenured', 'profile_returning', 'profile_previously_coached_same_issue',
+                    'focus_attendance_tardiness', 'focus_productivity', 'focus_compliance', 'focus_callouts',
+                    'focus_recognition_milestones', 'focus_growth_development', 'focus_other', 'focus_other_notes',
+                    'root_cause_lack_of_skills', 'root_cause_lack_of_clarity', 'root_cause_personal_issues',
+                    'root_cause_motivation_engagement', 'root_cause_health_fatigue', 'root_cause_workload_process',
+                    'root_cause_peer_conflict', 'root_cause_others', 'root_cause_others_notes',
+                    'performance_description', 'agent_strengths_wins', 'smart_action_plan', 'follow_up_date',
+                ]);
+            }
+        }
+
         // Handle clone_from
         $cloneData = null;
         if ($request->has('clone_from')) {
             $sourceSession = CoachingSession::find($request->clone_from);
-            if ($sourceSession) {
+            if ($sourceSession && $request->user()->can('view', $sourceSession)) {
                 $cloneData = $sourceSession->only([
                     'coachee_id', 'purpose', 'severity_flag',
                     'profile_new_hire', 'profile_tenured', 'profile_returning', 'profile_previously_coached_same_issue',
@@ -294,8 +322,6 @@ class CoachingSessionController extends Controller
         }
 
         // Get IDs of agents who have already been coached this week
-        $startOfWeek = now()->startOfWeek();
-        $endOfWeek = now()->endOfWeek();
         $coachedThisWeekIds = CoachingSession::whereBetween('session_date', [$startOfWeek, $endOfWeek])
             ->where('is_draft', false)
             ->pluck('coachee_id')
@@ -321,6 +347,7 @@ class CoachingSessionController extends Controller
             'purposes' => CoachingSession::PURPOSE_LABELS,
             'severityFlags' => CoachingSession::SEVERITY_FLAGS,
             'clone_data' => $cloneData,
+            'existingDraft' => $existingDraft,
             'coachedThisWeekIds' => $coachedThisWeekIds,
             'draftedThisWeekIds' => $draftedThisWeekIds,
         ]);
@@ -365,7 +392,7 @@ class CoachingSessionController extends Controller
             // Handle file uploads outside transaction
             if ($request->hasFile('attachments')) {
                 foreach ($request->file('attachments') as $file) {
-                    $filename = 'coaching_'.$session->id.'_'.time().'_'.uniqid().'.'.$file->getClientOriginalExtension();
+                    $filename = 'coaching_'.$session->id.'_'.Str::uuid().'.'.$file->getClientOriginalExtension();
                     $path = $file->storeAs('coaching_attachments', $filename, 'local');
 
                     $session->attachments()->create([
@@ -422,6 +449,27 @@ class CoachingSessionController extends Controller
 
                 unset($validated['coaching_mode'], $validated['attachments']);
 
+                // Check if this coachee already has a session this week
+                $startOfWeek = now()->startOfWeek();
+                $endOfWeek = now()->endOfWeek();
+
+                $existingSession = CoachingSession::where('coachee_id', $validated['coachee_id'])
+                    ->where('coach_id', $validated['coach_id'])
+                    ->whereBetween('session_date', [$startOfWeek, $endOfWeek])
+                    ->first();
+
+                if ($existingSession && ! $existingSession->is_draft) {
+                    throw new \RuntimeException('ALREADY_SUBMITTED');
+                }
+
+                if ($existingSession && $existingSession->is_draft) {
+                    // Update the existing draft instead of creating a duplicate
+                    unset($validated['coach_id'], $validated['coachee_id']);
+                    $existingSession->update($validated);
+
+                    return $existingSession;
+                }
+
                 $validated['is_draft'] = true;
                 $validated['ack_status'] = 'Pending';
                 $validated['compliance_status'] = 'Awaiting_Agent_Ack';
@@ -432,7 +480,7 @@ class CoachingSessionController extends Controller
             // Handle file uploads outside transaction
             if ($request->hasFile('attachments')) {
                 foreach ($request->file('attachments') as $file) {
-                    $filename = 'coaching_'.$session->id.'_'.time().'_'.uniqid().'.'.$file->getClientOriginalExtension();
+                    $filename = 'coaching_'.$session->id.'_'.Str::uuid().'.'.$file->getClientOriginalExtension();
                     $path = $file->storeAs('coaching_attachments', $filename, 'local');
 
                     $session->attachments()->create([
@@ -447,6 +495,11 @@ class CoachingSessionController extends Controller
             return redirect()->route('coaching.sessions.show', $session)
                 ->with('message', 'Coaching session saved as draft.')
                 ->with('type', 'success');
+        } catch (\RuntimeException $e) {
+            if ($e->getMessage() === 'ALREADY_SUBMITTED') {
+                return $this->backWithFlash('This agent already has a submitted coaching session this week.', 'error');
+            }
+            throw $e;
         } catch (\Exception $e) {
             Log::error('CoachingSessionController@storeDraft Error: '.$e->getMessage());
 
@@ -492,13 +545,45 @@ class CoachingSessionController extends Controller
                 }
 
                 unset($validated['coach_id'], $validated['coachee_id']);
-                $session->update($validated);
-            } else {
-                $validated['is_draft'] = true;
-                $validated['ack_status'] = 'Pending';
-                $validated['compliance_status'] = 'Awaiting_Agent_Ack';
 
-                $session = CoachingSession::create($validated);
+                // Atomic update: only update if still a draft (prevents race with submitDraft)
+                $affected = CoachingSession::where('id', $session->id)
+                    ->where('is_draft', true)
+                    ->update($validated);
+
+                if ($affected === 0) {
+                    return response()->json(['error' => 'Session was already submitted.'], 409);
+                }
+
+                $session->refresh();
+            } else {
+                // Check if this coachee already has a session this week
+                $startOfWeek = now()->startOfWeek();
+                $endOfWeek = now()->endOfWeek();
+
+                $existingSession = CoachingSession::where('coachee_id', $validated['coachee_id'])
+                    ->where('coach_id', $validated['coach_id'])
+                    ->whereBetween('session_date', [$startOfWeek, $endOfWeek])
+                    ->first();
+
+                if ($existingSession && ! $existingSession->is_draft) {
+                    return response()->json(['error' => 'This agent already has a submitted coaching session this week.'], 422);
+                }
+
+                if ($existingSession && $existingSession->is_draft) {
+                    // Update the existing draft instead of creating a duplicate
+                    $coacheeId = $validated['coachee_id'];
+                    $coachId = $validated['coach_id'];
+                    unset($validated['coach_id'], $validated['coachee_id']);
+                    $existingSession->update($validated);
+                    $session = $existingSession;
+                } else {
+                    $validated['is_draft'] = true;
+                    $validated['ack_status'] = 'Pending';
+                    $validated['compliance_status'] = 'Awaiting_Agent_Ack';
+
+                    $session = CoachingSession::create($validated);
+                }
             }
 
             return response()->json([
@@ -532,7 +617,16 @@ class CoachingSessionController extends Controller
                 $validated['is_draft'] = false;
                 $validated['submitted_at'] = now();
 
-                $session->update($validated);
+                // Atomic update: only submit if still a draft (prevents double-submit race)
+                $affected = CoachingSession::where('id', $session->id)
+                    ->where('is_draft', true)
+                    ->update($validated);
+
+                if ($affected === 0) {
+                    throw new \RuntimeException('ALREADY_SUBMITTED');
+                }
+
+                $session->refresh();
             });
 
             // Handle removed attachments
@@ -550,7 +644,7 @@ class CoachingSessionController extends Controller
             // Handle new file uploads
             if ($request->hasFile('attachments')) {
                 foreach ($request->file('attachments') as $file) {
-                    $filename = 'coaching_'.$session->id.'_'.time().'_'.uniqid().'.'.$file->getClientOriginalExtension();
+                    $filename = 'coaching_'.$session->id.'_'.Str::uuid().'.'.$file->getClientOriginalExtension();
                     $path = $file->storeAs('coaching_attachments', $filename, 'local');
 
                     $session->attachments()->create([
@@ -574,6 +668,11 @@ class CoachingSessionController extends Controller
             return redirect()->route('coaching.sessions.show', $session)
                 ->with('message', 'Draft submitted successfully.')
                 ->with('type', 'success');
+        } catch (\RuntimeException $e) {
+            if ($e->getMessage() === 'ALREADY_SUBMITTED') {
+                return $this->backWithFlash('This session has already been submitted.', 'error');
+            }
+            throw $e;
         } catch (\Exception $e) {
             Log::error('CoachingSessionController@submitDraft Error: '.$e->getMessage());
 
@@ -663,7 +762,7 @@ class CoachingSessionController extends Controller
             // Handle new file uploads
             if ($request->hasFile('attachments')) {
                 foreach ($request->file('attachments') as $file) {
-                    $filename = 'coaching_'.$session->id.'_'.time().'_'.uniqid().'.'.$file->getClientOriginalExtension();
+                    $filename = 'coaching_'.$session->id.'_'.Str::uuid().'.'.$file->getClientOriginalExtension();
                     $path = $file->storeAs('coaching_attachments', $filename, 'local');
 
                     $session->attachments()->create([
@@ -693,19 +792,19 @@ class CoachingSessionController extends Controller
         $this->authorize('delete', $session);
 
         try {
-            // Delete attachment files from storage
-            foreach ($session->attachments as $attachment) {
-                Storage::disk('local')->delete($attachment->file_path);
-            }
+            // Collect file paths before deleting DB records
+            $filePaths = $session->attachments->pluck('file_path')->toArray();
 
             DB::transaction(function () use ($session) {
                 $session->delete();
             });
 
-            return $this->redirectWithFlash(
-                'coaching.sessions.index',
-                'Coaching session deleted successfully.',
-            );
+            // Clean up files after successful DB deletion
+            foreach ($filePaths as $filePath) {
+                Storage::disk('local')->delete($filePath);
+            }
+
+            return $this->backWithFlash('Coaching session deleted successfully.');
         } catch (\Exception $e) {
             Log::error('CoachingSessionController@destroy Error: '.$e->getMessage());
 
@@ -740,16 +839,30 @@ class CoachingSessionController extends Controller
     {
         $this->authorize('acknowledge', $session);
 
+        // Prevent concurrent acknowledgement race condition
+        if ($session->ack_status !== 'Pending') {
+            return $this->backWithFlash('This session has already been acknowledged.', 'error');
+        }
+
         try {
             DB::transaction(function () use ($request, $session) {
-                $session->update([
-                    'ack_status' => 'Acknowledged',
-                    'ack_timestamp' => Carbon::now(),
-                    'ack_comment' => $request->validated('ack_comment'),
-                    'agent_response' => $request->input('agent_response'),
-                    'agent_response_at' => $request->input('agent_response') ? now() : null,
-                    'compliance_status' => 'For_Review',
-                ]);
+                // Atomic update: only acknowledge if still Pending
+                $affected = CoachingSession::where('id', $session->id)
+                    ->where('ack_status', 'Pending')
+                    ->update([
+                        'ack_status' => 'Acknowledged',
+                        'ack_timestamp' => Carbon::now(),
+                        'ack_comment' => $request->validated('ack_comment'),
+                        'agent_response' => $request->input('agent_response'),
+                        'agent_response_at' => $request->input('agent_response') ? now() : null,
+                        'compliance_status' => 'For_Review',
+                    ]);
+
+                if ($affected === 0) {
+                    throw new \RuntimeException('ALREADY_ACKNOWLEDGED');
+                }
+
+                $session->refresh();
             });
 
             // Notify the coach
@@ -774,6 +887,11 @@ class CoachingSessionController extends Controller
             return redirect()->route('coaching.sessions.show', $session)
                 ->with('message', 'Coaching session acknowledged successfully.')
                 ->with('type', 'success');
+        } catch (\RuntimeException $e) {
+            if ($e->getMessage() === 'ALREADY_ACKNOWLEDGED') {
+                return $this->backWithFlash('This session has already been acknowledged.', 'error');
+            }
+            throw $e;
         } catch (\Exception $e) {
             Log::error('CoachingSessionController@acknowledge Error: '.$e->getMessage());
 
@@ -788,16 +906,30 @@ class CoachingSessionController extends Controller
     {
         $this->authorize('review', $session);
 
+        // Prevent concurrent review race condition
+        if ($session->compliance_status !== 'For_Review') {
+            return $this->backWithFlash('This session has already been reviewed.', 'error');
+        }
+
         try {
             DB::transaction(function () use ($request, $session) {
                 $validated = $request->validated();
 
-                $session->update([
-                    'compliance_status' => $validated['compliance_status'],
-                    'compliance_reviewer_id' => auth()->id(),
-                    'compliance_review_timestamp' => Carbon::now(),
-                    'compliance_notes' => $validated['compliance_notes'] ?? null,
-                ]);
+                // Atomic update: only review if still For_Review
+                $affected = CoachingSession::where('id', $session->id)
+                    ->where('compliance_status', 'For_Review')
+                    ->update([
+                        'compliance_status' => $validated['compliance_status'],
+                        'compliance_reviewer_id' => auth()->id(),
+                        'compliance_review_timestamp' => Carbon::now(),
+                        'compliance_notes' => $validated['compliance_notes'] ?? null,
+                    ]);
+
+                if ($affected === 0) {
+                    throw new \RuntimeException('ALREADY_REVIEWED');
+                }
+
+                $session->refresh();
             });
 
             // Notify the coach (if not an admin) and coachee
@@ -827,6 +959,11 @@ class CoachingSessionController extends Controller
                 'coaching.sessions.index',
                 "Coaching session marked as {$session->compliance_status}.",
             );
+        } catch (\RuntimeException $e) {
+            if ($e->getMessage() === 'ALREADY_REVIEWED') {
+                return $this->backWithFlash('This session has already been reviewed.', 'error');
+            }
+            throw $e;
         } catch (\Exception $e) {
             Log::error('CoachingSessionController@review Error: '.$e->getMessage());
 
