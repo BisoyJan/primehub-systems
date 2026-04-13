@@ -545,7 +545,7 @@ function OceanTideDecor({ opacity, isDark }: { opacity: number; isDark: boolean 
                     key={`school-${groupIndex}`}
                     className="absolute"
                     style={{ top: school.groupY, opacity: opacity * 0.6 }}
-                    animate={{ left: ['-20%', '120%'] }}
+                    animate={{ left: ['120%', '-20%'] }}
                     transition={{ duration: school.duration, repeat: Infinity, delay: school.groupDelay, ease: 'linear' }}
                 >
                     {[0, 1, 2].map(fish => (
@@ -556,7 +556,7 @@ function OceanTideDecor({ opacity, isDark }: { opacity: number; isDark: boolean 
                                 top: `${-10 + fish * 15}px`,
                                 left: `${-fish * 20}px`,
                                 width: 24, height: 12,
-                                fill: waveDark
+                                fill: waveDark,
                             }}
                             animate={{ rotate: [-5, 5, -5], y: [-5, 5, -5] }}
                             transition={{ duration: 2, repeat: Infinity, delay: fish * 0.3 }}
