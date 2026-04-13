@@ -41,14 +41,10 @@ class PcSpecTest extends TestCase
     public function it_casts_integer_attributes(): void
     {
         $pcSpec = PcSpec::factory()->create([
-            'm2_slots' => '2',
-            'sata_ports' => '4',
             'ram_gb' => '16',
             'disk_gb' => '512',
         ]);
 
-        $this->assertIsInt($pcSpec->m2_slots);
-        $this->assertIsInt($pcSpec->sata_ports);
         $this->assertIsInt($pcSpec->ram_gb);
         $this->assertIsInt($pcSpec->disk_gb);
     }

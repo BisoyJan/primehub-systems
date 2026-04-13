@@ -64,6 +64,14 @@ class DatabaseBackupController extends Controller
 
             RunDatabaseBackup::dispatch($backup->id, $jobId);
 
+            // Set initial cache so progress endpoint can detect stale dispatches
+            Cache::put("database_backup:{$jobId}", [
+                'percent' => 0,
+                'status' => 'Queued, waiting for worker...',
+                'finished' => false,
+                'dispatched_at' => now()->timestamp,
+            ], 3600);
+
             return redirect()->route('database-backups.index')
                 ->with('message', 'Backup started. It will be available shortly.')
                 ->with('type', 'success')
@@ -83,6 +91,18 @@ class DatabaseBackupController extends Controller
             'status' => 'Waiting...',
             'finished' => false,
         ]);
+
+        // If the job was dispatched but hasn't started processing after 60 seconds,
+        // warn that the queue worker may not be running.
+        if (
+            ! ($progress['finished'] ?? false)
+            && ($progress['percent'] ?? 0) === 0
+            && isset($progress['dispatched_at'])
+            && now()->timestamp - $progress['dispatched_at'] > 60
+        ) {
+            $progress['status'] = 'Queue worker may not be running. Please ensure "php artisan queue:work" is active.';
+            $progress['queue_warning'] = true;
+        }
 
         return response()->json($progress);
     }

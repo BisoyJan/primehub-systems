@@ -21,8 +21,6 @@ class PcSpecFactory extends Factory
             'manufacturer' => $this->faker->randomElement($manufacturers),
             'model' => strtoupper($this->faker->bothify('????-####')),
             'memory_type' => $memoryType,
-            'm2_slots' => $this->faker->numberBetween(1, 3),
-            'sata_ports' => $this->faker->numberBetween(2, 6),
             'ram_gb' => $this->faker->randomElement([4, 8, 16, 32, 64]),
             'disk_gb' => $this->faker->randomElement([256, 512, 1024, 2048]),
             'available_ports' => $this->faker->optional(0.8)->randomElement(['HDMI, DisplayPort, USB-C', 'HDMI, VGA', 'DisplayPort, USB-C', 'HDMI, DisplayPort', 'HDMI, DisplayPort, VGA, USB-C']),

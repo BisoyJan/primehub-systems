@@ -8,7 +8,7 @@ import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
 import { index as pcSpecsIndexRoute, edit as pcSpecsEditRoute } from '@/routes/pcspecs';
 import { transferPage } from '@/routes/pc-transfers';
-import { Cpu, HardDrive, MemoryStick, Monitor, Pencil, ArrowLeft, ArrowLeftRight, AlertTriangle, Server, Layers } from 'lucide-react';
+import { Cpu, HardDrive, MemoryStick, Monitor, Pencil, ArrowLeft, ArrowLeftRight, AlertTriangle } from 'lucide-react';
 
 interface ProcessorSpec {
     id: number;
@@ -32,8 +32,6 @@ interface PcSpec {
     manufacturer: string;
     model: string;
     memory_type: string;
-    m2_slots: number;
-    sata_ports: number;
     ram_gb: number;
     disk_gb: number;
     available_ports?: string | null;
@@ -143,7 +141,7 @@ export default function ScanResult({ pcspec, error }: { pcspec?: PcSpec; error?:
                     )}
 
                     {/* Specs grid */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-2 gap-3">
                         <Card>
                             <CardContent className="pt-4 text-center">
                                 <MemoryStick className="mx-auto h-5 w-5 text-muted-foreground mb-1" />
@@ -156,20 +154,6 @@ export default function ScanResult({ pcspec, error }: { pcspec?: PcSpec; error?:
                                 <HardDrive className="mx-auto h-5 w-5 text-muted-foreground mb-1" />
                                 <p className="text-2xl font-bold">{pcspec.disk_gb} GB</p>
                                 <p className="text-xs text-muted-foreground">Storage</p>
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardContent className="pt-4 text-center">
-                                <Layers className="mx-auto h-5 w-5 text-muted-foreground mb-1" />
-                                <p className="text-2xl font-bold">{pcspec.m2_slots}</p>
-                                <p className="text-xs text-muted-foreground">M.2 Slots</p>
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardContent className="pt-4 text-center">
-                                <Server className="mx-auto h-5 w-5 text-muted-foreground mb-1" />
-                                <p className="text-2xl font-bold">{pcspec.sata_ports}</p>
-                                <p className="text-xs text-muted-foreground">SATA Ports</p>
                             </CardContent>
                         </Card>
                     </div>

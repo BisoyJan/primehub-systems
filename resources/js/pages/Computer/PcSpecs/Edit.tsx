@@ -48,8 +48,6 @@ interface PcSpecData {
     manufacturer: string;
     model: string;
     memory_type: string;
-    m2_slots: number;
-    sata_ports: number;
     ram_gb: number;
     disk_gb: number;
     available_ports: string | null;
@@ -68,8 +66,6 @@ type PageProps = {
 };
 
 const memoryTypes = ['DDR3', 'DDR4', 'DDR5'];
-const m2SlotOptions = [1, 2, 3, 4];
-const sataPortOptions = [2, 4, 6, 8];
 
 export default function Edit() {
     useFlashMessage();
@@ -93,8 +89,6 @@ export default function Edit() {
         manufacturer: pcspec.manufacturer,
         model: pcspec.model,
         memory_type: pcspec.memory_type,
-        m2_slots: pcspec.m2_slots,
-        sata_ports: pcspec.sata_ports,
         ram_gb: pcspec.ram_gb,
         disk_gb: pcspec.disk_gb,
         available_ports: pcspec.available_ports || '',
@@ -199,40 +193,6 @@ export default function Edit() {
                                     </SelectContent>
                                 </Select>
                                 {form.errors.memory_type && <p className="text-sm text-red-600">{form.errors.memory_type}</p>}
-                            </div>
-
-                            <div>
-                                <Label htmlFor="m2_slots">M.2 Slots</Label>
-                                <Select value={String(form.data.m2_slots)} onValueChange={(val) => form.setData('m2_slots', Number(val))}>
-                                    <SelectTrigger id="m2_slots" className="w-full">
-                                        <SelectValue placeholder="Select M.2 slots" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {m2SlotOptions.map((n) => (
-                                            <SelectItem key={n} value={String(n)}>
-                                                {n}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                {form.errors.m2_slots && <p className="text-sm text-red-600">{form.errors.m2_slots}</p>}
-                            </div>
-
-                            <div>
-                                <Label htmlFor="sata_ports">SATA Ports</Label>
-                                <Select value={String(form.data.sata_ports)} onValueChange={(val) => form.setData('sata_ports', Number(val))}>
-                                    <SelectTrigger id="sata_ports" className="w-full">
-                                        <SelectValue placeholder="Select SATA ports" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {sataPortOptions.map((n) => (
-                                            <SelectItem key={n} value={String(n)}>
-                                                {n}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                {form.errors.sata_ports && <p className="text-sm text-red-600">{form.errors.sata_ports}</p>}
                             </div>
 
                             <div>

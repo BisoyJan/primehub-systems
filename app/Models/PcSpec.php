@@ -24,8 +24,6 @@ class PcSpec extends Model
         'manufacturer',
         'model',
         'memory_type',
-        'm2_slots',
-        'sata_ports',
         'issue',
         'ram_gb',
         'disk_gb',
@@ -36,8 +34,6 @@ class PcSpec extends Model
     protected function casts(): array
     {
         return [
-            'm2_slots' => 'integer',
-            'sata_ports' => 'integer',
             'ram_gb' => 'integer',
             'disk_gb' => 'integer',
             'bios_release_date' => 'date:Y-m-d',

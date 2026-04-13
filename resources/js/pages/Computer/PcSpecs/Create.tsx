@@ -42,8 +42,6 @@ type PageProps = {
 };
 
 const memoryTypes = ['DDR3', 'DDR4', 'DDR5'];
-const m2SlotOptions = [1, 2, 3, 4];
-const sataPortOptions = [2, 4, 6, 8];
 
 export default function Create() {
     useFlashMessage();
@@ -65,8 +63,6 @@ export default function Create() {
         manufacturer: '',
         model: '',
         memory_type: '',
-        m2_slots: 0,
-        sata_ports: 0,
         ram_gb: 0,
         disk_gb: 0,
         available_ports: '',
@@ -185,40 +181,6 @@ export default function Create() {
                                     </SelectContent>
                                 </Select>
                                 {form.errors.memory_type && <p className="text-sm text-red-600">{form.errors.memory_type}</p>}
-                            </div>
-
-                            <div>
-                                <Label htmlFor="m2_slots">M.2 Slots</Label>
-                                <Select value={String(form.data.m2_slots)} onValueChange={(val) => form.setData('m2_slots', Number(val))}>
-                                    <SelectTrigger id="m2_slots" className="w-full">
-                                        <SelectValue placeholder="Select M.2 slots" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {m2SlotOptions.map((n) => (
-                                            <SelectItem key={n} value={String(n)}>
-                                                {n}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                {form.errors.m2_slots && <p className="text-sm text-red-600">{form.errors.m2_slots}</p>}
-                            </div>
-
-                            <div>
-                                <Label htmlFor="sata_ports">SATA Ports</Label>
-                                <Select value={String(form.data.sata_ports)} onValueChange={(val) => form.setData('sata_ports', Number(val))}>
-                                    <SelectTrigger id="sata_ports" className="w-full">
-                                        <SelectValue placeholder="Select SATA ports" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {sataPortOptions.map((n) => (
-                                            <SelectItem key={n} value={String(n)}>
-                                                {n}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                {form.errors.sata_ports && <p className="text-sm text-red-600">{form.errors.sata_ports}</p>}
                             </div>
 
                             <div>

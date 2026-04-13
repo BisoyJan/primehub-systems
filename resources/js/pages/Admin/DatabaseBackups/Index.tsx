@@ -126,7 +126,7 @@ export default function DatabaseBackupsIndex() {
 
     const [searchQuery, setSearchQuery] = useState(initialSearch || "");
     const [activeJobId, setActiveJobId] = useState<string | null>(null);
-    const [jobProgress, setJobProgress] = useState({ percent: 0, status: "Waiting...", finished: false, error: false });
+    const [jobProgress, setJobProgress] = useState({ percent: 0, status: "Waiting...", finished: false, error: false, queue_warning: false });
     const [cleanDays, setCleanDays] = useState("30");
     const [cleanDialogOpen, setCleanDialogOpen] = useState(false);
     const [cleaningOld, setCleaningOld] = useState(false);
@@ -207,17 +207,21 @@ export default function DatabaseBackupsIndex() {
 
                 {/* Progress Banner */}
                 {activeJobId && !jobProgress.finished && (
-                    <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                    <div className={`border rounded-lg p-4 ${jobProgress.queue_warning ? 'bg-yellow-50 dark:bg-yellow-950 border-yellow-200 dark:border-yellow-800' : 'bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800'}`}>
                         <div className="flex items-center gap-3 mb-2">
-                            <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-                            <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                            <Loader2 className={`h-4 w-4 animate-spin ${jobProgress.queue_warning ? 'text-yellow-600' : 'text-blue-600'}`} />
+                            <span className={`text-sm font-medium ${jobProgress.queue_warning ? 'text-yellow-800 dark:text-yellow-200' : 'text-blue-800 dark:text-blue-200'}`}>
                                 {jobProgress.status}
                             </span>
                         </div>
-                        <Progress value={jobProgress.percent} className="h-2" />
-                        <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                            {jobProgress.percent}% complete
-                        </div>
+                        {!jobProgress.queue_warning && (
+                            <>
+                                <Progress value={jobProgress.percent} className="h-2" />
+                                <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                                    {jobProgress.percent}% complete
+                                </div>
+                            </>
+                        )}
                     </div>
                 )}
 
