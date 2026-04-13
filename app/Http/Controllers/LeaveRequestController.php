@@ -753,17 +753,6 @@ class LeaveRequestController extends Controller
                     $endDate->format('Y-m-d'),
                     $leaveRequest->id
                 );
-
-                // Notify HR/Admin users about new leave request (alternative method)
-                $hrAdminUsers = User::whereIn('role', ['Super Admin', 'Admin', 'HR'])->get();
-                foreach ($hrAdminUsers as $admin) {
-                    $this->notificationService->notifyLeaveRequest(
-                        $admin->id,
-                        $targetUser->name,
-                        $request->leave_type,
-                        $leaveRequest->id
-                    );
-                }
             }
 
             DB::commit();
