@@ -442,7 +442,7 @@ export default function BreakTimerIndex() {
                         style={{ boxShadow: `inset 0 0 ${overageLevel >= 2 ? '120' : '80'}px ${overageLevel >= 2 ? '40' : '20'}px rgba(239,68,68,0.6)` }}
                     />
                 )}
-                <ThemeDecor theme={theme} isDark={isDark || theme.alwaysDark} />
+                <ThemeDecor theme={theme} isDark={isDark || theme.alwaysDark} timerOver={isOverage} overageSeconds={overageSeconds} />
                 <div className="relative mx-auto flex max-w-lg flex-col items-center gap-4 px-4 py-3 md:max-w-2xl md:py-4">
 
                     {/* ─── Theme Selector, Alarm & Fullscreen ─── */}

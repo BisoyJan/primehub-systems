@@ -5,6 +5,8 @@ import type { TimerTheme } from './themes';
 interface ThemeDecorProps {
     theme: TimerTheme;
     isDark: boolean;
+    timerOver?: boolean;
+    overageSeconds?: number;
 }
 
 /**
@@ -12,7 +14,7 @@ interface ThemeDecorProps {
  * Uses framer-motion for subtle floating/drifting animations.
  * All elements are pointer-events-none, aria-hidden, and absolute-positioned.
  */
-function ThemeDecorInner({ theme, isDark }: ThemeDecorProps) {
+function ThemeDecorInner({ theme, isDark, timerOver, overageSeconds }: ThemeDecorProps) {
     const o = isDark ? 0.32 : 0.42;
 
     switch (theme.id) {
@@ -41,7 +43,7 @@ function ThemeDecorInner({ theme, isDark }: ThemeDecorProps) {
         case 'synthwave':
             return <SynthwaveDecor opacity={o} />;
         case 'desktop-goose':
-            return <DesktopGooseDecor opacity={o} isDark={isDark} />;
+            return <DesktopGooseDecor opacity={o} isDark={isDark} timerOver={timerOver} overageSeconds={overageSeconds} />;
         default:
             return null;
     }
@@ -1242,7 +1244,7 @@ function SynthwaveDecor({ opacity }: { opacity: number }) {
 
 // ─── 13. Desktop Goose — Interactive roaming goose ──────────
 
-type GooseState = 'roaming' | 'thinking' | 'chasing' | 'honking' | 'dragging_meme' | 'sitting' | 'preening' | 'grabbing_cursor';
+type GooseState = 'roaming' | 'thinking' | 'chasing' | 'honking' | 'dragging_meme' | 'sitting' | 'preening' | 'grabbing_cursor' | 'panicking';
 
 interface Footprint {
     x: number;
@@ -1262,29 +1264,6 @@ interface DroppedMeme {
     type: 'note' | 'meme';
 }
 
-interface Spring {
-    p: number; // position
-    v: number; // velocity
-    t: number; // target
-    k: number; // stiffness
-    d: number; // damping
-}
-
-interface LegIK {
-    x: number;
-    y: number;
-    targetX: number;
-    targetY: number;
-    stepPhase: number; // 0 to 1
-    isPlanting: boolean;
-}
-
-function updateSpring(s: Spring, dtS: number) {
-    const force = (s.t - s.p) * s.k - s.v * s.d;
-    s.v += force * dtS;
-    s.p += s.v * dtS;
-}
-
 interface GooseData {
     x: number;
     y: number;
@@ -1300,23 +1279,11 @@ interface GooseData {
     targetY: number;
     // Head bob for realistic goose walk
     headBobPhase: number;
+    // Body sway
+    bodyTilt: number;
     // Smooth acceleration
     currentSpeed: number;
     targetSpeed: number;
-    
-    // Physics springs
-    bodyAngleSpring: Spring;
-    neckSpring: Spring;
-    squashSpring: Spring;
-    dragMemeXSpring: Spring;
-    dragMemeYSpring: Spring;
-    cursorXSpring: Spring;
-    cursorYSpring: Spring;
-    
-    // IK Legs
-    leftLeg: LegIK;
-    rightLeg: LegIK;
-
     // Meme dragging
     dragMeme: string | null;
     dragMemeType: 'note' | 'meme';
@@ -1327,6 +1294,10 @@ interface GooseData {
     preenPhase: number;
     // Attack cooldown
     attackCooldown: number;
+    // Neck stretch for dragging
+    neckStretch: number;
+    // Number of drag waypoints remaining before dropping
+    dragStopsLeft: number;
     // Eye blink
     blinkTimer: number;
     isBlinking: boolean;
@@ -1340,6 +1311,18 @@ interface GooseData {
     grabCooldown: number;
     grabTargetX: number;
     grabTargetY: number;
+    // Smooth walk cycle (continuous phase in radians)
+    walkPhase: number;
+    // Smooth facing direction (0 = right, 1 = left)
+    facingProgress: number;
+    // Wing flap animation phase
+    wingPhase: number;
+    // Tail wag animation phase
+    tailWagPhase: number;
+    // Sit/stand transition progress (0 = standing, 1 = fully sitting)
+    sitTransition: number;
+    // Breathing animation phase for idle body pulse
+    breathingPhase: number;
 }
 
 const GOOSE_NOTES = [
@@ -1363,37 +1346,39 @@ const GOOSE_MEMES = [
     '🔪', '👑', '💣', '🎺', '📢', '🧨', '🪿', '💀',
 ];
 
-function DesktopGooseDecor({ opacity, isDark }: { opacity: number; isDark: boolean }) {
+// Easing helpers for smooth goose animations
+const easeOut = (t: number) => 1 - (1 - t) ** 3;
+const easeIn = (t: number) => t ** 3;
+const smoothstep = (t: number) => (3 - 2 * t) * t * t;
+const clampV = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
+
+function DesktopGooseDecor({ opacity, isDark, timerOver, overageSeconds = 0 }: { opacity: number; isDark: boolean; timerOver?: boolean; overageSeconds?: number }) {
     const containerRef = useRef<HTMLDivElement>(null);
     const gooseRef = useRef<GooseData>({
         x: 200, y: 300, vx: 0, vy: 0,
         state: 'roaming', stateTimer: 3000,
         facingRight: true, walkFrame: 0, walkTimer: 0, honkTimer: 0,
         targetX: 400, targetY: 400,
-        headBobPhase: 0,
+        headBobPhase: 0, bodyTilt: 0,
         currentSpeed: 0, targetSpeed: 0,
-        
-        bodyAngleSpring: { p: 0, v: 0, t: 0, k: 80, d: 8 },
-        neckSpring: { p: 0, v: 0, t: 0, k: 30, d: 6 },
-        squashSpring: { p: 1, v: 0, t: 1, k: 50, d: 5 },
-        dragMemeXSpring: { p: 0, v: 0, t: 0, k: 120, d: 12 },
-        dragMemeYSpring: { p: 0, v: 0, t: 0, k: 120, d: 12 },
-        cursorXSpring: { p: 0, v: 0, t: 0, k: 150, d: 15 },
-        cursorYSpring: { p: 0, v: 0, t: 0, k: 150, d: 15 },
-        
-        leftLeg: { x: 26, y: 67, targetX: 26, targetY: 67, stepPhase: 0, isPlanting: true },
-        rightLeg: { x: 42, y: 67, targetX: 42, targetY: 67, stepPhase: 0.5, isPlanting: false },
-
         dragMeme: null, dragMemeType: 'note',
         dragOriginEdge: 'left', dragMemeX: 0, dragMemeY: 0,
         preenPhase: 0, attackCooldown: 2000,
+        neckStretch: 0, dragStopsLeft: 0,
         blinkTimer: 3000, isBlinking: false,
         sitBobPhase: 0,
-        fakeCursorX: 0, fakeCursorY: 0,
-        cursorGrabbed: false, cursorGrabPhase: 'approaching', grabCooldown: 3000,
+        cursorGrabbed: false, fakeCursorX: 0, fakeCursorY: 0,
+        cursorGrabPhase: 'approaching' as const, grabCooldown: 3000,
         grabTargetX: 0, grabTargetY: 0,
+        walkPhase: 0, facingProgress: 0, wingPhase: 0,
+        tailWagPhase: 0, sitTransition: 0, breathingPhase: 0,
     });
     const mouseRef = useRef({ x: -1000, y: -1000 });
+    const clickedRef = useRef(false);
+    const timerOverRef = useRef(timerOver);
+    useEffect(() => { timerOverRef.current = timerOver; }, [timerOver]);
+    const overageSecondsRef = useRef(overageSeconds);
+    useEffect(() => { overageSecondsRef.current = overageSeconds; }, [overageSeconds]);
     const frameRef = useRef<number>(0);
     const lastTimeRef = useRef<number>(0);
     const footprintsRef = useRef<Footprint[]>([]);
@@ -1401,8 +1386,19 @@ function DesktopGooseDecor({ opacity, isDark }: { opacity: number; isDark: boole
     const memeIdCounter = useRef(0);
     const [, setTick] = useState(0);
 
+    // Panic intensity: 0 = low (0-29s), 1 = medium (30-59s), 2 = high (60s+)
+    const getPanicLevel = () => {
+        const os = overageSecondsRef.current;
+        if (os >= 60) return 2;
+        if (os >= 30) return 1;
+        return 0;
+    };
+
     const SPEED_ROAM = 50;
     const SPEED_CHASE = 140;
+    const SPEED_PANIC_LOW = 150;
+    const SPEED_PANIC_MED = 200;
+    const SPEED_PANIC_HIGH = 260;
     const SPEED_DRAG = 35;
     const AWARENESS = 180;
     const CHASE_STOP = 300;
@@ -1436,8 +1432,15 @@ function DesktopGooseDecor({ opacity, isDark }: { opacity: number; isDark: boole
             const rect = containerRef.current.getBoundingClientRect();
             mouseRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
         };
+        const handleClick = () => {
+            clickedRef.current = true;
+        };
         window.addEventListener('mousemove', handleMouseMove);
-        return () => window.removeEventListener('mousemove', handleMouseMove);
+        window.addEventListener('mousedown', handleClick);
+        return () => {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mousedown', handleClick);
+        };
     }, []);
 
     useEffect(() => {
@@ -1470,6 +1473,50 @@ function DesktopGooseDecor({ opacity, isDark }: { opacity: number; isDark: boole
             g.attackCooldown -= dt;
             g.grabCooldown -= dt;
 
+            // Force panicking state when timer is over
+            if (timerOverRef.current && g.state !== 'panicking') {
+                g.state = 'panicking';
+                g.stateTimer = 800 + Math.random() * 600;
+                g.cursorGrabbed = false;
+                g.dragMeme = null;
+                g.neckStretch = 0;
+                document.documentElement.style.cursor = '';
+                const t = pickRoamTarget(w, h);
+                g.targetX = t.targetX;
+                g.targetY = t.targetY;
+            }
+            // Exit panic when timer is no longer over
+            if (!timerOverRef.current && g.state === 'panicking') {
+                g.state = 'roaming';
+                g.stateTimer = 2000;
+                const t = pickRoamTarget(w, h);
+                g.targetX = t.targetX;
+                g.targetY = t.targetY;
+            }
+
+            // Click reaction: goose gets angry if clicked near it
+            if (clickedRef.current) {
+                clickedRef.current = false;
+                const clickDist = Math.sqrt((g.x - mx) ** 2 + (g.y - my) ** 2);
+                if (clickDist < 80 && g.state !== 'grabbing_cursor') {
+                    // Direct hit on goose — angry honk then chase
+                    if (clickDist < 50) {
+                        g.state = 'honking';
+                        g.stateTimer = 500 + Math.random() * 400;
+                        g.honkTimer = g.stateTimer;
+                        g.targetSpeed = 0;
+                        g.attackCooldown = 0; // reset so it chases right after honking
+                        g.neckStretch = Math.min(6, g.neckStretch + 3);
+                    } else {
+                        // Clicked near goose — startled, faces cursor and chases
+                        g.state = 'chasing';
+                        g.stateTimer = 3000 + Math.random() * 2000;
+                        g.attackCooldown = 4000;
+                        g.facingRight = mx > g.x;
+                    }
+                }
+            }
+
             // Eye blink timer
             g.blinkTimer -= dt;
             if (g.blinkTimer <= 0) {
@@ -1482,115 +1529,59 @@ function DesktopGooseDecor({ opacity, isDark }: { opacity: number; isDark: boole
                 }
             }
 
-            // Walk animation (faster when running)
-            const walkSpeed = g.state === 'chasing' ? 150 : 280;
+            // Smooth animation updates
             const isMoving = Math.abs(g.vx) > 3 || Math.abs(g.vy) > 3;
+            const isPanic = g.state === 'panicking';
             if (isMoving) {
-                g.walkTimer += dt;
-                if (g.walkTimer > walkSpeed) {
-                    g.walkTimer = 0;
-                    g.walkFrame = (g.walkFrame + 1) % 4;
+                // Continuous walk phase (speed-dependent frequency)
+                const prevPhase = g.walkPhase;
+                const walkFreq = isPanic ? 15 : g.state === 'chasing' ? 11 : 7;
+                g.walkPhase += dtS * walkFreq;
 
-                    // Add footprint every other step
-                    if (g.walkFrame % 2 === 0) {
-                        const angle = Math.atan2(g.vy, g.vx);
-                        footprintsRef.current.push({
-                            x: g.x + (g.walkFrame === 0 ? -4 : 4),
-                            y: g.y + 25,
-                            angle: angle * (180 / Math.PI),
-                            isLeft: g.walkFrame === 0,
-                            opacity: 0.35,
-                            age: 0,
-                        });
-                        if (footprintsRef.current.length > MAX_FOOTPRINTS) {
-                            footprintsRef.current.shift();
-                        }
+                // Footprint on each half-cycle crossing
+                const prevStep = Math.floor(prevPhase / Math.PI);
+                const currStep = Math.floor(g.walkPhase / Math.PI);
+                if (currStep > prevStep) {
+                    const angle = Math.atan2(g.vy, g.vx);
+                    const isLeft = currStep % 2 === 0;
+                    footprintsRef.current.push({
+                        x: g.x + (isLeft ? -4 : 4),
+                        y: g.y + 25,
+                        angle: angle * (180 / Math.PI),
+                        isLeft,
+                        opacity: 0.35,
+                        age: 0,
+                    });
+                    if (footprintsRef.current.length > MAX_FOOTPRINTS) {
+                        footprintsRef.current.shift();
                     }
                 }
-                // Head bob (forward-back like a real goose)
-                g.headBobPhase += dtS * (g.state === 'chasing' ? 14 : 8);
+
+                // Head thrust phase (3-phase goose walk rhythm)
+                g.headBobPhase += dtS * (isPanic ? 13 : g.state === 'chasing' ? 9 : 5.5);
+
+                // Body sway (smooth oscillation synced to walk)
+                g.bodyTilt = Math.sin(g.walkPhase * 0.5) * (isPanic ? 6 : g.state === 'chasing' ? 3.5 : 2);
+
+                // Wing flutter phase
+                g.wingPhase += dtS * (isPanic ? 20 : g.state === 'chasing' ? 14 : 5);
+
+                // Tail wag phase
+                g.tailWagPhase += dtS * (isPanic ? 16 : g.state === 'chasing' ? 10 : 4);
+
+                // Reset breathing while moving
+                g.breathingPhase = 0;
             } else {
-                g.headBobPhase = 0;
-            }
+                // Smoothly decelerate head thrust
+                g.headBobPhase *= 0.92;
+                g.bodyTilt *= 0.9;
 
-            // --- ANIMATION TARGETS ---
-            if (isMoving) {
-                const leanFactor = g.vx * -0.05;
-                g.bodyAngleSpring.t = Math.sin(g.headBobPhase * 0.5) * (g.state === 'chasing' ? 4 : 2.5) + leanFactor;
-            } else {
-                g.bodyAngleSpring.t = 0;
-            }
+                // Idle breathing pulse (~0.8 Hz)
+                g.breathingPhase += dtS * Math.PI * 1.6;
 
-            if (g.state === 'chasing') {
-                g.neckSpring.t = 8;
-            } else if (g.state === 'dragging_meme') {
-                g.neckSpring.t = g.dragMeme ? 0 : 5;
-            } else if (g.state === 'grabbing_cursor') {
-                g.neckSpring.t = g.cursorGrabPhase === 'grabbed' ? 5 : 3;
-            } else {
-                g.neckSpring.t = 0;
+                // Gentle tail sway when idle
+                g.tailWagPhase += dtS * 1.5;
             }
-
-            // Squash & stretch on stopping
-            const stopDelta = Math.abs(g.currentSpeed - 0) / (SPEED_CHASE * 0.5);
-            g.squashSpring.t = 1 + Math.max(0, Math.min(0.15, stopDelta * 0.4));
-            
-            // Advance springs
-            updateSpring(g.bodyAngleSpring, dtS);
-            updateSpring(g.neckSpring, dtS);
-            updateSpring(g.squashSpring, dtS);
-            
-            if (g.dragMeme) {
-                const beakX = g.facingRight ? 35 : -35;
-                g.dragMemeXSpring.t = g.x + beakX;
-                g.dragMemeYSpring.t = g.y - 5;
-                updateSpring(g.dragMemeXSpring, dtS);
-                updateSpring(g.dragMemeYSpring, dtS);
-                g.dragMemeX = g.dragMemeXSpring.p;
-                g.dragMemeY = g.dragMemeYSpring.p;
-            }
-            if (g.cursorGrabbed) {
-                const beakX = g.facingRight ? 35 : -35;
-                g.cursorXSpring.t = g.x + beakX;
-                g.cursorYSpring.t = g.y - 15;
-                updateSpring(g.cursorXSpring, dtS);
-                updateSpring(g.cursorYSpring, dtS);
-                g.fakeCursorX = g.cursorXSpring.p;
-                g.fakeCursorY = g.cursorYSpring.p;
-            }
-
-            // IK leg solving
-            const updateIK = (leg: LegIK, index: number) => {
-                const baseX = index === 0 ? 26 : 42;
-                const baseY = 67;
-                if (!isMoving) {
-                    leg.targetX = baseX;
-                    leg.targetY = baseY;
-                    leg.stepPhase = 0;
-                    leg.isPlanting = true;
-                } else {
-                    const walkCycle = (g.walkFrame % 4) / 4;
-                    // Simple logic to swing/plant alternating
-                    const offset = walkCycle + (index === 0 ? 0 : 0.5);
-                    const phase = offset % 1.0;
-                    
-                    if (phase < 0.5) {
-                        leg.isPlanting = true;
-                        leg.targetX = baseX + Math.sin(g.headBobPhase + (index === 0 ? 0 : Math.PI)) * 7;
-                        leg.targetY = baseY;
-                    } else {
-                        leg.isPlanting = false;
-                        const arc = Math.sin((phase - 0.5) * 2 * Math.PI) * 6;
-                        leg.targetX = baseX + Math.sin(g.headBobPhase + (index === 0 ? 0 : Math.PI)) * 7;
-                        leg.targetY = baseY - arc;
-                    }
-                }
-                const speed = leg.isPlanting ? 0.4 : 0.25;
-                leg.x += (leg.targetX - leg.x) * speed;
-                leg.y += (leg.targetY - leg.y) * speed;
-            };
-            updateIK(g.leftLeg, 0);
-            updateIK(g.rightLeg, 1);
 
             // Age footprints
             footprintsRef.current.forEach((fp) => {
@@ -1640,8 +1631,10 @@ function DesktopGooseDecor({ opacity, isDark }: { opacity: number; isDark: boole
                             g.dragOriginEdge = edge.edge;
                             g.targetX = edge.x;
                             g.targetY = edge.y;
-                            g.stateTimer = 20000; // timeout safety
+                            g.stateTimer = 40000; // timeout safety
                             g.dragMeme = null;
+                            g.neckStretch = 0;
+                            g.dragStopsLeft = 2 + Math.floor(Math.random() * 3); // 2-4 waypoints before dropping
                             // Pick content
                             if (Math.random() < 0.6) {
                                 g.dragMemeType = 'note';
@@ -1753,23 +1746,33 @@ function DesktopGooseDecor({ opacity, isDark }: { opacity: number; isDark: boole
                         g.targetSpeed = cdist < 50 ? SPEED_CHASE * 0.4 : SPEED_CHASE;
                         g.vx = (cdx / cdist) * g.currentSpeed;
                         g.vy = (cdy / cdist) * g.currentSpeed;
+                        g.neckStretch = Math.min(8, g.neckStretch + dtS * 20);
                     } else {
                         g.targetSpeed = 0;
                         g.vx = 0;
                         g.vy = 0;
+                        g.neckStretch = Math.max(0, g.neckStretch - dtS * 15);
                     }
 
-                    // Try to grab cursor when very close
+                    // Try to grab cursor when very close — skip straight to grabbed
                     if (cdist < 30 && g.grabCooldown <= 0) {
                         g.state = 'grabbing_cursor';
-                        g.cursorGrabPhase = 'approaching';
-                        g.stateTimer = 6000;
+                        g.cursorGrabPhase = 'grabbed';
+                        g.cursorGrabbed = true;
+                        g.fakeCursorX = mx;
+                        g.fakeCursorY = my;
+                        g.grabTargetX = BOUNDARY_PAD + Math.random() * (w - BOUNDARY_PAD * 2);
+                        g.grabTargetY = BOUNDARY_PAD * 2 + Math.random() * (h - BOUNDARY_PAD * 4);
+                        g.stateTimer = 5000;
+                        g.neckStretch = 5;
                         g.grabCooldown = 12000 + Math.random() * 8000;
+                        document.documentElement.style.cursor = 'none';
                         break;
                     }
 
                     if (distToMouse > CHASE_STOP || g.stateTimer <= 0 || mx < 0) {
                         g.state = 'roaming';
+                        g.neckStretch = 0;
                         const t = pickRoamTarget(w, h);
                         g.targetX = t.targetX;
                         g.targetY = t.targetY;
@@ -1796,6 +1799,7 @@ function DesktopGooseDecor({ opacity, isDark }: { opacity: number; isDark: boole
                         } else {
                             g.dragMeme = GOOSE_MEMES[Math.floor(Math.random() * GOOSE_MEMES.length)];
                         }
+                        g.neckStretch = 5;
                         // Now walk to a random spot in center
                         const t = pickRoamTarget(w, h);
                         g.targetX = t.targetX;
@@ -1809,33 +1813,45 @@ function DesktopGooseDecor({ opacity, isDark }: { opacity: number; isDark: boole
                         const ddist = Math.sqrt(ddx * ddx + ddy * ddy);
 
                         if (ddist < 20) {
-                            // Drop the meme
-                            droppedMemesRef.current.push({
-                                id: memeIdCounter.current++,
-                                x: g.x + (g.facingRight ? 30 : -30),
-                                y: g.y - 10,
-                                rotation: -5 + Math.random() * 10,
-                                content: g.dragMeme,
-                                type: g.dragMemeType,
-                            });
-                            if (droppedMemesRef.current.length > MAX_MEMES) {
-                                droppedMemesRef.current.shift();
+                            g.dragStopsLeft--;
+                            if (g.dragStopsLeft <= 0) {
+                                // Drop the meme
+                                droppedMemesRef.current.push({
+                                    id: memeIdCounter.current++,
+                                    x: g.x + (g.facingRight ? 30 : -30),
+                                    y: g.y - 10,
+                                    rotation: -5 + Math.random() * 10,
+                                    content: g.dragMeme,
+                                    type: g.dragMemeType,
+                                });
+                                if (droppedMemesRef.current.length > MAX_MEMES) {
+                                    droppedMemesRef.current.shift();
+                                }
+                                g.dragMeme = null;
+                                g.neckStretch = 0;
+                                g.state = 'roaming';
+                                const t = pickRoamTarget(w, h);
+                                g.targetX = t.targetX;
+                                g.targetY = t.targetY;
+                                g.stateTimer = 2000 + Math.random() * 2000;
+                            } else {
+                                // Walk to another random spot while still dragging
+                                const t = pickRoamTarget(w, h);
+                                g.targetX = t.targetX;
+                                g.targetY = t.targetY;
                             }
-                            g.dragMeme = null;
-                            g.state = 'roaming';
-                            const t = pickRoamTarget(w, h);
-                            g.targetX = t.targetX;
-                            g.targetY = t.targetY;
-                            g.stateTimer = 2000 + Math.random() * 2000;
                         } else {
                             g.targetSpeed = SPEED_DRAG;
                             g.vx = (ddx / ddist) * g.currentSpeed;
                             g.vy = (ddy / ddist) * g.currentSpeed;
                         }
 
-                        // Update drag meme position (trails behind goose)
-                        g.dragMemeX = g.x + (g.facingRight ? -35 : 35);
-                        g.dragMemeY = g.y - 5;
+                        // Update drag meme position (smooth lerp follow)
+                        const memeTargetX = g.x + (g.facingRight ? -35 : 35);
+                        const memeTargetY = g.y - 5;
+                        const memeLerp = Math.min(1, 10 * dtS);
+                        g.dragMemeX += (memeTargetX - g.dragMemeX) * memeLerp;
+                        g.dragMemeY += (memeTargetY - g.dragMemeY) * memeLerp;
                     } else {
                         // Walking to edge to pick up
                         if (dist > 5) {
@@ -1847,6 +1863,7 @@ function DesktopGooseDecor({ opacity, isDark }: { opacity: number; isDark: boole
 
                     if (g.stateTimer <= 0) {
                         g.dragMeme = null;
+                        g.neckStretch = 0;
                         g.state = 'roaming';
                         const t = pickRoamTarget(w, h);
                         g.targetX = t.targetX;
@@ -1859,32 +1876,32 @@ function DesktopGooseDecor({ opacity, isDark }: { opacity: number; isDark: boole
                 case 'grabbing_cursor': {
                     switch (g.cursorGrabPhase) {
                         case 'approaching': {
-                            // Walk toward cursor
+                            // Fallback: walk toward cursor (rarely hit since we skip to grabbed from chase)
                             const cdx = mx - g.x;
                             const cdy = my - g.y;
                             const cdist = Math.sqrt(cdx * cdx + cdy * cdy);
 
-                            if (cdist < 30 && mx > 0 && my > 0) {
-                                // Close enough - grab the cursor!
+                            if (cdist < 35 && mx > 0 && my > 0) {
                                 g.cursorGrabPhase = 'grabbed';
                                 g.cursorGrabbed = true;
                                 g.fakeCursorX = mx;
                                 g.fakeCursorY = my;
-                                // Pick a random spot to drag cursor to
                                 g.grabTargetX = BOUNDARY_PAD + Math.random() * (w - BOUNDARY_PAD * 2);
                                 g.grabTargetY = BOUNDARY_PAD * 2 + Math.random() * (h - BOUNDARY_PAD * 4);
                                 g.stateTimer = 5000;
+                                g.neckStretch = 5;
                                 document.documentElement.style.cursor = 'none';
                             } else if (mx > 0 && my > 0) {
                                 g.targetSpeed = SPEED_CHASE;
                                 g.vx = (cdx / cdist) * g.currentSpeed;
                                 g.vy = (cdy / cdist) * g.currentSpeed;
+                                g.neckStretch = Math.min(6, g.neckStretch + dtS * 15);
                             }
 
-                            // Timeout or mouse left area
                             if (g.stateTimer <= 0 || (mx < 0 && my < 0)) {
                                 g.state = 'roaming';
                                 g.cursorGrabbed = false;
+                                g.neckStretch = 0;
                                 document.documentElement.style.cursor = '';
                                 const t = pickRoamTarget(w, h);
                                 g.targetX = t.targetX;
@@ -1894,24 +1911,27 @@ function DesktopGooseDecor({ opacity, isDark }: { opacity: number; isDark: boole
                             break;
                         }
                         case 'grabbed': {
-                            // Drag fake cursor toward target
+                            // Drag fake cursor toward target at a solid pace
                             const tdx = g.grabTargetX - g.x;
                             const tdy = g.grabTargetY - g.y;
                             const tdist = Math.sqrt(tdx * tdx + tdy * tdy);
 
                             if (tdist < 20 || g.stateTimer <= 0) {
-                                // Reached destination, drop cursor
                                 g.cursorGrabPhase = 'dropping';
                                 g.stateTimer = 800;
+                                g.neckStretch = 0;
                             } else {
-                                g.targetSpeed = SPEED_DRAG * 1.5;
+                                // Move at roaming speed (not slug-slow drag speed)
+                                g.targetSpeed = SPEED_ROAM * 1.3;
                                 g.vx = (tdx / tdist) * g.currentSpeed;
                                 g.vy = (tdy / tdist) * g.currentSpeed;
 
-                                // Fake cursor follows goose beak position
+                                // Fake cursor tracks beak tightly (high lerp factor)
                                 const beakOffsetX = g.facingRight ? 35 : -35;
-                                g.fakeCursorX += (g.x + beakOffsetX - g.fakeCursorX) * 0.15;
-                                g.fakeCursorY += (g.y - 15 - g.fakeCursorY) * 0.15;
+                                const beakTargetX = g.x + beakOffsetX;
+                                const beakTargetY = g.y - 15;
+                                g.fakeCursorX += (beakTargetX - g.fakeCursorX) * Math.min(1, 12 * dtS);
+                                g.fakeCursorY += (beakTargetY - g.fakeCursorY) * Math.min(1, 12 * dtS);
                             }
                             break;
                         }
@@ -1921,7 +1941,6 @@ function DesktopGooseDecor({ opacity, isDark }: { opacity: number; isDark: boole
                             g.targetSpeed = 0;
 
                             if (g.stateTimer <= 0) {
-                                // Release cursor and honk triumphantly
                                 g.cursorGrabbed = false;
                                 document.documentElement.style.cursor = '';
                                 g.state = 'honking';
@@ -1958,6 +1977,47 @@ function DesktopGooseDecor({ opacity, isDark }: { opacity: number; isDark: boole
                     }
                     break;
                 }
+
+                case 'panicking': {
+                    const pLvl = getPanicLevel();
+                    // Intensity-scaled frantic running
+                    const dx = g.targetX - g.x;
+                    const dy = g.targetY - g.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    g.targetSpeed = pLvl >= 2 ? SPEED_PANIC_HIGH : pLvl >= 1 ? SPEED_PANIC_MED : SPEED_PANIC_LOW;
+
+                    // Higher panic = shorter pauses, quicker direction changes
+                    const reachDist = pLvl >= 2 ? 15 : 25;
+                    if (dist < reachDist || g.stateTimer <= 0) {
+                        const t = pickRoamTarget(w, h);
+                        g.targetX = t.targetX;
+                        g.targetY = t.targetY;
+                        g.stateTimer = pLvl >= 2 ? 200 + Math.random() * 300 : pLvl >= 1 ? 350 + Math.random() * 500 : 500 + Math.random() * 800;
+
+                        // Honk frequency scales with panic
+                        const honkChance = pLvl >= 2 ? 0.7 : pLvl >= 1 ? 0.55 : 0.4;
+                        if (Math.random() < honkChance) {
+                            g.honkTimer = pLvl >= 2 ? 400 + Math.random() * 400 : 300 + Math.random() * 300;
+                        }
+                    } else {
+                        g.vx = (dx / dist) * g.currentSpeed;
+                        g.vy = (dy / dist) * g.currentSpeed;
+                    }
+
+                    // Frantic neck bobbing — intensity scales with panic level
+                    const neckFreq = pLvl >= 2 ? 0.025 : pLvl >= 1 ? 0.02 : 0.015;
+                    const neckAmp = pLvl >= 2 ? 5 : pLvl >= 1 ? 4 : 3;
+                    g.neckStretch = Math.sin(Date.now() * neckFreq) * neckAmp + 2;
+
+                    // High panic: erratic body tilt
+                    if (pLvl >= 2) {
+                        g.bodyTilt = Math.sin(Date.now() * 0.02) * 8;
+                    } else if (pLvl >= 1) {
+                        g.bodyTilt = Math.sin(Date.now() * 0.012) * 4;
+                    }
+                    break;
+                }
             }
 
             // Apply velocity
@@ -1968,6 +2028,14 @@ function DesktopGooseDecor({ opacity, isDark }: { opacity: number; isDark: boole
             if (Math.abs(g.vx) > 3) {
                 g.facingRight = g.vx > 0;
             }
+
+            // Smooth facing transition (lerp for smooth body flip)
+            const targetFacing = g.facingRight ? 0 : 1;
+            g.facingProgress += (targetFacing - g.facingProgress) * Math.min(1, 8 * dtS);
+
+            // Sit/stand transition (smooth squat)
+            const targetSit = g.state === 'sitting' ? 1 : 0;
+            g.sitTransition += (targetSit - g.sitTransition) * Math.min(1, 4 * dtS);
 
             // Boundary clamping (allow going off-edge when walking to pick up meme)
             const isWalkingToEdge = g.state === 'dragging_meme' && !g.dragMeme;
@@ -1990,18 +2058,55 @@ function DesktopGooseDecor({ opacity, isDark }: { opacity: number; isDark: boole
     const g = gooseRef.current;
     const isHonking = g.state === 'honking' && g.honkTimer > 0;
     const isChasing = g.state === 'chasing';
+    const isPanicking = g.state === 'panicking';
+    const isPanicHonk = isPanicking && g.honkTimer > 0;
+    const panicLevel = isPanicking ? (overageSeconds >= 60 ? 2 : overageSeconds >= 30 ? 1 : 0) : 0;
     const isSitting = g.state === 'sitting';
     const isPreening = g.state === 'preening';
     const isDragging = g.state === 'dragging_meme' && g.dragMeme !== null;
     const isGrabbingCursor = g.state === 'grabbing_cursor';
     const isMoving = Math.abs(g.vx) > 3 || Math.abs(g.vy) > 3;
-    const bobY = isMoving ? Math.sin(g.walkFrame * Math.PI * 0.5) * 3.5 : 0;
-    const headBob = isMoving ? Math.sin(g.headBobPhase) * 4 : 0;
-    const legOffset = isMoving ? Math.sin(g.walkFrame * Math.PI * 0.5) * 7 : 0;
+
+    // Smooth continuous body and leg bob from walkPhase
+    const bobY = isMoving ? Math.sin(g.walkPhase * 2) * 3 : 0;
+    const legOffset = isMoving ? Math.sin(g.walkPhase) * 8 : 0;
+
+    // 3-phase head thrust (thrust forward → hold → retract)
+    let headBob = 0;
+    if (isMoving || g.headBobPhase > 0.3) {
+        const thrustCycle = (g.headBobPhase % (Math.PI * 2)) / (Math.PI * 2);
+        let thrustT: number;
+        if (thrustCycle < 0.3) {
+            thrustT = easeOut(thrustCycle / 0.3);
+        } else if (thrustCycle < 0.6) {
+            thrustT = 1;
+        } else {
+            thrustT = 1 - easeIn((thrustCycle - 0.6) / 0.4);
+        }
+        headBob = thrustT * (isChasing ? 6 : 4);
+    }
+
     const preenHeadY = isPreening ? Math.sin(g.preenPhase) * 12 + 8 : 0;
     const preenHeadX = isPreening ? Math.cos(g.preenPhase * 0.7) * 4 : 0;
-    const sitSquish = isSitting ? 0.88 : 1;
-    const sitBob = isSitting ? Math.sin(g.sitBobPhase) * 1.5 : 0;
+
+    // Smooth sit/stand transition
+    const sitT = smoothstep(clampV(g.sitTransition, 0, 1));
+    const sitSquish = 1 - sitT * 0.12; // 1.0 → 0.88
+    const sitBob = sitT * Math.sin(g.sitBobPhase) * 1.5;
+
+    const neckLen = g.neckStretch;
+
+    // Breathing (subtle body scale when idle)
+    const breathScale = 1 + Math.sin(g.breathingPhase) * 0.015;
+
+    // Wing animation
+    const wingFlap = isMoving ? Math.sin(g.wingPhase) * (isChasing ? 4 : 2) : 0;
+
+    // Tail wag
+    const tailWag = Math.sin(g.tailWagPhase) * (isMoving ? (isChasing ? 6 : 3) : 1.5);
+
+    // Smooth facing (1 = right, -1 = left, interpolated)
+    const facingScale = 1 - g.facingProgress * 2;
     const grassColor = isDark ? '#2e5a2e' : '#66bb6a';
     const grassLight = isDark ? '#3a6f3a' : '#81c784';
     const bodyFill = isDark ? '#f0f0e8' : '#fefefa';
@@ -2135,7 +2240,6 @@ function DesktopGooseDecor({ opacity, isDark }: { opacity: number; isDark: boole
                         top: g.dragMemeY,
                         transform: `rotate(${g.facingRight ? -8 : 8}deg)`,
                         zIndex: 9,
-                        transition: 'left 0.1s, top 0.1s',
                     }}
                 >
                     {g.dragMemeType === 'note' ? (
@@ -2182,21 +2286,29 @@ function DesktopGooseDecor({ opacity, isDark }: { opacity: number; isDark: boole
                     position: 'absolute',
                     left: g.x - 45,
                     top: g.y - 50 + bobY + sitBob,
+                    transform: `scaleX(${facingScale}) scaleY(${sitSquish * breathScale}) rotate(${g.bodyTilt}deg)`,
                     transformOrigin: 'center bottom',
                     transition: 'transform 0.12s ease',
-                    filter: isChasing ? `drop-shadow(0 0 8px rgba(255,100,50,0.3))` : 'none',
+                    filter: (isChasing || isPanicking)
+                        ? isPanicking
+                            ? panicLevel >= 2
+                                ? 'drop-shadow(0 0 14px rgba(255,20,20,0.5)) drop-shadow(0 0 30px rgba(255,0,0,0.25))'
+                                : panicLevel >= 1
+                                    ? 'drop-shadow(0 0 10px rgba(255,40,40,0.4))'
+                                    : 'drop-shadow(0 0 8px rgba(255,50,50,0.3))'
+                            : 'drop-shadow(0 0 8px rgba(255,100,50,0.3))'
+                        : 'none',
                 }}
             >
                 <svg width="100" height="90" viewBox="-5 -15 95 90" overflow="visible">
                     {/* Shadow under goose */}
                     <ellipse cx="38" cy="74" rx={isSitting ? 22 : 18} ry={isSitting ? 6 : 4} fill="rgba(0,0,0,0.1)" />
 
-                    <g style={{ transformOrigin: '35px 60px' }} transform={`rotate(${g.bodyAngleSpring.p} 35 40) scale(1, ${g.squashSpring.p})`}>
                     {/* Tail feathers */}
                     <g>
-                        <path d="M12 35 Q5 28 3 24" stroke={bodyStroke} strokeWidth="2.5" fill="none" strokeLinecap="round" opacity="0.8" />
-                        <path d="M12 37 Q3 35 0 33" stroke={bodyStroke} strokeWidth="2" fill="none" strokeLinecap="round" opacity="0.6" />
-                        <path d="M12 39 Q5 44 3 48" stroke={bodyStroke} strokeWidth="2.5" fill="none" strokeLinecap="round" opacity="0.8" />
+                        <path d={`M12 35 Q5 ${28 + tailWag * 0.5} 3 ${24 + tailWag}`} stroke={bodyStroke} strokeWidth="2.5" fill="none" strokeLinecap="round" opacity="0.8" />
+                        <path d={`M12 37 Q3 ${35 + tailWag * 0.3} 0 ${33 + tailWag * 0.4}`} stroke={bodyStroke} strokeWidth="2" fill="none" strokeLinecap="round" opacity="0.6" />
+                        <path d={`M12 39 Q5 ${44 - tailWag * 0.5} 3 ${48 - tailWag}`} stroke={bodyStroke} strokeWidth="2.5" fill="none" strokeLinecap="round" opacity="0.8" />
                     </g>
 
                     {/* Body */}
@@ -2214,7 +2326,7 @@ function DesktopGooseDecor({ opacity, isDark }: { opacity: number; isDark: boole
                     <path
                         d={isSitting
                             ? 'M30 34 Q42 26 48 34 Q44 40 34 42 Z'
-                            : `M28 30 Q42 ${20 + bobY * 0.5} 50 30 Q46 ${38 + bobY * 0.3} 32 40 Z`}
+                            : `M28 ${30 - wingFlap * 0.3} Q42 ${20 + bobY * 0.5 - wingFlap} 50 ${30 - wingFlap * 0.5} Q46 ${38 + bobY * 0.3} 32 40 Z`}
                         fill={wingFill}
                         stroke={bodyStroke}
                         strokeWidth="0.8"
@@ -2227,7 +2339,7 @@ function DesktopGooseDecor({ opacity, isDark }: { opacity: number; isDark: boole
                     <path
                         d={isPreening
                             ? `M44 30 Q${48 + preenHeadX} ${22 + preenHeadY * 0.5} ${42 + preenHeadX} ${18 + preenHeadY}`
-                            : `M44 30 Q${48 + g.neckSpring.p * 0.5} ${16 - g.neckSpring.p * 0.3} ${52 + g.neckSpring.p + headBob * 0.5} ${8 - g.neckSpring.p * 0.4}`}
+                            : `M44 30 Q${48 + neckLen * 0.5} ${16 - neckLen * 0.3} ${52 + neckLen + headBob * 0.5} ${8 - neckLen * 0.4}`}
                         stroke={bodyFill}
                         strokeWidth="10"
                         fill="none"
@@ -2236,7 +2348,7 @@ function DesktopGooseDecor({ opacity, isDark }: { opacity: number; isDark: boole
                     <path
                         d={isPreening
                             ? `M44 30 Q${48 + preenHeadX} ${22 + preenHeadY * 0.5} ${42 + preenHeadX} ${18 + preenHeadY}`
-                            : `M44 30 Q${48 + g.neckSpring.p * 0.5} ${16 - g.neckSpring.p * 0.3} ${52 + g.neckSpring.p + headBob * 0.5} ${8 - g.neckSpring.p * 0.4}`}
+                            : `M44 30 Q${48 + neckLen * 0.5} ${16 - neckLen * 0.3} ${52 + neckLen + headBob * 0.5} ${8 - neckLen * 0.4}`}
                         stroke={bodyStroke}
                         strokeWidth="1"
                         fill="none"
@@ -2244,8 +2356,8 @@ function DesktopGooseDecor({ opacity, isDark }: { opacity: number; isDark: boole
 
                     {/* Head */}
                     <circle
-                        cx={isPreening ? 42 + preenHeadX : 52 + g.neckSpring.p + headBob * 0.5}
-                        cy={isPreening ? 14 + preenHeadY : 6 - g.neckSpring.p * 0.4}
+                        cx={isPreening ? 42 + preenHeadX : 52 + neckLen + headBob * 0.5}
+                        cy={isPreening ? 14 + preenHeadY : 6 - neckLen * 0.4}
                         r="8.5"
                         fill={bodyFill}
                         stroke={bodyStroke}
@@ -2255,8 +2367,8 @@ function DesktopGooseDecor({ opacity, isDark }: { opacity: number; isDark: boole
                     {/* Cheek blush when honking */}
                     {isHonking && (
                         <circle
-                            cx={isPreening ? 46 + preenHeadX : 56 + g.neckSpring.p + headBob * 0.5}
-                            cy={isPreening ? 16 + preenHeadY : 8 - g.neckSpring.p * 0.4}
+                            cx={isPreening ? 46 + preenHeadX : 56 + neckLen + headBob * 0.5}
+                            cy={isPreening ? 16 + preenHeadY : 8 - neckLen * 0.4}
                             r="3"
                             fill="rgba(255,120,120,0.3)"
                         />
@@ -2266,13 +2378,13 @@ function DesktopGooseDecor({ opacity, isDark }: { opacity: number; isDark: boole
                     {isHonking ? (
                         <g>
                             <path
-                                d={`M${isPreening ? 49 + preenHeadX : 59 + g.neckSpring.p + headBob * 0.5} ${isPreening ? 11 + preenHeadY : 3 - g.neckSpring.p * 0.4} L${isPreening ? 58 + preenHeadX : 70 + g.neckSpring.p} ${isPreening ? 8 + preenHeadY : -1 - g.neckSpring.p * 0.4} L${isPreening ? 50 + preenHeadX : 61 + g.neckSpring.p + headBob * 0.5} ${isPreening ? 14 + preenHeadY : 6 - g.neckSpring.p * 0.4} Z`}
+                                d={`M${isPreening ? 49 + preenHeadX : 59 + neckLen + headBob * 0.5} ${isPreening ? 11 + preenHeadY : 3 - neckLen * 0.4} L${isPreening ? 58 + preenHeadX : 70 + neckLen} ${isPreening ? 8 + preenHeadY : -1 - neckLen * 0.4} L${isPreening ? 50 + preenHeadX : 61 + neckLen + headBob * 0.5} ${isPreening ? 14 + preenHeadY : 6 - neckLen * 0.4} Z`}
                                 fill="#ff9800"
                                 stroke="#e68a00"
                                 strokeWidth="0.6"
                             />
                             <path
-                                d={`M${isPreening ? 49 + preenHeadX : 59 + g.neckSpring.p + headBob * 0.5} ${isPreening ? 17 + preenHeadY : 9 - g.neckSpring.p * 0.4} L${isPreening ? 58 + preenHeadX : 70 + g.neckSpring.p} ${isPreening ? 20 + preenHeadY : 14 - g.neckSpring.p * 0.4} L${isPreening ? 50 + preenHeadX : 61 + g.neckSpring.p + headBob * 0.5} ${isPreening ? 17 + preenHeadY : 9 - g.neckSpring.p * 0.4} Z`}
+                                d={`M${isPreening ? 49 + preenHeadX : 59 + neckLen + headBob * 0.5} ${isPreening ? 17 + preenHeadY : 9 - neckLen * 0.4} L${isPreening ? 58 + preenHeadX : 70 + neckLen} ${isPreening ? 20 + preenHeadY : 14 - neckLen * 0.4} L${isPreening ? 50 + preenHeadX : 61 + neckLen + headBob * 0.5} ${isPreening ? 17 + preenHeadY : 9 - neckLen * 0.4} Z`}
                                 fill="#ffb74d"
                                 stroke="#e68a00"
                                 strokeWidth="0.5"
@@ -2280,7 +2392,7 @@ function DesktopGooseDecor({ opacity, isDark }: { opacity: number; isDark: boole
                         </g>
                     ) : (
                         <path
-                            d={`M${isPreening ? 49 + preenHeadX : 59 + g.neckSpring.p + headBob * 0.5} ${isPreening ? 12 + preenHeadY : 4 - g.neckSpring.p * 0.4} L${isPreening ? 59 + preenHeadX : 70 + g.neckSpring.p} ${isPreening ? 10 + preenHeadY : 2 - g.neckSpring.p * 0.4} L${isPreening ? 49 + preenHeadX : 59 + g.neckSpring.p + headBob * 0.5} ${isPreening ? 16 + preenHeadY : 8 - g.neckSpring.p * 0.4} Z`}
+                            d={`M${isPreening ? 49 + preenHeadX : 59 + neckLen + headBob * 0.5} ${isPreening ? 12 + preenHeadY : 4 - neckLen * 0.4} L${isPreening ? 59 + preenHeadX : 70 + neckLen} ${isPreening ? 10 + preenHeadY : 2 - neckLen * 0.4} L${isPreening ? 49 + preenHeadX : 59 + neckLen + headBob * 0.5} ${isPreening ? 16 + preenHeadY : 8 - neckLen * 0.4} Z`}
                             fill="#ff9800"
                             stroke="#e68a00"
                             strokeWidth="0.6"
@@ -2289,8 +2401,8 @@ function DesktopGooseDecor({ opacity, isDark }: { opacity: number; isDark: boole
 
                     {/* Nostril */}
                     <circle
-                        cx={isPreening ? 51 + preenHeadX : 61 + g.neckSpring.p + headBob * 0.5}
-                        cy={isPreening ? 13 + preenHeadY : 5 - g.neckSpring.p * 0.4}
+                        cx={isPreening ? 51 + preenHeadX : 61 + neckLen + headBob * 0.5}
+                        cy={isPreening ? 13 + preenHeadY : 5 - neckLen * 0.4}
                         r="0.5"
                         fill="#d48400"
                     />
@@ -2298,10 +2410,10 @@ function DesktopGooseDecor({ opacity, isDark }: { opacity: number; isDark: boole
                     {/* Eye */}
                     {g.isBlinking ? (
                         <line
-                            x1={isPreening ? 46 + preenHeadX - 2 : 56 + g.neckSpring.p + headBob * 0.5 - 2}
-                            y1={isPreening ? 12 + preenHeadY : 4 - g.neckSpring.p * 0.4}
-                            x2={isPreening ? 46 + preenHeadX + 2 : 56 + g.neckSpring.p + headBob * 0.5 + 2}
-                            y2={isPreening ? 12 + preenHeadY : 4 - g.neckSpring.p * 0.4}
+                            x1={isPreening ? 46 + preenHeadX - 2 : 56 + neckLen + headBob * 0.5 - 2}
+                            y1={isPreening ? 12 + preenHeadY : 4 - neckLen * 0.4}
+                            x2={isPreening ? 46 + preenHeadX + 2 : 56 + neckLen + headBob * 0.5 + 2}
+                            y2={isPreening ? 12 + preenHeadY : 4 - neckLen * 0.4}
                             stroke="#222"
                             strokeWidth="1.5"
                             strokeLinecap="round"
@@ -2309,15 +2421,15 @@ function DesktopGooseDecor({ opacity, isDark }: { opacity: number; isDark: boole
                     ) : (
                         <>
                             <circle
-                                cx={isPreening ? 46 + preenHeadX : 56 + g.neckSpring.p + headBob * 0.5}
-                                cy={isPreening ? 12 + preenHeadY : 4 - g.neckSpring.p * 0.4}
-                                r={isChasing ? 2.2 : 2}
-                                fill={isChasing ? '#c62828' : '#1a1a1a'}
+                                cx={isPreening ? 46 + preenHeadX : 56 + neckLen + headBob * 0.5}
+                                cy={isPreening ? 12 + preenHeadY : 4 - neckLen * 0.4}
+                                r={(isChasing || isPanicking) ? (panicLevel >= 2 ? 2.8 : panicLevel >= 1 ? 2.5 : 2.2) : 2}
+                                fill={(isChasing || isPanicking) ? (panicLevel >= 2 ? '#b71c1c' : '#c62828') : '#1a1a1a'}
                             />
                             {/* Eye highlight */}
                             <circle
-                                cx={isPreening ? 46.8 + preenHeadX : 56.8 + g.neckSpring.p + headBob * 0.5}
-                                cy={isPreening ? 11.2 + preenHeadY : 3.2 - g.neckSpring.p * 0.4}
+                                cx={isPreening ? 46.8 + preenHeadX : 56.8 + neckLen + headBob * 0.5}
+                                cy={isPreening ? 11.2 + preenHeadY : 3.2 - neckLen * 0.4}
                                 r="0.7"
                                 fill="white"
                                 opacity="0.8"
@@ -2325,36 +2437,35 @@ function DesktopGooseDecor({ opacity, isDark }: { opacity: number; isDark: boole
                         </>
                     )}
 
-                    {/* Angry eyebrow when chasing */}
-                    {isChasing && !g.isBlinking && (
+                    {/* Angry eyebrow when chasing or panicking */}
+                    {(isChasing || isPanicking) && !g.isBlinking && (
                         <line
-                            x1={53 + g.neckSpring.p + headBob * 0.5}
-                            y1={0 - g.neckSpring.p * 0.4}
-                            x2={59 + g.neckSpring.p + headBob * 0.5}
-                            y2={2 - g.neckSpring.p * 0.4}
+                            x1={53 + neckLen + headBob * 0.5}
+                            y1={0 - neckLen * 0.4}
+                            x2={59 + neckLen + headBob * 0.5}
+                            y2={2 - neckLen * 0.4}
                             stroke="#1a1a1a"
                             strokeWidth="2"
                             strokeLinecap="round"
                         />
                     )}
-                    </g>
 
-                    {/* Legs (hidden when sitting) */}
-                    {!isSitting && (
-                        <g>
+                    {/* Legs (fade out when sitting via transition) */}
+                    {sitT < 0.95 && (
+                        <g opacity={1 - sitT}>
                             {/* Left leg */}
-                            <line x1="26" y1="56" x2={g.leftLeg.x} y2={g.leftLeg.y} stroke="#ff9800" strokeWidth="2.5" strokeLinecap="round" />
-                            <path d={`M${g.leftLeg.x} ${g.leftLeg.y} L${g.leftLeg.x - 6} ${g.leftLeg.y + 3} M${g.leftLeg.x} ${g.leftLeg.y} L${g.leftLeg.x} ${g.leftLeg.y + 4} M${g.leftLeg.x} ${g.leftLeg.y} L${g.leftLeg.x + 6} ${g.leftLeg.y + 3}`} stroke="#ff9800" strokeWidth="1.8" fill="none" strokeLinecap="round" />
+                            <line x1="26" y1="56" x2={26 - legOffset} y2="67" stroke="#ff9800" strokeWidth="2.5" strokeLinecap="round" />
+                            <path d={`M${26 - legOffset} 67 L${20 - legOffset} 70 M${26 - legOffset} 67 L${26 - legOffset} 71 M${26 - legOffset} 67 L${32 - legOffset} 70`} stroke="#ff9800" strokeWidth="1.8" fill="none" strokeLinecap="round" />
 
                             {/* Right leg */}
-                            <line x1="42" y1="56" x2={g.rightLeg.x} y2={g.rightLeg.y} stroke="#ff9800" strokeWidth="2.5" strokeLinecap="round" />
-                            <path d={`M${g.rightLeg.x} ${g.rightLeg.y} L${g.rightLeg.x - 6} ${g.rightLeg.y + 3} M${g.rightLeg.x} ${g.rightLeg.y} L${g.rightLeg.x} ${g.rightLeg.y + 4} M${g.rightLeg.x} ${g.rightLeg.y} L${g.rightLeg.x + 6} ${g.rightLeg.y + 3}`} stroke="#ff9800" strokeWidth="1.8" fill="none" strokeLinecap="round" />
+                            <line x1="42" y1="56" x2={42 + legOffset} y2="67" stroke="#ff9800" strokeWidth="2.5" strokeLinecap="round" />
+                            <path d={`M${42 + legOffset} 67 L${36 + legOffset} 70 M${42 + legOffset} 67 L${42 + legOffset} 71 M${42 + legOffset} 67 L${48 + legOffset} 70`} stroke="#ff9800" strokeWidth="1.8" fill="none" strokeLinecap="round" />
                         </g>
                     )}
 
-                    {/* Sitting legs (tucked under) */}
-                    {isSitting && (
-                        <g opacity="0.5">
+                    {/* Sitting legs (tucked under, fade in) */}
+                    {sitT > 0.05 && (
+                        <g opacity={sitT * 0.5}>
                             <path d="M24 54 L22 56 L28 56 Z" fill="#ff9800" />
                             <path d="M44 54 L42 56 L48 56 Z" fill="#ff9800" />
                         </g>
@@ -2468,6 +2579,124 @@ function DesktopGooseDecor({ opacity, isDark }: { opacity: number; isDark: boole
                         ❗
                     </motion.div>
                 )}
+
+                {/* Panic effects: sweat drops + frantic honk — scaled by intensity */}
+                {isPanicking && (
+                    <>
+                        {/* Sweat drops — positioned along the back/side of the body */}
+                        {Array.from({ length: panicLevel >= 2 ? 5 : panicLevel >= 1 ? 3 : 2 }, (_, i) => (
+                            <motion.div
+                                key={`sweat-${i}`}
+                                style={{
+                                    position: 'absolute',
+                                    top: 8 + i * 10,
+                                    left: 10 + i * 4,
+                                    fontSize: panicLevel >= 2 ? '12px' : '10px',
+                                    transform: g.facingRight ? 'none' : 'scaleX(-1)',
+                                    pointerEvents: 'none',
+                                }}
+                                animate={{ y: [0, panicLevel >= 2 ? 16 : 10, 0], opacity: [0.9, 0.2, 0.9] }}
+                                transition={{ duration: panicLevel >= 2 ? 0.35 : panicLevel >= 1 ? 0.45 : 0.6, repeat: Infinity, delay: i * 0.2, ease: 'easeIn' }}
+                            >
+                                💧
+                            </motion.div>
+                        ))}
+
+                        {/* Panicking honk bubble — positioned well above the head */}
+                        {isPanicHonk && (
+                            <div
+                                style={{
+                                    position: 'absolute',
+                                    top: -50,
+                                    left: 15,
+                                    background: panicLevel >= 2 ? '#d50000' : '#ff4444',
+                                    border: `${panicLevel >= 2 ? 3 : 2.5}px solid ${panicLevel >= 2 ? '#8b0000' : '#cc0000'}`,
+                                    borderRadius: '14px',
+                                    padding: panicLevel >= 2 ? '4px 12px' : '3px 10px',
+                                    fontSize: panicLevel >= 2 ? '14px' : panicLevel >= 1 ? '12px' : '11px',
+                                    fontWeight: 900,
+                                    color: 'white',
+                                    whiteSpace: 'nowrap',
+                                    transform: g.facingRight ? 'none' : 'scaleX(-1)',
+                                    animation: `goose-honk-shake ${panicLevel >= 2 ? '0.05' : '0.08'}s ease-in-out infinite alternate`,
+                                    fontFamily: 'system-ui, sans-serif',
+                                    letterSpacing: panicLevel >= 2 ? '2px' : '1px',
+                                }}
+                            >
+                                {panicLevel >= 2 ? 'HONK!!!!!' : panicLevel >= 1 ? 'HONK!!!' : 'HONK!!'}
+                                <div
+                                    style={{
+                                        position: 'absolute',
+                                        bottom: -8,
+                                        left: 12,
+                                        width: 0,
+                                        height: 0,
+                                        borderLeft: '6px solid transparent',
+                                        borderRight: '6px solid transparent',
+                                        borderTop: `8px solid ${panicLevel >= 2 ? '#8b0000' : '#cc0000'}`,
+                                    }}
+                                />
+                            </div>
+                        )}
+
+                        {/* Medium+ panic: anger symbol — on the head area */}
+                        {panicLevel >= 1 && (
+                            <motion.div
+                                style={{
+                                    position: 'absolute',
+                                    top: -18,
+                                    left: 58,
+                                    fontSize: panicLevel >= 2 ? '14px' : '11px',
+                                    transform: g.facingRight ? 'none' : 'scaleX(-1)',
+                                    pointerEvents: 'none',
+                                }}
+                                animate={{ rotate: [0, 15, -15, 0], scale: [1, 1.2, 1] }}
+                                transition={{ duration: 0.5, repeat: Infinity }}
+                            >
+                                💢
+                            </motion.div>
+                        )}
+
+                        {/* High panic: skull — top-right, well separated from honk bubble */}
+                        {panicLevel >= 2 && (
+                            <motion.div
+                                style={{
+                                    position: 'absolute',
+                                    top: -55,
+                                    left: 72,
+                                    fontSize: '14px',
+                                    transform: g.facingRight ? 'none' : 'scaleX(-1)',
+                                    pointerEvents: 'none',
+                                }}
+                                animate={{ scale: [1, 1.3, 1], opacity: [1, 0.5, 1] }}
+                                transition={{ duration: 0.4, repeat: Infinity, delay: 0.15 }}
+                            >
+                                💀
+                            </motion.div>
+                        )}
+
+                        {/* Alarm / exclamation — above the honk bubble */}
+                        <motion.div
+                            style={{
+                                position: 'absolute',
+                                top: panicLevel >= 2 ? -72 : -62,
+                                left: 30,
+                                fontSize: panicLevel >= 2 ? '20px' : panicLevel >= 1 ? '17px' : '14px',
+                                fontWeight: 900,
+                                color: panicLevel >= 2 ? '#d50000' : '#ff1744',
+                                transform: g.facingRight ? 'none' : 'scaleX(-1)',
+                                pointerEvents: 'none',
+                            }}
+                            animate={{
+                                scale: panicLevel >= 2 ? [1, 1.5, 1] : [1, 1.3, 1],
+                                rotate: panicLevel >= 2 ? [-12, 12, -12] : [-8, 8, -8],
+                            }}
+                            transition={{ duration: panicLevel >= 2 ? 0.2 : 0.3, repeat: Infinity }}
+                        >
+                            {panicLevel >= 2 ? '🔥' : '‼️'}
+                        </motion.div>
+                    </>
+                )}
             </div>
 
             {/* Keyframe animations */}
@@ -2488,7 +2717,7 @@ function DesktopGooseDecor({ opacity, isDark }: { opacity: number; isDark: boole
                         zIndex: 100,
                         pointerEvents: 'none',
                         filter: 'drop-shadow(1px 2px 2px rgba(0,0,0,0.25))',
-                        transition: 'left 0.08s linear, top 0.08s linear',
+                        transform: `rotate(${Math.sin(Date.now() * 0.008) * 12}deg)`,
                     }}
                     width="20" height="24" viewBox="0 0 20 24"
                 >
