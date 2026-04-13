@@ -17,9 +17,9 @@ class RunDatabaseBackup implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $timeout = 600;
+    public int $timeout = 900;
 
-    public int $tries = 3;
+    public int $tries = 1;
 
     public int $backoff = 10;
 

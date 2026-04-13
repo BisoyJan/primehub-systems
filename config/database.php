@@ -63,8 +63,16 @@ return [
             'dump' => [
                 'dump_binary_path' => env('MYSQL_DUMP_BINARY_PATH'),
                 'useSingleTransaction' => true,
-                'timeout' => 600,
-                'add_extra_option' => '--routines --triggers --events --quick --max-allowed-packet=256M',
+                'timeout' => 900,
+                'exclude_tables' => [
+                    'sessions',
+                    'cache',
+                    'cache_locks',
+                    'jobs',
+                    'job_batches',
+                    'failed_jobs',
+                ],
+                'add_extra_option' => '--routines --triggers --events --quick --max-allowed-packet=256M --net-buffer-length=32768',
             ],
         ],
 
@@ -89,8 +97,16 @@ return [
             'dump' => [
                 'dump_binary_path' => env('MYSQL_DUMP_BINARY_PATH'),
                 'useSingleTransaction' => true,
-                'timeout' => 600,
-                'add_extra_option' => '--routines --triggers --events --quick --max-allowed-packet=256M',
+                'timeout' => 900,
+                'exclude_tables' => [
+                    'sessions',
+                    'cache',
+                    'cache_locks',
+                    'jobs',
+                    'job_batches',
+                    'failed_jobs',
+                ],
+                'add_extra_option' => '--routines --triggers --events --quick --max-allowed-packet=256M --net-buffer-length=32768',
             ],
         ],
 

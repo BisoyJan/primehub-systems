@@ -10,6 +10,7 @@ use Spatie\Backup\Notifications\Notifications\UnhealthyBackupWasFoundNotificatio
 use Spatie\Backup\Tasks\Cleanup\Strategies\DefaultStrategy;
 use Spatie\Backup\Tasks\Monitor\HealthChecks\MaximumAgeInDays;
 use Spatie\Backup\Tasks\Monitor\HealthChecks\MaximumStorageInMegabytes;
+use Spatie\DbDumper\Compressors\GzipCompressor;
 
 return [
 
@@ -105,7 +106,7 @@ return [
          *
          * If you do not want any compressor at all, set it to null.
          */
-        'database_dump_compressor' => null,
+        'database_dump_compressor' => GzipCompressor::class,
 
         /*
          * If specified, the database dumped file name will contain a timestamp (e.g.: 'Y-m-d-H-i-s').
@@ -143,7 +144,7 @@ return [
              *
              * For more check https://www.php.net/manual/zip.constants.php and confirm it's supported by your system.
              */
-            'compression_method' => ZipArchive::CM_DEFAULT,
+            'compression_method' => ZipArchive::CM_STORE,
 
             /*
              * The compression level corresponding to the used algorithm; an integer between 0 and 9.
@@ -153,7 +154,7 @@ return [
              *
              * Setting of 0 for some algorithms may switch to the strongest compression.
              */
-            'compression_level' => 5,
+            'compression_level' => 0,
 
             /*
              * The filename prefix used for the backup zip file.
@@ -198,7 +199,7 @@ return [
          * After creating the zip, verify it can be opened and contains files.
          * Recommended for critical backups but adds a small overhead.
          */
-        'verify_backup' => true,
+        'verify_backup' => false,
 
         /*
          * The number of attempts, in case the backup command encounters an exception
