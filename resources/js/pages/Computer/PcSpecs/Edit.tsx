@@ -32,6 +32,16 @@ import {
     edit as pcSpecEdit,
 } from '@/routes/pcspecs';
 
+interface ProcessorSpecDetail {
+    id: number;
+    manufacturer: string;
+    model: string;
+    core_count: number;
+    thread_count: number;
+    base_clock_ghz: number;
+    boost_clock_ghz: number;
+}
+
 interface PcSpecData {
     id: number;
     pc_number: string | null;
@@ -43,7 +53,8 @@ interface PcSpecData {
     ram_gb: number;
     disk_gb: number;
     available_ports: string | null;
-    processorSpecs: number[];
+    bios_release_date: string | null;
+    processorSpecs: ProcessorSpecDetail[];
 }
 
 interface ProcessorOption {
@@ -87,21 +98,24 @@ export default function Edit() {
         ram_gb: pcspec.ram_gb,
         disk_gb: pcspec.disk_gb,
         available_ports: pcspec.available_ports || '',
+        bios_release_date: pcspec.bios_release_date || '',
         processor_mode: 'existing' as 'existing' | 'new',
-        processor_spec_id: pcspec.processorSpecs?.[0] || 0,
+        processor_spec_id: pcspec.processorSpecs?.[0]?.id || 0,
         processor_manufacturer: '',
         processor_model: '',
         processor_core_count: '' as number | '',
         processor_thread_count: '' as number | '',
         processor_base_clock_ghz: '' as number | '',
         processor_boost_clock_ghz: '' as number | '',
-        processor_release_date: '',
     });
 
     const [processorOpen, setProcessorOpen] = useState(false);
 
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
+        if (form.data.processor_mode === 'new') {
+            form.setData('processor_spec_id', 0);
+        }
         form.put(pcSpecUpdate({ pcspec: pcspec.id }).url);
     }
 
@@ -255,6 +269,17 @@ export default function Edit() {
                                 />
                                 {form.errors.available_ports && <p className="text-sm text-red-600">{form.errors.available_ports}</p>}
                             </div>
+
+                            <div>
+                                <Label htmlFor="bios_release_date">Bios Release Date</Label>
+                                <Input
+                                    id="bios_release_date"
+                                    type="date"
+                                    value={form.data.bios_release_date}
+                                    onChange={(e) => form.setData('bios_release_date', e.target.value)}
+                                />
+                                {form.errors.bios_release_date && <p className="text-sm text-red-600">{form.errors.bios_release_date}</p>}
+                            </div>
                         </div>
                     </section>
 
@@ -318,6 +343,39 @@ export default function Edit() {
                                     </PopoverContent>
                                 </Popover>
                                 {form.errors.processor_spec_id && <p className="text-sm text-red-600">{form.errors.processor_spec_id}</p>}
+
+                                {/* Selected Processor Details */}
+                                {(() => {
+                                    const selected = pcspec.processorSpecs.find((p) => p.id === form.data.processor_spec_id);
+                                    if (!selected) return null;
+                                    return (
+                                        <div className="mt-3 rounded-lg border p-4">
+                                            <p className="text-sm font-medium text-muted-foreground mb-2">Processor Details</p>
+                                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 text-sm">
+                                                <div className="flex justify-between">
+                                                    <span className="text-muted-foreground">Manufacturer:</span>
+                                                    <span className="font-medium">{selected.manufacturer}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-muted-foreground">Model:</span>
+                                                    <span className="font-medium">{selected.model}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-muted-foreground">Cores / Threads:</span>
+                                                    <span className="font-medium">{selected.core_count} / {selected.thread_count}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-muted-foreground">Base Clock:</span>
+                                                    <span className="font-medium">{selected.base_clock_ghz} GHz</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-muted-foreground">Boost Clock:</span>
+                                                    <span className="font-medium">{selected.boost_clock_ghz} GHz</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         ) : (
                             <div className="rounded-lg border p-4 space-y-4">
@@ -404,17 +462,6 @@ export default function Edit() {
                                             onChange={(e) => form.setData('processor_boost_clock_ghz', e.target.value ? Number(e.target.value) : '')}
                                         />
                                         {form.errors.processor_boost_clock_ghz && <p className="text-sm text-red-600">{form.errors.processor_boost_clock_ghz}</p>}
-                                    </div>
-
-                                    <div>
-                                        <Label htmlFor="processor_release_date">Release Date</Label>
-                                        <Input
-                                            id="processor_release_date"
-                                            type="date"
-                                            value={form.data.processor_release_date}
-                                            onChange={(e) => form.setData('processor_release_date', e.target.value)}
-                                        />
-                                        {form.errors.processor_release_date && <p className="text-sm text-red-600">{form.errors.processor_release_date}</p>}
                                     </div>
                                 </div>
                             </div>

@@ -35,7 +35,6 @@ interface ProcessorSpec {
     thread_count: number;
     base_clock_ghz: number;
     boost_clock_ghz: number;
-    release_date: string | null;
 }
 
 interface PaginatedProcessorSpecs {
@@ -197,7 +196,6 @@ export default function Index() {
                                         <TableHead>Threads</TableHead>
                                         <TableHead className="hidden xl:table-cell">Base Clock</TableHead>
                                         <TableHead className="hidden xl:table-cell">Boost Clock</TableHead>
-                                        <TableHead>Release Date</TableHead>
                                         <TableHead className="text-center">Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -212,9 +210,6 @@ export default function Index() {
                                             <TableCell>{cpu.thread_count}</TableCell>
                                             <TableCell className="hidden xl:table-cell">{cpu.base_clock_ghz} GHz</TableCell>
                                             <TableCell className="hidden xl:table-cell">{cpu.boost_clock_ghz} GHz</TableCell>
-                                            <TableCell>
-                                                {cpu.release_date || 'N/A'}
-                                            </TableCell>
                                             <TableCell className="flex justify-center gap-2">
                                                 <Can permission="hardware.edit">
                                                     <Link href={edit.url(cpu.id)}>
@@ -253,10 +248,6 @@ export default function Index() {
                                 <div>
                                     <div className="text-xs text-muted-foreground">Manufacturer</div>
                                     <div className="font-semibold text-lg">{cpu.manufacturer}</div>
-                                </div>
-                                <div className="text-right">
-                                    <div className="text-xs text-muted-foreground">Release Date</div>
-                                    <div className="font-medium">{cpu.release_date || 'N/A'}</div>
                                 </div>
                             </div>
 

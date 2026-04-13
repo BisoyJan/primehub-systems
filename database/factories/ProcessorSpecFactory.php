@@ -60,7 +60,6 @@ class ProcessorSpecFactory extends Factory
             'thread_count' => $threadCount,
             'base_clock_ghz' => round(mt_rand(200, 380) / 100, 2),
             'boost_clock_ghz' => round(mt_rand(350, 520) / 100, 2),
-            'release_date' => $this->faker->dateTimeBetween('-5 years', 'now')->format('Y-m-d'),
         ];
     }
 }

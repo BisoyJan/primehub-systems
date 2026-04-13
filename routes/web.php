@@ -78,6 +78,9 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
         Route::get('zip/{jobId}/download', [PcSpecController::class, 'downloadZip'])->name('zip.download');
         Route::get('selected-progress/{jobId}', [PcSpecController::class, 'selectedZipProgress']);
         Route::get('selected-zip/{jobId}/download', [PcSpecController::class, 'downloadSelectedZip'])->name('selected.download');
+        // Streaming endpoints (no job queue - direct download)
+        Route::post('bulk-all-stream', [PcSpecController::class, 'bulkAllStream']);
+        Route::post('zip-selected-stream', [PcSpecController::class, 'zipSelectedStream']);
     });
 
     // Sites & Campaigns
@@ -109,6 +112,9 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
         Route::post('zip-selected-stream', [StationController::class, 'zipSelectedStream']);
     });
     Route::get('stations/scan/{station}', [StationController::class, 'scanResult'])->name('stations.scanResult');
+
+    // PC Spec Scan Result
+    Route::get('pcspecs/scan/{pcspec}', [PcSpecController::class, 'scanResult'])->name('pcspecs.scanResult');
 
     // Accounts
     Route::resource('accounts', AccountController::class)

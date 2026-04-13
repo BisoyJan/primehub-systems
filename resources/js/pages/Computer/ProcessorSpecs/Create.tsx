@@ -40,7 +40,6 @@ export default function Create() {
         thread_count: '' as number | '',
         base_clock_ghz: '' as number | '',
         boost_clock_ghz: '' as number | '',
-        release_date: '',
     });
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -163,18 +162,6 @@ export default function Create() {
                             onChange={(e) => setData('boost_clock_ghz', Number(e.target.value))}
                         />
                         {errors.boost_clock_ghz && <p className="mt-1 text-sm text-red-600">{errors.boost_clock_ghz}</p>}
-                    </div>
-
-                    <div>
-                        <Label htmlFor="release_date">Release Date</Label>
-                        <Input
-                            id="release_date"
-                            name="release_date"
-                            type="date"
-                            value={data.release_date}
-                            onChange={(e) => setData('release_date', e.target.value)}
-                        />
-                        {errors.release_date && <p className="mt-1 text-sm text-red-600">{errors.release_date}</p>}
                     </div>
 
                     <div className="md:col-span-2 flex justify-end">

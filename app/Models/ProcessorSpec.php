@@ -27,7 +27,6 @@ class ProcessorSpec extends Model
         'thread_count',
         'base_clock_ghz',
         'boost_clock_ghz',
-        'release_date',
     ];
 
     protected function casts(): array
@@ -37,7 +36,6 @@ class ProcessorSpec extends Model
             'thread_count' => 'integer',
             'base_clock_ghz' => 'decimal:2',
             'boost_clock_ghz' => 'decimal:2',
-            'release_date' => 'date',
         ];
     }
 

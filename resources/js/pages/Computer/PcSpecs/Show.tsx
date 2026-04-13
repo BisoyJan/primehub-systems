@@ -24,6 +24,7 @@ interface PcSpec {
     ram_gb: number;
     disk_gb: number;
     available_ports: string | null;
+    bios_release_date: string | null;
     station?: { id: number; name: string };
     processor_specs?: ProcessorSpec[];
 }
@@ -75,6 +76,10 @@ export default function Show() {
                 <div className="flex flex-col gap-1">
                     <span className="text-xs text-gray-500 dark:text-gray-400">Available Ports</span>
                     <span className="font-medium">{pcspec.available_ports || 'N/A'}</span>
+                </div>
+                <div className="flex flex-col gap-1">
+                    <span className="text-xs text-gray-500 dark:text-gray-400">Bios Release Date</span>
+                    <span className="font-medium">{pcspec.bios_release_date || 'N/A'}</span>
                 </div>
                 {pcspec.station && (
                     <div className="flex flex-col gap-1">

@@ -19,7 +19,6 @@ import { Label } from "@/components/ui/label";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
 import { toast } from "sonner";
 import { Eye, AlertTriangle, Plus, CheckSquare, RefreshCw, Search, Download, Play, Pause } from "lucide-react";
-import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { transferPage } from '@/routes/pc-transfers';
 import {
@@ -121,11 +120,9 @@ export default function StationIndex() {
         }
     });
 
-    // QR Code download state - job-based polling
-    const [bulkProgress, setBulkProgress] = useState<{ running: boolean; percent: number; status: string; downloadUrl?: string; jobId?: string }>({ running: false, percent: 0, status: '' });
-    const [selectedZipProgress, setSelectedZipProgress] = useState<{ running: boolean; percent: number; status: string; downloadUrl?: string; jobId?: string }>({ running: false, percent: 0, status: '' });
-    const bulkIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
-    const selectedZipIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
+    // QR Code download state
+    const [bulkProgress, setBulkProgress] = useState<{ running: boolean; percent: number; status: string }>({ running: false, percent: 0, status: '' });
+    const [selectedZipProgress, setSelectedZipProgress] = useState<{ running: boolean; percent: number; status: string }>({ running: false, percent: 0, status: '' });
 
     // Track if all records are selected (across all pages)
     const [isAllRecordsSelected, setIsAllRecordsSelected] = useState(false);
@@ -203,147 +200,86 @@ export default function StationIndex() {
         }
     };
 
-    // Bulk QR ZIP - job-based polling
+    // Bulk QR ZIP - streaming
     const handleBulkDownloadAllQRCodes = () => {
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
         if (!csrfToken) return toast.error('CSRF token not found');
-        toast.info('Preparing bulk QR code ZIP...');
-        fetch('/stations/qrcode/bulk-all', {
+
+        setBulkProgress({ running: true, percent: 0, status: 'Generating...' });
+        toast.info('Generating QR codes...');
+
+        fetch('/stations/qrcode/bulk-all-stream', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
             body: JSON.stringify({ format: 'png', size: 256, metadata: 0 }),
         })
-            .then(res => res.json())
-            .then(data => {
-                if (data.jobId) setBulkProgress({ running: true, percent: 0, status: 'Starting...', jobId: data.jobId });
-                else toast.error('Failed to start bulk download');
+            .then(res => {
+                if (!res.ok) throw new Error('Failed to generate QR codes');
+                const filename = res.headers.get('Content-Disposition')?.match(/filename="?(.+?)"?$/)?.[1] || 'station-qrcodes-all.zip';
+                return res.blob().then(blob => ({ blob, filename }));
+            })
+            .then(({ blob, filename }) => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                toast.success('Download started');
+                setBulkProgress({ running: false, percent: 100, status: 'Done' });
+            })
+            .catch(() => {
+                toast.error('Failed to download QR codes');
+                setBulkProgress({ running: false, percent: 0, status: '' });
             });
     };
 
-    useEffect(() => {
-        if (bulkProgress.running && bulkProgress.jobId) {
-            if (bulkIntervalRef.current) {
-                clearInterval(bulkIntervalRef.current);
-                bulkIntervalRef.current = null;
-            }
-
-            const pollProgress = () => {
-                fetch(`/stations/qrcode/bulk-progress/${bulkProgress.jobId}`)
-                    .then(res => {
-                        if (!res.ok) throw new Error('Failed to fetch progress');
-                        return res.json();
-                    })
-                    .then(data => {
-                        setBulkProgress(prev => ({
-                            ...prev,
-                            percent: data.percent || 0,
-                            status: data.status || 'Processing...',
-                            downloadUrl: data.downloadUrl,
-                            running: !data.finished,
-                        }));
-                        if (data.finished) {
-                            if (bulkIntervalRef.current) {
-                                clearInterval(bulkIntervalRef.current);
-                                bulkIntervalRef.current = null;
-                            }
-                            if (data.downloadUrl) {
-                                window.location.href = data.downloadUrl;
-                                toast.success('Download started');
-                            }
-                        }
-                    })
-                    .catch(err => {
-                        console.error('Progress fetch error:', err);
-                        toast.error('Failed to fetch progress');
-                    });
-            };
-
-            pollProgress();
-            bulkIntervalRef.current = setInterval(pollProgress, 500);
-        }
-        return () => {
-            if (bulkIntervalRef.current) {
-                clearInterval(bulkIntervalRef.current);
-                bulkIntervalRef.current = null;
-            }
-        };
-    }, [bulkProgress.running, bulkProgress.jobId]);
-
-    // Selected QR ZIP - job-based polling
+    // Selected QR ZIP - streaming
     const handleDownloadSelectedQRCodes = () => {
         if (selectedStationIds.length === 0) return toast.error('No stations selected');
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
         if (!csrfToken) return toast.error('CSRF token not found');
-        toast.info('Preparing selected QR code ZIP...');
-        fetch('/stations/qrcode/zip-selected', {
+
+        setSelectedZipProgress({ running: true, percent: 0, status: 'Generating...' });
+        toast.info('Generating selected QR codes...');
+
+        fetch('/stations/qrcode/zip-selected-stream', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
             body: JSON.stringify({ station_ids: selectedStationIds, format: 'png', size: 256, metadata: 0 }),
         })
-            .then(res => res.json())
-            .then(data => {
-                if (data.jobId) setSelectedZipProgress({ running: true, percent: 0, status: 'Starting...', jobId: data.jobId });
-                else toast.error('Failed to start selected ZIP download');
+            .then(res => {
+                if (!res.ok) throw new Error('Failed to generate QR codes');
+                const filename = res.headers.get('Content-Disposition')?.match(/filename="?(.+?)"?$/)?.[1] || 'station-qrcodes-selected.zip';
+                return res.blob().then(blob => ({ blob, filename }));
+            })
+            .then(({ blob, filename }) => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                toast.success('Download started');
+                setSelectedZipProgress({ running: false, percent: 100, status: 'Done' });
+                setSelectedStationIds([]);
+                setIsAllRecordsSelected(false);
+                try {
+                    localStorage.removeItem(LOCAL_STORAGE_KEY);
+                    localStorage.removeItem(LOCAL_STORAGE_TIMESTAMP_KEY);
+                } catch {
+                    // Ignore localStorage errors
+                }
+            })
+            .catch(() => {
+                toast.error('Failed to download QR codes');
+                setSelectedZipProgress({ running: false, percent: 0, status: '' });
             });
     };
-
-    useEffect(() => {
-        if (selectedZipProgress.running && selectedZipProgress.jobId) {
-            if (selectedZipIntervalRef.current) {
-                clearInterval(selectedZipIntervalRef.current);
-                selectedZipIntervalRef.current = null;
-            }
-
-            const pollProgress = () => {
-                fetch(`/stations/qrcode/selected-progress/${selectedZipProgress.jobId}`)
-                    .then(res => {
-                        if (!res.ok) throw new Error('Failed to fetch progress');
-                        return res.json();
-                    })
-                    .then(data => {
-                        setSelectedZipProgress(prev => ({
-                            ...prev,
-                            percent: data.percent || 0,
-                            status: data.status || 'Processing...',
-                            downloadUrl: data.downloadUrl,
-                            running: !data.finished,
-                        }));
-                        if (data.finished) {
-                            if (selectedZipIntervalRef.current) {
-                                clearInterval(selectedZipIntervalRef.current);
-                                selectedZipIntervalRef.current = null;
-                            }
-                            if (data.downloadUrl) {
-                                window.location.href = data.downloadUrl;
-                                toast.success('Download started');
-                                // Clear selection after successful download
-                                setSelectedStationIds([]);
-                                setIsAllRecordsSelected(false);
-                                try {
-                                    localStorage.removeItem(LOCAL_STORAGE_KEY);
-                                    localStorage.removeItem(LOCAL_STORAGE_TIMESTAMP_KEY);
-                                } catch {
-                                    // Ignore localStorage errors
-                                }
-                            }
-                        }
-                    })
-                    .catch(err => {
-                        console.error('Progress fetch error:', err);
-                        toast.error('Failed to fetch progress');
-                    });
-            };
-
-            pollProgress();
-            selectedZipIntervalRef.current = setInterval(pollProgress, 500);
-        }
-        return () => {
-            if (selectedZipIntervalRef.current) {
-                clearInterval(selectedZipIntervalRef.current);
-                selectedZipIntervalRef.current = null;
-            }
-        };
-    }, [selectedZipProgress.running, selectedZipProgress.jobId]);
 
     // Use new hooks for cleaner code
     const { title, breadcrumbs } = usePageMeta({
@@ -1135,15 +1071,11 @@ export default function StationIndex() {
                         <CardHeader className="pb-2">
                             <CardTitle className="text-sm flex items-center gap-2">
                                 <Download className="h-4 w-4" />
-                                Generating All QR Codes
+                                Generating All QR Codes...
                             </CardTitle>
                         </CardHeader>
-                        <CardContent className="space-y-2">
-                            <div className="flex items-center justify-between text-sm">
-                                <span className="text-muted-foreground">{bulkProgress.status}</span>
-                                <span className="font-medium">{bulkProgress.percent}%</span>
-                            </div>
-                            <Progress value={bulkProgress.percent} className="h-2" />
+                        <CardContent>
+                            <span className="text-sm text-muted-foreground">{bulkProgress.status}</span>
                         </CardContent>
                     </Card>
                 )}
@@ -1152,15 +1084,11 @@ export default function StationIndex() {
                         <CardHeader className="pb-2">
                             <CardTitle className="text-sm flex items-center gap-2">
                                 <Download className="h-4 w-4" />
-                                Generating Selected QR Codes
+                                Generating Selected QR Codes...
                             </CardTitle>
                         </CardHeader>
-                        <CardContent className="space-y-2">
-                            <div className="flex items-center justify-between text-sm">
-                                <span className="text-muted-foreground">{selectedZipProgress.status}</span>
-                                <span className="font-medium">{selectedZipProgress.percent}%</span>
-                            </div>
-                            <Progress value={selectedZipProgress.percent} className="h-2" />
+                        <CardContent>
+                            <span className="text-sm text-muted-foreground">{selectedZipProgress.status}</span>
                         </CardContent>
                     </Card>
                 )}
