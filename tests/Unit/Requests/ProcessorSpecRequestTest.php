@@ -31,51 +31,11 @@ class ProcessorSpecRequestTest extends TestCase
             'thread_count' => 20,
             'base_clock_ghz' => 3.6,
             'boost_clock_ghz' => 5.0,
-            'release_date' => '2021-11-04',
         ];
 
         $validator = Validator::make($data, $request->rules());
 
         $this->assertFalse($validator->fails());
-    }
-
-    #[Test]
-    public function it_allows_nullable_release_date(): void
-    {
-        $request = ProcessorSpecRequest::create('/test', 'POST');
-
-        $data = [
-            'manufacturer' => 'Intel',
-            'model' => 'Core i7-12700K',
-            'core_count' => 12,
-            'thread_count' => 20,
-            'base_clock_ghz' => 3.6,
-            'release_date' => null,
-        ];
-
-        $validator = Validator::make($data, $request->rules());
-
-        $this->assertFalse($validator->fails());
-    }
-
-    #[Test]
-    public function it_rejects_invalid_release_date(): void
-    {
-        $request = ProcessorSpecRequest::create('/test', 'POST');
-
-        $data = [
-            'manufacturer' => 'Intel',
-            'model' => 'Core i7-12700K',
-            'core_count' => 12,
-            'thread_count' => 20,
-            'base_clock_ghz' => 3.6,
-            'release_date' => 'not-a-date',
-        ];
-
-        $validator = Validator::make($data, $request->rules());
-
-        $this->assertTrue($validator->fails());
-        $this->assertArrayHasKey('release_date', $validator->errors()->toArray());
     }
 
     #[Test]
@@ -90,7 +50,6 @@ class ProcessorSpecRequestTest extends TestCase
             'thread_count' => 12,
             'base_clock_ghz' => 3.7,
             'boost_clock_ghz' => null,
-            'release_date' => null,
         ];
 
         $validator = Validator::make($data, $request->rules());
@@ -185,7 +144,6 @@ class ProcessorSpecRequestTest extends TestCase
         $this->assertEquals('number of threads', $attributes['thread_count']);
         $this->assertEquals('base clock speed', $attributes['base_clock_ghz']);
         $this->assertEquals('boost clock speed', $attributes['boost_clock_ghz']);
-        $this->assertEquals('release date', $attributes['release_date']);
     }
 
     #[Test]

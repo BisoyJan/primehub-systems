@@ -73,6 +73,7 @@ interface PcSpec {
     ram_gb: number;
     disk_gb: number;
     available_ports?: string | null;
+    bios_release_date?: string | null;
     issue?: string | null;
     processorSpecs: ProcessorSpec[];
 }
@@ -143,33 +144,13 @@ export default function Index() {
         running: boolean;
         percent: number;
         status: string;
-        downloadUrl?: string;
-        jobId?: string;
     }>({ running: false, percent: 0, status: '' });
 
     const [bulkProgress, setBulkProgress] = useState<{
         running: boolean;
         percent: number;
         status: string;
-        downloadUrl?: string;
-        jobId?: string;
     }>({ running: false, percent: 0, status: '' });
-
-    const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
-    const bulkProgressRef = useRef<HTMLDivElement>(null);
-    const selectedProgressRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        if (bulkProgressRef.current) {
-            bulkProgressRef.current.style.width = `${bulkProgress.percent}%`;
-        }
-    }, [bulkProgress.percent]);
-
-    useEffect(() => {
-        if (selectedProgressRef.current) {
-            selectedProgressRef.current.style.width = `${selectedZipProgress.percent}%`;
-        }
-    }, [selectedZipProgress.percent]);
 
     // QR Code functionality - persist selection in localStorage
     const LOCAL_STORAGE_KEY = 'pcspec_selected_ids';
@@ -211,8 +192,6 @@ export default function Index() {
             // Ignore localStorage errors
         }
     }, [selectedPcIds]);
-
-    const selectedZipIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
     // Use new hooks for cleaner code
     const { title, breadcrumbs } = usePageMeta({
@@ -269,17 +248,16 @@ export default function Index() {
     };
 
     const handleBulkDownloadAllQRCodes = () => {
-        // Get CSRF token
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
         if (!csrfToken) {
             toast.error('CSRF token not found. Please refresh the page.');
             return;
         }
 
-        toast.info('Preparing bulk QR code ZIP...');
+        setBulkProgress({ running: true, percent: 0, status: 'Generating...' });
+        toast.info('Generating QR codes...');
 
-        // Start bulk job
-        fetch('/pcspecs/qrcode/bulk-all', {
+        fetch('/pcspecs/qrcode/bulk-all-stream', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -291,74 +269,28 @@ export default function Index() {
                 metadata: 0,
             }),
         })
-            .then(res => res.json())
-            .then(data => {
-                if (data.jobId) {
-                    setBulkProgress({
-                        running: true,
-                        percent: 0,
-                        status: 'Starting...',
-                        jobId: data.jobId,
-                    });
-                } else {
-                    toast.error('Failed to start bulk download');
-                }
+            .then(res => {
+                if (!res.ok) throw new Error('Failed to generate QR codes');
+                const filename = res.headers.get('Content-Disposition')?.match(/filename="?(.+?)"?$/)?.[1] || 'pc-qrcodes-all.zip';
+                return res.blob().then(blob => ({ blob, filename }));
             })
-            .catch(() => toast.error('Failed to start bulk download'));
+            .then(({ blob, filename }) => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                toast.success('Download started');
+                setBulkProgress({ running: false, percent: 100, status: 'Done' });
+            })
+            .catch(() => {
+                toast.error('Failed to download QR codes');
+                setBulkProgress({ running: false, percent: 0, status: '' });
+            });
     };
-
-    useEffect(() => {
-        if (bulkProgress.running && bulkProgress.jobId) {
-            if (progressIntervalRef.current) {
-                clearInterval(progressIntervalRef.current);
-                progressIntervalRef.current = null;
-            }
-
-            // Poll immediately first, then every 500ms
-            const pollProgress = () => {
-                fetch(`/pcspecs/qrcode/bulk-progress/${bulkProgress.jobId}`)
-                    .then(res => {
-                        if (!res.ok) throw new Error('Failed to fetch progress');
-                        return res.json();
-                    })
-                    .then(data => {
-                        setBulkProgress(prev => ({
-                            ...prev,
-                            percent: data.percent || 0,
-                            status: data.status || 'Processing...',
-                            downloadUrl: data.downloadUrl,
-                            running: !data.finished,
-                        }));
-                        if (data.finished) {
-                            if (progressIntervalRef.current) {
-                                clearInterval(progressIntervalRef.current);
-                                progressIntervalRef.current = null;
-                            }
-                            if (data.downloadUrl) {
-                                window.location.href = data.downloadUrl;
-                                toast.success('Download started');
-                            }
-                        }
-                    })
-                    .catch(err => {
-                        console.error('Progress fetch error:', err);
-                        toast.error('Failed to fetch progress');
-                    });
-            };
-
-            // Poll immediately
-            pollProgress();
-
-            // Then poll every 500ms for faster updates
-            progressIntervalRef.current = setInterval(pollProgress, 500);
-        }
-        return () => {
-            if (progressIntervalRef.current) {
-                clearInterval(progressIntervalRef.current);
-                progressIntervalRef.current = null;
-            }
-        };
-    }, [bulkProgress.running, bulkProgress.jobId]);
 
     const handleDownloadSelectedQRCodes = () => {
         if (selectedPcIds.length === 0) {
@@ -372,9 +304,10 @@ export default function Index() {
             return;
         }
 
-        toast.info('Preparing selected QR code ZIP...');
+        setSelectedZipProgress({ running: true, percent: 0, status: 'Generating...' });
+        toast.info('Generating selected QR codes...');
 
-        fetch('/pcspecs/qrcode/zip-selected', {
+        fetch('/pcspecs/qrcode/zip-selected-stream', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -387,78 +320,29 @@ export default function Index() {
                 metadata: 0,
             }),
         })
-            .then(res => res.json())
-            .then(data => {
-                if (data.jobId) {
-                    setSelectedZipProgress({
-                        running: true,
-                        percent: 0,
-                        status: 'Starting...',
-                        jobId: data.jobId,
-                    });
-                } else if (data.downloadUrl) {
-                    window.location.href = data.downloadUrl;
-                    toast.success('Download started');
-                } else {
-                    toast.error('Failed to start selected ZIP download');
-                }
+            .then(res => {
+                if (!res.ok) throw new Error('Failed to generate QR codes');
+                const filename = res.headers.get('Content-Disposition')?.match(/filename="?(.+?)"?$/)?.[1] || 'pc-qrcodes-selected.zip';
+                return res.blob().then(blob => ({ blob, filename }));
             })
-            .catch(() => toast.error('Failed to start selected ZIP download'));
+            .then(({ blob, filename }) => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                toast.success('Download started');
+                setSelectedZipProgress({ running: false, percent: 100, status: 'Done' });
+                setSelectedPcIds([]);
+            })
+            .catch(() => {
+                toast.error('Failed to download QR codes');
+                setSelectedZipProgress({ running: false, percent: 0, status: '' });
+            });
     };
-
-    // Poll progress for selected ZIP every 500ms
-    useEffect(() => {
-        if (selectedZipProgress.running && selectedZipProgress.jobId) {
-            if (selectedZipIntervalRef.current) {
-                clearInterval(selectedZipIntervalRef.current);
-                selectedZipIntervalRef.current = null;
-            }
-
-            // Poll immediately first, then every 500ms
-            const pollProgress = () => {
-                fetch(`/pcspecs/qrcode/selected-progress/${selectedZipProgress.jobId}`)
-                    .then(res => {
-                        if (!res.ok) throw new Error('Failed to fetch progress');
-                        return res.json();
-                    })
-                    .then(data => {
-                        setSelectedZipProgress(prev => ({
-                            ...prev,
-                            percent: data.percent || 0,
-                            status: data.status || 'Processing...',
-                            downloadUrl: data.downloadUrl,
-                            running: !data.finished,
-                        }));
-                        if (data.finished) {
-                            if (selectedZipIntervalRef.current) {
-                                clearInterval(selectedZipIntervalRef.current);
-                                selectedZipIntervalRef.current = null;
-                            }
-                            if (data.downloadUrl) {
-                                window.location.href = data.downloadUrl;
-                                toast.success('Download started');
-                            }
-                        }
-                    })
-                    .catch(err => {
-                        console.error('Progress fetch error:', err);
-                        toast.error('Failed to fetch progress');
-                    });
-            };
-
-            // Poll immediately
-            pollProgress();
-
-            // Then poll every 500ms for faster updates
-            selectedZipIntervalRef.current = setInterval(pollProgress, 500);
-        }
-        return () => {
-            if (selectedZipIntervalRef.current) {
-                clearInterval(selectedZipIntervalRef.current);
-                selectedZipIntervalRef.current = null;
-            }
-        };
-    }, [selectedZipProgress.running, selectedZipProgress.jobId]);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -472,16 +356,10 @@ export default function Index() {
                 {bulkProgress.running && (
                     <div className="fixed bottom-6 right-6 z-50 bg-white dark:bg-gray-900 border border-blue-400 shadow-lg rounded-lg px-6 py-4 flex flex-col gap-2 items-center">
                         <div className="font-semibold text-blue-700 dark:text-blue-200">
-                            Bulk QR Code ZIP Progress
-                        </div>
-                        <div className="w-full bg-gray-200 rounded h-3 mb-2">
-                            <div
-                                ref={bulkProgressRef}
-                                className="bg-blue-600 h-3 rounded"
-                            />
+                            Generating QR Codes...
                         </div>
                         <div className="text-xs text-gray-700 dark:text-gray-300">
-                            {bulkProgress.status} ({bulkProgress.percent}%)
+                            {bulkProgress.status}
                         </div>
                     </div>
                 )}
@@ -490,16 +368,10 @@ export default function Index() {
                 {selectedZipProgress.running && (
                     <div className="fixed bottom-24 right-6 z-50 bg-white dark:bg-gray-900 border border-green-400 shadow-lg rounded-lg px-6 py-4 flex flex-col gap-2 items-center">
                         <div className="font-semibold text-green-700 dark:text-green-200">
-                            Selected QR Code ZIP Progress
-                        </div>
-                        <div className="w-full bg-gray-200 rounded h-3 mb-2">
-                            <div
-                                ref={selectedProgressRef}
-                                className="bg-green-600 h-3 rounded"
-                            />
+                            Generating Selected QR Codes...
                         </div>
                         <div className="text-xs text-gray-700 dark:text-gray-300">
-                            {selectedZipProgress.status} ({selectedZipProgress.percent}%)
+                            {selectedZipProgress.status}
                         </div>
                     </div>
                 )}
@@ -655,7 +527,7 @@ export default function Index() {
                                                 <TableCell>
                                                     <div className="flex items-center gap-2">
                                                         {pc.issue ? (
-                                                            <span className="text-xs text-red-600 font-medium truncate max-w-[200px]" title={pc.issue}>
+                                                            <span className="text-xs text-red-600 font-medium truncate max-w-50" title={pc.issue}>
                                                                 ⚠️ {pc.issue}
                                                             </span>
                                                         ) : (
@@ -690,72 +562,74 @@ export default function Index() {
                                                                 Details
                                                             </Button>
                                                         </DialogTrigger>
-                                                        <DialogContent className="max-w-[95vw] sm:max-w-7xl w-full h-[90vh] flex flex-col">
-                                                            <DialogTitle className="text-lg sm:text-xl font-semibold break-words">
-                                                                {pc.manufacturer} {pc.model} — Full Specifications
-                                                            </DialogTitle>
+                                                        <DialogContent className="max-w-[95vw] sm:max-w-lg w-full">
+                                                            <DialogHeader>
+                                                                <DialogTitle className="text-lg font-semibold">
+                                                                    {pc.pc_number || `PC #${pc.id}`}
+                                                                </DialogTitle>
+                                                                <DialogDescription>
+                                                                    {pc.manufacturer} {pc.model}
+                                                                </DialogDescription>
+                                                            </DialogHeader>
 
-                                                            {/* Scrollable body */}
-                                                            <div className="flex-1 overflow-y-auto pr-2 mt-4 space-y-6 text-sm">
-                                                                {/* Motherboard Core Info */}
-                                                                <section>
-                                                                    <h3 className="font-semibold text-base mb-2">PC Spec Details</h3>
-                                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
-                                                                        <p><span className="font-medium">Manufacturer:</span> {pc.manufacturer}</p>
-                                                                        <p><span className="font-medium">Model:</span> {pc.model}</p>
-                                                                        <p><span className="font-medium">Memory Type:</span> {pc.memory_type}</p>
+                                                            <div className="space-y-4 text-sm">
+                                                                <div className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-lg border p-4">
+                                                                    <div>
+                                                                        <span className="text-xs text-muted-foreground">Memory Type</span>
+                                                                        <p className="font-medium">{pc.memory_type}</p>
                                                                     </div>
-                                                                </section>
-
-                                                                {/* RAM & Disk */}
-                                                                <section>
-                                                                    <h3 className="font-semibold text-base mb-2">Memory & Storage</h3>
-                                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
-                                                                        <p><span className="font-medium">RAM:</span> {pc.ram_gb} GB</p>
-                                                                        <p><span className="font-medium">Disk:</span> {pc.disk_gb} GB</p>
-                                                                        {pc.available_ports && (
-                                                                            <p className="sm:col-span-2"><span className="font-medium">Available Ports:</span> {pc.available_ports}</p>
-                                                                        )}
+                                                                    <div>
+                                                                        <span className="text-xs text-muted-foreground">RAM</span>
+                                                                        <p className="font-medium">{pc.ram_gb} GB</p>
                                                                     </div>
-                                                                </section>
+                                                                    <div>
+                                                                        <span className="text-xs text-muted-foreground">Disk</span>
+                                                                        <p className="font-medium">{pc.disk_gb} GB</p>
+                                                                    </div>
+                                                                    <div>
+                                                                        <span className="text-xs text-muted-foreground">Ports</span>
+                                                                        <p className="font-medium">{pc.available_ports || 'N/A'}</p>
+                                                                    </div>
+                                                                    <div>
+                                                                        <span className="text-xs text-muted-foreground">Bios Release Date</span>
+                                                                        <p className="font-medium">{pc.bios_release_date || 'N/A'}</p>
+                                                                    </div>
+                                                                </div>
 
-                                                                {/* Processor Specs */}
-                                                                <section>
-                                                                    <h3 className="font-semibold text-base mb-2">Processor Specs</h3>
-                                                                    {pc.processorSpecs?.length ? (
-                                                                        <Table>
-                                                                            <TableHeader>
-                                                                                <TableRow>
-                                                                                    <TableHead>Manufacturer</TableHead>
-                                                                                    <TableHead>Model</TableHead>
-                                                                                    <TableHead>Cores</TableHead>
-                                                                                    <TableHead>Threads</TableHead>
-                                                                                    <TableHead>Base Clock</TableHead>
-                                                                                    <TableHead>Boost Clock</TableHead>
-                                                                                </TableRow>
-                                                                            </TableHeader>
-                                                                            <TableBody>
-                                                                                {pc.processorSpecs.map((p) => (
-                                                                                    <TableRow key={p.id}>
-                                                                                        <TableCell>{p.manufacturer}</TableCell>
-                                                                                        <TableCell>{p.model}</TableCell>
-                                                                                        <TableCell>{p.core_count}</TableCell>
-                                                                                        <TableCell>{p.thread_count}</TableCell>
-                                                                                        <TableCell>{p.base_clock_ghz} GHz</TableCell>
-                                                                                        <TableCell>{p.boost_clock_ghz} GHz</TableCell>
-                                                                                    </TableRow>
-                                                                                ))}
-                                                                            </TableBody>
-                                                                        </Table>
-                                                                    ) : (
-                                                                        <p className="text-muted-foreground">No processor specs available.</p>
-                                                                    )}
-                                                                </section>
+                                                                {pc.processorSpecs?.length ? (
+                                                                    <div className="space-y-2">
+                                                                        <h4 className="text-sm font-semibold">Processor</h4>
+                                                                        {pc.processorSpecs.map((p) => (
+                                                                            <div key={p.id} className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-lg border p-4">
+                                                                                <div className="col-span-2">
+                                                                                    <span className="text-xs text-muted-foreground">Processor</span>
+                                                                                    <p className="font-medium">{p.manufacturer} {p.model}</p>
+                                                                                </div>
+                                                                                <div>
+                                                                                    <span className="text-xs text-muted-foreground">Cores / Threads</span>
+                                                                                    <p className="font-medium">{p.core_count} / {p.thread_count}</p>
+                                                                                </div>
+                                                                                <div>
+                                                                                    <span className="text-xs text-muted-foreground">Clock (Base / Boost)</span>
+                                                                                    <p className="font-medium">{p.base_clock_ghz} / {p.boost_clock_ghz} GHz</p>
+                                                                                </div>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                ) : (
+                                                                    <p className="text-muted-foreground text-sm">No processor specs available.</p>
+                                                                )}
+
+                                                                {pc.issue && (
+                                                                    <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-4">
+                                                                        <span className="text-xs text-muted-foreground">Issue</span>
+                                                                        <p className="font-medium text-red-600 dark:text-red-400">{pc.issue}</p>
+                                                                    </div>
+                                                                )}
                                                             </div>
 
-                                                            {/* Footer */}
                                                             <DialogClose asChild>
-                                                                <Button className="mt-4 self-end">Close</Button>
+                                                                <Button variant="outline" className="mt-2 w-full">Close</Button>
                                                             </DialogClose>
                                                         </DialogContent>
                                                     </Dialog>
@@ -849,7 +723,7 @@ export default function Index() {
                                 <div className="space-y-2 text-sm">
                                     <div className="flex justify-between">
                                         <span className="text-muted-foreground">Processor:</span>
-                                        <span className="font-medium text-right break-words max-w-[60%]">{procLabel}</span>
+                                        <span className="font-medium text-right wrap-break-word max-w-[60%]">{procLabel}</span>
                                     </div>
                                     <div className="flex justify-between">
                                         <span className="text-muted-foreground">RAM:</span>
@@ -870,7 +744,7 @@ export default function Index() {
                                             <span className="text-muted-foreground">Issue:</span>
                                             <div className="flex items-center gap-2 flex-1 justify-end">
                                                 {pc.issue ? (
-                                                    <span className="text-xs text-red-600 font-medium truncate max-w-[120px]" title={pc.issue}>
+                                                    <span className="text-xs text-red-600 font-medium truncate max-w-30" title={pc.issue}>
                                                         ⚠️ {pc.issue}
                                                     </span>
                                                 ) : (
@@ -906,56 +780,74 @@ export default function Index() {
                                                     Details
                                                 </Button>
                                             </DialogTrigger>
-                                            <DialogContent className="max-w-[95vw] sm:max-w-7xl w-full h-[90vh] flex flex-col">
-                                                <DialogTitle className="text-lg sm:text-xl font-semibold break-words">
-                                                    {pc.manufacturer} {pc.model} — Full Specifications
-                                                </DialogTitle>
+                                            <DialogContent className="max-w-[95vw] sm:max-w-lg w-full">
+                                                <DialogHeader>
+                                                    <DialogTitle className="text-lg font-semibold">
+                                                        {pc.pc_number || `PC #${pc.id}`}
+                                                    </DialogTitle>
+                                                    <DialogDescription>
+                                                        {pc.manufacturer} {pc.model}
+                                                    </DialogDescription>
+                                                </DialogHeader>
 
-                                                <div className="flex-1 overflow-y-auto pr-2 mt-4 space-y-6 text-sm">
-                                                    <section>
-                                                        <h3 className="font-semibold text-base mb-2">PC Spec Details</h3>
-                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
-                                                            <p><span className="font-medium">Manufacturer:</span> {pc.manufacturer}</p>
-                                                            <p><span className="font-medium">Model:</span> {pc.model}</p>
-                                                            <p><span className="font-medium">Memory Type:</span> {pc.memory_type}</p>
+                                                <div className="space-y-4 text-sm">
+                                                    <div className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-lg border p-4">
+                                                        <div>
+                                                            <span className="text-xs text-muted-foreground">Memory Type</span>
+                                                            <p className="font-medium">{pc.memory_type}</p>
                                                         </div>
-                                                    </section>
-
-                                                    <section>
-                                                        <h3 className="font-semibold text-base mb-2">Memory & Storage</h3>
-                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
-                                                            <p><span className="font-medium">RAM:</span> {pc.ram_gb} GB</p>
-                                                            <p><span className="font-medium">Disk:</span> {pc.disk_gb} GB</p>
-                                                            {pc.available_ports && (
-                                                                <p className="sm:col-span-2"><span className="font-medium">Available Ports:</span> {pc.available_ports}</p>
-                                                            )}
+                                                        <div>
+                                                            <span className="text-xs text-muted-foreground">RAM</span>
+                                                            <p className="font-medium">{pc.ram_gb} GB</p>
                                                         </div>
-                                                    </section>
+                                                        <div>
+                                                            <span className="text-xs text-muted-foreground">Disk</span>
+                                                            <p className="font-medium">{pc.disk_gb} GB</p>
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-xs text-muted-foreground">Ports</span>
+                                                            <p className="font-medium">{pc.available_ports || 'N/A'}</p>
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-xs text-muted-foreground">Bios Release Date</span>
+                                                            <p className="font-medium">{pc.bios_release_date || 'N/A'}</p>
+                                                        </div>
+                                                    </div>
 
-                                                    <section>
-                                                        <h3 className="font-semibold text-base mb-2">Processor Specs</h3>
-                                                        {pc.processorSpecs?.length ? (
-                                                            <div className="space-y-2">
-                                                                {pc.processorSpecs.map((p) => (
-                                                                    <div key={p.id} className="border p-3 rounded text-sm">
-                                                                        <div className="font-medium">{p.manufacturer} {p.model}</div>
-                                                                        <div className="text-muted-foreground">
-                                                                            {p.core_count} cores / {p.thread_count} threads
-                                                                        </div>
-                                                                        <div className="text-muted-foreground text-xs">
-                                                                            {p.base_clock_ghz} GHz - {p.boost_clock_ghz} GHz
-                                                                        </div>
+                                                    {pc.processorSpecs?.length ? (
+                                                        <div className="space-y-2">
+                                                            <h4 className="text-sm font-semibold">Processor</h4>
+                                                            {pc.processorSpecs.map((p) => (
+                                                                <div key={p.id} className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-lg border p-4">
+                                                                    <div className="col-span-2">
+                                                                        <span className="text-xs text-muted-foreground">Processor</span>
+                                                                        <p className="font-medium">{p.manufacturer} {p.model}</p>
                                                                     </div>
-                                                                ))}
-                                                            </div>
-                                                        ) : (
-                                                            <p className="text-muted-foreground">No processor specs available.</p>
-                                                        )}
-                                                    </section>
+                                                                    <div>
+                                                                        <span className="text-xs text-muted-foreground">Cores / Threads</span>
+                                                                        <p className="font-medium">{p.core_count} / {p.thread_count}</p>
+                                                                    </div>
+                                                                    <div>
+                                                                        <span className="text-xs text-muted-foreground">Clock (Base / Boost)</span>
+                                                                        <p className="font-medium">{p.base_clock_ghz} / {p.boost_clock_ghz} GHz</p>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <p className="text-muted-foreground text-sm">No processor specs available.</p>
+                                                    )}
+
+                                                    {pc.issue && (
+                                                        <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-4">
+                                                            <span className="text-xs text-muted-foreground">Issue</span>
+                                                            <p className="font-medium text-red-600 dark:text-red-400">{pc.issue}</p>
+                                                        </div>
+                                                    )}
                                                 </div>
 
                                                 <DialogClose asChild>
-                                                    <Button className="mt-4 self-end">Close</Button>
+                                                    <Button variant="outline" className="mt-2 w-full">Close</Button>
                                                 </DialogClose>
                                             </DialogContent>
                                         </Dialog>
@@ -1010,7 +902,7 @@ export default function Index() {
                             <DialogTitle>Manage Issue Note</DialogTitle>
                             <DialogDescription>
                                 {selectedPcSpec && (
-                                    <span className="text-sm break-words">
+                                    <span className="text-sm wrap-break-word">
                                         {selectedPcSpec.manufacturer} {selectedPcSpec.model}
                                     </span>
                                 )}

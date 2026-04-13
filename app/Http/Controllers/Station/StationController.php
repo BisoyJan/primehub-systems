@@ -130,7 +130,9 @@ class StationController extends Controller
         $format = $request->input('format');
         $size = $request->input('size');
 
-        $stations = Station::all();
+        set_time_limit(300);
+
+        $stations = Station::cursor();
 
         // Generate ZIP file
         $zipFileName = 'stations_qr_codes_all_'.date('Y-m-d_His').'.zip';
@@ -167,8 +169,8 @@ class StationController extends Controller
 
         $zip->close();
 
-        // If no stations, create an empty ZIP
-        if ($stations->count() === 0 && ! file_exists($zipPath)) {
+        // Create empty ZIP if no records were processed
+        if (! file_exists($zipPath) || filesize($zipPath) === 0) {
             file_put_contents($zipPath, hex2bin('504b0506'.str_repeat('00', 18)));
         }
 
@@ -193,11 +195,13 @@ class StationController extends Controller
             'metadata' => 'required|integer|in:0,1',
         ]);
 
+        set_time_limit(300);
+
         $format = $request->input('format');
         $size = $request->input('size');
         $stationIds = $request->input('station_ids');
 
-        $stations = Station::whereIn('id', $stationIds)->get();
+        $stations = Station::whereIn('id', $stationIds)->cursor();
 
         // Generate ZIP file
         $zipFileName = 'stations_qr_codes_selected_'.date('Y-m-d_His').'.zip';
@@ -234,8 +238,8 @@ class StationController extends Controller
 
         $zip->close();
 
-        // If no stations, create an empty ZIP
-        if ($stations->count() === 0 && ! file_exists($zipPath)) {
+        // Create empty ZIP if no records were processed
+        if (! file_exists($zipPath) || filesize($zipPath) === 0) {
             file_put_contents($zipPath, hex2bin('504b0506'.str_repeat('00', 18)));
         }
 

@@ -29,7 +29,6 @@ class ProcessorSpecRequest extends FormRequest
             'thread_count' => ['required', 'integer', 'min:1'],
             'base_clock_ghz' => ['required', 'numeric', 'min:0'],
             'boost_clock_ghz' => ['nullable', 'numeric', 'min:0'],
-            'release_date' => ['nullable', 'date'],
         ];
 
         return $rules;
@@ -47,7 +46,6 @@ class ProcessorSpecRequest extends FormRequest
             'thread_count' => 'number of threads',
             'base_clock_ghz' => 'base clock speed',
             'boost_clock_ghz' => 'boost clock speed',
-            'release_date' => 'release date',
         ];
     }
 

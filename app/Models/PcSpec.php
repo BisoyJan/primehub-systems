@@ -30,6 +30,7 @@ class PcSpec extends Model
         'ram_gb',
         'disk_gb',
         'available_ports',
+        'bios_release_date',
     ];
 
     protected function casts(): array
@@ -39,6 +40,7 @@ class PcSpec extends Model
             'sata_ports' => 'integer',
             'ram_gb' => 'integer',
             'disk_gb' => 'integer',
+            'bios_release_date' => 'date:Y-m-d',
         ];
     }
 

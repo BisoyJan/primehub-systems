@@ -70,6 +70,7 @@ export default function Create() {
         ram_gb: 0,
         disk_gb: 0,
         available_ports: '',
+        bios_release_date: '',
         processor_mode: 'existing' as 'existing' | 'new',
         processor_spec_id: 0,
         processor_manufacturer: '',
@@ -78,7 +79,6 @@ export default function Create() {
         processor_thread_count: '' as number | '',
         processor_base_clock_ghz: '' as number | '',
         processor_boost_clock_ghz: '' as number | '',
-        processor_release_date: '',
         quantity: 1,
     });
 
@@ -86,6 +86,9 @@ export default function Create() {
 
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
+        if (form.data.processor_mode === 'new') {
+            form.setData('processor_spec_id', 0);
+        }
         form.post(pcSpecStore().url);
     }
 
@@ -252,6 +255,17 @@ export default function Create() {
                                 />
                                 {form.errors.available_ports && <p className="text-sm text-red-600">{form.errors.available_ports}</p>}
                             </div>
+
+                            <div>
+                                <Label htmlFor="bios_release_date">Bios Release Date</Label>
+                                <Input
+                                    id="bios_release_date"
+                                    type="date"
+                                    value={form.data.bios_release_date}
+                                    onChange={(e) => form.setData('bios_release_date', e.target.value)}
+                                />
+                                {form.errors.bios_release_date && <p className="text-sm text-red-600">{form.errors.bios_release_date}</p>}
+                            </div>
                         </div>
                     </section>
 
@@ -401,17 +415,6 @@ export default function Create() {
                                             onChange={(e) => form.setData('processor_boost_clock_ghz', e.target.value ? Number(e.target.value) : '')}
                                         />
                                         {form.errors.processor_boost_clock_ghz && <p className="text-sm text-red-600">{form.errors.processor_boost_clock_ghz}</p>}
-                                    </div>
-
-                                    <div>
-                                        <Label htmlFor="processor_release_date">Release Date</Label>
-                                        <Input
-                                            id="processor_release_date"
-                                            type="date"
-                                            value={form.data.processor_release_date}
-                                            onChange={(e) => form.setData('processor_release_date', e.target.value)}
-                                        />
-                                        {form.errors.processor_release_date && <p className="text-sm text-red-600">{form.errors.processor_release_date}</p>}
                                     </div>
                                 </div>
                             </div>

@@ -169,4 +169,50 @@ class PcSpecControllerTest extends TestCase
             'issue' => 'New Issue',
         ]);
     }
+
+    public function test_scan_result_displays_pc_spec_details()
+    {
+        $processorSpec = ProcessorSpec::factory()->create();
+        $pcSpec = PcSpec::factory()->create();
+        $pcSpec->processorSpecs()->attach($processorSpec);
+
+        $response = $this->actingAs($this->user)
+            ->get(route('pcspecs.scanResult', $pcSpec));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Computer/PcSpecs/ScanResult')
+                ->has('pcspec')
+                ->where('pcspec.id', $pcSpec->id)
+                ->has('pcspec.processorSpecs')
+                ->has('pcspec.stations')
+            );
+    }
+
+    public function test_scan_result_shows_error_for_invalid_id()
+    {
+        $response = $this->actingAs($this->user)
+            ->get(route('pcspecs.scanResult', 99999));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Computer/PcSpecs/ScanResult')
+                ->where('error', 'PC Spec not found.')
+            );
+    }
+
+    public function test_scan_result_includes_assigned_stations()
+    {
+        $pcSpec = PcSpec::factory()->create();
+        Station::factory()->count(2)->create(['pc_spec_id' => $pcSpec->id]);
+
+        $response = $this->actingAs($this->user)
+            ->get(route('pcspecs.scanResult', $pcSpec));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Computer/PcSpecs/ScanResult')
+                ->has('pcspec.stations', 2)
+            );
+    }
 }

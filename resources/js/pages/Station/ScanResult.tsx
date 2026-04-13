@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Head, router } from "@inertiajs/react";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import AppLayout from "@/layouts/app-layout";
 import { PageHeader } from "@/components/PageHeader";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
@@ -10,8 +12,9 @@ import {
     edit as stationsEditRoute,
 } from "@/routes/stations";
 import { transferPage } from "@/routes/pc-transfers";
+import { Monitor, Cpu, HardDrive, MemoryStick, MapPin, Megaphone, Pencil, ArrowLeftRight, ArrowLeft, AlertTriangle, Layers } from "lucide-react";
 
-interface Monitor {
+interface MonitorSpec {
     id: number;
     brand: string;
     model: string;
@@ -45,10 +48,19 @@ interface Station {
     status: string;
     monitor_type: string;
     pcSpec?: PcSpec;
-    monitors?: Monitor[];
+    monitors?: MonitorSpec[];
     created_at?: string;
     updated_at?: string;
 }
+
+const statusColor = (status: string) => {
+    switch (status.toLowerCase()) {
+        case 'active': return 'default';
+        case 'inactive': return 'secondary';
+        case 'maintenance': return 'destructive';
+        default: return 'outline';
+    }
+};
 
 export default function ScanResult({ stationId, station: initialStation, error: initialError }: { stationId?: number, station?: Station, error?: string }) {
     const [station, setStation] = useState<Station | null>(initialStation ?? null);
@@ -77,82 +89,182 @@ export default function ScanResult({ stationId, station: initialStation, error: 
         }
     }, [stationId, station, error]);
 
-
-    const renderContent = () => {
-        if (error) {
-            return (
-                <div className="p-8 text-center text-red-600 text-base sm:text-lg md:text-xl">{error}</div>
-            );
-        }
-
-        if (!station) {
-            return (
-                <div className="p-8 text-center text-base sm:text-lg md:text-xl">Loading...</div>
-            );
-        }
-
+    if (error) {
         return (
-            <div className="mx-auto mt-4 sm:mt-8 w-full max-w-md sm:max-w-lg md:max-w-2xl lg:max-w-3xl px-1 sm:px-4 md:px-8">
-                <div className="bg-card border rounded-lg shadow p-2 sm:p-4 md:p-6 space-y-4">
-                    <div className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-500 text-center">Station #{station.station_number}</div>
-                    <div className="space-y-3 text-base sm:text-lg md:text-xl">
-                        <div><span className="font-semibold">Site:</span> <span className="text-white/90">{station.site?.name}</span></div>
-                        <div><span className="font-semibold">Campaign:</span> <span className="text-white/90">{station.campaign?.name}</span></div>
-                        <div><span className="font-semibold">Status:</span> <span className="text-white/90">{station.status}</span></div>
-                        <div><span className="font-semibold">Monitor Type:</span> <span className="text-white/90">{station.monitor_type}</span></div>
-                        <div><span className="font-semibold">PC Spec:</span> <span className="text-white/90">{station.pcSpec?.model ?? "—"}</span></div>
-                        {station.pcSpec && (
-                            <div className="pl-2 text-base sm:text-lg md:text-xl text-gray-200 space-y-1">
-                                <div><span className="font-semibold">Processor:</span> <span className="text-white/90">{station.pcSpec.processor}</span></div>
-                                <div><span className="font-semibold">RAM:</span> <span className="text-white/90">{station.pcSpec.ram}</span> {station.pcSpec.ram_ddr && <span className="text-white/70">(DDR: {station.pcSpec.ram_ddr})</span>} {station.pcSpec.ram_capacities && <span className="text-white/70">({station.pcSpec.ram_capacities})</span>}</div>
-                                <div><span className="font-semibold">Disk:</span> <span className="text-white/90">{station.pcSpec.disk}</span> {station.pcSpec.disk_type && <span className="text-white/70">(Type: {station.pcSpec.disk_type})</span>} {station.pcSpec.disk_capacities && <span className="text-white/70">({station.pcSpec.disk_capacities})</span>}</div>
-                                {station.pcSpec.pc_number && <div><span className="font-semibold">PC Number:</span> <span className="text-white/90">{station.pcSpec.pc_number}</span></div>}
-                                {station.pcSpec.issue && <div className="text-red-400 font-semibold">Issue: {station.pcSpec.issue}</div>}
-                            </div>
-                        )}
-                        <div><span className="font-semibold">Monitors:</span></div>
-                        {station.monitors && station.monitors.length > 0 ? (
-                            <ul className="pl-4 text-base sm:text-lg md:text-xl text-white/90">
-                                {station.monitors.map(m => (
-                                    <li key={m.id} className="mb-2">
-                                        <span className="font-semibold">{m.brand} {m.model}</span> - {m.screen_size}" {m.resolution} {m.panel_type} <span className="font-bold">x{m.quantity}</span>
-                                    </li>
-                                ))}
-                            </ul>
-                        ) : (
-                            <div className="pl-4 text-base sm:text-lg md:text-xl text-gray-400">No monitors</div>
-                        )}
-                    </div>
-                    <div className="flex flex-col sm:flex-row gap-3 mt-6">
-                        <Button
-                            className="w-full sm:w-auto sm:flex-1 text-base sm:text-lg md:text-xl py-3"
-                            onClick={() => router.get(stationsEditRoute(station.id).url)}
-                        >
-                            Edit Station
-                        </Button>
-                        <Button
-                            className="w-full sm:w-auto sm:flex-1 text-base sm:text-lg md:text-xl py-3"
-                            variant="outline"
-                            onClick={() => router.visit(transferPage(station.id).url)}
-                        >
-                            {station.pcSpec ? 'Transfer PC' : 'Assign PC'}
-                        </Button>
-                    </div>
+            <AppLayout breadcrumbs={breadcrumbs}>
+                <Head title="Scan Error" />
+                <div className="flex items-center justify-center min-h-[60vh] p-4">
+                    <Card className="w-full max-w-md text-center">
+                        <CardContent className="pt-8 pb-6 space-y-4">
+                            <AlertTriangle className="mx-auto h-12 w-12 text-destructive" />
+                            <p className="text-lg text-destructive font-medium">{error}</p>
+                            <Button variant="outline" onClick={() => router.get(stationsIndexRoute().url)}>
+                                <ArrowLeft className="mr-2 h-4 w-4" /> Back to List
+                            </Button>
+                        </CardContent>
+                    </Card>
                 </div>
-            </div>
+            </AppLayout>
         );
-    };
+    }
+
+    if (!station) {
+        return (
+            <AppLayout breadcrumbs={breadcrumbs}>
+                <Head title="Loading..." />
+                <div className="flex items-center justify-center min-h-[60vh]">
+                    <p className="text-muted-foreground text-lg">Loading...</p>
+                </div>
+            </AppLayout>
+        );
+    }
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={title} />
-            <div className="relative">
+            <div className="relative flex flex-col gap-4 p-3">
                 <LoadingOverlay isLoading={isPageLoading || isFetching} />
+
                 <PageHeader
-                    title={station ? `Station #${station.station_number}` : "Station Scan Result"}
-                    description={station ? 'Live station details from QR scan' : 'Fetching station details...'}
+                    title={`Station #${station.station_number}`}
+                    description="Live station details from QR scan"
                 />
-                {renderContent()}
+
+                <div className="mx-auto w-full max-w-3xl space-y-4">
+                    {/* Header card */}
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                                <div className="flex items-center gap-3">
+                                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                                        <Monitor className="h-5 w-5 text-primary" />
+                                    </div>
+                                    <div>
+                                        <CardTitle className="text-xl sm:text-2xl">Station #{station.station_number}</CardTitle>
+                                        <p className="text-sm text-muted-foreground">{station.monitor_type} monitor setup</p>
+                                    </div>
+                                </div>
+                                <Badge variant={statusColor(station.status)}>
+                                    {station.status}
+                                </Badge>
+                            </div>
+                        </CardHeader>
+                    </Card>
+
+                    {/* Location info */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <Card>
+                            <CardContent className="flex items-center gap-3 pt-4">
+                                <MapPin className="h-5 w-5 text-muted-foreground shrink-0" />
+                                <div>
+                                    <p className="text-xs text-muted-foreground">Site</p>
+                                    <p className="font-medium">{station.site?.name ?? '—'}</p>
+                                </div>
+                            </CardContent>
+                        </Card>
+                        <Card>
+                            <CardContent className="flex items-center gap-3 pt-4">
+                                <Megaphone className="h-5 w-5 text-muted-foreground shrink-0" />
+                                <div>
+                                    <p className="text-xs text-muted-foreground">Campaign</p>
+                                    <p className="font-medium">{station.campaign?.name ?? '—'}</p>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+
+                    {/* PC Spec */}
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="flex items-center gap-2 text-base">
+                                <Cpu className="h-4 w-4" /> PC Specification
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            {station.pcSpec ? (
+                                <div className="space-y-3">
+                                    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 rounded-md border px-3 py-2">
+                                        <span className="font-medium">{station.pcSpec.model}</span>
+                                        {station.pcSpec.pc_number && (
+                                            <Badge variant="outline">{station.pcSpec.pc_number}</Badge>
+                                        )}
+                                    </div>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                        <div className="flex items-center gap-2 rounded-md border px-3 py-2">
+                                            <Cpu className="h-4 w-4 text-muted-foreground" />
+                                            <div>
+                                                <p className="text-xs text-muted-foreground">Processor</p>
+                                                <p className="text-sm font-medium">{station.pcSpec.processor}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 rounded-md border px-3 py-2">
+                                            <MemoryStick className="h-4 w-4 text-muted-foreground" />
+                                            <div>
+                                                <p className="text-xs text-muted-foreground">RAM</p>
+                                                <p className="text-sm font-medium">{station.pcSpec.ram}</p>
+                                                {station.pcSpec.ram_ddr && <p className="text-xs text-muted-foreground">{station.pcSpec.ram_ddr}</p>}
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 rounded-md border px-3 py-2">
+                                            <HardDrive className="h-4 w-4 text-muted-foreground" />
+                                            <div>
+                                                <p className="text-xs text-muted-foreground">Disk</p>
+                                                <p className="text-sm font-medium">{station.pcSpec.disk}</p>
+                                                {station.pcSpec.disk_type && <p className="text-xs text-muted-foreground">{station.pcSpec.disk_type}</p>}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {station.pcSpec.issue && (
+                                        <div className="flex items-start gap-2 rounded-md border border-destructive/50 bg-destructive/5 px-3 py-2">
+                                            <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                                            <p className="text-sm text-destructive">{station.pcSpec.issue}</p>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <p className="text-sm text-muted-foreground">No PC assigned to this station</p>
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    {/* Monitors */}
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="flex items-center gap-2 text-base">
+                                <Layers className="h-4 w-4" /> Monitors
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            {station.monitors && station.monitors.length > 0 ? (
+                                <div className="space-y-2">
+                                    {station.monitors.map(m => (
+                                        <div key={m.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 rounded-md border px-3 py-2">
+                                            <span className="font-medium">{m.brand} {m.model}</span>
+                                            <div className="flex flex-wrap gap-1.5">
+                                                <Badge variant="outline">{m.screen_size}"</Badge>
+                                                <Badge variant="outline">{m.resolution}</Badge>
+                                                <Badge variant="outline">{m.panel_type}</Badge>
+                                                <Badge variant="secondary">x{m.quantity}</Badge>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="text-sm text-muted-foreground">No monitors assigned</p>
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    {/* Action buttons */}
+                    <div className="flex flex-col sm:flex-row gap-3">
+                        <Button className="flex-1" onClick={() => router.get(stationsEditRoute(station.id).url)}>
+                            <Pencil className="mr-2 h-4 w-4" /> Edit Station
+                        </Button>
+                        <Button className="flex-1" variant="outline" onClick={() => router.visit(transferPage(station.id).url)}>
+                            <ArrowLeftRight className="mr-2 h-4 w-4" /> {station.pcSpec ? 'Transfer PC' : 'Assign PC'}
+                        </Button>
+                    </div>
+                </div>
             </div>
         </AppLayout>
     );

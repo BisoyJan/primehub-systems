@@ -42,7 +42,6 @@ class ProcessorSpecsControllerTest extends TestCase
             'thread_count' => 12,
             'base_clock_ghz' => 2.50,
             'boost_clock_ghz' => 4.40,
-            'release_date' => '2022-01-04',
         ];
 
         $this->post(route('processorspecs.store'), $data)
@@ -55,7 +54,6 @@ class ProcessorSpecsControllerTest extends TestCase
             'model' => 'Core i5-12400',
             'core_count' => 6,
             'thread_count' => 12,
-            'release_date' => '2022-01-04',
         ]);
     }
 
