@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useEffect, useRef, useCallback, useState } from 'react';
 import { motion } from 'framer-motion';
 import type { TimerTheme } from './themes';
 
@@ -40,6 +40,8 @@ function ThemeDecorInner({ theme, isDark }: ThemeDecorProps) {
             return <CyberpunkDecor opacity={o} />;
         case 'synthwave':
             return <SynthwaveDecor opacity={o} />;
+        case 'desktop-goose':
+            return <DesktopGooseDecor opacity={o} isDark={isDark} />;
         default:
             return null;
     }
@@ -1235,5 +1237,1293 @@ function SynthwaveDecor({ opacity }: { opacity: number }) {
                 <path d="M50 20 Q80 40 90 60 Q60 50 50 20" fill="#1f013d" />
             </svg>
         </DecorWrap>
+    );
+}
+
+// ─── 13. Desktop Goose — Interactive roaming goose ──────────
+
+type GooseState = 'roaming' | 'thinking' | 'chasing' | 'honking' | 'dragging_meme' | 'sitting' | 'preening' | 'grabbing_cursor';
+
+interface Footprint {
+    x: number;
+    y: number;
+    angle: number;
+    isLeft: boolean;
+    opacity: number;
+    age: number;
+}
+
+interface DroppedMeme {
+    id: number;
+    x: number;
+    y: number;
+    rotation: number;
+    content: string;
+    type: 'note' | 'meme';
+}
+
+interface Spring {
+    p: number; // position
+    v: number; // velocity
+    t: number; // target
+    k: number; // stiffness
+    d: number; // damping
+}
+
+interface LegIK {
+    x: number;
+    y: number;
+    targetX: number;
+    targetY: number;
+    stepPhase: number; // 0 to 1
+    isPlanting: boolean;
+}
+
+function updateSpring(s: Spring, dtS: number) {
+    const force = (s.t - s.p) * s.k - s.v * s.d;
+    s.v += force * dtS;
+    s.p += s.v * dtS;
+}
+
+interface GooseData {
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    state: GooseState;
+    stateTimer: number;
+    facingRight: boolean;
+    walkFrame: number;
+    walkTimer: number;
+    honkTimer: number;
+    targetX: number;
+    targetY: number;
+    // Head bob for realistic goose walk
+    headBobPhase: number;
+    // Smooth acceleration
+    currentSpeed: number;
+    targetSpeed: number;
+    
+    // Physics springs
+    bodyAngleSpring: Spring;
+    neckSpring: Spring;
+    squashSpring: Spring;
+    dragMemeXSpring: Spring;
+    dragMemeYSpring: Spring;
+    cursorXSpring: Spring;
+    cursorYSpring: Spring;
+    
+    // IK Legs
+    leftLeg: LegIK;
+    rightLeg: LegIK;
+
+    // Meme dragging
+    dragMeme: string | null;
+    dragMemeType: 'note' | 'meme';
+    dragOriginEdge: 'left' | 'right' | 'top' | 'bottom';
+    dragMemeX: number;
+    dragMemeY: number;
+    // Preening
+    preenPhase: number;
+    // Attack cooldown
+    attackCooldown: number;
+    // Eye blink
+    blinkTimer: number;
+    isBlinking: boolean;
+    // Sitting bob
+    sitBobPhase: number;
+    // Cursor grabbing
+    cursorGrabbed: boolean;
+    fakeCursorX: number;
+    fakeCursorY: number;
+    cursorGrabPhase: 'approaching' | 'grabbed' | 'dropping';
+    grabCooldown: number;
+    grabTargetX: number;
+    grabTargetY: number;
+}
+
+const GOOSE_NOTES = [
+    'HONK HONK HONK',
+    'This is MY timer now',
+    'Take a break or else 🔪',
+    'Honk',
+    'I am going to\nsteal your cursor',
+    'No take-backs',
+    'Have you honked\ntoday?',
+    '*angry goose noises*',
+    'Peace was never\nan option',
+    'I am the break\ntimer now',
+    'HJÖNK HJÖNK',
+    'am goose',
+    'Mess with the honk\nget the bonk',
+    'rake in the lake',
+];
+
+const GOOSE_MEMES = [
+    '🔪', '👑', '💣', '🎺', '📢', '🧨', '🪿', '💀',
+];
+
+function DesktopGooseDecor({ opacity, isDark }: { opacity: number; isDark: boolean }) {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const gooseRef = useRef<GooseData>({
+        x: 200, y: 300, vx: 0, vy: 0,
+        state: 'roaming', stateTimer: 3000,
+        facingRight: true, walkFrame: 0, walkTimer: 0, honkTimer: 0,
+        targetX: 400, targetY: 400,
+        headBobPhase: 0,
+        currentSpeed: 0, targetSpeed: 0,
+        
+        bodyAngleSpring: { p: 0, v: 0, t: 0, k: 80, d: 8 },
+        neckSpring: { p: 0, v: 0, t: 0, k: 30, d: 6 },
+        squashSpring: { p: 1, v: 0, t: 1, k: 50, d: 5 },
+        dragMemeXSpring: { p: 0, v: 0, t: 0, k: 120, d: 12 },
+        dragMemeYSpring: { p: 0, v: 0, t: 0, k: 120, d: 12 },
+        cursorXSpring: { p: 0, v: 0, t: 0, k: 150, d: 15 },
+        cursorYSpring: { p: 0, v: 0, t: 0, k: 150, d: 15 },
+        
+        leftLeg: { x: 26, y: 67, targetX: 26, targetY: 67, stepPhase: 0, isPlanting: true },
+        rightLeg: { x: 42, y: 67, targetX: 42, targetY: 67, stepPhase: 0.5, isPlanting: false },
+
+        dragMeme: null, dragMemeType: 'note',
+        dragOriginEdge: 'left', dragMemeX: 0, dragMemeY: 0,
+        preenPhase: 0, attackCooldown: 2000,
+        blinkTimer: 3000, isBlinking: false,
+        sitBobPhase: 0,
+        fakeCursorX: 0, fakeCursorY: 0,
+        cursorGrabbed: false, cursorGrabPhase: 'approaching', grabCooldown: 3000,
+        grabTargetX: 0, grabTargetY: 0,
+    });
+    const mouseRef = useRef({ x: -1000, y: -1000 });
+    const frameRef = useRef<number>(0);
+    const lastTimeRef = useRef<number>(0);
+    const footprintsRef = useRef<Footprint[]>([]);
+    const droppedMemesRef = useRef<DroppedMeme[]>([]);
+    const memeIdCounter = useRef(0);
+    const [, setTick] = useState(0);
+
+    const SPEED_ROAM = 50;
+    const SPEED_CHASE = 140;
+    const SPEED_DRAG = 35;
+    const AWARENESS = 180;
+    const CHASE_STOP = 300;
+    const BOUNDARY_PAD = 40;
+    const HONK_CHANCE = 0.04;
+    const MAX_FOOTPRINTS = 40;
+    const FOOTPRINT_LIFETIME = 12000;
+    const MAX_MEMES = 6;
+    const ACCELERATION = 200;
+
+    const pickRoamTarget = useCallback((w: number, h: number) => ({
+        targetX: BOUNDARY_PAD + Math.random() * (w - BOUNDARY_PAD * 2),
+        targetY: BOUNDARY_PAD * 2 + Math.random() * (h - BOUNDARY_PAD * 4),
+    }), []);
+
+    const pickEdge = useCallback((w: number, h: number): { edge: 'left' | 'right' | 'top' | 'bottom'; x: number; y: number } => {
+        // Y must be within the clamped range so the goose can reach it
+        const minY = BOUNDARY_PAD + 10;
+        const maxY = h - BOUNDARY_PAD * 2 - 10;
+        const edgeY = minY + Math.random() * (maxY - minY);
+        const edges: Array<{ edge: 'left' | 'right' | 'top' | 'bottom'; x: number; y: number }> = [
+            { edge: 'left', x: -40, y: edgeY },
+            { edge: 'right', x: w + 40, y: edgeY },
+        ];
+        return edges[Math.floor(Math.random() * edges.length)];
+    }, []);
+
+    useEffect(() => {
+        const handleMouseMove = (e: MouseEvent) => {
+            if (!containerRef.current) return;
+            const rect = containerRef.current.getBoundingClientRect();
+            mouseRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        };
+        window.addEventListener('mousemove', handleMouseMove);
+        return () => window.removeEventListener('mousemove', handleMouseMove);
+    }, []);
+
+    useEffect(() => {
+        const container = containerRef.current;
+        if (!container) return;
+
+        const w = container.clientWidth;
+        const h = container.clientHeight;
+
+        const g = gooseRef.current;
+        g.x = w * 0.3 + Math.random() * w * 0.4;
+        g.y = h * 0.4 + Math.random() * h * 0.3;
+        const target = pickRoamTarget(w, h);
+        g.targetX = target.targetX;
+        g.targetY = target.targetY;
+
+        lastTimeRef.current = performance.now();
+
+        const update = (now: number) => {
+            const dt = Math.min(now - lastTimeRef.current, 50);
+            lastTimeRef.current = now;
+            const dtS = dt / 1000;
+
+            const g = gooseRef.current;
+            const mx = mouseRef.current.x;
+            const my = mouseRef.current.y;
+            const distToMouse = Math.sqrt((g.x - mx) ** 2 + (g.y - my) ** 2);
+
+            g.stateTimer -= dt;
+            g.attackCooldown -= dt;
+            g.grabCooldown -= dt;
+
+            // Eye blink timer
+            g.blinkTimer -= dt;
+            if (g.blinkTimer <= 0) {
+                if (g.isBlinking) {
+                    g.isBlinking = false;
+                    g.blinkTimer = 2000 + Math.random() * 4000;
+                } else {
+                    g.isBlinking = true;
+                    g.blinkTimer = 100 + Math.random() * 100;
+                }
+            }
+
+            // Walk animation (faster when running)
+            const walkSpeed = g.state === 'chasing' ? 150 : 280;
+            const isMoving = Math.abs(g.vx) > 3 || Math.abs(g.vy) > 3;
+            if (isMoving) {
+                g.walkTimer += dt;
+                if (g.walkTimer > walkSpeed) {
+                    g.walkTimer = 0;
+                    g.walkFrame = (g.walkFrame + 1) % 4;
+
+                    // Add footprint every other step
+                    if (g.walkFrame % 2 === 0) {
+                        const angle = Math.atan2(g.vy, g.vx);
+                        footprintsRef.current.push({
+                            x: g.x + (g.walkFrame === 0 ? -4 : 4),
+                            y: g.y + 25,
+                            angle: angle * (180 / Math.PI),
+                            isLeft: g.walkFrame === 0,
+                            opacity: 0.35,
+                            age: 0,
+                        });
+                        if (footprintsRef.current.length > MAX_FOOTPRINTS) {
+                            footprintsRef.current.shift();
+                        }
+                    }
+                }
+                // Head bob (forward-back like a real goose)
+                g.headBobPhase += dtS * (g.state === 'chasing' ? 14 : 8);
+            } else {
+                g.headBobPhase = 0;
+            }
+
+            // --- ANIMATION TARGETS ---
+            if (isMoving) {
+                const leanFactor = g.vx * -0.05;
+                g.bodyAngleSpring.t = Math.sin(g.headBobPhase * 0.5) * (g.state === 'chasing' ? 4 : 2.5) + leanFactor;
+            } else {
+                g.bodyAngleSpring.t = 0;
+            }
+
+            if (g.state === 'chasing') {
+                g.neckSpring.t = 8;
+            } else if (g.state === 'dragging_meme') {
+                g.neckSpring.t = g.dragMeme ? 0 : 5;
+            } else if (g.state === 'grabbing_cursor') {
+                g.neckSpring.t = g.cursorGrabPhase === 'grabbed' ? 5 : 3;
+            } else {
+                g.neckSpring.t = 0;
+            }
+
+            // Squash & stretch on stopping
+            const stopDelta = Math.abs(g.currentSpeed - 0) / (SPEED_CHASE * 0.5);
+            g.squashSpring.t = 1 + Math.max(0, Math.min(0.15, stopDelta * 0.4));
+            
+            // Advance springs
+            updateSpring(g.bodyAngleSpring, dtS);
+            updateSpring(g.neckSpring, dtS);
+            updateSpring(g.squashSpring, dtS);
+            
+            if (g.dragMeme) {
+                const beakX = g.facingRight ? 35 : -35;
+                g.dragMemeXSpring.t = g.x + beakX;
+                g.dragMemeYSpring.t = g.y - 5;
+                updateSpring(g.dragMemeXSpring, dtS);
+                updateSpring(g.dragMemeYSpring, dtS);
+                g.dragMemeX = g.dragMemeXSpring.p;
+                g.dragMemeY = g.dragMemeYSpring.p;
+            }
+            if (g.cursorGrabbed) {
+                const beakX = g.facingRight ? 35 : -35;
+                g.cursorXSpring.t = g.x + beakX;
+                g.cursorYSpring.t = g.y - 15;
+                updateSpring(g.cursorXSpring, dtS);
+                updateSpring(g.cursorYSpring, dtS);
+                g.fakeCursorX = g.cursorXSpring.p;
+                g.fakeCursorY = g.cursorYSpring.p;
+            }
+
+            // IK leg solving
+            const updateIK = (leg: LegIK, index: number) => {
+                const baseX = index === 0 ? 26 : 42;
+                const baseY = 67;
+                if (!isMoving) {
+                    leg.targetX = baseX;
+                    leg.targetY = baseY;
+                    leg.stepPhase = 0;
+                    leg.isPlanting = true;
+                } else {
+                    const walkCycle = (g.walkFrame % 4) / 4;
+                    // Simple logic to swing/plant alternating
+                    const offset = walkCycle + (index === 0 ? 0 : 0.5);
+                    const phase = offset % 1.0;
+                    
+                    if (phase < 0.5) {
+                        leg.isPlanting = true;
+                        leg.targetX = baseX + Math.sin(g.headBobPhase + (index === 0 ? 0 : Math.PI)) * 7;
+                        leg.targetY = baseY;
+                    } else {
+                        leg.isPlanting = false;
+                        const arc = Math.sin((phase - 0.5) * 2 * Math.PI) * 6;
+                        leg.targetX = baseX + Math.sin(g.headBobPhase + (index === 0 ? 0 : Math.PI)) * 7;
+                        leg.targetY = baseY - arc;
+                    }
+                }
+                const speed = leg.isPlanting ? 0.4 : 0.25;
+                leg.x += (leg.targetX - leg.x) * speed;
+                leg.y += (leg.targetY - leg.y) * speed;
+            };
+            updateIK(g.leftLeg, 0);
+            updateIK(g.rightLeg, 1);
+
+            // Age footprints
+            footprintsRef.current.forEach((fp) => {
+                fp.age += dt;
+                fp.opacity = Math.max(0, 0.35 * (1 - fp.age / FOOTPRINT_LIFETIME));
+            });
+            footprintsRef.current = footprintsRef.current.filter((fp) => fp.age < FOOTPRINT_LIFETIME);
+
+            // Smooth acceleration
+            const speedDiff = g.targetSpeed - g.currentSpeed;
+            g.currentSpeed += Math.sign(speedDiff) * Math.min(Math.abs(speedDiff), ACCELERATION * dtS);
+
+            // State machine
+            switch (g.state) {
+                case 'roaming': {
+                    if (distToMouse < AWARENESS && mx > 0 && my > 0 && g.attackCooldown <= 0) {
+                        g.state = 'chasing';
+                        g.stateTimer = 4000 + Math.random() * 3000;
+                        g.attackCooldown = 6000 + Math.random() * 5000;
+                        break;
+                    }
+
+                    const dx = g.targetX - g.x;
+                    const dy = g.targetY - g.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    if (dist < 15 || g.stateTimer <= 0) {
+                        const r = Math.random();
+                        if (r < 0.15) {
+                            g.state = 'sitting';
+                            g.stateTimer = 3000 + Math.random() * 4000;
+                            g.targetSpeed = 0;
+                            g.sitBobPhase = 0;
+                        } else if (r < 0.25) {
+                            g.state = 'preening';
+                            g.stateTimer = 2000 + Math.random() * 2000;
+                            g.targetSpeed = 0;
+                            g.preenPhase = 0;
+                        } else if (r < 0.4) {
+                            g.state = 'thinking';
+                            g.stateTimer = 1500 + Math.random() * 2500;
+                            g.targetSpeed = 0;
+                        } else if (r < 0.65 && droppedMemesRef.current.length < MAX_MEMES) {
+                            // Start dragging a meme from screen edge
+                            g.state = 'dragging_meme';
+                            const edge = pickEdge(w, h);
+                            g.dragOriginEdge = edge.edge;
+                            g.targetX = edge.x;
+                            g.targetY = edge.y;
+                            g.stateTimer = 20000; // timeout safety
+                            g.dragMeme = null;
+                            // Pick content
+                            if (Math.random() < 0.6) {
+                                g.dragMemeType = 'note';
+                                g.dragMeme = null; // will be set after reaching edge
+                            } else {
+                                g.dragMemeType = 'meme';
+                                g.dragMeme = null;
+                            }
+                        } else {
+                            const t = pickRoamTarget(w, h);
+                            g.targetX = t.targetX;
+                            g.targetY = t.targetY;
+                            g.stateTimer = 3000 + Math.random() * 3000;
+                        }
+                    } else {
+                        g.targetSpeed = SPEED_ROAM;
+                        g.vx = (dx / dist) * g.currentSpeed;
+                        g.vy = (dy / dist) * g.currentSpeed;
+                    }
+
+                    if (Math.random() < HONK_CHANCE * dtS) {
+                        g.state = 'honking';
+                        g.stateTimer = 600 + Math.random() * 1000;
+                        g.honkTimer = g.stateTimer;
+                        g.targetSpeed = 0;
+                    }
+                    break;
+                }
+
+                case 'sitting': {
+                    g.vx = 0;
+                    g.vy = 0;
+                    g.targetSpeed = 0;
+                    g.sitBobPhase += dtS * 2;
+
+                    if (distToMouse < AWARENESS * 0.7 && mx > 0) {
+                        g.facingRight = mx > g.x;
+                    }
+
+                    if (g.stateTimer <= 0 || (distToMouse < 100 && mx > 0)) {
+                        g.state = 'roaming';
+                        const t = pickRoamTarget(w, h);
+                        g.targetX = t.targetX;
+                        g.targetY = t.targetY;
+                        g.stateTimer = 2000 + Math.random() * 3000;
+                    }
+                    break;
+                }
+
+                case 'preening': {
+                    g.vx = 0;
+                    g.vy = 0;
+                    g.targetSpeed = 0;
+                    g.preenPhase += dtS * 3;
+
+                    if (g.stateTimer <= 0) {
+                        g.state = 'roaming';
+                        const t = pickRoamTarget(w, h);
+                        g.targetX = t.targetX;
+                        g.targetY = t.targetY;
+                        g.stateTimer = 2000 + Math.random() * 2000;
+                    }
+
+                    if (distToMouse < 80 && mx > 0 && g.attackCooldown <= 0) {
+                        g.state = 'chasing';
+                        g.stateTimer = 4000;
+                        g.attackCooldown = 5000;
+                    }
+                    break;
+                }
+
+                case 'thinking': {
+                    g.vx = 0;
+                    g.vy = 0;
+                    g.targetSpeed = 0;
+
+                    if (distToMouse < AWARENESS * 1.5 && mx > 0) {
+                        g.facingRight = mx > g.x;
+                    }
+
+                    if (g.stateTimer <= 0) {
+                        if (distToMouse < AWARENESS && mx > 0 && my > 0 && g.attackCooldown <= 0) {
+                            g.state = 'chasing';
+                            g.stateTimer = 5000;
+                            g.attackCooldown = 6000;
+                        } else {
+                            g.state = 'roaming';
+                            const t = pickRoamTarget(w, h);
+                            g.targetX = t.targetX;
+                            g.targetY = t.targetY;
+                            g.stateTimer = 3000 + Math.random() * 3000;
+                        }
+                    }
+
+                    if (Math.random() < HONK_CHANCE * 0.3 * dtS) {
+                        g.state = 'honking';
+                        g.stateTimer = 500 + Math.random() * 800;
+                        g.honkTimer = g.stateTimer;
+                    }
+                    break;
+                }
+
+                case 'chasing': {
+                    const cdx = mx - g.x;
+                    const cdy = my - g.y;
+                    const cdist = Math.sqrt(cdx * cdx + cdy * cdy);
+
+                    if (cdist > 15) {
+                        g.targetSpeed = cdist < 50 ? SPEED_CHASE * 0.4 : SPEED_CHASE;
+                        g.vx = (cdx / cdist) * g.currentSpeed;
+                        g.vy = (cdy / cdist) * g.currentSpeed;
+                    } else {
+                        g.targetSpeed = 0;
+                        g.vx = 0;
+                        g.vy = 0;
+                    }
+
+                    // Try to grab cursor when very close
+                    if (cdist < 30 && g.grabCooldown <= 0) {
+                        g.state = 'grabbing_cursor';
+                        g.cursorGrabPhase = 'approaching';
+                        g.stateTimer = 6000;
+                        g.grabCooldown = 12000 + Math.random() * 8000;
+                        break;
+                    }
+
+                    if (distToMouse > CHASE_STOP || g.stateTimer <= 0 || mx < 0) {
+                        g.state = 'roaming';
+                        const t = pickRoamTarget(w, h);
+                        g.targetX = t.targetX;
+                        g.targetY = t.targetY;
+                        g.stateTimer = 2000 + Math.random() * 2000;
+                    }
+
+                    if (Math.random() < HONK_CHANCE * 3 * dtS) {
+                        g.state = 'honking';
+                        g.stateTimer = 400 + Math.random() * 600;
+                        g.honkTimer = g.stateTimer;
+                    }
+                    break;
+                }
+
+                case 'dragging_meme': {
+                    const dx = g.targetX - g.x;
+                    const dy = g.targetY - g.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    if (!g.dragMeme && dist < 30) {
+                        // Reached the edge, pick up the meme
+                        if (g.dragMemeType === 'note') {
+                            g.dragMeme = GOOSE_NOTES[Math.floor(Math.random() * GOOSE_NOTES.length)];
+                        } else {
+                            g.dragMeme = GOOSE_MEMES[Math.floor(Math.random() * GOOSE_MEMES.length)];
+                        }
+                        // Now walk to a random spot in center
+                        const t = pickRoamTarget(w, h);
+                        g.targetX = t.targetX;
+                        g.targetY = t.targetY;
+                    }
+
+                    if (g.dragMeme) {
+                        // Dragging back to center
+                        const ddx = g.targetX - g.x;
+                        const ddy = g.targetY - g.y;
+                        const ddist = Math.sqrt(ddx * ddx + ddy * ddy);
+
+                        if (ddist < 20) {
+                            // Drop the meme
+                            droppedMemesRef.current.push({
+                                id: memeIdCounter.current++,
+                                x: g.x + (g.facingRight ? 30 : -30),
+                                y: g.y - 10,
+                                rotation: -5 + Math.random() * 10,
+                                content: g.dragMeme,
+                                type: g.dragMemeType,
+                            });
+                            if (droppedMemesRef.current.length > MAX_MEMES) {
+                                droppedMemesRef.current.shift();
+                            }
+                            g.dragMeme = null;
+                            g.state = 'roaming';
+                            const t = pickRoamTarget(w, h);
+                            g.targetX = t.targetX;
+                            g.targetY = t.targetY;
+                            g.stateTimer = 2000 + Math.random() * 2000;
+                        } else {
+                            g.targetSpeed = SPEED_DRAG;
+                            g.vx = (ddx / ddist) * g.currentSpeed;
+                            g.vy = (ddy / ddist) * g.currentSpeed;
+                        }
+
+                        // Update drag meme position (trails behind goose)
+                        g.dragMemeX = g.x + (g.facingRight ? -35 : 35);
+                        g.dragMemeY = g.y - 5;
+                    } else {
+                        // Walking to edge to pick up
+                        if (dist > 5) {
+                            g.targetSpeed = SPEED_ROAM;
+                            g.vx = (dx / dist) * g.currentSpeed;
+                            g.vy = (dy / dist) * g.currentSpeed;
+                        }
+                    }
+
+                    if (g.stateTimer <= 0) {
+                        g.dragMeme = null;
+                        g.state = 'roaming';
+                        const t = pickRoamTarget(w, h);
+                        g.targetX = t.targetX;
+                        g.targetY = t.targetY;
+                        g.stateTimer = 3000;
+                    }
+                    break;
+                }
+
+                case 'grabbing_cursor': {
+                    switch (g.cursorGrabPhase) {
+                        case 'approaching': {
+                            // Walk toward cursor
+                            const cdx = mx - g.x;
+                            const cdy = my - g.y;
+                            const cdist = Math.sqrt(cdx * cdx + cdy * cdy);
+
+                            if (cdist < 30 && mx > 0 && my > 0) {
+                                // Close enough - grab the cursor!
+                                g.cursorGrabPhase = 'grabbed';
+                                g.cursorGrabbed = true;
+                                g.fakeCursorX = mx;
+                                g.fakeCursorY = my;
+                                // Pick a random spot to drag cursor to
+                                g.grabTargetX = BOUNDARY_PAD + Math.random() * (w - BOUNDARY_PAD * 2);
+                                g.grabTargetY = BOUNDARY_PAD * 2 + Math.random() * (h - BOUNDARY_PAD * 4);
+                                g.stateTimer = 5000;
+                                document.documentElement.style.cursor = 'none';
+                            } else if (mx > 0 && my > 0) {
+                                g.targetSpeed = SPEED_CHASE;
+                                g.vx = (cdx / cdist) * g.currentSpeed;
+                                g.vy = (cdy / cdist) * g.currentSpeed;
+                            }
+
+                            // Timeout or mouse left area
+                            if (g.stateTimer <= 0 || (mx < 0 && my < 0)) {
+                                g.state = 'roaming';
+                                g.cursorGrabbed = false;
+                                document.documentElement.style.cursor = '';
+                                const t = pickRoamTarget(w, h);
+                                g.targetX = t.targetX;
+                                g.targetY = t.targetY;
+                                g.stateTimer = 3000;
+                            }
+                            break;
+                        }
+                        case 'grabbed': {
+                            // Drag fake cursor toward target
+                            const tdx = g.grabTargetX - g.x;
+                            const tdy = g.grabTargetY - g.y;
+                            const tdist = Math.sqrt(tdx * tdx + tdy * tdy);
+
+                            if (tdist < 20 || g.stateTimer <= 0) {
+                                // Reached destination, drop cursor
+                                g.cursorGrabPhase = 'dropping';
+                                g.stateTimer = 800;
+                            } else {
+                                g.targetSpeed = SPEED_DRAG * 1.5;
+                                g.vx = (tdx / tdist) * g.currentSpeed;
+                                g.vy = (tdy / tdist) * g.currentSpeed;
+
+                                // Fake cursor follows goose beak position
+                                const beakOffsetX = g.facingRight ? 35 : -35;
+                                g.fakeCursorX += (g.x + beakOffsetX - g.fakeCursorX) * 0.15;
+                                g.fakeCursorY += (g.y - 15 - g.fakeCursorY) * 0.15;
+                            }
+                            break;
+                        }
+                        case 'dropping': {
+                            g.vx = 0;
+                            g.vy = 0;
+                            g.targetSpeed = 0;
+
+                            if (g.stateTimer <= 0) {
+                                // Release cursor and honk triumphantly
+                                g.cursorGrabbed = false;
+                                document.documentElement.style.cursor = '';
+                                g.state = 'honking';
+                                g.stateTimer = 800;
+                                g.honkTimer = 800;
+                                const t = pickRoamTarget(w, h);
+                                g.targetX = t.targetX;
+                                g.targetY = t.targetY;
+                            }
+                            break;
+                        }
+                    }
+                    break;
+                }
+
+                case 'honking': {
+                    g.targetSpeed = 0;
+                    g.vx *= 0.85;
+                    g.vy *= 0.85;
+                    g.honkTimer -= dt;
+
+                    if (g.stateTimer <= 0) {
+                        if (distToMouse < AWARENESS && mx > 0 && my > 0 && g.attackCooldown <= 0) {
+                            g.state = 'chasing';
+                            g.stateTimer = 5000;
+                            g.attackCooldown = 6000;
+                        } else {
+                            g.state = 'roaming';
+                            const t = pickRoamTarget(w, h);
+                            g.targetX = t.targetX;
+                            g.targetY = t.targetY;
+                            g.stateTimer = 3000 + Math.random() * 3000;
+                        }
+                    }
+                    break;
+                }
+            }
+
+            // Apply velocity
+            g.x += g.vx * dtS;
+            g.y += g.vy * dtS;
+
+            // Facing direction (smooth)
+            if (Math.abs(g.vx) > 3) {
+                g.facingRight = g.vx > 0;
+            }
+
+            // Boundary clamping (allow going off-edge when walking to pick up meme)
+            const isWalkingToEdge = g.state === 'dragging_meme' && !g.dragMeme;
+            if (!isWalkingToEdge) {
+                g.x = Math.max(BOUNDARY_PAD, Math.min(w - BOUNDARY_PAD, g.x));
+            }
+            g.y = Math.max(BOUNDARY_PAD, Math.min(h - BOUNDARY_PAD * 2, g.y));
+
+            setTick((t) => t + 1);
+            frameRef.current = requestAnimationFrame(update);
+        };
+
+        frameRef.current = requestAnimationFrame(update);
+        return () => {
+            cancelAnimationFrame(frameRef.current);
+            document.documentElement.style.cursor = '';
+        };
+    }, [pickRoamTarget, pickEdge]);
+
+    const g = gooseRef.current;
+    const isHonking = g.state === 'honking' && g.honkTimer > 0;
+    const isChasing = g.state === 'chasing';
+    const isSitting = g.state === 'sitting';
+    const isPreening = g.state === 'preening';
+    const isDragging = g.state === 'dragging_meme' && g.dragMeme !== null;
+    const isGrabbingCursor = g.state === 'grabbing_cursor';
+    const isMoving = Math.abs(g.vx) > 3 || Math.abs(g.vy) > 3;
+    const bobY = isMoving ? Math.sin(g.walkFrame * Math.PI * 0.5) * 3.5 : 0;
+    const headBob = isMoving ? Math.sin(g.headBobPhase) * 4 : 0;
+    const legOffset = isMoving ? Math.sin(g.walkFrame * Math.PI * 0.5) * 7 : 0;
+    const preenHeadY = isPreening ? Math.sin(g.preenPhase) * 12 + 8 : 0;
+    const preenHeadX = isPreening ? Math.cos(g.preenPhase * 0.7) * 4 : 0;
+    const sitSquish = isSitting ? 0.88 : 1;
+    const sitBob = isSitting ? Math.sin(g.sitBobPhase) * 1.5 : 0;
+    const grassColor = isDark ? '#2e5a2e' : '#66bb6a';
+    const grassLight = isDark ? '#3a6f3a' : '#81c784';
+    const bodyFill = isDark ? '#f0f0e8' : '#fefefa';
+    const bodyStroke = isDark ? '#777' : '#c0c0b8';
+    const wingFill = isDark ? '#e4e4d8' : '#f0efe8';
+
+    return (
+        <div ref={containerRef} className="pointer-events-none absolute inset-0 z-50 overflow-hidden" aria-hidden="true">
+            {/* Grass tufts */}
+            {[0.05, 0.15, 0.25, 0.38, 0.5, 0.62, 0.75, 0.85, 0.95].map((xPct, i) => (
+                <svg
+                    key={i}
+                    className="absolute bottom-[4%]"
+                    style={{ left: `${xPct * 100}%`, opacity: opacity * 0.65 }}
+                    width="36" height="28" viewBox="0 0 36 28"
+                >
+                    <path d={`M8 28 Q10 ${16 - (i % 3) * 3} 6 3`} stroke={grassColor} strokeWidth="2" fill="none" strokeLinecap="round" />
+                    <path d={`M16 28 Q18 ${11 - (i % 2) * 4} 20 1`} stroke={grassLight} strokeWidth="2.5" fill="none" strokeLinecap="round" />
+                    <path d={`M26 28 Q24 ${15 - (i % 3) * 2} 28 5`} stroke={grassColor} strokeWidth="1.8" fill="none" strokeLinecap="round" />
+                </svg>
+            ))}
+
+            {/* Clouds */}
+            <motion.div className="absolute top-[6%] left-[12%]" style={{ opacity: opacity * 0.3 }} {...floatX(25, 14)}>
+                <svg width="120" height="50" viewBox="0 0 120 50">
+                    <ellipse cx="60" cy="30" rx="50" ry="18" fill={isDark ? '#4a5568' : '#e8ecf0'} />
+                    <ellipse cx="40" cy="22" rx="30" ry="15" fill={isDark ? '#4a5568' : '#e8ecf0'} />
+                    <ellipse cx="78" cy="20" rx="25" ry="13" fill={isDark ? '#4a5568' : '#e8ecf0'} />
+                    <ellipse cx="55" cy="15" rx="18" ry="10" fill={isDark ? '#555e6b' : '#f0f3f6'} />
+                </svg>
+            </motion.div>
+            <motion.div className="absolute top-[10%] right-[18%]" style={{ opacity: opacity * 0.22 }} {...floatX(18, 18)}>
+                <svg width="90" height="40" viewBox="0 0 90 40">
+                    <ellipse cx="45" cy="24" rx="40" ry="14" fill={isDark ? '#4a5568' : '#e8ecf0'} />
+                    <ellipse cx="30" cy="17" rx="22" ry="11" fill={isDark ? '#4a5568' : '#e8ecf0'} />
+                    <ellipse cx="62" cy="16" rx="20" ry="10" fill={isDark ? '#555e6b' : '#f0f3f6'} />
+                </svg>
+            </motion.div>
+
+            {/* Daisies */}
+            {[0.1, 0.3, 0.55, 0.72, 0.9].map((xPct, i) => (
+                <motion.svg
+                    key={`daisy-${i}`}
+                    className="absolute"
+                    style={{ left: `${xPct * 100}%`, bottom: `${5 + (i % 2) * 3}%`, opacity: opacity * 0.45 }}
+                    width="18" height="24" viewBox="0 0 18 24"
+                    {...floatY(2.5, 4 + i)}
+                >
+                    <line x1="9" y1="24" x2="9" y2="12" stroke="#4caf50" strokeWidth="1.5" />
+                    <ellipse cx="9" cy="10" rx="4" ry="3.5" fill={isDark ? '#ddd' : 'white'} />
+                    <circle cx="9" cy="10" r="1.8" fill="#ffd54f" />
+                </motion.svg>
+            ))}
+
+            {/* Muddy footprints */}
+            {footprintsRef.current.map((fp, i) => (
+                <svg
+                    key={`fp-${i}`}
+                    className="absolute"
+                    style={{
+                        left: fp.x - 6,
+                        top: fp.y - 4,
+                        opacity: fp.opacity,
+                        transform: `rotate(${fp.angle}deg)`,
+                    }}
+                    width="12" height="10" viewBox="0 0 12 10"
+                >
+                    <ellipse cx="6" cy="6" rx="3.5" ry="3" fill={isDark ? '#5d4a37' : '#8d6e4f'} />
+                    <line x1="3.5" y1="3" x2="1.5" y2="1" stroke={isDark ? '#5d4a37' : '#8d6e4f'} strokeWidth="1.3" strokeLinecap="round" />
+                    <line x1="6" y1="2.5" x2="6" y2="0.5" stroke={isDark ? '#5d4a37' : '#8d6e4f'} strokeWidth="1.3" strokeLinecap="round" />
+                    <line x1="8.5" y1="3" x2="10.5" y2="1" stroke={isDark ? '#5d4a37' : '#8d6e4f'} strokeWidth="1.3" strokeLinecap="round" />
+                </svg>
+            ))}
+
+            {/* Dropped memes / notes on the ground */}
+            {droppedMemesRef.current.map((meme) => (
+                <div
+                    key={meme.id}
+                    className="absolute"
+                    style={{
+                        left: meme.x,
+                        top: meme.y,
+                        transform: `rotate(${meme.rotation}deg)`,
+                        zIndex: 10,
+                    }}
+                >
+                    {meme.type === 'note' ? (
+                        <div
+                            style={{
+                                background: isDark ? '#fff9c4' : '#fffde7',
+                                border: `1px solid ${isDark ? '#c8b900' : '#e0d54a'}`,
+                                borderRadius: '2px',
+                                padding: '6px 10px',
+                                fontSize: '10px',
+                                fontFamily: 'monospace',
+                                color: '#333',
+                                boxShadow: '2px 2px 6px rgba(0,0,0,0.15)',
+                                maxWidth: '120px',
+                                whiteSpace: 'pre-line',
+                                lineHeight: '1.3',
+                            }}
+                        >
+                            <div style={{ fontSize: '7px', color: '#999', borderBottom: '1px solid #e0d54a', marginBottom: '3px', paddingBottom: '2px' }}>
+                                goose_note.txt
+                            </div>
+                            {meme.content}
+                        </div>
+                    ) : (
+                        <div
+                            style={{
+                                background: isDark ? 'rgba(40,40,40,0.9)' : 'rgba(255,255,255,0.95)',
+                                border: `1px solid ${isDark ? '#555' : '#ccc'}`,
+                                borderRadius: '6px',
+                                padding: '8px 12px',
+                                fontSize: '28px',
+                                boxShadow: '2px 2px 8px rgba(0,0,0,0.2)',
+                            }}
+                        >
+                            {meme.content}
+                        </div>
+                    )}
+                </div>
+            ))}
+
+            {/* Being-dragged meme (attached to goose) */}
+            {isDragging && (
+                <div
+                    className="absolute"
+                    style={{
+                        left: g.dragMemeX,
+                        top: g.dragMemeY,
+                        transform: `rotate(${g.facingRight ? -8 : 8}deg)`,
+                        zIndex: 9,
+                        transition: 'left 0.1s, top 0.1s',
+                    }}
+                >
+                    {g.dragMemeType === 'note' ? (
+                        <div
+                            style={{
+                                background: isDark ? '#fff9c4' : '#fffde7',
+                                border: `1px solid ${isDark ? '#c8b900' : '#e0d54a'}`,
+                                borderRadius: '2px',
+                                padding: '5px 8px',
+                                fontSize: '9px',
+                                fontFamily: 'monospace',
+                                color: '#333',
+                                boxShadow: '2px 2px 6px rgba(0,0,0,0.15)',
+                                maxWidth: '110px',
+                                whiteSpace: 'pre-line',
+                                lineHeight: '1.3',
+                            }}
+                        >
+                            <div style={{ fontSize: '7px', color: '#999', borderBottom: '1px solid #e0d54a', marginBottom: '2px', paddingBottom: '2px' }}>
+                                goose_note.txt
+                            </div>
+                            {g.dragMeme}
+                        </div>
+                    ) : (
+                        <div
+                            style={{
+                                background: isDark ? 'rgba(40,40,40,0.9)' : 'rgba(255,255,255,0.95)',
+                                border: `1px solid ${isDark ? '#555' : '#ccc'}`,
+                                borderRadius: '6px',
+                                padding: '6px 10px',
+                                fontSize: '24px',
+                                boxShadow: '2px 2px 8px rgba(0,0,0,0.2)',
+                            }}
+                        >
+                            {g.dragMeme}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* === THE GOOSE === */}
+            <div
+                style={{
+                    position: 'absolute',
+                    left: g.x - 45,
+                    top: g.y - 50 + bobY + sitBob,
+                    transformOrigin: 'center bottom',
+                    transition: 'transform 0.12s ease',
+                    filter: isChasing ? `drop-shadow(0 0 8px rgba(255,100,50,0.3))` : 'none',
+                }}
+            >
+                <svg width="100" height="90" viewBox="-5 -15 95 90" overflow="visible">
+                    {/* Shadow under goose */}
+                    <ellipse cx="38" cy="74" rx={isSitting ? 22 : 18} ry={isSitting ? 6 : 4} fill="rgba(0,0,0,0.1)" />
+
+                    <g style={{ transformOrigin: '35px 60px' }} transform={`rotate(${g.bodyAngleSpring.p} 35 40) scale(1, ${g.squashSpring.p})`}>
+                    {/* Tail feathers */}
+                    <g>
+                        <path d="M12 35 Q5 28 3 24" stroke={bodyStroke} strokeWidth="2.5" fill="none" strokeLinecap="round" opacity="0.8" />
+                        <path d="M12 37 Q3 35 0 33" stroke={bodyStroke} strokeWidth="2" fill="none" strokeLinecap="round" opacity="0.6" />
+                        <path d="M12 39 Q5 44 3 48" stroke={bodyStroke} strokeWidth="2.5" fill="none" strokeLinecap="round" opacity="0.8" />
+                    </g>
+
+                    {/* Body */}
+                    <ellipse
+                        cx="35"
+                        cy={isSitting ? 42 : 40}
+                        rx={isSitting ? 23 : 21}
+                        ry={isSitting ? 16 : 19}
+                        fill={bodyFill}
+                        stroke={bodyStroke}
+                        strokeWidth="1.3"
+                    />
+
+                    {/* Wing */}
+                    <path
+                        d={isSitting
+                            ? 'M30 34 Q42 26 48 34 Q44 40 34 42 Z'
+                            : `M28 30 Q42 ${20 + bobY * 0.5} 50 30 Q46 ${38 + bobY * 0.3} 32 40 Z`}
+                        fill={wingFill}
+                        stroke={bodyStroke}
+                        strokeWidth="0.8"
+                    />
+                    {/* Wing detail feathers */}
+                    <path d={`M35 ${isSitting ? 32 : 30} Q40 ${isSitting ? 28 : 26} 44 ${isSitting ? 31 : 29}`} stroke={bodyStroke} strokeWidth="0.5" fill="none" opacity="0.5" />
+                    <path d={`M33 ${isSitting ? 35 : 33} Q38 ${isSitting ? 31 : 29} 42 ${isSitting ? 34 : 32}`} stroke={bodyStroke} strokeWidth="0.5" fill="none" opacity="0.4" />
+
+                    {/* Neck */}
+                    <path
+                        d={isPreening
+                            ? `M44 30 Q${48 + preenHeadX} ${22 + preenHeadY * 0.5} ${42 + preenHeadX} ${18 + preenHeadY}`
+                            : `M44 30 Q${48 + g.neckSpring.p * 0.5} ${16 - g.neckSpring.p * 0.3} ${52 + g.neckSpring.p + headBob * 0.5} ${8 - g.neckSpring.p * 0.4}`}
+                        stroke={bodyFill}
+                        strokeWidth="10"
+                        fill="none"
+                        strokeLinecap="round"
+                    />
+                    <path
+                        d={isPreening
+                            ? `M44 30 Q${48 + preenHeadX} ${22 + preenHeadY * 0.5} ${42 + preenHeadX} ${18 + preenHeadY}`
+                            : `M44 30 Q${48 + g.neckSpring.p * 0.5} ${16 - g.neckSpring.p * 0.3} ${52 + g.neckSpring.p + headBob * 0.5} ${8 - g.neckSpring.p * 0.4}`}
+                        stroke={bodyStroke}
+                        strokeWidth="1"
+                        fill="none"
+                    />
+
+                    {/* Head */}
+                    <circle
+                        cx={isPreening ? 42 + preenHeadX : 52 + g.neckSpring.p + headBob * 0.5}
+                        cy={isPreening ? 14 + preenHeadY : 6 - g.neckSpring.p * 0.4}
+                        r="8.5"
+                        fill={bodyFill}
+                        stroke={bodyStroke}
+                        strokeWidth="1"
+                    />
+
+                    {/* Cheek blush when honking */}
+                    {isHonking && (
+                        <circle
+                            cx={isPreening ? 46 + preenHeadX : 56 + g.neckSpring.p + headBob * 0.5}
+                            cy={isPreening ? 16 + preenHeadY : 8 - g.neckSpring.p * 0.4}
+                            r="3"
+                            fill="rgba(255,120,120,0.3)"
+                        />
+                    )}
+
+                    {/* Beak */}
+                    {isHonking ? (
+                        <g>
+                            <path
+                                d={`M${isPreening ? 49 + preenHeadX : 59 + g.neckSpring.p + headBob * 0.5} ${isPreening ? 11 + preenHeadY : 3 - g.neckSpring.p * 0.4} L${isPreening ? 58 + preenHeadX : 70 + g.neckSpring.p} ${isPreening ? 8 + preenHeadY : -1 - g.neckSpring.p * 0.4} L${isPreening ? 50 + preenHeadX : 61 + g.neckSpring.p + headBob * 0.5} ${isPreening ? 14 + preenHeadY : 6 - g.neckSpring.p * 0.4} Z`}
+                                fill="#ff9800"
+                                stroke="#e68a00"
+                                strokeWidth="0.6"
+                            />
+                            <path
+                                d={`M${isPreening ? 49 + preenHeadX : 59 + g.neckSpring.p + headBob * 0.5} ${isPreening ? 17 + preenHeadY : 9 - g.neckSpring.p * 0.4} L${isPreening ? 58 + preenHeadX : 70 + g.neckSpring.p} ${isPreening ? 20 + preenHeadY : 14 - g.neckSpring.p * 0.4} L${isPreening ? 50 + preenHeadX : 61 + g.neckSpring.p + headBob * 0.5} ${isPreening ? 17 + preenHeadY : 9 - g.neckSpring.p * 0.4} Z`}
+                                fill="#ffb74d"
+                                stroke="#e68a00"
+                                strokeWidth="0.5"
+                            />
+                        </g>
+                    ) : (
+                        <path
+                            d={`M${isPreening ? 49 + preenHeadX : 59 + g.neckSpring.p + headBob * 0.5} ${isPreening ? 12 + preenHeadY : 4 - g.neckSpring.p * 0.4} L${isPreening ? 59 + preenHeadX : 70 + g.neckSpring.p} ${isPreening ? 10 + preenHeadY : 2 - g.neckSpring.p * 0.4} L${isPreening ? 49 + preenHeadX : 59 + g.neckSpring.p + headBob * 0.5} ${isPreening ? 16 + preenHeadY : 8 - g.neckSpring.p * 0.4} Z`}
+                            fill="#ff9800"
+                            stroke="#e68a00"
+                            strokeWidth="0.6"
+                        />
+                    )}
+
+                    {/* Nostril */}
+                    <circle
+                        cx={isPreening ? 51 + preenHeadX : 61 + g.neckSpring.p + headBob * 0.5}
+                        cy={isPreening ? 13 + preenHeadY : 5 - g.neckSpring.p * 0.4}
+                        r="0.5"
+                        fill="#d48400"
+                    />
+
+                    {/* Eye */}
+                    {g.isBlinking ? (
+                        <line
+                            x1={isPreening ? 46 + preenHeadX - 2 : 56 + g.neckSpring.p + headBob * 0.5 - 2}
+                            y1={isPreening ? 12 + preenHeadY : 4 - g.neckSpring.p * 0.4}
+                            x2={isPreening ? 46 + preenHeadX + 2 : 56 + g.neckSpring.p + headBob * 0.5 + 2}
+                            y2={isPreening ? 12 + preenHeadY : 4 - g.neckSpring.p * 0.4}
+                            stroke="#222"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                        />
+                    ) : (
+                        <>
+                            <circle
+                                cx={isPreening ? 46 + preenHeadX : 56 + g.neckSpring.p + headBob * 0.5}
+                                cy={isPreening ? 12 + preenHeadY : 4 - g.neckSpring.p * 0.4}
+                                r={isChasing ? 2.2 : 2}
+                                fill={isChasing ? '#c62828' : '#1a1a1a'}
+                            />
+                            {/* Eye highlight */}
+                            <circle
+                                cx={isPreening ? 46.8 + preenHeadX : 56.8 + g.neckSpring.p + headBob * 0.5}
+                                cy={isPreening ? 11.2 + preenHeadY : 3.2 - g.neckSpring.p * 0.4}
+                                r="0.7"
+                                fill="white"
+                                opacity="0.8"
+                            />
+                        </>
+                    )}
+
+                    {/* Angry eyebrow when chasing */}
+                    {isChasing && !g.isBlinking && (
+                        <line
+                            x1={53 + g.neckSpring.p + headBob * 0.5}
+                            y1={0 - g.neckSpring.p * 0.4}
+                            x2={59 + g.neckSpring.p + headBob * 0.5}
+                            y2={2 - g.neckSpring.p * 0.4}
+                            stroke="#1a1a1a"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                        />
+                    )}
+                    </g>
+
+                    {/* Legs (hidden when sitting) */}
+                    {!isSitting && (
+                        <g>
+                            {/* Left leg */}
+                            <line x1="26" y1="56" x2={g.leftLeg.x} y2={g.leftLeg.y} stroke="#ff9800" strokeWidth="2.5" strokeLinecap="round" />
+                            <path d={`M${g.leftLeg.x} ${g.leftLeg.y} L${g.leftLeg.x - 6} ${g.leftLeg.y + 3} M${g.leftLeg.x} ${g.leftLeg.y} L${g.leftLeg.x} ${g.leftLeg.y + 4} M${g.leftLeg.x} ${g.leftLeg.y} L${g.leftLeg.x + 6} ${g.leftLeg.y + 3}`} stroke="#ff9800" strokeWidth="1.8" fill="none" strokeLinecap="round" />
+
+                            {/* Right leg */}
+                            <line x1="42" y1="56" x2={g.rightLeg.x} y2={g.rightLeg.y} stroke="#ff9800" strokeWidth="2.5" strokeLinecap="round" />
+                            <path d={`M${g.rightLeg.x} ${g.rightLeg.y} L${g.rightLeg.x - 6} ${g.rightLeg.y + 3} M${g.rightLeg.x} ${g.rightLeg.y} L${g.rightLeg.x} ${g.rightLeg.y + 4} M${g.rightLeg.x} ${g.rightLeg.y} L${g.rightLeg.x + 6} ${g.rightLeg.y + 3}`} stroke="#ff9800" strokeWidth="1.8" fill="none" strokeLinecap="round" />
+                        </g>
+                    )}
+
+                    {/* Sitting legs (tucked under) */}
+                    {isSitting && (
+                        <g opacity="0.5">
+                            <path d="M24 54 L22 56 L28 56 Z" fill="#ff9800" />
+                            <path d="M44 54 L42 56 L48 56 Z" fill="#ff9800" />
+                        </g>
+                    )}
+                </svg>
+
+                {/* Honk speech bubble */}
+                {isHonking && (
+                    <div
+                        style={{
+                            position: 'absolute',
+                            top: -32,
+                            left: 38,
+                            background: 'white',
+                            border: '2.5px solid #222',
+                            borderRadius: '14px',
+                            padding: '3px 10px',
+                            fontSize: '14px',
+                            fontWeight: 900,
+                            color: '#222',
+                            whiteSpace: 'nowrap',
+                            transform: g.facingRight ? 'none' : 'scaleX(-1)',
+                            animation: 'goose-honk-shake 0.12s ease-in-out infinite alternate',
+                            fontFamily: 'system-ui, sans-serif',
+                            letterSpacing: '1px',
+                        }}
+                    >
+                        {g.honkTimer > 400 ? 'HONK!' : 'honk'}
+                        {/* Speech bubble tail */}
+                        <div
+                            style={{
+                                position: 'absolute',
+                                bottom: -8,
+                                left: 12,
+                                width: 0,
+                                height: 0,
+                                borderLeft: '6px solid transparent',
+                                borderRight: '6px solid transparent',
+                                borderTop: '8px solid #222',
+                            }}
+                        />
+                        <div
+                            style={{
+                                position: 'absolute',
+                                bottom: -5,
+                                left: 14,
+                                width: 0,
+                                height: 0,
+                                borderLeft: '4px solid transparent',
+                                borderRight: '4px solid transparent',
+                                borderTop: '6px solid white',
+                            }}
+                        />
+                    </div>
+                )}
+
+                {/* Thinking bubble (when idle/thinking) */}
+                {g.state === 'thinking' && g.stateTimer > 500 && (
+                    <div style={{ position: 'absolute', top: -20, left: 50, transform: g.facingRight ? 'none' : 'scaleX(-1)' }}>
+                        <div style={{ width: 4, height: 4, borderRadius: '50%', background: isDark ? '#aaa' : '#888', marginBottom: 3, marginLeft: 2 }} />
+                        <div style={{ width: 6, height: 6, borderRadius: '50%', background: isDark ? '#aaa' : '#888', marginBottom: 3 }} />
+                        <div
+                            style={{
+                                background: isDark ? 'rgba(60,60,60,0.9)' : 'rgba(255,255,255,0.95)',
+                                border: `1.5px solid ${isDark ? '#666' : '#bbb'}`,
+                                borderRadius: '10px',
+                                padding: '2px 6px',
+                                fontSize: '10px',
+                                color: isDark ? '#ddd' : '#555',
+                            }}
+                        >
+                            🤔
+                        </div>
+                    </div>
+                )}
+
+                {/* Sitting 'zzz' */}
+                {isSitting && g.stateTimer < (g.stateTimer + 1000) && (
+                    <motion.div
+                        style={{
+                            position: 'absolute',
+                            top: -15,
+                            left: 50,
+                            fontSize: '11px',
+                            color: isDark ? '#aaa' : '#888',
+                            fontWeight: 'bold',
+                            transform: g.facingRight ? 'none' : 'scaleX(-1)',
+                        }}
+                        animate={{ y: [0, -8, 0], opacity: [0.4, 0.8, 0.4] }}
+                        transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                    >
+                        💤
+                    </motion.div>
+                )}
+
+                {/* Chase exclamation */}
+                {isChasing && g.stateTimer > 3500 && (
+                    <motion.div
+                        style={{
+                            position: 'absolute',
+                            top: -28,
+                            left: 48,
+                            fontSize: '16px',
+                            fontWeight: 900,
+                            color: '#ff1744',
+                            transform: g.facingRight ? 'none' : 'scaleX(-1)',
+                        }}
+                        animate={{ scale: [1, 1.3, 1], rotate: [0, -5, 5, 0] }}
+                        transition={{ duration: 0.4, repeat: 3 }}
+                    >
+                        ❗
+                    </motion.div>
+                )}
+            </div>
+
+            {/* Keyframe animations */}
+            <style>{`
+                @keyframes goose-honk-shake {
+                    0% { transform: ${g.facingRight ? '' : 'scaleX(-1) '}rotate(-4deg) scale(1.05); }
+                    100% { transform: ${g.facingRight ? '' : 'scaleX(-1) '}rotate(4deg) scale(0.95); }
+                }
+            `}</style>
+
+            {/* Fake cursor being dragged by goose */}
+            {g.cursorGrabbed && (
+                <svg
+                    style={{
+                        position: 'absolute',
+                        left: g.fakeCursorX,
+                        top: g.fakeCursorY,
+                        zIndex: 100,
+                        pointerEvents: 'none',
+                        filter: 'drop-shadow(1px 2px 2px rgba(0,0,0,0.25))',
+                        transition: 'left 0.08s linear, top 0.08s linear',
+                    }}
+                    width="20" height="24" viewBox="0 0 20 24"
+                >
+                    <path
+                        d="M1 1 L1 16 L4.5 12.5 L8 20 L10.5 18.8 L7 11.5 L12 11.5 Z"
+                        fill="white"
+                        stroke="#222"
+                        strokeWidth="1.5"
+                        strokeLinejoin="round"
+                    />
+                </svg>
+            )}
+
+            {/* Cursor grab struggle lines */}
+            {isGrabbingCursor && g.cursorGrabbed && (
+                <>
+                    {[0, 1, 2].map((i) => (
+                        <motion.div
+                            key={`struggle-${i}`}
+                            style={{
+                                position: 'absolute',
+                                left: g.fakeCursorX + 8 + Math.cos((i * Math.PI * 2) / 3) * 14,
+                                top: g.fakeCursorY + 10 + Math.sin((i * Math.PI * 2) / 3) * 14,
+                                width: 8,
+                                height: 2,
+                                background: isDark ? '#aaa' : '#666',
+                                borderRadius: 1,
+                                transform: `rotate(${i * 60}deg)`,
+                            }}
+                            animate={{ opacity: [0, 0.7, 0], scale: [0.5, 1.2, 0.5] }}
+                            transition={{ duration: 0.5, repeat: Infinity, delay: i * 0.15 }}
+                        />
+                    ))}
+                </>
+            )}
+        </div>
     );
 }
