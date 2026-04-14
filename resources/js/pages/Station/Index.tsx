@@ -681,23 +681,23 @@ export default function StationIndex() {
                                                 <TableCell>
                                                     <Badge
                                                         className={
-                                                            station.status.toLowerCase() === 'occupied'
+                                                            (station.status ?? '').toLowerCase() === 'occupied'
                                                                 ? 'bg-green-500 hover:bg-green-600 text-white'
-                                                                : station.status.toLowerCase() === 'vacant'
+                                                                : (station.status ?? '').toLowerCase() === 'vacant'
                                                                     ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
-                                                                    : station.status.toLowerCase() === 'no pc'
+                                                                    : (station.status ?? '').toLowerCase() === 'no pc'
                                                                         ? 'bg-red-500 hover:bg-red-600 text-white'
-                                                                        : station.status.toLowerCase() === 'admin'
+                                                                        : (station.status ?? '').toLowerCase() === 'admin'
                                                                             ? 'bg-blue-500 hover:bg-blue-600 text-white'
                                                                             : 'bg-gray-500 hover:bg-gray-600 text-white'
                                                         }
                                                     >
-                                                        {station.status}
+                                                        {station.status || 'N/A'}
                                                     </Badge>
                                                 </TableCell>
                                                 <TableCell>
                                                     <span className={station.monitor_type === 'dual' ? 'text-blue-600 font-medium' : ''}>
-                                                        {station.monitor_type === 'dual' ? 'Dual' : 'Single'}
+                                                        {station.monitor_type === 'dual' ? 'Dual' : station.monitor_type === 'none' ? 'No Monitor' : 'Single'}
                                                     </span>
                                                 </TableCell>
                                                 <TableCell>
@@ -830,18 +830,18 @@ export default function StationIndex() {
                                         <div className="text-xs text-muted-foreground">Status</div>
                                         <Badge
                                             className={
-                                                station.status.toLowerCase() === 'occupied'
+                                                (station.status ?? '').toLowerCase() === 'occupied'
                                                     ? 'bg-green-500 hover:bg-green-600 text-white'
-                                                    : station.status.toLowerCase() === 'vacant'
+                                                    : (station.status ?? '').toLowerCase() === 'vacant'
                                                         ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
-                                                        : station.status.toLowerCase() === 'no pc'
+                                                        : (station.status ?? '').toLowerCase() === 'no pc'
                                                             ? 'bg-red-500 hover:bg-red-600 text-white'
-                                                            : station.status.toLowerCase() === 'admin'
+                                                            : (station.status ?? '').toLowerCase() === 'admin'
                                                                 ? 'bg-blue-500 hover:bg-blue-600 text-white'
                                                                 : 'bg-gray-500 hover:bg-gray-600 text-white'
                                             }
                                         >
-                                            {station.status}
+                                            {station.status || 'N/A'}
                                         </Badge>
                                     </div>
                                 </div>
@@ -859,7 +859,7 @@ export default function StationIndex() {
                                     <div className="flex justify-between">
                                         <span className="text-muted-foreground">Monitor Type:</span>
                                         <span className={station.monitor_type === 'dual' ? 'text-blue-600 font-medium' : 'font-medium'}>
-                                            {station.monitor_type === 'dual' ? 'Dual' : 'Single'}
+                                            {station.monitor_type === 'dual' ? 'Dual' : station.monitor_type === 'none' ? 'No Monitor' : 'Single'}
                                         </span>
                                     </div>
 

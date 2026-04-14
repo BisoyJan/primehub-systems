@@ -56,7 +56,7 @@ export default function StationCreate({
         station_number: "",
         campaign_id: "",
         status: "",
-        monitor_type: "",
+        monitor_type: "single",
         pc_spec_id: "",
         pc_spec_ids: [] as string[], // For bulk mode
         quantity: "1",
