@@ -57,8 +57,8 @@ class StationRequestTest extends TestCase
         $errors = $validator->errors()->toArray();
         $this->assertArrayHasKey('site_id', $errors);
         $this->assertArrayHasKey('station_number', $errors);
-        $this->assertArrayHasKey('campaign_id', $errors);
-        $this->assertArrayHasKey('status', $errors);
+        $this->assertArrayNotHasKey('campaign_id', $errors);
+        $this->assertArrayNotHasKey('status', $errors);
         $this->assertArrayHasKey('monitor_type', $errors);
     }
 

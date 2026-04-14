@@ -33,8 +33,8 @@ interface StationEditProps {
         id: number;
         site_id: number;
         station_number: string;
-        campaign_id: number;
-        status: string;
+        campaign_id: number | null;
+        status: string | null;
         monitor_type: string;
         pc_spec_id: number;
     };
@@ -53,8 +53,8 @@ export default function StationEdit({ station, sites, campaigns, pcSpecs, usedPc
     const { data, setData, processing, errors } = useForm({
         site_id: String(station.site_id),
         station_number: station.station_number,
-        campaign_id: String(station.campaign_id),
-        status: station.status,
+        campaign_id: station.campaign_id ? String(station.campaign_id) : "",
+        status: station.status || "",
         monitor_type: station.monitor_type || 'single',
         pc_spec_id: String(station.pc_spec_id),
     });
@@ -139,12 +139,13 @@ export default function StationEdit({ station, sites, campaigns, pcSpecs, usedPc
                             {errors.station_number && <p className="text-red-600 text-sm mt-1">{errors.station_number}</p>}
                         </div>
                         <div>
-                            <label className="block text-sm font-medium mb-1">Campaign</label>
-                            <Select value={data.campaign_id} onValueChange={(val) => setData("campaign_id", val)}>
+                            <label className="block text-sm font-medium mb-1">Campaign (Optional)</label>
+                            <Select value={data.campaign_id} onValueChange={(val) => setData("campaign_id", val === "__none__" ? "" : val)}>
                                 <SelectTrigger className="w-full">
                                     <SelectValue placeholder="Select Campaign" />
                                 </SelectTrigger>
                                 <SelectContent>
+                                    <SelectItem value="__none__">None</SelectItem>
                                     {campaigns.map((c: Campaign) => (
                                         <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
                                     ))}
@@ -153,12 +154,13 @@ export default function StationEdit({ station, sites, campaigns, pcSpecs, usedPc
                             {errors.campaign_id && <p className="text-red-600 text-sm mt-1">{errors.campaign_id}</p>}
                         </div>
                         <div>
-                            <label className="block text-sm font-medium mb-1">Status</label>
-                            <Select value={data.status} onValueChange={(val) => setData("status", val)}>
+                            <label className="block text-sm font-medium mb-1">Status (Optional)</label>
+                            <Select value={data.status} onValueChange={(val) => setData("status", val === "__none__" ? "" : val)}>
                                 <SelectTrigger className="w-full">
                                     <SelectValue placeholder="Select Status" />
                                 </SelectTrigger>
                                 <SelectContent>
+                                    <SelectItem value="__none__">None</SelectItem>
                                     <SelectItem value="Admin">Admin</SelectItem>
                                     <SelectItem value="Occupied">Occupied</SelectItem>
                                     <SelectItem value="Vacant">Vacant</SelectItem>

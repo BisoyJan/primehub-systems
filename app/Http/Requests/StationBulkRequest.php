@@ -29,6 +29,20 @@ class StationBulkRequest extends FormRequest
                 'monitor_type' => strtolower((string) $this->input('monitor_type')),
             ]);
         }
+
+        // Convert empty campaign_id to null
+        if ($this->has('campaign_id') && ($this->input('campaign_id') === '' || $this->input('campaign_id') === '0')) {
+            $this->merge([
+                'campaign_id' => null,
+            ]);
+        }
+
+        // Convert empty status to null
+        if ($this->has('status') && $this->input('status') === '') {
+            $this->merge([
+                'status' => null,
+            ]);
+        }
     }
 
     public function rules(): array
@@ -36,8 +50,8 @@ class StationBulkRequest extends FormRequest
         return [
             'site_id' => ['required', 'exists:sites,id'],
             'starting_number' => ['required', 'string', 'max:255'],
-            'campaign_id' => ['required', 'exists:campaigns,id'],
-            'status' => ['required', 'string', 'max:255'],
+            'campaign_id' => ['nullable', 'exists:campaigns,id'],
+            'status' => ['nullable', 'string', 'max:255'],
             'monitor_type' => ['required', Rule::in(['single', 'dual'])],
             'pc_spec_id' => ['nullable', 'exists:pc_specs,id'],
             'pc_spec_ids' => ['nullable', 'array'],

@@ -26,6 +26,20 @@ class StationRequest extends FormRequest
                 'pc_spec_id' => null,
             ]);
         }
+
+        // Convert empty campaign_id to null
+        if ($this->has('campaign_id') && ($this->input('campaign_id') === '' || $this->input('campaign_id') === '0')) {
+            $this->merge([
+                'campaign_id' => null,
+            ]);
+        }
+
+        // Convert empty status to null
+        if ($this->has('status') && $this->input('status') === '') {
+            $this->merge([
+                'status' => null,
+            ]);
+        }
     }
 
     public function rules(): array
@@ -39,8 +53,8 @@ class StationRequest extends FormRequest
                 'required', 'string', 'max:255',
                 Rule::unique('stations', 'station_number')->ignore($ignoreId),
             ],
-            'campaign_id' => ['required', 'exists:campaigns,id'],
-            'status' => ['required', 'string', 'max:255'],
+            'campaign_id' => ['nullable', 'exists:campaigns,id'],
+            'status' => ['nullable', 'string', 'max:255'],
             'monitor_type' => ['required', Rule::in(['single', 'dual'])],
             'pc_spec_id' => ['nullable', 'exists:pc_specs,id'],
         ];

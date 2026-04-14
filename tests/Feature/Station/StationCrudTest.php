@@ -127,7 +127,7 @@ class StationCrudTest extends TestCase
     }
 
     #[Test]
-    public function station_creation_requires_campaign_id(): void
+    public function station_creation_allows_empty_campaign_id(): void
     {
         $response = $this->actingAs($this->admin)->post(route('stations.store'), [
             'site_id' => $this->site->id,
@@ -136,7 +136,7 @@ class StationCrudTest extends TestCase
             'monitor_type' => 'single',
         ]);
 
-        $response->assertSessionHasErrors('campaign_id');
+        $response->assertSessionDoesntHaveErrors('campaign_id');
     }
 
     #[Test]

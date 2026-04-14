@@ -274,12 +274,13 @@ export default function StationCreate({
                         )}
 
                         <div>
-                            <Label>Campaign</Label>
-                            <Select value={data.campaign_id} onValueChange={(val) => setData("campaign_id", val)}>
+                            <Label>Campaign (Optional)</Label>
+                            <Select value={data.campaign_id} onValueChange={(val) => setData("campaign_id", val === "__none__" ? "" : val)}>
                                 <SelectTrigger className="w-full">
                                     <SelectValue placeholder="Select Campaign" />
                                 </SelectTrigger>
                                 <SelectContent>
+                                    <SelectItem value="__none__">None</SelectItem>
                                     {campaigns.map((c: Campaign) => (
                                         <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
                                     ))}
@@ -288,12 +289,13 @@ export default function StationCreate({
                             {errors.campaign_id && <p className="text-red-600 text-sm mt-1">{errors.campaign_id}</p>}
                         </div>
                         <div>
-                            <Label>Status</Label>
-                            <Select value={data.status} onValueChange={(val) => setData("status", val)}>
+                            <Label>Status (Optional)</Label>
+                            <Select value={data.status} onValueChange={(val) => setData("status", val === "__none__" ? "" : val)}>
                                 <SelectTrigger className="w-full">
                                     <SelectValue placeholder="Select Status" />
                                 </SelectTrigger>
                                 <SelectContent>
+                                    <SelectItem value="__none__">None</SelectItem>
                                     <SelectItem value="Admin">Admin</SelectItem>
                                     <SelectItem value="Occupied">Occupied</SelectItem>
                                     <SelectItem value="Vacant">Vacant</SelectItem>
