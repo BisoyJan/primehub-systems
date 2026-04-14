@@ -79,8 +79,8 @@ class DashboardService
             ->get()
             ->map(fn ($station) => [
                 'station' => $station->station_number,
-                'site' => $station->site->name,
-                'campaign' => $station->campaign->name,
+                'site' => $station->site?->name ?? 'N/A',
+                'campaign' => $station->campaign?->name ?? 'N/A',
             ])
             ->toArray();
 
@@ -103,7 +103,7 @@ class DashboardService
         $stations = $query->with('site')
             ->get()
             ->map(fn ($station) => [
-                'site' => $station->site->name,
+                'site' => $station->site?->name ?? 'N/A',
                 'station_number' => $station->station_number,
             ])
             ->toArray();
