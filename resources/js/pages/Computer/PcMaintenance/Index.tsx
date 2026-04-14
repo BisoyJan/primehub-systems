@@ -100,6 +100,7 @@ interface Filters {
     status?: string;
     search?: string;
     site?: string;
+    assignment?: string;
 }
 
 interface IndexProps {
@@ -125,6 +126,7 @@ export default function Index({ maintenances, sites, filters = {}, allMatchingId
     const [search, setSearch] = useState(filters.search || '');
     const [status, setStatus] = useState(filters.status || 'all');
     const [siteFilter, setSiteFilter] = useState(filters.site || 'all');
+    const [assignmentFilter, setAssignmentFilter] = useState(filters.assignment || 'assigned');
     const [isFilterLoading, setIsFilterLoading] = useState(false);
     const [isMutating, setIsMutating] = useState(false);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
@@ -202,7 +204,7 @@ export default function Index({ maintenances, sites, filters = {}, allMatchingId
         }
     }, [isAllRecordsSelected, allMatchingIds]);
 
-    const showClearFilters = Boolean(search.trim()) || status !== 'all' || siteFilter !== 'all';
+    const showClearFilters = Boolean(search.trim()) || status !== 'all' || siteFilter !== 'all' || assignmentFilter !== 'assigned';
 
     // Current page IDs
     const currentPageIds = maintenances.data.map((m) => m.id);
@@ -295,8 +297,11 @@ export default function Index({ maintenances, sites, filters = {}, allMatchingId
         if (siteFilter !== 'all') {
             params.site = siteFilter;
         }
+        if (assignmentFilter !== 'assigned') {
+            params.assignment = assignmentFilter;
+        }
         return params;
-    }, [search, status, siteFilter]);
+    }, [search, status, siteFilter, assignmentFilter]);
 
     const requestWithFilters = (params: Record<string, string>, clearSelection = false) => {
         setIsFilterLoading(true);
@@ -329,6 +334,7 @@ export default function Index({ maintenances, sites, filters = {}, allMatchingId
         setSearch('');
         setStatus('all');
         setSiteFilter('all');
+        setAssignmentFilter('assigned');
         requestWithFilters({}, true);
     };
 
@@ -447,7 +453,7 @@ export default function Index({ maintenances, sites, filters = {}, allMatchingId
 
                 <div className="flex flex-col gap-4">
                     <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
-                        <div className="w-full sm:w-auto flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div className="w-full sm:w-auto flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                             <div className="relative">
                                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                                 <Input
@@ -458,6 +464,17 @@ export default function Index({ maintenances, sites, filters = {}, allMatchingId
                                     className="pl-8"
                                 />
                             </div>
+
+                            <Select value={assignmentFilter} onValueChange={setAssignmentFilter}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Assigned to Station" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="assigned">Assigned to Station</SelectItem>
+                                    <SelectItem value="unassigned">Unassigned</SelectItem>
+                                    <SelectItem value="all">All PCs</SelectItem>
+                                </SelectContent>
+                            </Select>
 
                             <Select value={siteFilter} onValueChange={setSiteFilter}>
                                 <SelectTrigger>

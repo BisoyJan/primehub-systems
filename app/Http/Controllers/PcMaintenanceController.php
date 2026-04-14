@@ -2,14 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\PcMaintenanceRequest;
 use App\Models\PcMaintenance;
 use App\Models\PcSpec;
 use App\Models\Site;
-use App\Http\Requests\PcMaintenanceRequest;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
-use Carbon\Carbon;
 
 class PcMaintenanceController extends Controller
 {
@@ -20,6 +20,15 @@ class PcMaintenanceController extends Controller
     {
         $query = PcMaintenance::with(['pcSpec.stations.site']);
 
+        // Filter by assignment status (default: only PCs assigned to a station)
+        $assignment = $request->input('assignment', 'assigned');
+        if ($assignment === 'assigned') {
+            $query->whereHas('pcSpec.stations');
+        } elseif ($assignment === 'unassigned') {
+            $query->whereDoesntHave('pcSpec.stations');
+        }
+        // 'all' shows everything
+
         // Filter by status
         if ($request->filled('status')) {
             $query->where('status', $request->status);
@@ -27,14 +36,13 @@ class PcMaintenanceController extends Controller
 
         // Filter by site (via pc_spec -> stations -> site)
         if ($request->filled('site')) {
-            $query->whereHas('pcSpec.stations', fn($q) => $q->where('site_id', $request->site));
+            $query->whereHas('pcSpec.stations', fn ($q) => $q->where('site_id', $request->site));
         }
 
         // Filter by PC number
         if ($request->filled('search')) {
-            $query->whereHas('pcSpec', fn($q) =>
-                $q->where('pc_number', 'like', "%{$request->search}%")
-                  ->orWhere('model', 'like', "%{$request->search}%")
+            $query->whereHas('pcSpec', fn ($q) => $q->where('pc_number', 'like', "%{$request->search}%")
+                ->orWhere('model', 'like', "%{$request->search}%")
             );
         }
 
@@ -59,6 +67,7 @@ class PcMaintenanceController extends Controller
                     'name' => $currentStation->site->name,
                 ] : null,
             ] : null;
+
             return $maintenance;
         });
 
@@ -67,7 +76,7 @@ class PcMaintenanceController extends Controller
         return Inertia::render('Computer/PcMaintenance/Index', [
             'maintenances' => $maintenances,
             'sites' => $sites,
-            'filters' => $request->only(['status', 'search', 'site']),
+            'filters' => $request->only(['status', 'search', 'site', 'assignment']),
             'allMatchingIds' => $allMatchingIds,
         ]);
     }
@@ -77,12 +86,14 @@ class PcMaintenanceController extends Controller
      */
     public function create(): Response
     {
-        // Get all PC specs with their current station assignment
+        // Get only PC specs that are assigned to a station
         $pcSpecs = PcSpec::with(['stations.site'])
+            ->whereHas('stations')
             ->orderBy('pc_number')
             ->get()
             ->map(function ($pcSpec) {
                 $currentStation = $pcSpec->stations->first();
+
                 return [
                     'id' => $pcSpec->id,
                     'pc_number' => $pcSpec->pc_number,
@@ -114,7 +125,7 @@ class PcMaintenanceController extends Controller
     {
         $validated = $request->validated();
 
-        $records = collect($validated['pc_spec_ids'])->map(fn($pcSpecId) => [
+        $records = collect($validated['pc_spec_ids'])->map(fn ($pcSpecId) => [
             'pc_spec_id' => $pcSpecId,
             'last_maintenance_date' => $validated['last_maintenance_date'],
             'next_due_date' => $validated['next_due_date'],
@@ -129,7 +140,7 @@ class PcMaintenanceController extends Controller
         PcMaintenance::insert($records);
 
         return redirect()->route('pc-maintenance.index')
-            ->with('success', count($records) . ' PC Maintenance record(s) created successfully.');
+            ->with('success', count($records).' PC Maintenance record(s) created successfully.');
     }
 
     /**
@@ -171,11 +182,18 @@ class PcMaintenanceController extends Controller
             ] : null,
         ] : null;
 
+        // Get PCs assigned to stations, plus the currently selected PC
+        $currentPcSpecId = $pcMaintenance->pc_spec_id;
         $pcSpecs = PcSpec::with(['stations.site'])
+            ->where(function ($q) use ($currentPcSpecId) {
+                $q->whereHas('stations')
+                    ->orWhere('id', $currentPcSpecId);
+            })
             ->orderBy('pc_number')
             ->get()
             ->map(function ($pcSpec) {
                 $currentStation = $pcSpec->stations->first();
+
                 return [
                     'id' => $pcSpec->id,
                     'pc_number' => $pcSpec->pc_number,

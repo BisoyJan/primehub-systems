@@ -79,7 +79,7 @@ export default function Create({ pcSpecs, sites }: CreateProps) {
     const [loading, setLoading] = useState(false);
     const [selectedPcSpecIds, setSelectedPcSpecIds] = useState<number[]>([]);
     const [siteFilter, setSiteFilter] = useState<string>('all');
-    const [assignmentFilter, setAssignmentFilter] = useState<string>('all');
+    const [assignmentFilter, setAssignmentFilter] = useState<string>('assigned');
     const [search, setSearch] = useState('');
 
     const today = new Date().toISOString().split('T')[0];

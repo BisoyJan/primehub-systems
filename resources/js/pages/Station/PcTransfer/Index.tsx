@@ -59,7 +59,7 @@ type Station = {
     site_id: number;
     campaign: string;
     campaign_id: number;
-    status: string;
+    status: string | null;
     monitor_type: string;
     pc_spec_id: number | null;
     pc_spec_details: PcSpecDetails | null;
@@ -455,18 +455,18 @@ export default function Index({ stations: stationsPayload, filters }: PageProps)
                                             <TableCell>
                                                 <Badge
                                                     className={
-                                                        station.status.toLowerCase() === 'occupied'
+                                                        (station.status ?? '').toLowerCase() === 'occupied'
                                                             ? 'bg-green-500 hover:bg-green-600 text-white'
-                                                            : station.status.toLowerCase() === 'vacant'
+                                                            : (station.status ?? '').toLowerCase() === 'vacant'
                                                                 ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
-                                                                : station.status.toLowerCase() === 'no pc'
+                                                                : (station.status ?? '').toLowerCase() === 'no pc'
                                                                     ? 'bg-red-500 hover:bg-red-600 text-white'
-                                                                    : station.status.toLowerCase() === 'admin'
+                                                                    : (station.status ?? '').toLowerCase() === 'admin'
                                                                         ? 'bg-blue-500 hover:bg-blue-600 text-white'
                                                                         : 'bg-gray-500 hover:bg-gray-600 text-white'
                                                     }
                                                 >
-                                                    {station.status}
+                                                    {station.status ?? 'N/A'}
                                                 </Badge>
                                             </TableCell>
                                             <TableCell>
@@ -570,18 +570,18 @@ export default function Index({ stations: stationsPayload, filters }: PageProps)
                                             </div>
                                             <Badge
                                                 className={
-                                                    station.status.toLowerCase() === 'occupied'
+                                                    (station.status ?? '').toLowerCase() === 'occupied'
                                                         ? 'bg-green-500 hover:bg-green-600 text-white'
-                                                        : station.status.toLowerCase() === 'vacant'
+                                                        : (station.status ?? '').toLowerCase() === 'vacant'
                                                             ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
-                                                            : station.status.toLowerCase() === 'no pc'
+                                                            : (station.status ?? '').toLowerCase() === 'no pc'
                                                                 ? 'bg-red-500 hover:bg-red-600 text-white'
-                                                                : station.status.toLowerCase() === 'admin'
+                                                                : (station.status ?? '').toLowerCase() === 'admin'
                                                                     ? 'bg-blue-500 hover:bg-blue-600 text-white'
                                                                     : 'bg-gray-500 hover:bg-gray-600 text-white'
                                                 }
                                             >
-                                                {station.status}
+                                                {station.status ?? 'N/A'}
                                             </Badge>
                                         </div>
 

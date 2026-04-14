@@ -4,6 +4,7 @@ namespace Tests\Feature\Controllers\Station;
 
 use App\Models\PcMaintenance;
 use App\Models\PcSpec;
+use App\Models\Station;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -25,7 +26,12 @@ class PcMaintenanceControllerTest extends TestCase
 
     public function test_index_displays_maintenance_records()
     {
-        PcMaintenance::factory()->count(3)->create();
+        // Create PcSpecs assigned to stations so they appear with default 'assigned' filter
+        $pcSpecs = PcSpec::factory()->count(3)->create();
+        foreach ($pcSpecs as $pcSpec) {
+            Station::factory()->create(['pc_spec_id' => $pcSpec->id]);
+            PcMaintenance::factory()->create(['pc_spec_id' => $pcSpec->id]);
+        }
 
         $this->get(route('pc-maintenance.index'))
             ->assertStatus(200)
@@ -33,6 +39,30 @@ class PcMaintenanceControllerTest extends TestCase
                 ->component('Computer/PcMaintenance/Index')
                 ->has('maintenances.data', 3)
             );
+    }
+
+    public function test_index_filters_by_assignment_status()
+    {
+        // PC assigned to station
+        $assignedPcSpec = PcSpec::factory()->create();
+        Station::factory()->create(['pc_spec_id' => $assignedPcSpec->id]);
+        PcMaintenance::factory()->create(['pc_spec_id' => $assignedPcSpec->id]);
+
+        // PC not assigned to any station
+        $unassignedPcSpec = PcSpec::factory()->create();
+        PcMaintenance::factory()->create(['pc_spec_id' => $unassignedPcSpec->id]);
+
+        // Default (assigned) should show only 1
+        $this->get(route('pc-maintenance.index'))
+            ->assertInertia(fn (Assert $page) => $page->has('maintenances.data', 1));
+
+        // Unassigned should show only 1
+        $this->get(route('pc-maintenance.index', ['assignment' => 'unassigned']))
+            ->assertInertia(fn (Assert $page) => $page->has('maintenances.data', 1));
+
+        // All should show 2
+        $this->get(route('pc-maintenance.index', ['assignment' => 'all']))
+            ->assertInertia(fn (Assert $page) => $page->has('maintenances.data', 2));
     }
 
     public function test_store_creates_maintenance_record()

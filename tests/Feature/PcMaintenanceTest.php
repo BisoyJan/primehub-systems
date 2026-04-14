@@ -5,23 +5,27 @@ namespace Tests\Feature;
 use App\Models\Campaign;
 use App\Models\EmployeeSchedule;
 use App\Models\PcMaintenance;
-use App\Models\Station;
-use App\Models\Site;
 use App\Models\PcSpec;
+use App\Models\Site;
+use App\Models\Station;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
-use Carbon\Carbon;
-use Tests\TestCase;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\TestCase;
 
 class PcMaintenanceTest extends TestCase
 {
     use RefreshDatabase;
 
     protected User $admin;
+
     protected Site $site;
+
     protected PcSpec $pcSpec;
+
+    protected Station $station;
 
     protected function setUp(): void
     {
@@ -35,6 +39,11 @@ class PcMaintenanceTest extends TestCase
 
         $this->site = Site::factory()->create();
         $this->pcSpec = PcSpec::factory()->create();
+        // Assign pcSpec to a station so it shows up in default views
+        $this->station = Station::factory()->create([
+            'site_id' => $this->site->id,
+            'pc_spec_id' => $this->pcSpec->id,
+        ]);
     }
 
     #[Test]
@@ -64,7 +73,7 @@ class PcMaintenanceTest extends TestCase
         $response->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Computer/PcMaintenance/Create')
-                ->has('pcSpecs')
+                ->has('pcSpecs', 1) // Only PCs assigned to stations
                 ->has('sites')
             );
     }
@@ -243,8 +252,10 @@ class PcMaintenanceTest extends TestCase
             'status' => 'completed',
         ]);
 
+        $pcSpec2 = PcSpec::factory()->create();
+        Station::factory()->create(['pc_spec_id' => $pcSpec2->id]);
         PcMaintenance::factory()->create([
-            'pc_spec_id' => PcSpec::factory()->create()->id,
+            'pc_spec_id' => $pcSpec2->id,
             'status' => 'pending',
         ]);
 
@@ -311,6 +322,81 @@ class PcMaintenanceTest extends TestCase
         $response->assertOk();
 
         $this->assertEquals('overdue', $maintenance->fresh()->status);
+    }
+
+    #[Test]
+    public function it_filters_maintenance_by_assignment_status()
+    {
+        // Maintenance for assigned PC (via setUp station)
+        PcMaintenance::factory()->create([
+            'pc_spec_id' => $this->pcSpec->id,
+        ]);
+
+        // Maintenance for unassigned PC
+        $unassignedPcSpec = PcSpec::factory()->create();
+        PcMaintenance::factory()->create([
+            'pc_spec_id' => $unassignedPcSpec->id,
+        ]);
+
+        // Default (assigned) - only assigned PCs
+        $this->actingAs($this->admin)
+            ->get(route('pc-maintenance.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('maintenances.data', 1)
+            );
+
+        // Unassigned - only unassigned PCs
+        $this->actingAs($this->admin)
+            ->get(route('pc-maintenance.index', ['assignment' => 'unassigned']))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('maintenances.data', 1)
+            );
+
+        // All - both
+        $this->actingAs($this->admin)
+            ->get(route('pc-maintenance.index', ['assignment' => 'all']))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('maintenances.data', 2)
+            );
+    }
+
+    #[Test]
+    public function it_only_shows_assigned_pcs_on_create_form()
+    {
+        // Create an unassigned PcSpec
+        PcSpec::factory()->create();
+
+        $response = $this->actingAs($this->admin)
+            ->get(route('pc-maintenance.create'));
+
+        $response->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Computer/PcMaintenance/Create')
+                ->has('pcSpecs', 1) // Only the assigned one from setUp
+            );
+    }
+
+    #[Test]
+    public function it_shows_current_pc_plus_assigned_pcs_on_edit_form()
+    {
+        // Create maintenance for an unassigned PC
+        $unassignedPcSpec = PcSpec::factory()->create();
+        $maintenance = PcMaintenance::factory()->create([
+            'pc_spec_id' => $unassignedPcSpec->id,
+        ]);
+
+        $response = $this->actingAs($this->admin)
+            ->get(route('pc-maintenance.edit', $maintenance));
+
+        $response->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Computer/PcMaintenance/Edit')
+                // Should include: the assigned pcSpec from setUp + the unassigned current one
+                ->has('pcSpecs', 2)
+            );
     }
 
     #[Test]
