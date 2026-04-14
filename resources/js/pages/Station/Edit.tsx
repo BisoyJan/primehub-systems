@@ -170,14 +170,15 @@ export default function StationEdit({ station, sites, campaigns, pcSpecs, usedPc
                             {errors.status && <p className="text-red-600 text-sm mt-1">{errors.status}</p>}
                         </div>
                         <div>
-                            <label className="block text-sm font-medium mb-1">Monitor Type</label>
+                            <label className="block text-sm font-medium mb-1">Monitor</label>
                             <Select value={data.monitor_type} onValueChange={(val) => setData("monitor_type", val)}>
                                 <SelectTrigger className="w-full">
-                                    <SelectValue placeholder="Select Monitor Type" />
+                                    <SelectValue placeholder="Select Monitor" />
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="single">Single Monitor</SelectItem>
                                     <SelectItem value="dual">Dual Monitor</SelectItem>
+                                    <SelectItem value="none">No Monitor</SelectItem>
                                 </SelectContent>
                             </Select>
                             {errors.monitor_type && <p className="text-red-600 text-sm mt-1">{errors.monitor_type}</p>}

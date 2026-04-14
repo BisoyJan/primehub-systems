@@ -154,7 +154,7 @@ class StationRequestTest extends TestCase
         $this->assertEquals('site', $attributes['site_id']);
         $this->assertEquals('station number', $attributes['station_number']);
         $this->assertEquals('campaign', $attributes['campaign_id']);
-        $this->assertEquals('monitor type', $attributes['monitor_type']);
+        $this->assertEquals('monitor', $attributes['monitor_type']);
         $this->assertEquals('PC spec', $attributes['pc_spec_id']);
     }
 

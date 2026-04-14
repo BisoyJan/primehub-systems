@@ -56,7 +56,7 @@ export default function StationCreate({
         station_number: "",
         campaign_id: "",
         status: "",
-        monitor_type: "single",
+        monitor_type: "",
         pc_spec_id: "",
         pc_spec_ids: [] as string[], // For bulk mode
         quantity: "1",
@@ -305,14 +305,15 @@ export default function StationCreate({
                             {errors.status && <p className="text-red-600 text-sm mt-1">{errors.status}</p>}
                         </div>
                         <div>
-                            <Label>Monitor Type</Label>
+                            <Label>Monitor</Label>
                             <Select value={data.monitor_type} onValueChange={(val) => setData("monitor_type", val)}>
                                 <SelectTrigger className="w-full">
-                                    <SelectValue placeholder="Select Monitor Type" />
+                                    <SelectValue placeholder="Select Monitor" />
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="single">Single Monitor</SelectItem>
                                     <SelectItem value="dual">Dual Monitor</SelectItem>
+                                    <SelectItem value="none">No Monitor</SelectItem>
                                 </SelectContent>
                             </Select>
                             {errors.monitor_type && <p className="text-red-600 text-sm mt-1">{errors.monitor_type}</p>}

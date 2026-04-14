@@ -55,7 +55,7 @@ class StationRequest extends FormRequest
             ],
             'campaign_id' => ['nullable', 'exists:campaigns,id'],
             'status' => ['nullable', 'string', 'max:255'],
-            'monitor_type' => ['required', Rule::in(['single', 'dual'])],
+            'monitor_type' => ['required', Rule::in(['single', 'dual', 'none'])],
             'pc_spec_id' => ['nullable', 'exists:pc_specs,id'],
         ];
     }
@@ -66,7 +66,7 @@ class StationRequest extends FormRequest
             'site_id' => 'site',
             'station_number' => 'station number',
             'campaign_id' => 'campaign',
-            'monitor_type' => 'monitor type',
+            'monitor_type' => 'monitor',
             'pc_spec_id' => 'PC spec',
         ];
     }

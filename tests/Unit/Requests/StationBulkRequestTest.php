@@ -240,7 +240,7 @@ class StationBulkRequestTest extends TestCase
         $this->assertEquals('site', $attributes['site_id']);
         $this->assertEquals('starting station number', $attributes['starting_number']);
         $this->assertEquals('campaign', $attributes['campaign_id']);
-        $this->assertEquals('monitor type', $attributes['monitor_type']);
+        $this->assertEquals('monitor', $attributes['monitor_type']);
         $this->assertEquals('PC spec', $attributes['pc_spec_id']);
         $this->assertEquals('PC specs', $attributes['pc_spec_ids']);
         $this->assertEquals('increment type', $attributes['increment_type']);
