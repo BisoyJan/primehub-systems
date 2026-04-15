@@ -86,6 +86,11 @@ class PcSpecController extends Controller
                 ->map(fn ($p) => [
                     'id' => $p->id,
                     'label' => "{$p->manufacturer} {$p->model}",
+                    'manufacturer' => $p->manufacturer,
+                    'core_count' => $p->core_count,
+                    'thread_count' => $p->thread_count,
+                    'base_clock_ghz' => $p->base_clock_ghz,
+                    'boost_clock_ghz' => $p->boost_clock_ghz,
                 ]),
         ]);
     }
@@ -173,6 +178,11 @@ class PcSpecController extends Controller
                 ->map(fn ($p) => [
                     'id' => $p->id,
                     'label' => "{$p->manufacturer} {$p->model}",
+                    'manufacturer' => $p->manufacturer,
+                    'core_count' => $p->core_count,
+                    'thread_count' => $p->thread_count,
+                    'base_clock_ghz' => $p->base_clock_ghz,
+                    'boost_clock_ghz' => $p->boost_clock_ghz,
                 ]),
         ]);
     }

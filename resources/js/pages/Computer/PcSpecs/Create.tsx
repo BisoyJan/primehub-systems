@@ -17,10 +17,12 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import {
     Command,
     CommandInput,
+    CommandList,
     CommandEmpty,
     CommandGroup,
     CommandItem,
 } from '@/components/ui/command';
+import { cn } from '@/lib/utils';
 
 import { PageHeader } from '@/components/PageHeader';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
@@ -35,6 +37,11 @@ import {
 interface ProcessorOption {
     id: number;
     label: string;
+    manufacturer: string;
+    core_count: number;
+    thread_count: number;
+    base_clock_ghz: number;
+    boost_clock_ghz: number;
 }
 
 type PageProps = {
@@ -256,41 +263,60 @@ export default function Create() {
                         </div>
 
                         {form.data.processor_mode === 'existing' ? (
-                            <div>
+                            <div className="space-y-2">
                                 <Label htmlFor="processor_spec_id">Select Processor</Label>
                                 <Popover open={processorOpen} onOpenChange={setProcessorOpen}>
                                     <PopoverTrigger asChild>
-                                        <Button variant="outline" className="w-full justify-between">
+                                        <Button
+                                            variant="outline"
+                                            role="combobox"
+                                            aria-expanded={processorOpen}
+                                            className={cn(
+                                                'w-full justify-between',
+                                                form.errors.processor_spec_id && 'border-destructive'
+                                            )}
+                                        >
                                             {form.data.processor_spec_id
                                                 ? processorOptions.find((p) => p.id === form.data.processor_spec_id)?.label
                                                 : 'Select a processor...'}
-                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0" />
+                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                         </Button>
                                     </PopoverTrigger>
                                     <PopoverContent className="w-full p-0">
                                         <Command>
                                             <CommandInput placeholder="Search processors..." />
-                                            <CommandEmpty>No processor found.</CommandEmpty>
-                                            <CommandGroup>
-                                                {processorOptions.map((opt) => (
-                                                    <CommandItem
-                                                        key={opt.id}
-                                                        onSelect={() => {
-                                                            form.setData('processor_spec_id', opt.id);
-                                                            setProcessorOpen(false);
-                                                        }}
-                                                    >
-                                                        <Check
-                                                            className={`mr-2 h-4 w-4 ${form.data.processor_spec_id === opt.id ? 'opacity-100' : 'opacity-0'}`}
-                                                        />
-                                                        {opt.label}
-                                                    </CommandItem>
-                                                ))}
-                                            </CommandGroup>
+                                            <CommandList>
+                                                <CommandEmpty>No processor found.</CommandEmpty>
+                                                <CommandGroup>
+                                                    {processorOptions.map((opt) => (
+                                                        <CommandItem
+                                                            key={opt.id}
+                                                            value={opt.label}
+                                                            onSelect={() => {
+                                                                form.setData('processor_spec_id', opt.id);
+                                                                setProcessorOpen(false);
+                                                            }}
+                                                        >
+                                                            <Check
+                                                                className={cn(
+                                                                    'mr-2 h-4 w-4',
+                                                                    form.data.processor_spec_id === opt.id ? 'opacity-100' : 'opacity-0'
+                                                                )}
+                                                            />
+                                                            <div className="flex flex-col">
+                                                                <span>{opt.label}</span>
+                                                                <span className="text-xs text-muted-foreground">
+                                                                    {opt.core_count}C/{opt.thread_count}T • {opt.base_clock_ghz}–{opt.boost_clock_ghz} GHz
+                                                                </span>
+                                                            </div>
+                                                        </CommandItem>
+                                                    ))}
+                                                </CommandGroup>
+                                            </CommandList>
                                         </Command>
                                     </PopoverContent>
                                 </Popover>
-                                {form.errors.processor_spec_id && <p className="text-sm text-red-600">{form.errors.processor_spec_id}</p>}
+                                {form.errors.processor_spec_id && <p className="text-sm text-destructive">{form.errors.processor_spec_id}</p>}
                             </div>
                         ) : (
                             <div className="rounded-lg border p-4 space-y-4">
