@@ -25,7 +25,7 @@ class PcTransferController extends Controller
 
         // Get stations with their PC specs
         $query = Station::with(['site', 'campaign', 'pcSpec.processorSpecs'])
-            ->orderBy('station_number', 'asc');
+            ->orderByRaw('CAST(station_number AS UNSIGNED), station_number');
 
         // Apply filters
         if ($search) {
@@ -369,7 +369,7 @@ class PcTransferController extends Controller
     public function transferPage(Request $request, ?Station $station = null)
     {
         // Get all PC specs with their station assignments
-        $pcSpecs = PcSpec::with(['processorSpecs', 'stations'])
+        $pcSpecs = PcSpec::with(['processorSpecs', 'stations.site', 'stations.campaign'])
             ->get()
             ->map(function ($pc) {
                 $assignedStation = $pc->stations->first();
@@ -382,9 +382,9 @@ class PcTransferController extends Controller
                     'station' => $assignedStation ? [
                         'id' => $assignedStation->id,
                         'station_number' => $assignedStation->station_number,
-                        'site' => $assignedStation->site->name,
+                        'site' => $assignedStation->site?->name,
                         'site_id' => $assignedStation->site_id,
-                        'campaign' => $assignedStation->campaign->name,
+                        'campaign' => $assignedStation->campaign?->name,
                         'campaign_id' => $assignedStation->campaign_id,
                     ] : null,
                 ];
@@ -392,7 +392,7 @@ class PcTransferController extends Controller
 
         // Get all stations or filter by IDs if provided (bulk mode)
         $stationsQuery = Station::with(['site', 'campaign', 'pcSpec'])
-            ->orderBy('station_number', 'asc');
+            ->orderByRaw('CAST(station_number AS UNSIGNED), station_number');
 
         // If station IDs provided in query string (for bulk mode)
         if ($request->has('stations')) {
@@ -404,9 +404,9 @@ class PcTransferController extends Controller
             return [
                 'id' => $st->id,
                 'station_number' => $st->station_number,
-                'site' => $st->site->name,
+                'site' => $st->site?->name,
                 'site_id' => $st->site_id,
-                'campaign' => $st->campaign->name,
+                'campaign' => $st->campaign?->name,
                 'campaign_id' => $st->campaign_id,
                 'pc_spec_id' => $st->pc_spec_id,
                 'pc_spec_details' => $st->pcSpec ? $st->pcSpec->getFormattedDetails() : null,

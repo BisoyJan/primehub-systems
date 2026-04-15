@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import { toast } from 'sonner';
-import { ArrowLeft, Search, ArrowRight, Check, AlertCircle, X, MousePointer, CheckSquare, ListChecks } from 'lucide-react';
+import { ArrowLeft, Search, ArrowRight, Check, AlertCircle, X, MousePointer, CheckSquare, ListChecks, ChevronDown } from 'lucide-react';
 import UseAnimations from 'react-useanimations';
 import help from 'react-useanimations/lib/help';
 
@@ -22,6 +22,7 @@ import {
     DialogTitle,
     DialogDescription,
 } from '@/components/ui/dialog';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 import {
     index as pcTransfersIndexRoute,
@@ -599,82 +600,96 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
 
                 {/* Selected Transfers Summary */}
                 {transfers.length > 0 && (
-                    <Card>
-                        <CardHeader className="pb-3">
-                            <CardTitle className="text-base">Selected Transfers</CardTitle>
-                            <CardDescription className="text-xs">Review and manage your selections</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="space-y-1.5">
-                                {transfers.map((transfer) => {
-                                    const pc = pcSpecs.find(p => p.id === transfer.pcId);
-                                    const station = stations.find(s => s.id === transfer.stationId);
-                                    const replacedPc = transfer.replacedPcId
-                                        ? pcSpecs.find(p => p.id === transfer.replacedPcId)
-                                        : null;
-                                    const darkColor = generateDarkColor(transfer.color);
+                    <Collapsible defaultOpen>
+                        <Card>
+                            <CardHeader className="pb-3">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <CardTitle className="text-base">Selected Transfers</CardTitle>
+                                        <CardDescription className="text-xs">Review and manage your selections</CardDescription>
+                                    </div>
+                                    <CollapsibleTrigger asChild>
+                                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                            <ChevronDown className="h-4 w-4 transition-transform duration-200 in-data-[state=closed]:-rotate-90" />
+                                            <span className="sr-only">Toggle transfers</span>
+                                        </Button>
+                                    </CollapsibleTrigger>
+                                </div>
+                            </CardHeader>
+                            <CollapsibleContent>
+                                <CardContent>
+                                    <div className="space-y-1.5">
+                                        {transfers.map((transfer) => {
+                                            const pc = pcSpecs.find(p => p.id === transfer.pcId);
+                                            const station = stations.find(s => s.id === transfer.stationId);
+                                            const replacedPc = transfer.replacedPcId
+                                                ? pcSpecs.find(p => p.id === transfer.replacedPcId)
+                                                : null;
+                                            const darkColor = generateDarkColor(transfer.color);
 
-                                    return (
-                                        <div key={transfer.pcId} data-transfer-id={transfer.pcId}>
-                                            <Colorized
-                                                className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-2 rounded border-2 space-y-2 sm:space-y-0"
-                                                style={{
-                                                    backgroundColor: transfer.color,
-                                                    borderColor: darkColor,
-                                                }}
-                                            >
-                                                <div className="flex items-center gap-2">
-                                                    <Colorized className="text-sm font-semibold" style={{ color: darkColor }}>
-                                                        {pc?.pc_number || pc?.label}
-                                                    </Colorized>
-                                                    <Colorized as="span" style={{ color: darkColor }} className="flex items-center">
-                                                        <ArrowRight className="h-3 w-3" />
-                                                    </Colorized>
-                                                    <Colorized className="text-sm font-semibold" style={{ color: darkColor }}>
-                                                        {station ? station.station_number : 'No station selected'}
-                                                    </Colorized>
-                                                </div>
-                                                <div className="w-full sm:w-auto flex justify-end">
-                                                    <Button
-                                                        size="sm"
-                                                        variant="ghost"
-                                                        onClick={() => clearTransfer(transfer.pcId)}
-                                                        className="h-6 w-6 p-0"
+                                            return (
+                                                <div key={transfer.pcId} data-transfer-id={transfer.pcId}>
+                                                    <Colorized
+                                                        className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-2 rounded border-2 space-y-2 sm:space-y-0"
+                                                        style={{
+                                                            backgroundColor: transfer.color,
+                                                            borderColor: darkColor,
+                                                        }}
                                                     >
-                                                        <X className="h-3 w-3" />
-                                                    </Button>
-                                                </div>
-                                            </Colorized>
-
-                                            {replacedPc && (
-                                                <div className="mt-1 p-2 bg-orange-50 border-l-2 border-orange-400 rounded text-xs">
-                                                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                                                        <div className="flex items-center gap-1.5 text-orange-700">
-                                                            <AlertCircle className="h-3 w-3 flex-shrink-0" />
-                                                            <div>
-                                                                <span className="font-medium">Floating PC: </span>
-                                                                <span className="font-semibold">{replacedPc.pc_number || replacedPc.label}</span>
-                                                                <span className="text-orange-600"> - will be unassigned</span>
-                                                            </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <Colorized className="text-sm font-semibold" style={{ color: darkColor }}>
+                                                                {pc?.pc_number || pc?.label}
+                                                            </Colorized>
+                                                            <Colorized as="span" style={{ color: darkColor }} className="flex items-center">
+                                                                <ArrowRight className="h-3 w-3" />
+                                                            </Colorized>
+                                                            <Colorized className="text-sm font-semibold" style={{ color: darkColor }}>
+                                                                {station ? station.station_number : 'No station selected'}
+                                                            </Colorized>
                                                         </div>
-                                                        <div className="w-full sm:w-auto">
+                                                        <div className="w-full sm:w-auto flex justify-end">
                                                             <Button
                                                                 size="sm"
-                                                                onClick={() => assignFloatingPc(replacedPc.id)}
-                                                                className="h-6 text-xs px-2 w-full sm:w-auto"
+                                                                variant="ghost"
+                                                                onClick={() => clearTransfer(transfer.pcId)}
+                                                                className="h-6 w-6 p-0"
                                                             >
-                                                                Assign
+                                                                <X className="h-3 w-3" />
                                                             </Button>
                                                         </div>
-                                                    </div>
+                                                    </Colorized>
+
+                                                    {replacedPc && (
+                                                        <div className="mt-1 p-2 bg-orange-50 border-l-2 border-orange-400 rounded text-xs">
+                                                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                                                                <div className="flex items-center gap-1.5 text-orange-700">
+                                                                    <AlertCircle className="h-3 w-3 flex-shrink-0" />
+                                                                    <div>
+                                                                        <span className="font-medium">Floating PC: </span>
+                                                                        <span className="font-semibold">{replacedPc.pc_number || replacedPc.label}</span>
+                                                                        <span className="text-orange-600"> - will be unassigned</span>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="w-full sm:w-auto">
+                                                                    <Button
+                                                                        size="sm"
+                                                                        onClick={() => assignFloatingPc(replacedPc.id)}
+                                                                        className="h-6 text-xs px-2 w-full sm:w-auto"
+                                                                    >
+                                                                        Assign
+                                                                    </Button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </CardContent>
-                    </Card>
+                                            );
+                                        })}
+                                    </div>
+                                </CardContent>
+                            </CollapsibleContent>
+                        </Card>
+                    </Collapsible>
                 )}
 
                 <Card>
