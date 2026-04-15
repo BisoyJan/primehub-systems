@@ -386,6 +386,25 @@ class CoachingSessionController extends Controller
                 $validated['is_draft'] = false;
                 $validated['submitted_at'] = now();
 
+                // Clean up any existing auto-saved draft for the same coachee/coach this week
+                $startOfWeek = now()->startOfWeek();
+                $endOfWeek = now()->endOfWeek();
+
+                $existingDraft = CoachingSession::where('coachee_id', $validated['coachee_id'])
+                    ->where('coach_id', $validated['coach_id'])
+                    ->where('is_draft', true)
+                    ->whereBetween('session_date', [$startOfWeek, $endOfWeek])
+                    ->first();
+
+                if ($existingDraft) {
+                    // Delete attachments from the draft
+                    foreach ($existingDraft->attachments as $attachment) {
+                        Storage::disk('local')->delete($attachment->file_path);
+                        $attachment->delete();
+                    }
+                    $existingDraft->delete();
+                }
+
                 return CoachingSession::create($validated);
             });
 

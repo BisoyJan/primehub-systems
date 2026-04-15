@@ -222,6 +222,41 @@ class CoachingSessionControllerTest extends TestCase
     }
 
     #[Test]
+    public function store_cleans_up_existing_auto_saved_draft(): void
+    {
+        $team = $this->createTeamWithCampaign();
+
+        // Simulate an auto-saved draft that was created before the user clicks "Submit"
+        $draft = CoachingSession::factory()->draft()->create([
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $team['teamLead']->id,
+            'session_date' => now()->format('Y-m-d'),
+        ]);
+
+        $this->assertDatabaseHas('coaching_sessions', ['id' => $draft->id, 'is_draft' => true]);
+
+        // Now submit via the store method (direct submit, not draft flow)
+        $data = $this->validSessionData($team['agent']->id);
+
+        $response = $this->actingAs($team['teamLead'])
+            ->post(route('coaching.sessions.store'), $data);
+
+        $response->assertRedirect(route('coaching.sessions.index'));
+
+        // The orphaned draft should be deleted
+        $this->assertDatabaseMissing('coaching_sessions', ['id' => $draft->id]);
+
+        // The new submitted session should exist
+        $this->assertDatabaseHas('coaching_sessions', [
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $team['teamLead']->id,
+            'is_draft' => false,
+            'ack_status' => 'Pending',
+            'compliance_status' => 'Awaiting_Agent_Ack',
+        ]);
+    }
+
+    #[Test]
     public function agent_cannot_create_coaching_session(): void
     {
         $team = $this->createTeamWithCampaign();
