@@ -52,6 +52,57 @@ function closestTag(node: Node | null, tag: string, boundary: HTMLElement): HTML
     return null;
 }
 
+/** Escape HTML entities in plain text */
+function escapeHtml(text: string): string {
+    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/** Convert plain text (e.g. from Notepad) to structured HTML, detecting list patterns */
+function convertPlainTextToHtml(text: string): string {
+    const lines = text.split(/\r?\n/);
+    const result: string[] = [];
+    let inUl = false;
+    let inOl = false;
+
+    for (let i = 0; i < lines.length; i++) {
+        const raw = lines[i];
+        const bulletMatch = raw.match(/^(\s*)[-*]\s+(.*)$/);
+        const numberedMatch = raw.match(/^(\s*)\d+[.)]\s+(.*)$/);
+
+        if (bulletMatch) {
+            if (inOl) { result.push('</ol>'); inOl = false; }
+            if (!inUl) { result.push('<ul>'); inUl = true; }
+            result.push(`<li>${escapeHtml(bulletMatch[2])}</li>`);
+        } else if (numberedMatch) {
+            if (inUl) { result.push('</ul>'); inUl = false; }
+            if (!inOl) { result.push('<ol>'); inOl = true; }
+            result.push(`<li>${escapeHtml(numberedMatch[2])}</li>`);
+        } else {
+            // Close any open lists
+            if (inUl) { result.push('</ul>'); inUl = false; }
+            if (inOl) { result.push('</ol>'); inOl = false; }
+
+            if (raw.trim() === '') {
+                result.push('<br>');
+            } else {
+                // Preserve leading whitespace with &nbsp;
+                const leadingMatch = raw.match(/^(\s+)/);
+                const indent = leadingMatch
+                    ? leadingMatch[1].replace(/\t/g, '    ').replace(/ /g, '&nbsp;')
+                    : '';
+                result.push(`${indent}${escapeHtml(raw.trimStart())}<br>`);
+            }
+        }
+    }
+
+    if (inUl) result.push('</ul>');
+    if (inOl) result.push('</ol>');
+
+    // Remove trailing <br> if last element was a list
+    const joined = result.join('');
+    return joined.replace(/<br>$/, '');
+}
+
 /** Toolbar icon button with tooltip */
 function ToolbarButton({
     onClick,
@@ -197,6 +248,104 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
         ol.style.listStyleType = styleType;
     }, []);
 
+    /** Strip unwanted inline styles from pasted HTML, keeping only structural formatting */
+    const handlePaste = useCallback((e: React.ClipboardEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        const clipboard = e.clipboardData;
+
+        // Try to get HTML content first
+        const html = clipboard.getData('text/html');
+        const plain = clipboard.getData('text/plain');
+
+        if (html) {
+            // Parse the HTML and clean it
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+
+            // Tags we allow to keep (structural + basic formatting)
+            const ALLOWED = new Set([
+                'P', 'BR', 'STRONG', 'B', 'EM', 'I', 'U', 'S',
+                'UL', 'OL', 'LI', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6',
+                'BLOCKQUOTE', 'A', 'SPAN', 'SUB', 'SUP', 'DIV',
+            ]);
+
+            const cleanNode = (node: Node): Node | null => {
+                if (node.nodeType === Node.TEXT_NODE) {
+                    return node.cloneNode();
+                }
+
+                if (node.nodeType !== Node.ELEMENT_NODE) {
+                    return null;
+                }
+
+                const el = node as HTMLElement;
+                const tag = el.tagName;
+
+                // Remove completely unwanted elements
+                if (['STYLE', 'SCRIPT', 'META', 'LINK', 'TITLE', 'HEAD'].includes(tag)) {
+                    return null;
+                }
+
+                let newEl: HTMLElement;
+
+                if (ALLOWED.has(tag)) {
+                    newEl = document.createElement(tag);
+
+                    // Only preserve href on anchors
+                    if (tag === 'A' && el.getAttribute('href')) {
+                        newEl.setAttribute('href', el.getAttribute('href')!);
+                    }
+
+                    // Preserve list-style-type on OL (used for nested list styles)
+                    if (tag === 'OL' && el.style.listStyleType) {
+                        newEl.style.listStyleType = el.style.listStyleType;
+                    }
+                } else {
+                    // Convert unrecognized block elements to DIV, inline to SPAN
+                    const display = window.getComputedStyle?.(el)?.display;
+                    const isBlock = display ? display === 'block' || display === 'list-item' : ['DIV', 'TABLE', 'TR', 'TD', 'TH', 'THEAD', 'TBODY', 'SECTION', 'ARTICLE', 'HEADER', 'FOOTER', 'NAV', 'MAIN', 'FIGURE', 'FIGCAPTION', 'PRE', 'HR'].includes(tag);
+                    newEl = document.createElement(isBlock ? 'div' : 'span');
+                }
+
+                // Recurse into children
+                for (const child of Array.from(el.childNodes)) {
+                    const cleaned = cleanNode(child);
+                    if (cleaned) {
+                        newEl.appendChild(cleaned);
+                    }
+                }
+
+                return newEl;
+            };
+
+            const fragment = document.createDocumentFragment();
+            for (const child of Array.from(doc.body.childNodes)) {
+                const cleaned = cleanNode(child);
+                if (cleaned) {
+                    fragment.appendChild(cleaned);
+                }
+            }
+
+            // Insert the cleaned HTML
+            const sel = window.getSelection();
+            if (sel && sel.rangeCount > 0) {
+                const range = sel.getRangeAt(0);
+                range.deleteContents();
+                range.insertNode(fragment);
+                // Move cursor to end of inserted content
+                range.collapse(false);
+                sel.removeAllRanges();
+                sel.addRange(range);
+            }
+        } else if (plain) {
+            // Convert plain text to structured HTML, detecting list patterns
+            const htmlContent = convertPlainTextToHtml(plain);
+            document.execCommand('insertHTML', false, htmlContent);
+        }
+
+        emitChange();
+    }, [emitChange]);
+
     const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
         const editor = editorRef.current;
         if (!editor) return;
@@ -205,6 +354,49 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
         if (!sel || sel.rangeCount === 0) return;
 
         const anchorNode = sel.anchorNode;
+
+        // SPACE after markdown-style list markers: auto-convert to list
+        // "- " or "* " → bullet list, "1. " → numbered list
+        if (e.key === ' ' && anchorNode && anchorNode.nodeType === Node.TEXT_NODE && !closestTag(anchorNode, 'LI', editor)) {
+            const text = anchorNode.textContent || '';
+            const offset = sel.anchorOffset;
+            const beforeCursor = text.substring(0, offset);
+
+            let listCommand = '';
+
+            if (beforeCursor === '-' || beforeCursor === '*') {
+                listCommand = 'insertUnorderedList';
+            } else if (/^\d\.$/.test(beforeCursor)) {
+                listCommand = 'insertOrderedList';
+            }
+
+            if (listCommand) {
+                e.preventDefault();
+                // Remove the marker text, keep any remaining content
+                const remaining = text.substring(offset);
+                if (remaining) {
+                    anchorNode.textContent = remaining;
+                    const range = document.createRange();
+                    range.setStart(anchorNode, 0);
+                    range.collapse(true);
+                    sel.removeAllRanges();
+                    sel.addRange(range);
+                } else {
+                    anchorNode.textContent = '';
+                }
+                document.execCommand(listCommand, false);
+                // Apply correct OL styles if numbered list
+                if (listCommand === 'insertOrderedList') {
+                    requestAnimationFrame(() => {
+                        editor.querySelectorAll('ol').forEach((ol) => applyOlStyle(ol, editor));
+                        emitChange();
+                    });
+                }
+                emitChange();
+                return;
+            }
+        }
+
         const li = closestTag(anchorNode, 'LI', editor);
 
         if (!li) return;
@@ -291,6 +483,7 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
                     data-placeholder={placeholder}
                     onInput={emitChange}
                     onBlur={emitChange}
+                    onPaste={handlePaste}
                     onKeyDown={handleKeyDown}
                 />
 

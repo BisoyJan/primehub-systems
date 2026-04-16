@@ -47,6 +47,35 @@ trait SanitizesHtmlInput
                 // Strip all tags except allowed ones
                 $value = strip_tags($value, self::ALLOWED_TAGS);
 
+                // Strip style attributes from all tags except list-style-type on <ol>
+                // This prevents pasted content from Word/Google Docs from carrying over
+                // unwanted font-family, font-size, line-height, margin, etc.
+                $value = preg_replace_callback(
+                    '/<(ol|li|span|p|strong|b|em|i|u|s|h[1-6]|blockquote|a|sub|sup)\b([^>]*?)>/i',
+                    function ($matches) {
+                        $tag = strtolower($matches[1]);
+                        $attrs = $matches[2];
+
+                        if ($tag === 'ol') {
+                            // Preserve only list-style-type on <ol>
+                            if (preg_match('/list-style-type\s*:\s*([^;"]+)/i', $attrs, $styleMatch)) {
+                                return '<' . $matches[1] . ' style="list-style-type: ' . trim($styleMatch[1]) . '">';
+                            }
+                        }
+
+                        if ($tag === 'a') {
+                            // Preserve href on anchors
+                            if (preg_match('/href\s*=\s*"([^"]*)"/i', $attrs, $hrefMatch)) {
+                                return '<a href="' . $hrefMatch[1] . '">';
+                            }
+                        }
+
+                        // Strip all attributes (including style) from other tags
+                        return '<' . $matches[1] . '>';
+                    },
+                    $value
+                );
+
                 $this->merge([$field => $value]);
             }
         }

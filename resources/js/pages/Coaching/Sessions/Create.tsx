@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Head, Link, useForm, usePage, router } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
 import { ArrowLeft, CheckCircle2, Circle, Users, UserPlus, X, Save, SaveAll, CloudUpload, Check, AlertTriangle } from 'lucide-react';
@@ -272,7 +272,7 @@ export default function CoachingSessionsCreate() {
         router.get(sessionsCreate.url({ query: { coaching_mode: mode } }), {}, { preserveState: false });
     };
 
-    const queueAgents = useMemo(() => getQueue(), [getQueue]);
+    const [queueAgents, setQueueAgents] = useState(() => getQueue());
 
     const getFormFieldsToSave = () => {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -296,6 +296,7 @@ export default function CoachingSessionsCreate() {
                     const nextAgent = updated.find(a => !a.done);
                     if (nextAgent) {
                         sessionStorage.setItem('coaching_queue', JSON.stringify(updated));
+                        setQueueAgents(updated);
                         // Keep completed agent's form data so they can review it later
                         if (selectedAgentId) {
                             sessionStorage.setItem(`coaching_form_${selectedAgentId}`, JSON.stringify(getFormFieldsToSave()));
@@ -304,6 +305,7 @@ export default function CoachingSessionsCreate() {
                         return;
                     } else {
                         sessionStorage.removeItem('coaching_queue');
+                        setQueueAgents([]);
                         Object.keys(sessionStorage).forEach(key => {
                             if (key.startsWith('coaching_form_')) sessionStorage.removeItem(key);
                         });
@@ -328,6 +330,7 @@ export default function CoachingSessionsCreate() {
                     const nextAgent = updated.find(a => !a.done);
                     if (nextAgent) {
                         sessionStorage.setItem('coaching_queue', JSON.stringify(updated));
+                        setQueueAgents(updated);
                         if (selectedAgentId) {
                             sessionStorage.setItem(`coaching_form_${selectedAgentId}`, JSON.stringify(getFormFieldsToSave()));
                         }
@@ -336,6 +339,7 @@ export default function CoachingSessionsCreate() {
                         return;
                     } else {
                         sessionStorage.removeItem('coaching_queue');
+                        setQueueAgents([]);
                         Object.keys(sessionStorage).forEach(key => {
                             if (key.startsWith('coaching_form_')) sessionStorage.removeItem(key);
                         });
@@ -439,10 +443,12 @@ export default function CoachingSessionsCreate() {
                 { id: agent.id, name: agentName, coaching_status: '', done: false },
             ];
             sessionStorage.setItem('coaching_queue', JSON.stringify(newQueue));
+            setQueueAgents(newQueue);
         } else {
             // Add to existing queue
             const updated = [...queue, { id: agent.id, name: agentName, coaching_status: '', done: false }];
             sessionStorage.setItem('coaching_queue', JSON.stringify(updated));
+            setQueueAgents(updated);
         }
 
         // Save current form data before switching
@@ -455,32 +461,47 @@ export default function CoachingSessionsCreate() {
     };
 
     const handleRemoveFromQueue = (agentId: number) => {
+        // Cancel pending auto-save timer and abort in-flight request (same as handleSwitchToAgent)
+        if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+        autoSaveAbortRef.current?.abort();
+
         const queue = getQueue();
         const updated = queue.filter(a => a.id !== agentId);
         sessionStorage.removeItem(`coaching_form_${agentId}`);
 
-        if (updated.length <= 1) {
-            // If only 1 or 0 agents left, dissolve the queue
+        if (updated.length === 0) {
+            // No agents left — dissolve the queue entirely
             sessionStorage.removeItem('coaching_queue');
             Object.keys(sessionStorage).forEach(key => {
                 if (key.startsWith('coaching_form_')) sessionStorage.removeItem(key);
             });
-            if (updated.length === 1 && updated[0].id !== selectedAgentId) {
+            setQueueAgents([]);
+        } else if (updated.length === 1) {
+            // Only 1 agent left — dissolve the queue but keep that agent's page
+            const remainingAgent = updated[0];
+            sessionStorage.removeItem('coaching_queue');
+            // Only clear OTHER agents' form data, keep the remaining agent's data
+            Object.keys(sessionStorage).forEach(key => {
+                if (key.startsWith('coaching_form_') && key !== `coaching_form_${remainingAgent.id}`) {
+                    sessionStorage.removeItem(key);
+                }
+            });
+            setQueueAgents([]);
+            if (remainingAgent.id !== selectedAgentId) {
                 isNavigatingRef.current = true;
-                router.visit(sessionsCreate().url + `?coachee_id=${updated[0].id}`);
-            } else {
-                isNavigatingRef.current = true;
-                window.location.reload();
+                router.visit(sessionsCreate().url + `?coachee_id=${remainingAgent.id}`);
             }
         } else if (agentId === selectedAgentId) {
-            // Removing the currently active agent — switch to next undone or first
+            // Removing the currently active agent — save form data, then switch to next
             sessionStorage.setItem('coaching_queue', JSON.stringify(updated));
+            setQueueAgents(updated);
             const next = updated.find(a => !a.done) ?? updated[0];
             isNavigatingRef.current = true;
             router.visit(sessionsCreate().url + `?coachee_id=${next.id}`);
         } else {
+            // Removing a non-current agent — update state directly, no reload needed
             sessionStorage.setItem('coaching_queue', JSON.stringify(updated));
-            window.location.reload();
+            setQueueAgents(updated);
         }
     };
 
@@ -519,7 +540,7 @@ export default function CoachingSessionsCreate() {
                                     Object.keys(sessionStorage).forEach(key => {
                                         if (key.startsWith('coaching_form_')) sessionStorage.removeItem(key);
                                     });
-                                    window.location.reload();
+                                    setQueueAgents([]);
                                 }}
                             >
                                 Cancel queue
