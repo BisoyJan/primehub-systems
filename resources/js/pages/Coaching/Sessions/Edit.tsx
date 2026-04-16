@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
-import { ArrowLeft, SendHorizonal } from 'lucide-react';
+import { ArrowLeft, SendHorizontal } from 'lucide-react';
 import { toast } from 'sonner';
 
 import AppLayout from '@/layouts/app-layout';
@@ -123,6 +123,15 @@ export default function CoachingSessionsEdit() {
         if (!data.session_date) {
             missing.push('Session Date');
         }
+        if (!data.profile_new_hire && !data.profile_tenured && !data.profile_returning && !data.profile_previously_coached_same_issue) {
+            missing.push('Agent Profile (select at least one)');
+        }
+        if (!data.focus_attendance_tardiness && !data.focus_productivity && !data.focus_compliance && !data.focus_callouts && !data.focus_recognition_milestones && !data.focus_growth_development && !data.focus_other) {
+            missing.push('Focus Area (select at least one)');
+        }
+        if (!data.root_cause_lack_of_skills && !data.root_cause_lack_of_clarity && !data.root_cause_personal_issues && !data.root_cause_motivation_engagement && !data.root_cause_health_fatigue && !data.root_cause_workload_process && !data.root_cause_peer_conflict && !data.root_cause_others) {
+            missing.push('Root Cause (select at least one)');
+        }
         if (missing.length > 0) {
             toast.error('Please complete required fields before submitting', {
                 description: missing.join(', '),
@@ -187,7 +196,7 @@ export default function CoachingSessionsEdit() {
                                 onClick={handleSubmitDraft}
                                 className="bg-green-600 hover:bg-green-700 text-white"
                             >
-                                <SendHorizonal className="mr-2 h-4 w-4" />
+                                <SendHorizontal className="mr-2 h-4 w-4" />
                                 {submittingDraft ? 'Submitting...' : 'Submit Coaching Session'}
                             </Button>
                         )}

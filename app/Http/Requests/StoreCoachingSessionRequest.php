@@ -38,9 +38,10 @@ class StoreCoachingSessionRequest extends FormRequest
         $user = $this->user();
         $isAdmin = in_array($user->role, ['Super Admin', 'Admin']);
         $coachingMode = $this->input('coaching_mode', 'assign');
+        $isSubmittingDraft = $this->route('session') !== null;
 
         $rules = [
-            'coaching_mode' => [$isAdmin ? 'required' : 'nullable', Rule::in(['assign', 'direct'])],
+            'coaching_mode' => [$isAdmin && ! $isSubmittingDraft ? 'required' : 'nullable', Rule::in(['assign', 'direct'])],
             'session_date' => ['required', 'date', 'before_or_equal:today'],
             // Agent Profile
             'profile_new_hire' => ['sometimes', 'boolean'],
@@ -79,9 +80,16 @@ class StoreCoachingSessionRequest extends FormRequest
             // Attachments
             'attachments' => ['nullable', 'array', 'max:10'],
             'attachments.*' => ['image', 'mimes:jpeg,jpg,png,gif,webp', 'max:4096'],
+            // Removed attachments (for submit-draft from Edit page)
+            'removed_attachments' => ['nullable', 'array'],
+            'removed_attachments.*' => ['integer'],
         ];
 
-        if ($coachingMode === 'direct' && $isAdmin) {
+        // When submitting an existing draft, coachee/coach are already on the session
+        if ($isSubmittingDraft) {
+            $rules['coach_id'] = ['nullable'];
+            $rules['coachee_id'] = ['nullable'];
+        } elseif ($coachingMode === 'direct' && $isAdmin) {
             $rules['coach_id'] = ['nullable'];
             $rules['coachee_id'] = ['required', 'exists:users,id'];
         } else {
@@ -158,6 +166,11 @@ class StoreCoachingSessionRequest extends FormRequest
                     && ! $this->boolean('root_cause_peer_conflict')
                     && ! $this->boolean('root_cause_others')) {
                     $validator->errors()->add('root_cause', 'Please select at least one root cause.');
+                }
+
+                // Skip campaign validation when submitting an existing draft (already validated on creation)
+                if ($this->route('session') !== null) {
+                    return;
                 }
 
                 $coachingMode = $this->input('coaching_mode', 'assign');
