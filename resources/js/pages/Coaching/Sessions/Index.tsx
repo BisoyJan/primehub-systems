@@ -1,7 +1,6 @@
-import { Fragment, useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Head, Link, useForm, usePage, router } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
-import DOMPurify from 'dompurify';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -143,8 +142,6 @@ export default function CoachingSessionsIndex() {
     const [dateFrom, setDateFrom] = useState(initialFilters.date_from || '');
     const [dateTo, setDateTo] = useState(initialFilters.date_to || '');
     const [coacheeRole, setCoacheeRole] = useState(initialFilters.coachee_role || '');
-
-    const [expandedId, setExpandedId] = useState<number | null>(null);
 
     const deleteForm = useForm({});
 
@@ -607,97 +604,74 @@ export default function CoachingSessionsIndex() {
                                         </TableRow>
                                     ) : (
                                         sessions.data.map((session) => (
-                                            <Fragment key={session.id}>
-                                                <TableRow className="cursor-pointer" onClick={() => setExpandedId(expandedId === session.id ? null : session.id)}>
-                                                    <TableCell className="whitespace-nowrap">
-                                                        {new Date(session.session_date).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
-                                                        {session.is_draft && (
-                                                            <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
-                                                                Draft
-                                                            </span>
-                                                        )}
-                                                    </TableCell>
-                                                    {!isAgent && activeTab !== 'my' && (
-                                                        <TableCell className="font-medium">
-                                                            {formatName(session.coachee)}
-                                                        </TableCell>
+                                            <TableRow key={session.id}>
+                                                <TableCell className="whitespace-nowrap">
+                                                    {new Date(session.session_date).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
+                                                    {session.is_draft && (
+                                                        <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+                                                            Draft
+                                                        </span>
                                                     )}
-                                                    {(isAdmin || activeTab === 'my') && <TableCell>{formatName(session.coach)}</TableCell>}
-                                                    <TableCell className="max-w-[200px] truncate">
-                                                        {purposes[session.purpose] ?? session.purpose}
+                                                </TableCell>
+                                                {!isAgent && activeTab !== 'my' && (
+                                                    <TableCell className="font-medium">
+                                                        {formatName(session.coachee)}
                                                     </TableCell>
-                                                    <TableCell>
-                                                        <SeverityBadge flag={session.severity_flag} />
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <AckStatusBadge status={session.ack_status} />
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <ComplianceStatusBadge status={session.compliance_status} />
-                                                    </TableCell>
-                                                    <TableCell onClick={(e) => e.stopPropagation()}>
-                                                        <div className="flex items-center justify-center gap-1">
-                                                            <Link href={sessionsShow.url(session.id)}>
-                                                                <Button variant="ghost" size="icon" title="View">
-                                                                    <Eye className="h-4 w-4" />
+                                                )}
+                                                {(isAdmin || activeTab === 'my') && <TableCell>{formatName(session.coach)}</TableCell>}
+                                                <TableCell className="max-w-[200px] truncate">
+                                                    {purposes[session.purpose] ?? session.purpose}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <SeverityBadge flag={session.severity_flag} />
+                                                </TableCell>
+                                                <TableCell>
+                                                    <AckStatusBadge status={session.ack_status} />
+                                                </TableCell>
+                                                <TableCell>
+                                                    <ComplianceStatusBadge status={session.compliance_status} />
+                                                </TableCell>
+                                                <TableCell>
+                                                    <div className="flex items-center justify-center gap-1">
+                                                        <Link href={sessionsShow.url(session.id)}>
+                                                            <Button variant="ghost" size="icon" title="View">
+                                                                <Eye className="h-4 w-4" />
+                                                            </Button>
+                                                        </Link>
+                                                        {can('coaching.edit') && (
+                                                            <Link href={sessionsEdit.url(session.id)}>
+                                                                <Button variant="ghost" size="icon" title="Edit">
+                                                                    <Pencil className="h-4 w-4" />
                                                                 </Button>
                                                             </Link>
-                                                            {can('coaching.edit') && (
-                                                                <Link href={sessionsEdit.url(session.id)}>
-                                                                    <Button variant="ghost" size="icon" title="Edit">
-                                                                        <Pencil className="h-4 w-4" />
+                                                        )}
+                                                        {can('coaching.create') && (
+                                                            <Link href={sessionsCreate().url + `?clone_from=${session.id}`}>
+                                                                <Button variant="ghost" size="icon" title="Clone as new">
+                                                                    <Copy className="h-4 w-4" />
+                                                                </Button>
+                                                            </Link>
+                                                        )}
+                                                        {can('coaching.delete') && (isAdmin || !['Verified', 'Rejected'].includes(session.compliance_status)) && (
+                                                            <DeleteConfirmDialog
+                                                                title="Delete Coaching Session"
+                                                                description="Are you sure you want to delete this coaching session? This action cannot be undone."
+                                                                onConfirm={() => handleDelete(session.id)}
+                                                                trigger={
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        title="Delete"
+                                                                        className="text-red-600 hover:text-red-700"
+                                                                    >
+                                                                        <Trash2 className="h-4 w-4" />
                                                                     </Button>
-                                                                </Link>
-                                                            )}
-                                                            {can('coaching.create') && (
-                                                                <Link href={sessionsCreate().url + `?clone_from=${session.id}`}>
-                                                                    <Button variant="ghost" size="icon" title="Clone as new">
-                                                                        <Copy className="h-4 w-4" />
-                                                                    </Button>
-                                                                </Link>
-                                                            )}
-                                                            {can('coaching.delete') && (isAdmin || !['Verified', 'Rejected'].includes(session.compliance_status)) && (
-                                                                <DeleteConfirmDialog
-                                                                    title="Delete Coaching Session"
-                                                                    description="Are you sure you want to delete this coaching session? This action cannot be undone."
-                                                                    onConfirm={() => handleDelete(session.id)}
-                                                                    trigger={
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="icon"
-                                                                            title="Delete"
-                                                                            className="text-red-600 hover:text-red-700"
-                                                                        >
-                                                                            <Trash2 className="h-4 w-4" />
-                                                                        </Button>
-                                                                    }
-                                                                />
-                                                            )}
-                                                        </div>
-                                                    </TableCell>
-                                                </TableRow>
-                                                {expandedId === session.id && (
-                                                    <TableRow className="bg-muted/30">
-                                                        <TableCell colSpan={8} className="p-4">
-                                                            <div className="grid gap-3 sm:grid-cols-2">
-                                                                <div>
-                                                                    <p className="text-xs font-semibold text-muted-foreground mb-1">Performance Description</p>
-                                                                    <p className="text-sm line-clamp-3" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(session.performance_description || 'N/A') }} />
-                                                                </div>
-                                                                <div>
-                                                                    <p className="text-xs font-semibold text-muted-foreground mb-1">SMART Action Plan</p>
-                                                                    <p className="text-sm line-clamp-3" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(session.smart_action_plan || 'N/A') }} />
-                                                                </div>
-                                                            </div>
-                                                            <div className="mt-2 flex gap-2">
-                                                                <Link href={sessionsShow.url(session.id)} onClick={(e) => e.stopPropagation()}>
-                                                                    <Button size="sm" variant="outline">View Full Details</Button>
-                                                                </Link>
-                                                            </div>
-                                                        </TableCell>
-                                                    </TableRow>
-                                                )}
-                                            </Fragment>
+                                                                }
+                                                            />
+                                                        )}
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
                                         ))
                                     )}
                                 </TableBody>

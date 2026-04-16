@@ -78,12 +78,24 @@ class PcSpec extends Model
         return [
             'id' => $this->id,
             'pc_number' => $this->pc_number,
+            'manufacturer' => $this->manufacturer,
             'model' => $this->model,
+            'memory_type' => $this->memory_type,
             'ram_gb' => $this->ram_gb,
             'disk_gb' => $this->disk_gb,
             'available_ports' => $this->available_ports,
-            'processor' => $this->processorSpecs->pluck('model')->implode(', '),
+            'bios_release_date' => $this->bios_release_date?->format('Y-m-d'),
             'issue' => $this->issue,
+            'processor' => $this->processorSpecs->pluck('model')->implode(', '),
+            'processorSpecs' => $this->processorSpecs->map(fn ($p) => [
+                'id' => $p->id,
+                'manufacturer' => $p->manufacturer,
+                'model' => $p->model,
+                'core_count' => $p->core_count ?? null,
+                'thread_count' => $p->thread_count ?? null,
+                'base_clock_ghz' => $p->base_clock_ghz ?? null,
+                'boost_clock_ghz' => $p->boost_clock_ghz ?? null,
+            ])->toArray(),
         ];
     }
 

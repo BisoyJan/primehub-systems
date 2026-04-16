@@ -68,11 +68,20 @@ interface FormData {
     status: 'completed' | 'pending' | 'overdue';
 }
 
+// Helper function to format date as YYYY-MM-DD in local timezone
+const formatLocalDate = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
 // Helper function to add months to a date
 const addMonths = (dateString: string, months: number): string => {
-    const date = new Date(dateString);
+    const [year, month, day] = dateString.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
     date.setMonth(date.getMonth() + months);
-    return date.toISOString().split('T')[0];
+    return formatLocalDate(date);
 };
 
 export default function Create({ pcSpecs, sites }: CreateProps) {
@@ -81,8 +90,10 @@ export default function Create({ pcSpecs, sites }: CreateProps) {
     const [siteFilter, setSiteFilter] = useState<string>('all');
     const [assignmentFilter, setAssignmentFilter] = useState<string>('assigned');
     const [search, setSearch] = useState('');
+    const [stationFrom, setStationFrom] = useState('');
+    const [stationTo, setStationTo] = useState('');
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = formatLocalDate(new Date());
     const [formData, setFormData] = useState<FormData>({
         last_maintenance_date: today,
         next_due_date: addMonths(today, 4),
@@ -94,11 +105,11 @@ export default function Create({ pcSpecs, sites }: CreateProps) {
 
     // Auto-update next due date when last maintenance date changes
     const handleLastMaintenanceDateChange = (value: string) => {
-        setFormData({
-            ...formData,
+        setFormData(prev => ({
+            ...prev,
             last_maintenance_date: value,
             next_due_date: addMonths(value, 4),
-        });
+        }));
     };
 
     const { title, breadcrumbs } = usePageMeta({
@@ -136,8 +147,23 @@ export default function Create({ pcSpecs, sites }: CreateProps) {
             );
         }
 
+        // Filter by station number range
+        if (stationFrom || stationTo) {
+            const from = stationFrom ? parseInt(stationFrom, 10) : null;
+            const to = stationTo ? parseInt(stationTo, 10) : null;
+
+            filtered = filtered.filter(pcSpec => {
+                if (!pcSpec.current_station?.station_number) return false;
+                const num = parseInt(pcSpec.current_station.station_number, 10);
+                if (isNaN(num)) return false;
+                if (from !== null && num < from) return false;
+                if (to !== null && num > to) return false;
+                return true;
+            });
+        }
+
         return filtered;
-    }, [pcSpecs, siteFilter, assignmentFilter, search]);
+    }, [pcSpecs, siteFilter, assignmentFilter, search, stationFrom, stationTo]);
 
     // Toggle PC spec selection
     const togglePcSpecSelection = (pcSpecId: number) => {
@@ -264,6 +290,26 @@ export default function Create({ pcSpecs, sites }: CreateProps) {
                                             ))}
                                         </SelectContent>
                                     </Select>
+                                </div>
+                                <div className="w-full sm:w-48">
+                                    <Label>Station Range</Label>
+                                    <div className="flex gap-2 items-center">
+                                        <Input
+                                            type="number"
+                                            min="1"
+                                            placeholder="From"
+                                            value={stationFrom}
+                                            onChange={(e) => setStationFrom(e.target.value)}
+                                        />
+                                        <span className="text-muted-foreground text-sm">to</span>
+                                        <Input
+                                            type="number"
+                                            min="1"
+                                            placeholder="To"
+                                            value={stationTo}
+                                            onChange={(e) => setStationTo(e.target.value)}
+                                        />
+                                    </div>
                                 </div>
                             </div>
 

@@ -101,6 +101,8 @@ interface Filters {
     search?: string;
     site?: string;
     assignment?: string;
+    station_from?: string;
+    station_to?: string;
 }
 
 interface IndexProps {
@@ -127,6 +129,8 @@ export default function Index({ maintenances, sites, filters = {}, allMatchingId
     const [status, setStatus] = useState(filters.status || 'all');
     const [siteFilter, setSiteFilter] = useState(filters.site || 'all');
     const [assignmentFilter, setAssignmentFilter] = useState(filters.assignment || 'assigned');
+    const [stationFrom, setStationFrom] = useState(filters.station_from || '');
+    const [stationTo, setStationTo] = useState(filters.station_to || '');
     const [isFilterLoading, setIsFilterLoading] = useState(false);
     const [isMutating, setIsMutating] = useState(false);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
@@ -204,7 +208,7 @@ export default function Index({ maintenances, sites, filters = {}, allMatchingId
         }
     }, [isAllRecordsSelected, allMatchingIds]);
 
-    const showClearFilters = Boolean(search.trim()) || status !== 'all' || siteFilter !== 'all' || assignmentFilter !== 'assigned';
+    const showClearFilters = Boolean(search.trim()) || status !== 'all' || siteFilter !== 'all' || assignmentFilter !== 'assigned' || Boolean(stationFrom) || Boolean(stationTo);
 
     // Current page IDs
     const currentPageIds = maintenances.data.map((m) => m.id);
@@ -300,8 +304,14 @@ export default function Index({ maintenances, sites, filters = {}, allMatchingId
         if (assignmentFilter !== 'assigned') {
             params.assignment = assignmentFilter;
         }
+        if (stationFrom.trim()) {
+            params.station_from = stationFrom.trim();
+        }
+        if (stationTo.trim()) {
+            params.station_to = stationTo.trim();
+        }
         return params;
-    }, [search, status, siteFilter, assignmentFilter]);
+    }, [search, status, siteFilter, assignmentFilter, stationFrom, stationTo]);
 
     const requestWithFilters = (params: Record<string, string>, clearSelection = false) => {
         setIsFilterLoading(true);
@@ -335,6 +345,8 @@ export default function Index({ maintenances, sites, filters = {}, allMatchingId
         setStatus('all');
         setSiteFilter('all');
         setAssignmentFilter('assigned');
+        setStationFrom('');
+        setStationTo('');
         requestWithFilters({}, true);
     };
 
@@ -452,87 +464,107 @@ export default function Index({ maintenances, sites, filters = {}, allMatchingId
                 />
 
                 <div className="flex flex-col gap-4">
-                    <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
-                        <div className="w-full sm:w-auto flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-                            <div className="relative">
-                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                                <Input
-                                    placeholder="Search by PC number or model..."
-                                    value={search}
-                                    onChange={(event) => setSearch(event.target.value)}
-                                    onKeyDown={(event) => event.key === 'Enter' && handleApplyFilters()}
-                                    className="pl-8"
-                                />
-                            </div>
-
-                            <Select value={assignmentFilter} onValueChange={setAssignmentFilter}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Assigned to Station" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="assigned">Assigned to Station</SelectItem>
-                                    <SelectItem value="unassigned">Unassigned</SelectItem>
-                                    <SelectItem value="all">All PCs</SelectItem>
-                                </SelectContent>
-                            </Select>
-
-                            <Select value={siteFilter} onValueChange={setSiteFilter}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="All sites" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All sites</SelectItem>
-                                    {sites.map((site) => (
-                                        <SelectItem key={site.id} value={site.id.toString()}>
-                                            {site.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-
-                            <Select value={status} onValueChange={setStatus}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="All statuses" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All statuses</SelectItem>
-                                    <SelectItem value="completed">Completed</SelectItem>
-                                    <SelectItem value="pending">Pending</SelectItem>
-                                    <SelectItem value="overdue">Overdue</SelectItem>
-                                </SelectContent>
-                            </Select>
+                    <div className="flex flex-col sm:flex-row flex-wrap gap-3 items-start sm:items-center">
+                        <div className="relative w-full sm:w-56">
+                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                            <Input
+                                placeholder="Search PC..."
+                                value={search}
+                                onChange={(event) => setSearch(event.target.value)}
+                                onKeyDown={(event) => event.key === 'Enter' && handleApplyFilters()}
+                                className="pl-8"
+                            />
                         </div>
 
-                        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-                            <Button variant="outline" onClick={handleApplyFilters} disabled={isFilterLoading} className="flex-1 sm:flex-none">
-                                <Filter className="mr-2 h-4 w-4" />
+                        <div className="flex gap-1.5 items-center">
+                            <span className="text-muted-foreground text-xs shrink-0">Station</span>
+                            <Input
+                                type="number"
+                                min="1"
+                                placeholder="From"
+                                value={stationFrom}
+                                onChange={(event) => setStationFrom(event.target.value)}
+                                onKeyDown={(event) => event.key === 'Enter' && handleApplyFilters()}
+                                className="w-20"
+                            />
+                            <span className="text-muted-foreground text-xs">–</span>
+                            <Input
+                                type="number"
+                                min="1"
+                                placeholder="To"
+                                value={stationTo}
+                                onChange={(event) => setStationTo(event.target.value)}
+                                onKeyDown={(event) => event.key === 'Enter' && handleApplyFilters()}
+                                className="w-20"
+                            />
+                        </div>
+
+                        <Select value={assignmentFilter} onValueChange={setAssignmentFilter}>
+                            <SelectTrigger className="w-full sm:w-40">
+                                <SelectValue placeholder="Assignment" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="assigned">Assigned</SelectItem>
+                                <SelectItem value="unassigned">Unassigned</SelectItem>
+                                <SelectItem value="all">All PCs</SelectItem>
+                            </SelectContent>
+                        </Select>
+
+                        <Select value={siteFilter} onValueChange={setSiteFilter}>
+                            <SelectTrigger className="w-full sm:w-32">
+                                <SelectValue placeholder="All sites" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All sites</SelectItem>
+                                {sites.map((site) => (
+                                    <SelectItem key={site.id} value={site.id.toString()}>
+                                        {site.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+
+                        <Select value={status} onValueChange={setStatus}>
+                            <SelectTrigger className="w-full sm:w-36">
+                                <SelectValue placeholder="All statuses" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All statuses</SelectItem>
+                                <SelectItem value="completed">Completed</SelectItem>
+                                <SelectItem value="pending">Pending</SelectItem>
+                                <SelectItem value="overdue">Overdue</SelectItem>
+                            </SelectContent>
+                        </Select>
+
+                        <div className="flex gap-2 items-center ml-auto">
+                            <Button variant="outline" size="sm" onClick={handleApplyFilters} disabled={isFilterLoading}>
+                                <Filter className="mr-1.5 h-3.5 w-3.5" />
                                 Filter
                             </Button>
 
                             {showClearFilters && (
-                                <Button variant="outline" onClick={handleClearFilters} disabled={isFilterLoading} className="flex-1 sm:flex-none">
+                                <Button variant="outline" size="sm" onClick={handleClearFilters} disabled={isFilterLoading}>
                                     Reset
                                 </Button>
                             )}
 
-                            <div className="flex gap-2">
-                                <Button variant="ghost" size="icon" onClick={handleManualRefresh} disabled={isFilterLoading} title="Refresh">
-                                    <RefreshCw className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                    variant={autoRefreshEnabled ? "default" : "ghost"}
-                                    size="icon"
-                                    onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
-                                    title={autoRefreshEnabled ? "Disable auto-refresh" : "Enable auto-refresh (30s)"}
-                                >
-                                    {autoRefreshEnabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                                </Button>
-                            </div>
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleManualRefresh} disabled={isFilterLoading} title="Refresh">
+                                <RefreshCw className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                                variant={autoRefreshEnabled ? "default" : "ghost"}
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
+                                title={autoRefreshEnabled ? "Disable auto-refresh" : "Enable auto-refresh (30s)"}
+                            >
+                                {autoRefreshEnabled ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+                            </Button>
 
                             {can('pc_maintenance.create') && (
-                                <Link href={pcMaintenanceCreateRoute().url} className="flex-1 sm:flex-none">
-                                    <Button className="w-full sm:w-auto">
-                                        <Plus className="mr-2 h-4 w-4" />
+                                <Link href={pcMaintenanceCreateRoute().url}>
+                                    <Button size="sm">
+                                        <Plus className="mr-1.5 h-3.5 w-3.5" />
                                         Add Record
                                     </Button>
                                 </Link>
@@ -605,8 +637,7 @@ export default function Index({ maintenances, sites, filters = {}, allMatchingId
                                             <TableHead>Current Station</TableHead>
                                             <TableHead>Site</TableHead>
                                             <TableHead>Maintenance Type</TableHead>
-                                            <TableHead>Last Maintenance</TableHead>
-                                            <TableHead>Next Due Date</TableHead>
+                                            <TableHead>Maintenance Date</TableHead>
                                             <TableHead>Days Until Due</TableHead>
                                             <TableHead>Performed By</TableHead>
                                             <TableHead>Status</TableHead>
@@ -616,7 +647,7 @@ export default function Index({ maintenances, sites, filters = {}, allMatchingId
                                     <TableBody>
                                         {!hasData ? (
                                             <TableRow>
-                                                <TableCell colSpan={can('pc_maintenance.edit') ? 12 : 11} className="text-center py-8">
+                                                <TableCell colSpan={can('pc_maintenance.edit') ? 11 : 10} className="text-center py-8">
                                                     <Calendar className="mx-auto h-12 w-12 text-muted-foreground mb-2" />
                                                     <p className="text-muted-foreground">No maintenance records found</p>
                                                 </TableCell>
@@ -650,8 +681,12 @@ export default function Index({ maintenances, sites, filters = {}, allMatchingId
                                                         )}
                                                     </TableCell>
                                                     <TableCell>{maintenance.maintenance_type || 'N/A'}</TableCell>
-                                                    <TableCell>{formatDate(maintenance.last_maintenance_date)}</TableCell>
-                                                    <TableCell>{formatDate(maintenance.next_due_date)}</TableCell>
+                                                    <TableCell>
+                                                        <div className="text-sm">
+                                                            <div>{formatDate(maintenance.last_maintenance_date)}</div>
+                                                            <div className="text-muted-foreground text-xs">Due: {formatDate(maintenance.next_due_date)}</div>
+                                                        </div>
+                                                    </TableCell>
                                                     <TableCell>
                                                         <span
                                                             className={

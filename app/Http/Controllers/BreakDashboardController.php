@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Jobs\GenerateBreakTimerExportExcel;
 use App\Models\BreakSession;
+use App\Models\Campaign;
 use App\Models\User;
 use App\Services\BreakTimerService;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
@@ -59,6 +61,32 @@ class BreakDashboardController extends Controller
         return $query->get(['id', 'first_name', 'last_name']);
     }
 
+    /**
+     * Get the campaigns list, scoped to the Team Lead's campaigns if applicable.
+     */
+    private function getScopedCampaigns(array $campaignIds): Collection
+    {
+        $query = Campaign::query()->orderBy('name');
+
+        if (! empty($campaignIds)) {
+            $query->whereIn('id', $campaignIds);
+        }
+
+        return $query->get(['id', 'name']);
+    }
+
+    /**
+     * Filter a query by campaign_id via user's active schedule.
+     */
+    private function filterByCampaign($query, ?string $campaignId): void
+    {
+        if ($campaignId) {
+            $query->whereHas('user.activeSchedule', function ($q) use ($campaignId) {
+                $q->where('campaign_id', $campaignId);
+            });
+        }
+    }
+
     public function index(Request $request)
     {
         $policy = $this->breakTimerService->getActivePolicy();
@@ -67,7 +95,7 @@ class BreakDashboardController extends Controller
         $teamLeadCampaignIds = $this->getTeamLeadCampaignIds();
 
         $query = BreakSession::query()
-            ->with(['user', 'breakEvents' => fn ($q) => $q->whereIn('action', ['pause', 'resume'])->orderBy('occurred_at')])
+            ->with(['user.activeSchedule.campaign', 'breakEvents' => fn ($q) => $q->whereIn('action', ['pause', 'resume'])->orderBy('occurred_at')])
             ->where('shift_date', $date)
             ->search($request->query('search'))
             ->orderByRaw("CASE status WHEN 'overage' THEN 1 WHEN 'active' THEN 2 WHEN 'paused' THEN 3 WHEN 'completed' THEN 4 ELSE 5 END")
@@ -75,6 +103,7 @@ class BreakDashboardController extends Controller
             ->orderBy('started_at', 'desc');
 
         $this->scopeByCampaigns($query, $teamLeadCampaignIds);
+        $this->filterByCampaign($query, $request->query('campaign_id'));
 
         if ($request->query('status')) {
             $query->where('status', $request->query('status'));
@@ -99,6 +128,7 @@ class BreakDashboardController extends Controller
                     'first_name' => $session->user->first_name,
                     'last_name' => $session->user->last_name,
                 ] : null,
+                'campaign' => $session->user?->activeSchedule?->campaign?->name,
                 'station' => $session->station,
                 'type' => $session->type,
                 'status' => $session->status,
@@ -120,6 +150,7 @@ class BreakDashboardController extends Controller
         // Live stats for the date
         $sessionsForDate = BreakSession::query()->where('shift_date', $date);
         $this->scopeByCampaigns($sessionsForDate, $teamLeadCampaignIds);
+        $this->filterByCampaign($sessionsForDate, $request->query('campaign_id'));
         $stats = [
             'total_sessions' => (clone $sessionsForDate)->count(),
             'active_now' => (clone $sessionsForDate)->whereIn('status', ['active', 'paused'])->count(),
@@ -146,8 +177,10 @@ class BreakDashboardController extends Controller
                 'status' => $request->query('status', ''),
                 'type' => $request->query('type', ''),
                 'user_id' => $request->query('user_id', ''),
+                'campaign_id' => $request->query('campaign_id', ''),
             ],
             'users' => $this->getScopedUsers($teamLeadCampaignIds),
+            'campaigns' => $this->getScopedCampaigns($teamLeadCampaignIds),
         ]);
     }
 
@@ -158,13 +191,14 @@ class BreakDashboardController extends Controller
         $teamLeadCampaignIds = $this->getTeamLeadCampaignIds();
 
         $query = BreakSession::query()
-            ->with(['user'])
+            ->with(['user.activeSchedule.campaign'])
             ->whereBetween('shift_date', [$startDate, $endDate])
             ->search($request->query('search'))
             ->orderBy('shift_date', 'desc')
             ->orderBy('started_at', 'desc');
 
         $this->scopeByCampaigns($query, $teamLeadCampaignIds);
+        $this->filterByCampaign($query, $request->query('campaign_id'));
 
         if ($request->query('user_id')) {
             $query->where('user_id', $request->query('user_id'));
@@ -189,6 +223,7 @@ class BreakDashboardController extends Controller
                     'first_name' => $session->user->first_name,
                     'last_name' => $session->user->last_name,
                 ] : null,
+                'campaign' => $session->user?->activeSchedule?->campaign?->name,
                 'station' => $session->station,
                 'type' => $session->type,
                 'status' => $session->status,
@@ -207,6 +242,7 @@ class BreakDashboardController extends Controller
         // Summary stats for the period
         $periodQuery = BreakSession::query()->whereBetween('shift_date', [$startDate, $endDate]);
         $this->scopeByCampaigns($periodQuery, $teamLeadCampaignIds);
+        $this->filterByCampaign($periodQuery, $request->query('campaign_id'));
         $summary = [
             'total_sessions' => (clone $periodQuery)->count(),
             'total_overage' => (clone $periodQuery)->where('status', 'overage')->count(),
@@ -233,8 +269,10 @@ class BreakDashboardController extends Controller
                 'user_id' => $request->query('user_id', ''),
                 'type' => $request->query('type', ''),
                 'status' => $request->query('status', ''),
+                'campaign_id' => $request->query('campaign_id', ''),
             ],
             'users' => $this->getScopedUsers($teamLeadCampaignIds),
+            'campaigns' => $this->getScopedCampaigns($teamLeadCampaignIds),
         ]);
     }
 

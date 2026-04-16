@@ -103,7 +103,8 @@ class PcSpecTest extends TestCase
         $this->assertEquals('PC-001', $details['pc_number']);
         $this->assertEquals(32, $details['ram_gb']);
         $this->assertEquals(512, $details['disk_gb']);
-        $this->assertEquals('Intel Core i7-10700', $details['processor']);
+        $this->assertCount(1, $details['processorSpecs']);
+        $this->assertEquals('Intel Core i7-10700', $details['processorSpecs'][0]['model']);
     }
 
     #[Test]

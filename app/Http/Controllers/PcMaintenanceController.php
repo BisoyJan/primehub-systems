@@ -46,14 +46,33 @@ class PcMaintenanceController extends Controller
             );
         }
 
+        // Filter by station number range (e.g., 1 to 20 for stations 1E-20E)
+        if ($request->filled('station_from') || $request->filled('station_to')) {
+            $stationFrom = $request->input('station_from');
+            $stationTo = $request->input('station_to');
+
+            $query->whereHas('pcSpec.stations', function ($q) use ($stationFrom, $stationTo) {
+                if ($stationFrom !== null && $stationTo !== null) {
+                    $q->whereRaw('CAST(station_number AS UNSIGNED) BETWEEN ? AND ?', [(int) $stationFrom, (int) $stationTo]);
+                } elseif ($stationFrom !== null) {
+                    $q->whereRaw('CAST(station_number AS UNSIGNED) >= ?', [(int) $stationFrom]);
+                } elseif ($stationTo !== null) {
+                    $q->whereRaw('CAST(station_number AS UNSIGNED) <= ?', [(int) $stationTo]);
+                }
+            });
+        }
+
         // Auto-update overdue statuses
         $this->updateOverdueStatuses();
+
+        // Sort by station number numerically (1E, 2E, 3E... instead of 1E, 10E, 100E...)
+        $query->orderByRaw('ISNULL((SELECT CAST(s.station_number AS UNSIGNED) FROM stations s WHERE s.pc_spec_id = pc_maintenances.pc_spec_id LIMIT 1))')
+            ->orderByRaw('(SELECT CAST(s.station_number AS UNSIGNED) FROM stations s WHERE s.pc_spec_id = pc_maintenances.pc_spec_id LIMIT 1) ASC');
 
         // Get all IDs matching current filters (for bulk select all)
         $allMatchingIds = (clone $query)->pluck('id')->toArray();
 
-        $maintenances = $query->orderBy('next_due_date', 'asc')
-            ->paginate(10)
+        $maintenances = $query->paginate(10)
             ->withQueryString();
 
         // Transform data to include current station info
@@ -76,7 +95,7 @@ class PcMaintenanceController extends Controller
         return Inertia::render('Computer/PcMaintenance/Index', [
             'maintenances' => $maintenances,
             'sites' => $sites,
-            'filters' => $request->only(['status', 'search', 'site', 'assignment']),
+            'filters' => $request->only(['status', 'search', 'site', 'assignment', 'station_from', 'station_to']),
             'allMatchingIds' => $allMatchingIds,
         ]);
     }
@@ -86,10 +105,10 @@ class PcMaintenanceController extends Controller
      */
     public function create(): Response
     {
-        // Get only PC specs that are assigned to a station
+        // Get only PC specs that are assigned to a station, sorted by station number numerically
         $pcSpecs = PcSpec::with(['stations.site'])
             ->whereHas('stations')
-            ->orderBy('pc_number')
+            ->orderByRaw('(SELECT CAST(s.station_number AS UNSIGNED) FROM stations s WHERE s.pc_spec_id = pc_specs.id LIMIT 1) ASC')
             ->get()
             ->map(function ($pcSpec) {
                 $currentStation = $pcSpec->stations->first();
@@ -189,7 +208,8 @@ class PcMaintenanceController extends Controller
                 $q->whereHas('stations')
                     ->orWhere('id', $currentPcSpecId);
             })
-            ->orderBy('pc_number')
+            ->orderByRaw('ISNULL((SELECT CAST(s.station_number AS UNSIGNED) FROM stations s WHERE s.pc_spec_id = pc_specs.id LIMIT 1))')
+            ->orderByRaw('(SELECT CAST(s.station_number AS UNSIGNED) FROM stations s WHERE s.pc_spec_id = pc_specs.id LIMIT 1) ASC')
             ->get()
             ->map(function ($pcSpec) {
                 $currentStation = $pcSpec->stations->first();

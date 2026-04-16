@@ -33,6 +33,7 @@ interface SessionData {
     id: number;
     session_id: string;
     user: SessionUser | null;
+    campaign: string | null;
     station: string | null;
     type: string;
     status: string;
@@ -60,12 +61,18 @@ interface Filters {
     status: string;
     type: string;
     user_id: string;
+    campaign_id: string;
 }
 
 interface UserOption {
     id: number;
     first_name: string;
     last_name: string;
+}
+
+interface CampaignOption {
+    id: number;
+    name: string;
 }
 
 interface Sessions {
@@ -84,6 +91,7 @@ interface PageProps extends Record<string, unknown> {
     stats: Stats;
     filters: Filters;
     users: UserOption[];
+    campaigns: CampaignOption[];
 }
 
 function formatTime(totalSeconds: number): string {
@@ -117,7 +125,7 @@ function statusBadgeVariant(status: string, overageSeconds = 0): { variant: 'def
 }
 
 export default function BreakTimerDashboard() {
-    const { sessions, stats, filters, users } = usePage<PageProps>().props;
+    const { sessions, stats, filters, users, campaigns } = usePage<PageProps>().props;
 
     const { title, breadcrumbs } = usePageMeta({
         title: 'Break Dashboard',
@@ -134,6 +142,7 @@ export default function BreakTimerDashboard() {
     const [status, setStatus] = useState(filters.status);
     const [type, setType] = useState(filters.type);
     const [userId, setUserId] = useState(filters.user_id);
+    const [campaignId, setCampaignId] = useState(filters.campaign_id);
     const [showUserSearch, setShowUserSearch] = useState(false);
     const [userSearchQuery, setUserSearchQuery] = useState('');
 
@@ -171,7 +180,7 @@ export default function BreakTimerDashboard() {
     function applyFilters() {
         router.get(
             dashboardRoute().url,
-            { date, status: status || undefined, type: type || undefined, user_id: userId || undefined },
+            { date, status: status || undefined, type: type || undefined, user_id: userId || undefined, campaign_id: campaignId || undefined },
             { preserveState: true, preserveScroll: true },
         );
     }
@@ -181,6 +190,7 @@ export default function BreakTimerDashboard() {
         setStatus('');
         setType('');
         setUserId('');
+        setCampaignId('');
         setUserSearchQuery('');
         router.get(dashboardRoute().url, {}, { preserveState: true });
     }
@@ -246,7 +256,7 @@ export default function BreakTimerDashboard() {
                 {/* Filters */}
                 <div className="flex flex-col gap-4">
                     <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
-                        <div className="w-full sm:w-auto flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                        <div className="w-full sm:w-auto flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
                             <div className="flex-1">
                                 <DatePicker
                                     value={date}
@@ -336,6 +346,17 @@ export default function BreakTimerDashboard() {
                                     <SelectItem value="combined">Combined</SelectItem>
                                 </SelectContent>
                             </Select>
+                            <Select value={campaignId || 'all'} onValueChange={(v) => setCampaignId(v === 'all' ? '' : v)}>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="All Campaigns" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Campaigns</SelectItem>
+                                    {campaigns.map((c) => (
+                                        <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                         </div>
 
                         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
@@ -352,6 +373,7 @@ export default function BreakTimerDashboard() {
                             <TableHeader>
                                 <TableRow className="bg-muted/50">
                                     <TableHead>Agent</TableHead>
+                                    <TableHead>Campaign</TableHead>
                                     <TableHead>Station</TableHead>
                                     <TableHead>Type</TableHead>
                                     <TableHead>Status</TableHead>
@@ -363,7 +385,7 @@ export default function BreakTimerDashboard() {
                             <TableBody>
                                 {sessions.data.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                                        <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
                                             No sessions found.
                                         </TableCell>
                                     </TableRow>
@@ -375,6 +397,7 @@ export default function BreakTimerDashboard() {
                                                     ? `${session.user.first_name} ${session.user.last_name}`
                                                     : '—'}
                                             </TableCell>
+                                            <TableCell>{session.campaign || '—'}</TableCell>
                                             <TableCell>{session.station || '—'}</TableCell>
                                             <TableCell>{formatBreakType(session.type)}</TableCell>
                                             <TableCell>
@@ -477,6 +500,7 @@ export default function BreakTimerDashboard() {
                                 <div className="text-muted-foreground grid grid-cols-2 gap-1 text-sm">
                                     <span>Type: {formatBreakType(session.type)}</span>
                                     <span>Station: {session.station || '—'}</span>
+                                    <span>Campaign: {session.campaign || '—'}</span>
                                 </div>
                                 <div className="flex flex-col gap-0.5 text-sm">
                                     <span className="flex items-center gap-1">

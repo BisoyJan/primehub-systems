@@ -38,6 +38,16 @@ import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { TableSkeleton } from '@/components/TableSkeleton';
 import { Can } from "@/components/authorization";
 
+interface ProcessorSpec {
+    id: number;
+    manufacturer: string;
+    model: string;
+    core_count: number;
+    thread_count: number;
+    base_clock_ghz: number;
+    boost_clock_ghz: number;
+}
+
 interface Station {
     id: number;
     site: string;
@@ -49,17 +59,15 @@ interface Station {
     pc_spec_details?: {
         id: number;
         pc_number?: string | null;
+        manufacturer?: string | null;
         model: string;
-        processor: string;
-        ram: string;
+        memory_type?: string | null;
         ram_gb: number;
-        ram_capacities: string;
-        ram_ddr: string;
-        disk: string;
         disk_gb: number;
-        disk_capacities: string;
-        disk_type: string;
+        available_ports?: string | null;
+        bios_release_date?: string | null;
         issue?: string | null;
+        processorSpecs: ProcessorSpec[];
     };
 }
 interface Flash { message?: string; type?: string; }
@@ -647,7 +655,6 @@ export default function StationIndex() {
                                                 aria-label="Select all on this page"
                                             />
                                         </TableHead>
-                                        <TableHead className="hidden lg:table-cell">ID</TableHead>
                                         <TableHead>Site</TableHead>
                                         <TableHead>Station #</TableHead>
                                         <TableHead>Campaign</TableHead>
@@ -674,7 +681,6 @@ export default function StationIndex() {
                                                     />
                                                 </TableCell>
 
-                                                <TableCell className="hidden lg:table-cell">{station.id}</TableCell>
                                                 <TableCell>{station.site}</TableCell>
                                                 <TableCell>{station.station_number}</TableCell>
                                                 <TableCell>{station.campaign}</TableCell>
@@ -977,47 +983,70 @@ export default function StationIndex() {
 
                 {/* PC Spec Details Dialog */}
                 <Dialog open={pcSpecDialogOpen} onOpenChange={setPcSpecDialogOpen}>
-                    <DialogContent className="max-w-[90vw] sm:max-w-2xl">
+                    <DialogContent className="max-w-[95vw] sm:max-w-lg w-full">
                         <DialogHeader>
-                            <DialogTitle>PC Specification Details</DialogTitle>
+                            <DialogTitle className="text-lg font-semibold">
+                                {selectedPcSpec?.pc_number || (selectedPcSpec ? `PC #${selectedPcSpec.id}` : 'PC Details')}
+                            </DialogTitle>
                             <DialogDescription>
-                                View detailed specifications for this PC.
+                                {selectedPcSpec ? `${selectedPcSpec.manufacturer ?? ''} ${selectedPcSpec.model}`.trim() : 'No PC selected'}
                             </DialogDescription>
                         </DialogHeader>
                         {selectedPcSpec ? (
-                            <div className="space-y-4 text-left">
-                                <div className="space-y-3">
-                                    {selectedPcSpec.pc_number && (
-                                        <div>
-                                            <div className="font-semibold text-foreground mb-1">PC Number:</div>
-                                            <div className="text-blue-600 font-medium pl-2 break-words">{selectedPcSpec.pc_number}</div>
-                                        </div>
-                                    )}
-
+                            <div className="space-y-4 text-sm">
+                                <div className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-lg border p-4">
                                     <div>
-                                        <div className="font-semibold text-foreground mb-1">Model:</div>
-                                        <div className="text-foreground pl-2 break-words">{selectedPcSpec.model}</div>
+                                        <span className="text-xs text-muted-foreground">Memory Type</span>
+                                        <p className="font-medium">{selectedPcSpec.memory_type || 'N/A'}</p>
                                     </div>
-
                                     <div>
-                                        <div className="font-semibold text-foreground mb-1">Processor:</div>
-                                        <div className="text-foreground pl-2 break-words">{selectedPcSpec.processor}</div>
+                                        <span className="text-xs text-muted-foreground">RAM</span>
+                                        <p className="font-medium">{selectedPcSpec.ram_gb ? `${selectedPcSpec.ram_gb} GB` : 'N/A'}</p>
                                     </div>
-
                                     <div>
-                                        <div className="font-semibold text-foreground mb-1">RAM ({selectedPcSpec.ram_ddr}):</div>
-                                        <div className="text-foreground pl-2 break-words">
-                                            {selectedPcSpec.ram} ({selectedPcSpec.ram_capacities})
-                                        </div>
+                                        <span className="text-xs text-muted-foreground">Disk</span>
+                                        <p className="font-medium">{selectedPcSpec.disk_gb ? `${selectedPcSpec.disk_gb} GB` : 'N/A'}</p>
                                     </div>
-
                                     <div>
-                                        <div className="font-semibold text-foreground mb-1">Disk ({selectedPcSpec.disk_type}):</div>
-                                        <div className="text-foreground pl-2 break-words">
-                                            {selectedPcSpec.disk} ({selectedPcSpec.disk_capacities})
-                                        </div>
+                                        <span className="text-xs text-muted-foreground">Ports</span>
+                                        <p className="font-medium">{selectedPcSpec.available_ports || 'N/A'}</p>
+                                    </div>
+                                    <div>
+                                        <span className="text-xs text-muted-foreground">Bios Release Date</span>
+                                        <p className="font-medium">{selectedPcSpec.bios_release_date || 'N/A'}</p>
                                     </div>
                                 </div>
+
+                                {selectedPcSpec.processorSpecs?.length ? (
+                                    <div className="space-y-2">
+                                        <h4 className="text-sm font-semibold">Processor</h4>
+                                        {selectedPcSpec.processorSpecs.map((p) => (
+                                            <div key={p.id} className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-lg border p-4">
+                                                <div className="col-span-2">
+                                                    <span className="text-xs text-muted-foreground">Processor</span>
+                                                    <p className="font-medium">{p.manufacturer} {p.model}</p>
+                                                </div>
+                                                <div>
+                                                    <span className="text-xs text-muted-foreground">Cores / Threads</span>
+                                                    <p className="font-medium">{p.core_count} / {p.thread_count}</p>
+                                                </div>
+                                                <div>
+                                                    <span className="text-xs text-muted-foreground">Clock (Base / Boost)</span>
+                                                    <p className="font-medium">{p.base_clock_ghz} / {p.boost_clock_ghz} GHz</p>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-muted-foreground text-sm">No processor specs available.</p>
+                                )}
+
+                                {selectedPcSpec.issue && (
+                                    <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-4">
+                                        <span className="text-xs text-muted-foreground">Issue</span>
+                                        <p className="font-medium text-red-600 dark:text-red-400">{selectedPcSpec.issue}</p>
+                                    </div>
+                                )}
                             </div>
                         ) : (
                             <p className="text-muted-foreground">No PC spec details available.</p>

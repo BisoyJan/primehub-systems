@@ -12,7 +12,7 @@ import {
     edit as stationsEditRoute,
 } from "@/routes/stations";
 import { transferPage } from "@/routes/pc-transfers";
-import { Monitor, Cpu, HardDrive, MemoryStick, MapPin, Megaphone, Pencil, ArrowLeftRight, ArrowLeft, AlertTriangle, Layers } from "lucide-react";
+import { Monitor, Cpu, MapPin, Megaphone, Pencil, ArrowLeftRight, ArrowLeft, AlertTriangle, Layers } from "lucide-react";
 
 interface MonitorSpec {
     id: number;
@@ -25,20 +25,28 @@ interface MonitorSpec {
 }
 interface Site { id: number; name: string; }
 interface Campaign { id: number; name: string; }
+interface ProcessorSpec {
+    id: number;
+    manufacturer: string;
+    model: string;
+    core_count: number;
+    thread_count: number;
+    base_clock_ghz: number;
+    boost_clock_ghz: number;
+}
+
 interface PcSpec {
     id: number;
-    model: string;
-    processor: string;
-    ram: string;
-    disk: string;
     pc_number?: string;
+    manufacturer?: string | null;
+    model: string;
+    memory_type?: string | null;
     ram_gb?: number;
     disk_gb?: number;
-    ram_capacities?: string;
-    disk_capacities?: string;
-    ram_ddr?: string;
-    disk_type?: string;
+    available_ports?: string | null;
+    bios_release_date?: string | null;
     issue?: string | null;
+    processorSpecs: ProcessorSpec[];
 }
 interface Station {
     id: number;
@@ -184,40 +192,65 @@ export default function ScanResult({ stationId, station: initialStation, error: 
                             {station.pcSpec ? (
                                 <div className="space-y-3">
                                     <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 rounded-md border px-3 py-2">
-                                        <span className="font-medium">{station.pcSpec.model}</span>
+                                        <span className="font-medium">{station.pcSpec.manufacturer ? `${station.pcSpec.manufacturer} ` : ''}{station.pcSpec.model}</span>
                                         {station.pcSpec.pc_number && (
                                             <Badge variant="outline">{station.pcSpec.pc_number}</Badge>
                                         )}
                                     </div>
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                        <div className="flex items-center gap-2 rounded-md border px-3 py-2">
-                                            <Cpu className="h-4 w-4 text-muted-foreground" />
-                                            <div>
-                                                <p className="text-xs text-muted-foreground">Processor</p>
-                                                <p className="text-sm font-medium">{station.pcSpec.processor}</p>
-                                            </div>
+
+                                    <div className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-md border px-3 py-2 text-sm">
+                                        <div>
+                                            <span className="text-xs text-muted-foreground">Memory Type</span>
+                                            <p className="font-medium">{station.pcSpec.memory_type || 'N/A'}</p>
                                         </div>
-                                        <div className="flex items-center gap-2 rounded-md border px-3 py-2">
-                                            <MemoryStick className="h-4 w-4 text-muted-foreground" />
-                                            <div>
-                                                <p className="text-xs text-muted-foreground">RAM</p>
-                                                <p className="text-sm font-medium">{station.pcSpec.ram}</p>
-                                                {station.pcSpec.ram_ddr && <p className="text-xs text-muted-foreground">{station.pcSpec.ram_ddr}</p>}
-                                            </div>
+                                        <div>
+                                            <span className="text-xs text-muted-foreground">RAM</span>
+                                            <p className="font-medium">{station.pcSpec.ram_gb ? `${station.pcSpec.ram_gb} GB` : 'N/A'}</p>
                                         </div>
-                                        <div className="flex items-center gap-2 rounded-md border px-3 py-2">
-                                            <HardDrive className="h-4 w-4 text-muted-foreground" />
-                                            <div>
-                                                <p className="text-xs text-muted-foreground">Disk</p>
-                                                <p className="text-sm font-medium">{station.pcSpec.disk}</p>
-                                                {station.pcSpec.disk_type && <p className="text-xs text-muted-foreground">{station.pcSpec.disk_type}</p>}
-                                            </div>
+                                        <div>
+                                            <span className="text-xs text-muted-foreground">Disk</span>
+                                            <p className="font-medium">{station.pcSpec.disk_gb ? `${station.pcSpec.disk_gb} GB` : 'N/A'}</p>
                                         </div>
+                                        <div>
+                                            <span className="text-xs text-muted-foreground">Ports</span>
+                                            <p className="font-medium">{station.pcSpec.available_ports || 'N/A'}</p>
+                                        </div>
+                                        {station.pcSpec.bios_release_date && (
+                                            <div>
+                                                <span className="text-xs text-muted-foreground">Bios Release Date</span>
+                                                <p className="font-medium">{station.pcSpec.bios_release_date}</p>
+                                            </div>
+                                        )}
                                     </div>
+
+                                    {station.pcSpec.processorSpecs?.length ? (
+                                        <div className="space-y-2">
+                                            <h4 className="text-sm font-semibold">Processor</h4>
+                                            {station.pcSpec.processorSpecs.map((p) => (
+                                                <div key={p.id} className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-md border px-3 py-2 text-sm">
+                                                    <div className="col-span-2">
+                                                        <span className="text-xs text-muted-foreground">Processor</span>
+                                                        <p className="font-medium">{p.manufacturer} {p.model}</p>
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-xs text-muted-foreground">Cores / Threads</span>
+                                                        <p className="font-medium">{p.core_count} / {p.thread_count}</p>
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-xs text-muted-foreground">Clock (Base / Boost)</span>
+                                                        <p className="font-medium">{p.base_clock_ghz} / {p.boost_clock_ghz} GHz</p>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="text-sm text-muted-foreground">No processor specs available.</p>
+                                    )}
+
                                     {station.pcSpec.issue && (
-                                        <div className="flex items-start gap-2 rounded-md border border-destructive/50 bg-destructive/5 px-3 py-2">
-                                            <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
-                                            <p className="text-sm text-destructive">{station.pcSpec.issue}</p>
+                                        <div className="rounded-md border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-3">
+                                            <span className="text-xs text-muted-foreground">Issue</span>
+                                            <p className="text-sm font-medium text-red-600 dark:text-red-400">{station.pcSpec.issue}</p>
                                         </div>
                                     )}
                                 </div>
