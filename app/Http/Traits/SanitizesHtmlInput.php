@@ -47,7 +47,7 @@ trait SanitizesHtmlInput
                 // Strip all tags except allowed ones
                 $value = strip_tags($value, self::ALLOWED_TAGS);
 
-                // Strip style attributes from all tags except list-style-type on <ol>
+                // Strip unwanted style attributes from tags, preserving only safe styles.
                 // This prevents pasted content from Word/Google Docs from carrying over
                 // unwanted font-family, font-size, line-height, margin, etc.
                 $value = preg_replace_callback(
@@ -56,21 +56,39 @@ trait SanitizesHtmlInput
                         $tag = strtolower($matches[1]);
                         $attrs = $matches[2];
 
+                        // Collect safe styles to preserve
+                        $safeStyles = [];
+
                         if ($tag === 'ol') {
-                            // Preserve only list-style-type on <ol>
-                            if (preg_match('/list-style-type\s*:\s*([^;"]+)/i', $attrs, $styleMatch)) {
-                                return '<' . $matches[1] . ' style="list-style-type: ' . trim($styleMatch[1]) . '">';
+                            // Preserve list-style-type on <ol>
+                            if (preg_match('/list-style-type\s*:\s*([^;"]+)/i', $attrs, $m)) {
+                                $safeStyles[] = 'list-style-type: ' . trim($m[1]);
+                            }
+                        }
+
+                        if ($tag === 'span') {
+                            // Preserve color and background-color on <span> (editor text/highlight colors)
+                            if (preg_match('/(?<![a-z-])color\s*:\s*([^;"]+)/i', $attrs, $m)) {
+                                $safeStyles[] = 'color: ' . trim($m[1]);
+                            }
+                            if (preg_match('/background-color\s*:\s*([^;"]+)/i', $attrs, $m)) {
+                                $safeStyles[] = 'background-color: ' . trim($m[1]);
                             }
                         }
 
                         if ($tag === 'a') {
                             // Preserve href on anchors
                             if (preg_match('/href\s*=\s*"([^"]*)"/i', $attrs, $hrefMatch)) {
-                                return '<a href="' . $hrefMatch[1] . '">';
+                                $styleAttr = $safeStyles ? ' style="' . implode('; ', $safeStyles) . '"' : '';
+                                return '<a href="' . $hrefMatch[1] . '"' . $styleAttr . '>';
                             }
                         }
 
-                        // Strip all attributes (including style) from other tags
+                        if ($safeStyles) {
+                            return '<' . $matches[1] . ' style="' . implode('; ', $safeStyles) . '">';
+                        }
+
+                        // Strip all attributes from other tags
                         return '<' . $matches[1] . '>';
                     },
                     $value

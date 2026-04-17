@@ -300,6 +300,16 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
                     if (tag === 'OL' && el.style.listStyleType) {
                         newEl.style.listStyleType = el.style.listStyleType;
                     }
+
+                    // Preserve color and background-color on SPAN (editor text/highlight colors)
+                    if (tag === 'SPAN') {
+                        if (el.style.color) {
+                            newEl.style.color = el.style.color;
+                        }
+                        if (el.style.backgroundColor) {
+                            newEl.style.backgroundColor = el.style.backgroundColor;
+                        }
+                    }
                 } else {
                     // Convert unrecognized block elements to DIV, inline to SPAN
                     const display = window.getComputedStyle?.(el)?.display;
