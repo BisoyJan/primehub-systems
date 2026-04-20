@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Head, Link, useForm, usePage, router } from "@inertiajs/react";
 import type { PageProps as InertiaPageProps } from "@inertiajs/core";
 
 import AppLayout from "@/layouts/app-layout";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import {
     Table,
     TableBody,
@@ -13,8 +13,21 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from "@/components/ui/command";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { RefreshCw, Search, Filter, Plus, Play, Pause } from "lucide-react";
+import { RefreshCw, Filter, Plus, Play, Pause, ChevronsUpDown, Check, X } from "lucide-react";
 
 // New reusable components and hooks
 import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
@@ -42,15 +55,27 @@ interface PaginatedProcessorSpecs {
     links: PaginationLink[];
 }
 
+interface ProcessorOption {
+    id: number;
+    label: string;
+}
+
 interface Props extends InertiaPageProps {
     flash?: { message?: string; type?: string };
     processorspecs: PaginatedProcessorSpecs;
-    search?: string;
+    allProcessors: ProcessorOption[];
+    filters: {
+        processor_ids: number[];
+    };
 }
 
 export default function Index() {
-    const { processorspecs, search: initialSearch } = usePage<Props>().props;
-    const form = useForm({}); // Keep useForm for delete but empty for search
+    const {
+        processorspecs,
+        allProcessors = [],
+        filters = { processor_ids: [] },
+    } = usePage<Props>().props;
+    const form = useForm({}); // Keep useForm for delete
 
     // Use new hooks for cleaner code
     const { title, breadcrumbs } = usePageMeta({
@@ -62,9 +87,34 @@ export default function Index() {
     const isLoading = usePageLoading(); // Track page loading state
     const { can } = usePermission(); // Check permissions
 
-    const [searchQuery, setSearchQuery] = useState(initialSearch || "");
+    // Multi-select processor search state
+    const [processorSearchQuery, setProcessorSearchQuery] = useState('');
+    const [isProcessorPopoverOpen, setIsProcessorPopoverOpen] = useState(false);
+    const [selectedFilterProcessorIds, setSelectedFilterProcessorIds] = useState<number[]>(
+        Array.isArray(filters.processor_ids) ? filters.processor_ids.map(Number) : []
+    );
+
     const [lastRefresh, setLastRefresh] = useState(new Date());
     const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
+
+    // Filter processor options by search query
+    const filteredProcessorOptions = useMemo(() => {
+        if (!processorSearchQuery) return allProcessors;
+        const lower = processorSearchQuery.toLowerCase();
+        return allProcessors.filter(p => p.label.toLowerCase().includes(lower));
+    }, [allProcessors, processorSearchQuery]);
+
+    const handleToggleProcessorSelect = (processorId: number) => {
+        setSelectedFilterProcessorIds(prev =>
+            prev.includes(processorId)
+                ? prev.filter(id => id !== processorId)
+                : [...prev, processorId]
+        );
+    };
+
+    const handleRemoveProcessorFilter = (processorId: number) => {
+        setSelectedFilterProcessorIds(prev => prev.filter(id => id !== processorId));
+    };
 
     const handleManualRefresh = () => {
         setLastRefresh(new Date());
@@ -89,9 +139,13 @@ export default function Index() {
     }, [autoRefreshEnabled]);
 
     const handleFilter = () => {
+        const params: Record<string, string | number | number[]> = {};
+        if (selectedFilterProcessorIds.length > 0) {
+            params.processor_ids = selectedFilterProcessorIds;
+        }
         router.get(
             index().url,
-            { search: searchQuery },
+            params,
             {
                 preserveState: true,
                 preserveScroll: true,
@@ -100,7 +154,8 @@ export default function Index() {
     };
 
     const handleReset = () => {
-        setSearchQuery("");
+        setSelectedFilterProcessorIds([]);
+        setProcessorSearchQuery('');
         router.get(index().url);
     };
 
@@ -127,15 +182,51 @@ export default function Index() {
                 <div className="flex flex-col gap-4">
                     <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
                         <div className="w-full sm:w-auto flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                            <div className="relative">
-                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                                <Input
-                                    placeholder="Search processor specs..."
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="pl-8"
-                                />
-                            </div>
+                            {/* Multi-select Processor Search */}
+                            <Popover open={isProcessorPopoverOpen} onOpenChange={setIsProcessorPopoverOpen}>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        role="combobox"
+                                        aria-expanded={isProcessorPopoverOpen}
+                                        className="w-full justify-between font-normal"
+                                    >
+                                        <span className="truncate">
+                                            {selectedFilterProcessorIds.length > 0
+                                                ? `${selectedFilterProcessorIds.length} processor(s) selected`
+                                                : 'Select processors to filter...'}
+                                        </span>
+                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-full min-w-75 p-0" align="start">
+                                    <Command shouldFilter={false}>
+                                        <CommandInput
+                                            placeholder="Search processors..."
+                                            value={processorSearchQuery}
+                                            onValueChange={setProcessorSearchQuery}
+                                        />
+                                        <CommandList>
+                                            <CommandEmpty>No processors found.</CommandEmpty>
+                                            <CommandGroup>
+                                                {filteredProcessorOptions.map((proc) => (
+                                                    <CommandItem
+                                                        key={proc.id}
+                                                        value={String(proc.id)}
+                                                        onSelect={() => handleToggleProcessorSelect(proc.id)}
+                                                        className="cursor-pointer"
+                                                    >
+                                                        <Check
+                                                            className={`mr-2 h-4 w-4 ${selectedFilterProcessorIds.includes(proc.id) ? "opacity-100" : "opacity-0"}`}
+                                                        />
+                                                        {proc.label}
+                                                    </CommandItem>
+                                                ))}
+                                            </CommandGroup>
+                                        </CommandList>
+                                    </Command>
+                                </PopoverContent>
+                            </Popover>
                         </div>
 
                         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
@@ -170,9 +261,28 @@ export default function Index() {
                         </div>
                     </div>
 
+                    {/* Selected processor filter badges */}
+                    {selectedFilterProcessorIds.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                            {selectedFilterProcessorIds.map((id) => {
+                                const proc = allProcessors.find(p => p.id === id);
+                                return proc ? (
+                                    <Badge key={id} variant="secondary" className="flex items-center gap-1">
+                                        {proc.label}
+                                        <X
+                                            className="h-3 w-3 cursor-pointer"
+                                            onClick={() => handleRemoveProcessorFilter(id)}
+                                        />
+                                    </Badge>
+                                ) : null;
+                            })}
+                        </div>
+                    )}
+
                     <div className="flex justify-between items-center text-sm">
                         <div className="text-muted-foreground">
                             Showing {processorspecs.data.length} records
+                            {selectedFilterProcessorIds.length > 0 && ` (filtered)`}
                         </div>
                         <div className="text-xs text-muted-foreground">
                             Last updated: {lastRefresh.toLocaleTimeString()}

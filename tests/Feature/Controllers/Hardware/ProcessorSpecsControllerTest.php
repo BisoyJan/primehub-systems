@@ -30,6 +30,38 @@ class ProcessorSpecsControllerTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Computer/ProcessorSpecs/Index')
                 ->has('processorspecs.data', 3)
+                ->has('allProcessors')
+                ->has('filters')
+            );
+    }
+
+    public function test_index_can_filter_by_processor_ids(): void
+    {
+        $intel = ProcessorSpec::factory()->create(['manufacturer' => 'Intel', 'model' => 'Core i7']);
+        $amd = ProcessorSpec::factory()->create(['manufacturer' => 'AMD', 'model' => 'Ryzen 5']);
+        ProcessorSpec::factory()->create(['manufacturer' => 'Intel', 'model' => 'Core i3']);
+
+        $this->get(route('processorspecs.index', ['processor_ids' => [$intel->id, $amd->id]]))
+            ->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Computer/ProcessorSpecs/Index')
+                ->has('processorspecs.data', 2)
+                ->has('allProcessors', 3)
+                ->where('filters.processor_ids', [$intel->id, $amd->id])
+            );
+    }
+
+    public function test_index_shows_all_when_no_filters(): void
+    {
+        ProcessorSpec::factory()->count(5)->create();
+
+        $this->get(route('processorspecs.index'))
+            ->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Computer/ProcessorSpecs/Index')
+                ->has('processorspecs.data', 5)
+                ->has('allProcessors', 5)
+                ->where('filters.processor_ids', [])
             );
     }
 

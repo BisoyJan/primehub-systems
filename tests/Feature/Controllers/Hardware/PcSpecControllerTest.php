@@ -36,6 +36,61 @@ class PcSpecControllerTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Computer/PcSpecs/Index')
                 ->has('pcspecs.data', 3)
+                ->has('allPcSpecs')
+                ->has('allProcessors')
+                ->has('filters')
+            );
+    }
+
+    public function test_index_filters_by_selected_pc_ids()
+    {
+        $pc1 = PcSpec::factory()->create();
+        $pc2 = PcSpec::factory()->create();
+        PcSpec::factory()->create(); // pc3 not selected
+
+        $response = $this->actingAs($this->user)
+            ->get(route('pcspecs.index', ['pc_ids' => [$pc1->id, $pc2->id]]));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Computer/PcSpecs/Index')
+                ->has('pcspecs.data', 2)
+            );
+    }
+
+    public function test_index_filters_by_processor()
+    {
+        $processor = ProcessorSpec::factory()->create();
+        $otherProcessor = ProcessorSpec::factory()->create();
+
+        $pcWithProcessor = PcSpec::factory()->create();
+        $pcWithProcessor->processorSpecs()->attach($processor);
+
+        $pcWithOther = PcSpec::factory()->create();
+        $pcWithOther->processorSpecs()->attach($otherProcessor);
+
+        $response = $this->actingAs($this->user)
+            ->get(route('pcspecs.index', ['processor_id' => $processor->id]));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Computer/PcSpecs/Index')
+                ->has('pcspecs.data', 1)
+                ->where('pcspecs.data.0.id', $pcWithProcessor->id)
+            );
+    }
+
+    public function test_index_shows_all_when_no_filters()
+    {
+        PcSpec::factory()->count(5)->create();
+
+        $response = $this->actingAs($this->user)
+            ->get(route('pcspecs.index'));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Computer/PcSpecs/Index')
+                ->has('pcspecs.data', 5)
             );
     }
 

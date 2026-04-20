@@ -14,16 +14,32 @@ class ProcessorSpecsController extends Controller
 
     public function index(Request $request)
     {
-        $search = $request->input('search');
+        $query = ProcessorSpec::query()->latest();
 
-        $processorspecs = ProcessorSpec::search($search)
-            ->latest()
-            ->paginate(10)
-            ->withQueryString();
+        // Filter by selected processor IDs (multi-select)
+        $processorIds = $request->input('processor_ids', []);
+        if (is_array($processorIds) && count($processorIds) > 0) {
+            $query->whereIn('id', array_map('intval', $processorIds));
+        }
+
+        $processorspecs = $query->paginate(10)->withQueryString();
+
+        // All processors for multi-select dropdown (lightweight, sorted by manufacturer + model)
+        $allProcessors = ProcessorSpec::select('id', 'manufacturer', 'model')
+            ->orderBy('manufacturer')
+            ->orderBy('model')
+            ->get()
+            ->map(fn ($p) => [
+                'id' => $p->id,
+                'label' => "{$p->manufacturer} {$p->model}",
+            ]);
 
         return inertia('Computer/ProcessorSpecs/Index', [
             'processorspecs' => $processorspecs,
-            'search' => $search,
+            'allProcessors' => $allProcessors,
+            'filters' => [
+                'processor_ids' => array_map('intval', $processorIds),
+            ],
         ]);
     }
 

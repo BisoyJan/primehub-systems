@@ -27,27 +27,26 @@ class PcSpecController extends Controller
     {
         $this->authorize('viewAny', PcSpec::class);
 
-        $search = trim((string) $request->input('search', ''));
-
         $query = PcSpec::with(['processorSpecs'])
             ->orderBy('id', 'desc');
 
-        if ($search !== '') {
-            $query->where(function ($q) use ($search) {
-                $q->where('manufacturer', 'like', "%{$search}%")
-                    ->orWhere('model', 'like', "%{$search}%")
-                    ->orWhere('pc_number', 'like', "%{$search}%")
-                  // Search by processor model/manufacturer
-                    ->orWhereHas('processorSpecs', function ($procQ) use ($search) {
-                        $procQ->where('model', 'like', "%{$search}%")
-                            ->orWhere('manufacturer', 'like', "%{$search}%");
-                    });
+        // Filter by selected PC IDs (multi-select)
+        $pcIds = $request->input('pc_ids', []);
+        if (is_array($pcIds) && count($pcIds) > 0) {
+            $query->whereIn('id', array_map('intval', $pcIds));
+        }
+
+        // Filter by processor
+        $processorId = $request->input('processor_id');
+        if ($processorId) {
+            $query->whereHas('processorSpecs', function ($q) use ($processorId) {
+                $q->where('processor_specs.id', (int) $processorId);
             });
         }
 
         $pcspecs = $query
             ->paginate(10)
-            ->appends($request->only('search'))
+            ->appends($request->only(['pc_ids', 'processor_id']))
             ->through(fn ($pc) => [
                 'id' => $pc->id,
                 'pc_number' => $pc->pc_number,
@@ -70,9 +69,37 @@ class PcSpecController extends Controller
                 ])->toArray(),
             ]);
 
+        // All PCs for multi-select dropdown (lightweight)
+        $allPcSpecs = PcSpec::select('id', 'pc_number', 'manufacturer', 'model')
+            ->orderByRaw("CAST(REGEXP_REPLACE(pc_number, '[^0-9]', '') AS UNSIGNED)")
+            ->orderBy('pc_number')
+            ->orderBy('manufacturer')
+            ->get()
+            ->map(fn ($pc) => [
+                'id' => $pc->id,
+                'label' => $pc->pc_number
+                    ? "{$pc->pc_number} — {$pc->manufacturer} {$pc->model}"
+                    : "{$pc->manufacturer} {$pc->model} (ID: {$pc->id})",
+            ]);
+
+        // All processors for filter dropdown
+        $allProcessors = ProcessorSpec::select('id', 'manufacturer', 'model')
+            ->orderBy('manufacturer')
+            ->orderBy('model')
+            ->get()
+            ->map(fn ($p) => [
+                'id' => $p->id,
+                'label' => "{$p->manufacturer} {$p->model}",
+            ]);
+
         return Inertia::render('Computer/PcSpecs/Index', [
             'pcspecs' => $pcspecs,
-            'search' => $request->input('search', ''),
+            'allPcSpecs' => $allPcSpecs,
+            'allProcessors' => $allProcessors,
+            'filters' => [
+                'pc_ids' => $pcIds,
+                'processor_id' => $processorId,
+            ],
         ]);
     }
 

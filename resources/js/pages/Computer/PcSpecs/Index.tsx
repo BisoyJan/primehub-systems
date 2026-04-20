@@ -1,11 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Head, Link, useForm, usePage, router } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from "@inertiajs/core";
 import { toast } from 'sonner';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
     Table,
@@ -36,10 +35,24 @@ import {
     AlertDialogCancel,
     AlertDialogAction,
 } from '@/components/ui/alert-dialog';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from '@/components/ui/command';
+import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
-import { RefreshCw, Search, Filter, Plus, Play, Pause } from 'lucide-react';
+import { RefreshCw, Filter, Plus, Play, Pause, ChevronsUpDown, Check, X } from 'lucide-react';
 
 // New reusable components and hooks
 import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
@@ -83,22 +96,81 @@ interface PaginatedPcSpecs {
     links: PaginationLink[];
 }
 
+interface PcOption {
+    id: number;
+    label: string;
+}
+
+interface ProcessorOption {
+    id: number;
+    label: string;
+}
+
 interface Props extends InertiaPageProps {
     flash?: { message?: string; type?: string };
     pcspecs: PaginatedPcSpecs;
-    search?: string;
+    allPcSpecs: PcOption[];
+    allProcessors: ProcessorOption[];
+    filters: {
+        pc_ids: number[];
+        processor_id: string | null;
+    };
 }
 
 
 
 export default function Index() {
-    const { pcspecs = { data: [], links: [] }, search: initialSearch } = usePage<Props>().props;
+    const {
+        pcspecs = { data: [], links: [] },
+        allPcSpecs = [],
+        allProcessors = [],
+        filters = { pc_ids: [], processor_id: null },
+    } = usePage<Props>().props;
     const form = useForm({}); // Keep useForm for delete but empty for search
     const [issueDialogOpen, setIssueDialogOpen] = useState(false);
     const [selectedPcSpec, setSelectedPcSpec] = useState<PcSpec | null>(null);
     const [issueText, setIssueText] = useState('');
 
-    const [searchQuery, setSearchQuery] = useState(initialSearch || "");
+    // Multi-select PC search state
+    const [pcSearchQuery, setPcSearchQuery] = useState('');
+    const [isPcPopoverOpen, setIsPcPopoverOpen] = useState(false);
+    const [selectedFilterPcIds, setSelectedFilterPcIds] = useState<number[]>(
+        Array.isArray(filters.pc_ids) ? filters.pc_ids.map(Number) : []
+    );
+
+    // Processor filter state
+    const [processorSearchQuery, setProcessorSearchQuery] = useState('');
+    const [isProcessorPopoverOpen, setIsProcessorPopoverOpen] = useState(false);
+    const [selectedProcessorId, setSelectedProcessorId] = useState<string>(
+        filters.processor_id || ''
+    );
+
+    // Filter PC options by search query
+    const filteredPcOptions = useMemo(() => {
+        if (!pcSearchQuery) return allPcSpecs;
+        const lower = pcSearchQuery.toLowerCase();
+        return allPcSpecs.filter(pc => pc.label.toLowerCase().includes(lower));
+    }, [allPcSpecs, pcSearchQuery]);
+
+    // Filter processor options by search query
+    const filteredProcessorOptions = useMemo(() => {
+        if (!processorSearchQuery) return allProcessors;
+        const lower = processorSearchQuery.toLowerCase();
+        return allProcessors.filter(p => p.label.toLowerCase().includes(lower));
+    }, [allProcessors, processorSearchQuery]);
+
+    const handleTogglePcSelect = (pcId: number) => {
+        setSelectedFilterPcIds(prev =>
+            prev.includes(pcId)
+                ? prev.filter(id => id !== pcId)
+                : [...prev, pcId]
+        );
+    };
+
+    const handleRemovePcFilter = (pcId: number) => {
+        setSelectedFilterPcIds(prev => prev.filter(id => id !== pcId));
+    };
+
     const [lastRefresh, setLastRefresh] = useState(new Date());
     const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
 
@@ -125,9 +197,16 @@ export default function Index() {
     }, [autoRefreshEnabled]);
 
     const handleFilter = () => {
+        const params: Record<string, string | number | number[]> = {};
+        if (selectedFilterPcIds.length > 0) {
+            params.pc_ids = selectedFilterPcIds;
+        }
+        if (selectedProcessorId) {
+            params.processor_id = selectedProcessorId;
+        }
         router.get(
             pcSpecIndex().url,
-            { search: searchQuery },
+            params,
             {
                 preserveState: true,
                 preserveScroll: true,
@@ -136,7 +215,10 @@ export default function Index() {
     };
 
     const handleReset = () => {
-        setSearchQuery("");
+        setSelectedFilterPcIds([]);
+        setSelectedProcessorId('');
+        setPcSearchQuery('');
+        setProcessorSearchQuery('');
         router.get(pcSpecIndex().url);
     };
 
@@ -384,16 +466,114 @@ export default function Index() {
 
                 <div className="flex flex-col gap-4">
                     <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
-                        <div className="w-full sm:w-auto flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                            <div className="relative">
-                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                                <Input
-                                    placeholder="Search PC specs..."
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="pl-8"
-                                />
-                            </div>
+                        <div className="w-full sm:w-auto flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {/* Multi-select PC Search */}
+                            <Popover open={isPcPopoverOpen} onOpenChange={setIsPcPopoverOpen}>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        role="combobox"
+                                        aria-expanded={isPcPopoverOpen}
+                                        className="w-full justify-between font-normal"
+                                    >
+                                        <span className="truncate">
+                                            {selectedFilterPcIds.length > 0
+                                                ? `${selectedFilterPcIds.length} PC${selectedFilterPcIds.length !== 1 ? 's' : ''} selected`
+                                                : 'Select PCs to filter...'}
+                                        </span>
+                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-full min-w-75 p-0" align="start">
+                                    <Command shouldFilter={false}>
+                                        <CommandInput
+                                            placeholder="Search PC specs..."
+                                            value={pcSearchQuery}
+                                            onValueChange={setPcSearchQuery}
+                                        />
+                                        <CommandList>
+                                            <CommandEmpty>No PC specs found.</CommandEmpty>
+                                            <CommandGroup>
+                                                {filteredPcOptions.map((pc) => (
+                                                    <CommandItem
+                                                        key={pc.id}
+                                                        value={pc.label}
+                                                        onSelect={() => handleTogglePcSelect(pc.id)}
+                                                        className="cursor-pointer"
+                                                    >
+                                                        <Check
+                                                            className={`mr-2 h-4 w-4 ${selectedFilterPcIds.includes(pc.id) ? "opacity-100" : "opacity-0"}`}
+                                                        />
+                                                        {pc.label}
+                                                    </CommandItem>
+                                                ))}
+                                            </CommandGroup>
+                                        </CommandList>
+                                    </Command>
+                                </PopoverContent>
+                            </Popover>
+
+                            {/* Processor Filter */}
+                            <Popover open={isProcessorPopoverOpen} onOpenChange={setIsProcessorPopoverOpen}>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        role="combobox"
+                                        aria-expanded={isProcessorPopoverOpen}
+                                        className="w-full justify-between font-normal"
+                                    >
+                                        <span className="truncate">
+                                            {selectedProcessorId
+                                                ? allProcessors.find(p => p.id.toString() === selectedProcessorId)?.label || 'Select processor...'
+                                                : 'All Processors'}
+                                        </span>
+                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-full min-w-75 p-0" align="start">
+                                    <Command shouldFilter={false}>
+                                        <CommandInput
+                                            placeholder="Search processor..."
+                                            value={processorSearchQuery}
+                                            onValueChange={setProcessorSearchQuery}
+                                        />
+                                        <CommandList>
+                                            <CommandEmpty>No processor found.</CommandEmpty>
+                                            <CommandGroup>
+                                                <CommandItem
+                                                    value="all"
+                                                    onSelect={() => {
+                                                        setSelectedProcessorId('');
+                                                        setIsProcessorPopoverOpen(false);
+                                                    }}
+                                                    className="cursor-pointer"
+                                                >
+                                                    <Check
+                                                        className={`mr-2 h-4 w-4 ${!selectedProcessorId ? "opacity-100" : "opacity-0"}`}
+                                                    />
+                                                    All Processors
+                                                </CommandItem>
+                                                {filteredProcessorOptions.map((proc) => (
+                                                    <CommandItem
+                                                        key={proc.id}
+                                                        value={proc.label}
+                                                        onSelect={() => {
+                                                            setSelectedProcessorId(proc.id.toString());
+                                                            setIsProcessorPopoverOpen(false);
+                                                        }}
+                                                        className="cursor-pointer"
+                                                    >
+                                                        <Check
+                                                            className={`mr-2 h-4 w-4 ${selectedProcessorId === proc.id.toString() ? "opacity-100" : "opacity-0"}`}
+                                                        />
+                                                        {proc.label}
+                                                    </CommandItem>
+                                                ))}
+                                            </CommandGroup>
+                                        </CommandList>
+                                    </Command>
+                                </PopoverContent>
+                            </Popover>
                         </div>
 
                         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
@@ -425,6 +605,36 @@ export default function Index() {
                             </Link>
                         </div>
                     </div>
+
+                    {/* Selected PC filter badges */}
+                    {selectedFilterPcIds.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                            {selectedFilterPcIds.map((pcId) => {
+                                const pc = allPcSpecs.find(p => p.id === pcId);
+                                return (
+                                    <Badge key={pcId} variant="secondary" className="flex items-center gap-1 py-1 px-2">
+                                        <span className="truncate max-w-50">{pc?.label || `PC #${pcId}`}</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleRemovePcFilter(pcId)}
+                                            className="ml-1 rounded-full hover:bg-muted p-0.5"
+                                            title="Remove filter"
+                                        >
+                                            <X className="h-3 w-3" />
+                                        </button>
+                                    </Badge>
+                                );
+                            })}
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setSelectedFilterPcIds([])}
+                                className="h-7 text-xs"
+                            >
+                                Clear all
+                            </Button>
+                        </div>
+                    )}
 
                     <div className="flex justify-between items-center text-sm">
                         <div className="text-muted-foreground">

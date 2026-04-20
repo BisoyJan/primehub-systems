@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { router, usePage, Head } from "@inertiajs/react";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -13,13 +13,25 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import AppLayout from "@/layouts/app-layout";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
 import { toast } from "sonner";
-import { Eye, AlertTriangle, Plus, CheckSquare, RefreshCw, Search, Download, Play, Pause } from "lucide-react";
+import { Eye, AlertTriangle, Plus, CheckSquare, RefreshCw, Download, Play, Pause, ChevronsUpDown, Check, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from "@/components/ui/command";
 import { transferPage } from '@/routes/pc-transfers';
 import {
     index as stationsIndexRoute,
@@ -91,15 +103,21 @@ interface Filters {
     statuses: string[];
 }
 
+interface StationOption {
+    id: number;
+    label: string;
+}
+
 interface PageProps extends Record<string, unknown> {
     stations: StationsPayload;
     flash?: Flash;
     filters: Filters;
+    allStations: StationOption[];
     allMatchingIds: number[];
 }
 
 export default function StationIndex() {
-    const { stations, filters, allMatchingIds } = usePage<PageProps>().props;
+    const { stations, filters, allStations = [], allMatchingIds } = usePage<PageProps>().props;
     // QR Code ZIP state
     // Persist selectedStationIds in localStorage
     const LOCAL_STORAGE_KEY = 'station_selected_ids';
@@ -301,8 +319,13 @@ export default function StationIndex() {
     // Initialize filters from URL params
     const urlParams = new URLSearchParams(window.location.search);
     const [loading, setLoading] = useState(false);
-    const [search, setSearch] = useState(urlParams.get('search') || "");
-    const [debouncedSearch, setDebouncedSearch] = useState(urlParams.get('search') || "");
+
+    // Multi-select station search state
+    const [stationSearchQuery, setStationSearchQuery] = useState('');
+    const [isStationPopoverOpen, setIsStationPopoverOpen] = useState(false);
+    const initialStationIds = urlParams.getAll('station_ids[]').map(Number).filter(Boolean);
+    const [selectedFilterStationIds, setSelectedFilterStationIds] = useState<number[]>(initialStationIds);
+
     const [siteFilter, setSiteFilter] = useState(urlParams.get('site') || "all");
     const [campaignFilter, setCampaignFilter] = useState(urlParams.get('campaign') || "all");
     const [statusFilter, setStatusFilter] = useState(urlParams.get('status') || "all");
@@ -314,6 +337,56 @@ export default function StationIndex() {
     const [selectedEmptyStations, setSelectedEmptyStations] = useState<number[]>([]);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
+
+    // Filter station options by search query
+    const filteredStationOptions = useMemo(() => {
+        if (!stationSearchQuery) return allStations;
+        const lower = stationSearchQuery.toLowerCase();
+        return allStations.filter(s => s.label.toLowerCase().includes(lower));
+    }, [allStations, stationSearchQuery]);
+
+    const handleToggleStationSelect = (stationId: number) => {
+        setSelectedFilterStationIds(prev =>
+            prev.includes(stationId)
+                ? prev.filter(id => id !== stationId)
+                : [...prev, stationId]
+        );
+    };
+
+    const handleRemoveStationFilter = (stationId: number) => {
+        setSelectedFilterStationIds(prev => prev.filter(id => id !== stationId));
+    };
+
+    const applyFilters = () => {
+        const params: Record<string, unknown> = {};
+        if (selectedFilterStationIds.length > 0) params.station_ids = selectedFilterStationIds;
+        if (siteFilter && siteFilter !== "all") params.site = siteFilter;
+        if (campaignFilter && campaignFilter !== "all") params.campaign = campaignFilter;
+        if (statusFilter && statusFilter !== "all") params.status = statusFilter;
+
+        setLoading(true);
+        router.get(stationsIndexRoute().url, params, {
+            preserveState: true,
+            preserveScroll: true,
+            onSuccess: () => setLastRefresh(new Date()),
+            onFinish: () => setLoading(false),
+        });
+    };
+
+    const resetFilters = () => {
+        setSelectedFilterStationIds([]);
+        setStationSearchQuery('');
+        setSiteFilter("all");
+        setCampaignFilter("all");
+        setStatusFilter("all");
+        setLoading(true);
+        router.get(stationsIndexRoute().url, {}, {
+            preserveState: true,
+            preserveScroll: true,
+            onSuccess: () => setLastRefresh(new Date()),
+            onFinish: () => setLoading(false),
+        });
+    };
 
     const handleManualRefresh = () => {
         setLoading(true);
@@ -329,8 +402,8 @@ export default function StationIndex() {
         if (!autoRefreshEnabled) return;
 
         const interval = setInterval(() => {
-            const params: Record<string, string | number> = {};
-            if (debouncedSearch) params.search = debouncedSearch;
+            const params: Record<string, unknown> = {};
+            if (selectedFilterStationIds.length > 0) params.station_ids = selectedFilterStationIds;
             if (siteFilter && siteFilter !== "all") params.site = siteFilter;
             if (campaignFilter && campaignFilter !== "all") params.campaign = campaignFilter;
             if (statusFilter && statusFilter !== "all") params.status = statusFilter;
@@ -345,39 +418,7 @@ export default function StationIndex() {
         }, 30000);
 
         return () => clearInterval(interval);
-    }, [autoRefreshEnabled, debouncedSearch, siteFilter, campaignFilter, statusFilter]);
-
-    useEffect(() => {
-        const timer = setTimeout(() => setDebouncedSearch(search), 500);
-        return () => clearTimeout(timer);
-    }, [search]);
-
-    // Track if this is the initial mount
-    const isInitialMount = React.useRef(true);
-
-    useEffect(() => {
-        // Skip on initial mount (data already loaded by Inertia)
-        if (isInitialMount.current) {
-            isInitialMount.current = false;
-            return;
-        }
-
-        const params: Record<string, string | number> = {};
-        if (debouncedSearch) params.search = debouncedSearch;
-        if (siteFilter && siteFilter !== "all") params.site = siteFilter;
-        if (campaignFilter && campaignFilter !== "all") params.campaign = campaignFilter;
-        if (statusFilter && statusFilter !== "all") params.status = statusFilter;
-
-        // When filters change, reset to page 1 (don't preserve page from URL)
-        setLoading(true);
-        router.get(stationsIndexRoute().url, params, {
-            preserveState: true,
-            preserveScroll: true,
-            replace: true,
-            onSuccess: () => setLastRefresh(new Date()),
-            onFinish: () => setLoading(false),
-        });
-    }, [debouncedSearch, siteFilter, campaignFilter, statusFilter]);
+    }, [autoRefreshEnabled, selectedFilterStationIds, siteFilter, campaignFilter, statusFilter]);
 
     const handleDelete = (stationId: number) => {
         setLoading(true);
@@ -447,15 +488,48 @@ export default function StationIndex() {
                 <div className="flex flex-col gap-4">
                     <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
                         <div className="w-full sm:w-auto flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                            <div className="relative">
-                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                                <Input
-                                    placeholder="Search site, station #, campaign..."
-                                    value={search}
-                                    onChange={(e) => setSearch(e.target.value)}
-                                    className="pl-8"
-                                />
-                            </div>
+                            {/* Multi-select station search */}
+                            <Popover open={isStationPopoverOpen} onOpenChange={setIsStationPopoverOpen}>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        role="combobox"
+                                        aria-expanded={isStationPopoverOpen}
+                                        className="w-full justify-between"
+                                    >
+                                        {selectedFilterStationIds.length > 0
+                                            ? `${selectedFilterStationIds.length} station(s) selected`
+                                            : "Select stations..."}
+                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-full min-w-75 p-0" align="start">
+                                    <Command shouldFilter={false}>
+                                        <CommandInput
+                                            placeholder="Search station..."
+                                            value={stationSearchQuery}
+                                            onValueChange={setStationSearchQuery}
+                                        />
+                                        <CommandList>
+                                            <CommandEmpty>No station found.</CommandEmpty>
+                                            <CommandGroup>
+                                                {filteredStationOptions.map((station) => (
+                                                    <CommandItem
+                                                        key={station.id}
+                                                        value={String(station.id)}
+                                                        onSelect={() => handleToggleStationSelect(station.id)}
+                                                    >
+                                                        <Check
+                                                            className={`mr-2 h-4 w-4 ${selectedFilterStationIds.includes(station.id) ? "opacity-100" : "opacity-0"}`}
+                                                        />
+                                                        {station.label}
+                                                    </CommandItem>
+                                                ))}
+                                            </CommandGroup>
+                                        </CommandList>
+                                    </Command>
+                                </PopoverContent>
+                            </Popover>
 
                             <Select value={siteFilter} onValueChange={setSiteFilter}>
                                 <SelectTrigger className="w-full">
@@ -495,15 +569,14 @@ export default function StationIndex() {
                         </div>
 
                         <div className="flex gap-2 w-full sm:w-auto flex-wrap justify-end">
-                            {(siteFilter !== "all" || campaignFilter !== "all" || statusFilter !== "all" || search) && (
+                            <Button onClick={applyFilters} className="flex-1 sm:flex-none">
+                                Filter
+                            </Button>
+
+                            {(siteFilter !== "all" || campaignFilter !== "all" || statusFilter !== "all" || selectedFilterStationIds.length > 0) && (
                                 <Button
                                     variant="outline"
-                                    onClick={() => {
-                                        setSearch("");
-                                        setSiteFilter("all");
-                                        setCampaignFilter("all");
-                                        setStatusFilter("all");
-                                    }}
+                                    onClick={resetFilters}
                                     className="flex-1 sm:flex-none"
                                 >
                                     Reset
@@ -544,6 +617,28 @@ export default function StationIndex() {
                             </Can>
                         </div>
                     </div>
+
+                    {/* Selected station filter badges */}
+                    {selectedFilterStationIds.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                            {selectedFilterStationIds.map((id) => {
+                                const station = allStations.find(s => s.id === id);
+                                return station ? (
+                                    <Badge key={id} variant="secondary" className="flex items-center gap-1">
+                                        {station.label}
+                                        <button
+                                            type="button"
+                                            onClick={() => handleRemoveStationFilter(id)}
+                                            className="ml-1 rounded-full outline-none hover:bg-muted"
+                                            title="Remove filter"
+                                        >
+                                            <X className="h-3 w-3" />
+                                        </button>
+                                    </Badge>
+                                ) : null;
+                            })}
+                        </div>
+                    )}
 
                     {/* Bulk Actions Section */}
                     {(selectedEmptyStations.length > 0 || selectedStationIds.length > 0) && (
@@ -622,7 +717,7 @@ export default function StationIndex() {
                 <div className="flex justify-between items-center text-sm">
                     <div className="text-muted-foreground">
                         Showing {stations.data.length} of {stations.meta.total} station{stations.meta.total !== 1 ? 's' : ''}
-                        {(siteFilter !== "all" || campaignFilter !== "all" || statusFilter !== "all" || search) && ' (filtered)'}
+                        {(siteFilter !== "all" || campaignFilter !== "all" || statusFilter !== "all" || selectedFilterStationIds.length > 0) && ' (filtered)'}
                     </div>
                     <div className="flex items-center gap-4">
                         {emptyStationsCount > 0 && (
@@ -750,8 +845,8 @@ export default function StationIndex() {
                                                         <div className="flex items-center gap-2">
                                                             {station.pc_spec_details.issue ? (
                                                                 <>
-                                                                    <AlertTriangle className="h-4 w-4 text-red-600 flex-shrink-0" />
-                                                                    <span className="text-xs text-red-600 font-medium truncate max-w-[150px]" title={station.pc_spec_details.issue}>
+                                                                    <AlertTriangle className="h-4 w-4 text-red-600 shrink-0" />
+                                                                    <span className="text-xs text-red-600 font-medium truncate max-w-37.5" title={station.pc_spec_details.issue}>
                                                                         {station.pc_spec_details.issue}
                                                                     </span>
                                                                 </>
@@ -918,8 +1013,8 @@ export default function StationIndex() {
                                                 <div className="flex items-center gap-2 flex-1 justify-end">
                                                     {station.pc_spec_details.issue ? (
                                                         <>
-                                                            <AlertTriangle className="h-4 w-4 text-red-600 flex-shrink-0" />
-                                                            <span className="text-xs text-red-600 font-medium truncate max-w-[120px]" title={station.pc_spec_details.issue}>
+                                                            <AlertTriangle className="h-4 w-4 text-red-600 shrink-0" />
+                                                            <span className="text-xs text-red-600 font-medium truncate max-w-30" title={station.pc_spec_details.issue}>
                                                                 {station.pc_spec_details.issue}
                                                             </span>
                                                         </>
@@ -1061,7 +1156,7 @@ export default function StationIndex() {
                             <DialogTitle>Manage PC Spec Issue</DialogTitle>
                             <DialogDescription>
                                 {selectedPcSpec && (
-                                    <span className="text-sm break-words">
+                                    <span className="text-sm wrap-break-word">
                                         {selectedPcSpec.model}
                                     </span>
                                 )}

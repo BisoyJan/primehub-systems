@@ -265,9 +265,15 @@ class StationController extends Controller
                 'site',
                 'pcSpec.processorSpecs',
                 'campaign',
-            ])
-            ->search($request->query('search'))
-            ->filterBySite($request->query('site'))
+            ]);
+
+        // Filter by selected station IDs (multi-select)
+        $stationIds = $request->input('station_ids', []);
+        if (is_array($stationIds) && count($stationIds) > 0) {
+            $query->whereIn('id', array_map('intval', $stationIds));
+        }
+
+        $query->filterBySite($request->query('site'))
             ->filterByCampaign($request->query('campaign'))
             ->filterByStatus($request->query('status'))
             ->orderBy('id', 'desc');
@@ -296,6 +302,16 @@ class StationController extends Controller
             ];
         })->toArray();
 
+        // All stations for multi-select dropdown (lightweight, numerically sorted)
+        $allStations = Station::select('id', 'station_number')
+            ->orderByRaw("CAST(REGEXP_REPLACE(station_number, '[^0-9]', '') AS UNSIGNED)")
+            ->orderBy('station_number')
+            ->get()
+            ->map(fn ($s) => [
+                'id' => $s->id,
+                'label' => $s->station_number,
+            ]);
+
         return Inertia::render('Station/Index', [
             'stations' => [
                 'data' => $items,
@@ -308,6 +324,7 @@ class StationController extends Controller
                 ],
             ],
             'filters' => $this->getFilterOptions(),
+            'allStations' => $allStations,
             'flash' => session('flash') ?? null,
             'allMatchingIds' => $allMatchingIds,
         ]);

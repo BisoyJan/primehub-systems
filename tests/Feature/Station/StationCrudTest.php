@@ -46,6 +46,7 @@ class StationCrudTest extends TestCase
             ->component('Station/Index')
             ->has('stations.data')
             ->has('filters')
+            ->has('allStations')
         );
     }
 
@@ -295,9 +296,9 @@ class StationCrudTest extends TestCase
     }
 
     #[Test]
-    public function station_index_can_be_searched(): void
+    public function station_index_can_filter_by_station_ids(): void
     {
-        Station::factory()->create([
+        $station1 = Station::factory()->create([
             'site_id' => $this->site->id,
             'campaign_id' => $this->campaign->id,
             'station_number' => 'SEARCH001',
@@ -309,12 +310,36 @@ class StationCrudTest extends TestCase
             'station_number' => 'OTHER002',
         ]);
 
-        $response = $this->actingAs($this->admin)->get(route('stations.index', ['search' => 'SEARCH']));
+        $response = $this->actingAs($this->admin)->get(route('stations.index', ['station_ids' => [$station1->id]]));
 
         $response->assertInertia(fn (Assert $page) => $page
             ->component('Station/Index')
             ->has('stations.data', 1)
             ->where('stations.data.0.station_number', 'SEARCH001')
+        );
+    }
+
+    #[Test]
+    public function station_index_shows_all_when_no_filters(): void
+    {
+        Station::factory()->create([
+            'site_id' => $this->site->id,
+            'campaign_id' => $this->campaign->id,
+            'station_number' => 'ST001',
+        ]);
+
+        Station::factory()->create([
+            'site_id' => $this->site->id,
+            'campaign_id' => $this->campaign->id,
+            'station_number' => 'ST002',
+        ]);
+
+        $response = $this->actingAs($this->admin)->get(route('stations.index'));
+
+        $response->assertInertia(fn (Assert $page) => $page
+            ->component('Station/Index')
+            ->has('stations.data', 2)
+            ->has('allStations', 2)
         );
     }
 

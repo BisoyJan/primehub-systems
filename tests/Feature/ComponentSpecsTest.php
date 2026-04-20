@@ -54,6 +54,8 @@ class ComponentSpecsTest extends TestCase
                 ->component('Computer/ProcessorSpecs/Index')
                 // Controller uses 'processorspecs' not 'processorSpecs'
                 ->has('processorspecs.data', 3)
+                ->has('allProcessors')
+                ->has('filters')
             );
     }
 
