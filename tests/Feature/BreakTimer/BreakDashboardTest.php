@@ -64,6 +64,65 @@ class BreakDashboardTest extends TestCase
     }
 
     #[Test]
+    public function dashboard_includes_expected_end_and_live_overbreak_fields(): void
+    {
+        $session = BreakSession::factory()->active()->create([
+            'break_policy_id' => $this->policy->id,
+            'shift_date' => now()->toDateString(),
+            'started_at' => now()->subMinutes(20),
+            'duration_seconds' => 900,
+            'remaining_seconds' => 900,
+            'overage_seconds' => 0,
+            'total_paused_seconds' => 0,
+        ]);
+
+        $response = $this->actingAs($this->admin)
+            ->get(route('break-timer.dashboard'));
+
+        $response->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('BreakTimer/Dashboard')
+                ->where('sessions.data.0.id', $session->id)
+                ->where('sessions.data.0.expected_end_at', now()->subMinutes(5)->toDateTimeString())
+                ->where('sessions.data.0.live_overage_seconds', 300)
+                ->where('sessions.data.0.is_overbreak_now', true)
+            );
+    }
+
+    #[Test]
+    public function dashboard_stats_include_currently_overbreak_count(): void
+    {
+        BreakSession::factory()->active()->create([
+            'break_policy_id' => $this->policy->id,
+            'shift_date' => now()->toDateString(),
+            'started_at' => now()->subMinutes(20),
+            'duration_seconds' => 900,
+            'remaining_seconds' => 900,
+            'overage_seconds' => 0,
+            'total_paused_seconds' => 0,
+        ]);
+
+        BreakSession::factory()->active()->create([
+            'break_policy_id' => $this->policy->id,
+            'shift_date' => now()->toDateString(),
+            'started_at' => now()->subMinutes(3),
+            'duration_seconds' => 900,
+            'remaining_seconds' => 900,
+            'overage_seconds' => 0,
+            'total_paused_seconds' => 0,
+        ]);
+
+        $response = $this->actingAs($this->admin)
+            ->get(route('break-timer.dashboard'));
+
+        $response->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('BreakTimer/Dashboard')
+                ->where('stats.currently_overbreak', 1)
+            );
+    }
+
+    #[Test]
     public function it_filters_dashboard_by_status(): void
     {
         BreakSession::factory()->create([

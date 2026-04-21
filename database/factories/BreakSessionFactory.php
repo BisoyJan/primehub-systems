@@ -30,6 +30,7 @@ class BreakSessionFactory extends Factory
             'ended_at' => now(),
             'remaining_seconds' => fake()->numberBetween(0, $durationSeconds),
             'overage_seconds' => 0,
+            'overbreak_notified_at' => null,
             'total_paused_seconds' => 0,
             'shift_date' => now()->toDateString(),
         ];

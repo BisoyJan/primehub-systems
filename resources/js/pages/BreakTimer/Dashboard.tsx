@@ -40,8 +40,11 @@ interface SessionData {
     duration_seconds: number;
     started_at: string;
     ended_at: string | null;
+    expected_end_at: string | null;
     remaining_seconds: number | null;
     overage_seconds: number;
+    live_overage_seconds: number;
+    is_overbreak_now: boolean;
     total_paused_seconds: number;
     last_pause_reason: string | null;
     pause_resume_events: PauseResumeEvent[];
@@ -50,6 +53,7 @@ interface SessionData {
 interface Stats {
     total_sessions: number;
     active_now: number;
+    currently_overbreak: number;
     completed: number;
     overage: number;
     avg_overage_seconds: number;
@@ -105,6 +109,21 @@ function formatBreakType(type: string): string {
     return type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+function formatClockTime(value: string | null): string {
+    if (!value) {
+        return '—';
+    }
+
+    return new Date(value).toLocaleTimeString([], {
+        hour: 'numeric',
+        minute: '2-digit',
+    });
+}
+
+function getDisplayedOverageSeconds(session: SessionData): number {
+    return Math.max(session.overage_seconds, session.live_overage_seconds);
+}
+
 function overageColorClass(seconds: number): string {
     if (seconds >= 60) return 'text-red-500';
     if (seconds > 30) return 'text-orange-500';
@@ -157,7 +176,7 @@ export default function BreakTimerDashboard() {
                 only: ['sessions', 'stats'],
                 onFinish: () => { isPollingRef.current = false; },
             });
-        }, 30000);
+        }, 15000);
         return () => {
             if (pollRef.current) clearInterval(pollRef.current);
         };
@@ -205,7 +224,7 @@ export default function BreakTimerDashboard() {
                 <PageHeader title={title} description="Live break session monitoring" />
 
                 {/* Stats Cards */}
-                <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
                     <Card>
                         <CardContent className="flex items-center gap-2.5 p-2.5">
                             <Users className="text-muted-foreground h-7 w-7" />
@@ -221,6 +240,15 @@ export default function BreakTimerDashboard() {
                             <div>
                                 <p className="text-muted-foreground text-xs">Active Now</p>
                                 <p className="text-xl font-bold leading-tight">{stats.active_now}</p>
+                            </div>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardContent className="flex items-center gap-2.5 p-2.5">
+                            <AlertTriangle className="h-7 w-7 text-red-600" />
+                            <div>
+                                <p className="text-muted-foreground text-xs">Currently Overbreak</p>
+                                <p className="text-xl font-bold leading-tight text-red-600 dark:text-red-400">{stats.currently_overbreak}</p>
                             </div>
                         </CardContent>
                     </Card>
@@ -378,6 +406,7 @@ export default function BreakTimerDashboard() {
                                     <TableHead>Type</TableHead>
                                     <TableHead>Status</TableHead>
                                     <TableHead>Timeline</TableHead>
+                                    <TableHead>Expected End</TableHead>
                                     <TableHead>Overage</TableHead>
                                     <TableHead>Paused / Resumed</TableHead>
                                 </TableRow>
@@ -385,7 +414,7 @@ export default function BreakTimerDashboard() {
                             <TableBody>
                                 {sessions.data.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                                        <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
                                             No sessions found.
                                         </TableCell>
                                     </TableRow>
@@ -401,29 +430,46 @@ export default function BreakTimerDashboard() {
                                             <TableCell>{session.station || '—'}</TableCell>
                                             <TableCell>{formatBreakType(session.type)}</TableCell>
                                             <TableCell>
-                                                <Badge {...statusBadgeVariant(session.status, session.overage_seconds)}>
-                                                    {session.status}
-                                                </Badge>
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <Badge {...statusBadgeVariant(session.status, session.overage_seconds)}>
+                                                        {session.status}
+                                                    </Badge>
+                                                    {session.is_overbreak_now && (
+                                                        <Badge variant="destructive">Overbreak</Badge>
+                                                    )}
+                                                </div>
                                             </TableCell>
                                             <TableCell className="text-sm">
                                                 <div className="flex flex-col gap-0.5">
                                                     <span className="flex items-center gap-1 text-xs">
                                                         <PlayCircle className="h-3 w-3 text-green-500" />
-                                                        {new Date(session.started_at).toLocaleTimeString()}
+                                                        {formatClockTime(session.started_at)}
                                                     </span>
                                                     {session.ended_at && (
                                                         <span className="flex items-center gap-1 text-xs">
                                                             <StopCircle className="h-3 w-3 text-red-500" />
-                                                            {new Date(session.ended_at).toLocaleTimeString()}
+                                                            {formatClockTime(session.ended_at)}
                                                         </span>
                                                     )}
                                                 </div>
                                             </TableCell>
                                             <TableCell>
-                                                {session.overage_seconds > 0 ? (
-                                                    <span className={overageColorClass(session.overage_seconds)}>
-                                                        +{formatTime(session.overage_seconds)}
-                                                    </span>
+                                                <span className={session.is_overbreak_now ? 'font-medium text-red-600 dark:text-red-400' : 'text-sm text-muted-foreground'}>
+                                                    {formatClockTime(session.expected_end_at)}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell>
+                                                {getDisplayedOverageSeconds(session) > 0 ? (
+                                                    <div className="flex flex-col gap-1">
+                                                        <span className={overageColorClass(getDisplayedOverageSeconds(session))}>
+                                                            +{formatTime(getDisplayedOverageSeconds(session))}
+                                                        </span>
+                                                        {session.is_overbreak_now && (
+                                                            <span className="text-xs font-medium uppercase tracking-wide text-red-600 dark:text-red-400">
+                                                                Live
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 ) : (
                                                     '—'
                                                 )}
@@ -441,7 +487,7 @@ export default function BreakTimerDashboard() {
                                                                             ) : (
                                                                                 <Play className="h-3 w-3 text-green-500" />
                                                                             )}
-                                                                            {new Date(ev.occurred_at).toLocaleTimeString()}
+                                                                            {formatClockTime(ev.occurred_at)}
                                                                         </span>
                                                                     ))}
                                                                 </div>
@@ -451,14 +497,14 @@ export default function BreakTimerDashboard() {
                                                                     {session.pause_resume_events.map((ev, i) => (
                                                                         <div key={i}>
                                                                             <span className="font-medium capitalize">{ev.action}</span>{' '}
-                                                                            at {new Date(ev.occurred_at).toLocaleTimeString()}
+                                                                            at {formatClockTime(ev.occurred_at)}
                                                                             {ev.reason && (
                                                                                 <span className="text-muted-foreground"> — {ev.reason}</span>
                                                                             )}
                                                                         </div>
                                                                     ))}
                                                                     {session.total_paused_seconds > 0 && (
-                                                                        <div className="border-t pt-1 mt-1">
+                                                                        <div className="mt-1 border-t pt-1">
                                                                             Total paused: {formatTime(session.total_paused_seconds)}
                                                                         </div>
                                                                     )}
@@ -481,41 +527,56 @@ export default function BreakTimerDashboard() {
                 {/* Mobile Card View */}
                 <div className="md:hidden space-y-4">
                     {sessions.data.length === 0 ? (
-                        <div className="py-12 text-center text-muted-foreground border rounded-lg bg-card">
+                        <div className="border rounded-lg bg-card py-12 text-center text-muted-foreground">
                             No sessions found.
                         </div>
                     ) : (
                         sessions.data.map((session) => (
                             <div key={session.id} className="bg-card border rounded-lg p-4 shadow-sm space-y-3">
-                                <div className="flex items-center justify-between">
+                                <div className="flex items-center justify-between gap-2">
                                     <span className="font-medium">
                                         {session.user
                                             ? `${session.user.first_name} ${session.user.last_name}`
                                             : '—'}
                                     </span>
-                                    <Badge {...statusBadgeVariant(session.status, session.overage_seconds)}>
-                                        {session.status}
-                                    </Badge>
+                                    <div className="flex flex-wrap items-center justify-end gap-2">
+                                        <Badge {...statusBadgeVariant(session.status, session.overage_seconds)}>
+                                            {session.status}
+                                        </Badge>
+                                        {session.is_overbreak_now && (
+                                            <Badge variant="destructive">Overbreak</Badge>
+                                        )}
+                                    </div>
                                 </div>
                                 <div className="text-muted-foreground grid grid-cols-2 gap-1 text-sm">
                                     <span>Type: {formatBreakType(session.type)}</span>
                                     <span>Station: {session.station || '—'}</span>
                                     <span>Campaign: {session.campaign || '—'}</span>
+                                    <span>Expected End: {formatClockTime(session.expected_end_at)}</span>
                                 </div>
                                 <div className="flex flex-col gap-0.5 text-sm">
                                     <span className="flex items-center gap-1">
                                         <PlayCircle className="h-3 w-3 text-green-500" />
-                                        Started: {new Date(session.started_at).toLocaleTimeString()}
+                                        Started: {formatClockTime(session.started_at)}
                                     </span>
                                     {session.ended_at && (
                                         <span className="flex items-center gap-1">
                                             <StopCircle className="h-3 w-3 text-red-500" />
-                                            Ended: {new Date(session.ended_at).toLocaleTimeString()}
+                                            Ended: {formatClockTime(session.ended_at)}
                                         </span>
                                     )}
                                 </div>
-                                {session.overage_seconds > 0 && (
-                                    <span className={`text-sm ${overageColorClass(session.overage_seconds)}`}>Overage: +{formatTime(session.overage_seconds)}</span>
+                                {getDisplayedOverageSeconds(session) > 0 && (
+                                    <div className="flex items-center gap-2 text-sm">
+                                        <span className={overageColorClass(getDisplayedOverageSeconds(session))}>
+                                            Overage: +{formatTime(getDisplayedOverageSeconds(session))}
+                                        </span>
+                                        {session.is_overbreak_now && (
+                                            <span className="font-medium uppercase tracking-wide text-red-600 dark:text-red-400">
+                                                Live
+                                            </span>
+                                        )}
+                                    </div>
                                 )}
                                 {session.pause_resume_events.length > 0 && (
                                     <div className="space-y-0.5 text-xs">
@@ -528,7 +589,7 @@ export default function BreakTimerDashboard() {
                                                     <Play className="h-3 w-3 text-green-500" />
                                                 )}
                                                 <span className="capitalize">{ev.action}</span>{' '}
-                                                {new Date(ev.occurred_at).toLocaleTimeString()}
+                                                {formatClockTime(ev.occurred_at)}
                                                 {ev.reason && <span className="text-muted-foreground"> — {ev.reason}</span>}
                                             </div>
                                         ))}

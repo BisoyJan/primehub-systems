@@ -18,8 +18,6 @@ export default function PendingApproval() {
             isPollingRef.current = true;
             router.reload({
                 only: [], // Don't reload any props, just trigger the route check
-                preserveScroll: true,
-                preserveState: true,
                 onSuccess: () => {
                     // The backend route will automatically redirect if approved
                 },

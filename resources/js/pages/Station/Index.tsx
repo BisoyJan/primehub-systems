@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { router, usePage, Head } from "@inertiajs/react";
+import type { RequestPayload } from "@inertiajs/core";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
@@ -358,7 +359,7 @@ export default function StationIndex() {
     };
 
     const applyFilters = () => {
-        const params: Record<string, unknown> = {};
+        const params: RequestPayload = {};
         if (selectedFilterStationIds.length > 0) params.station_ids = selectedFilterStationIds;
         if (siteFilter && siteFilter !== "all") params.site = siteFilter;
         if (campaignFilter && campaignFilter !== "all") params.campaign = campaignFilter;
@@ -402,7 +403,7 @@ export default function StationIndex() {
         if (!autoRefreshEnabled) return;
 
         const interval = setInterval(() => {
-            const params: Record<string, unknown> = {};
+            const params: RequestPayload = {};
             if (selectedFilterStationIds.length > 0) params.station_ids = selectedFilterStationIds;
             if (siteFilter && siteFilter !== "all") params.site = siteFilter;
             if (campaignFilter && campaignFilter !== "all") params.campaign = campaignFilter;

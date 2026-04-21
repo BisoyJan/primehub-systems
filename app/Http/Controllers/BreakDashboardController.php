@@ -120,6 +120,8 @@ class BreakDashboardController extends Controller
         $paginated = $query->paginate(20)->withQueryString();
 
         $items = $paginated->getCollection()->map(function (BreakSession $session) {
+            $timing = $this->breakTimerService->getSessionTimingSnapshot($session);
+
             return [
                 'id' => $session->id,
                 'session_id' => $session->session_id,
@@ -135,8 +137,11 @@ class BreakDashboardController extends Controller
                 'duration_seconds' => $session->duration_seconds,
                 'started_at' => $session->started_at?->toDateTimeString(),
                 'ended_at' => $session->ended_at?->toDateTimeString(),
+                'expected_end_at' => $timing['expected_end_at']?->toDateTimeString(),
                 'remaining_seconds' => $session->remaining_seconds,
                 'overage_seconds' => $session->overage_seconds,
+                'live_overage_seconds' => $timing['overage_seconds'],
+                'is_overbreak_now' => $timing['is_overbreak_now'],
                 'total_paused_seconds' => $session->total_paused_seconds,
                 'last_pause_reason' => $session->last_pause_reason,
                 'pause_resume_events' => $session->breakEvents->map(fn ($event) => [
@@ -151,9 +156,23 @@ class BreakDashboardController extends Controller
         $sessionsForDate = BreakSession::query()->where('shift_date', $date);
         $this->scopeByCampaigns($sessionsForDate, $teamLeadCampaignIds);
         $this->filterByCampaign($sessionsForDate, $request->query('campaign_id'));
+
+        $activeSessionsForDate = BreakSession::query()
+            ->where('shift_date', $date)
+            ->where('status', 'active')
+            ->with('breakEvents');
+        $this->scopeByCampaigns($activeSessionsForDate, $teamLeadCampaignIds);
+        $this->filterByCampaign($activeSessionsForDate, $request->query('campaign_id'));
+
+        $currentlyOverbreak = $activeSessionsForDate
+            ->get()
+            ->filter(fn (BreakSession $session) => $this->breakTimerService->getSessionTimingSnapshot($session)['is_overbreak_now'])
+            ->count();
+
         $stats = [
             'total_sessions' => (clone $sessionsForDate)->count(),
             'active_now' => (clone $sessionsForDate)->whereIn('status', ['active', 'paused'])->count(),
+            'currently_overbreak' => $currentlyOverbreak,
             'completed' => (clone $sessionsForDate)->where('status', 'completed')->count(),
             'overage' => (clone $sessionsForDate)->where('status', 'overage')->count(),
             'avg_overage_seconds' => (int) (clone $sessionsForDate)->where('overage_seconds', '>', 0)->avg('overage_seconds'),

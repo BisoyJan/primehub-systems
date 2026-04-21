@@ -48,6 +48,79 @@ class BreakTimerService
             ->get();
     }
 
+    /**
+     * @return array{
+     *     expected_end_at: ?Carbon,
+     *     elapsed_seconds: int,
+     *     remaining_seconds: int,
+     *     overage_seconds: int,
+     *     total_paused_seconds: int,
+     *     is_overbreak_now: bool
+     * }
+     */
+    public function getSessionTimingSnapshot(BreakSession $session): array
+    {
+        $currentPauseSeconds = $this->getCurrentPauseSeconds($session);
+        $totalPaused = $session->total_paused_seconds + $currentPauseSeconds;
+
+        if ($session->status === 'active') {
+            $elapsed = max(0, (int) now()->diffInSeconds($session->started_at, absolute: true) - $totalPaused);
+        } elseif (in_array($session->status, ['completed', 'overage', 'auto_ended', 'reset'], true)) {
+            $elapsed = max(
+                0,
+                ($session->duration_seconds - max(0, (int) $session->remaining_seconds)) + max(0, (int) $session->overage_seconds),
+            );
+        } else {
+            $elapsed = max(0, $session->duration_seconds - max(0, (int) $session->remaining_seconds));
+        }
+
+        $remaining = max(0, $session->duration_seconds - $elapsed);
+        $overage = max(0, $elapsed - $session->duration_seconds);
+
+        return [
+            'expected_end_at' => $session->started_at?->copy()->addSeconds($session->duration_seconds + $totalPaused),
+            'elapsed_seconds' => $elapsed,
+            'remaining_seconds' => $remaining,
+            'overage_seconds' => $overage,
+            'total_paused_seconds' => $totalPaused,
+            'is_overbreak_now' => $session->status === 'active' && $overage > 0,
+        ];
+    }
+
+    public function notifyAdminsAboutActiveOverbreaks(): int
+    {
+        $notifiedSessions = 0;
+
+        $sessions = BreakSession::query()
+            ->where('status', 'active')
+            ->whereNull('overbreak_notified_at')
+            ->with(['breakEvents', 'user'])
+            ->get();
+
+        foreach ($sessions as $session) {
+            $timing = $this->getSessionTimingSnapshot($session);
+
+            if (! $timing['is_overbreak_now']) {
+                continue;
+            }
+
+            $this->notificationService->notifyBreakOverageToAdmins(
+                $session->user_id,
+                $session->type,
+                $timing['overage_seconds'],
+                $session->shift_date,
+            );
+
+            $session->forceFill([
+                'overbreak_notified_at' => now(),
+            ])->save();
+
+            $notifiedSessions++;
+        }
+
+        return $notifiedSessions;
+    }
+
     public function getActiveSession(Collection $todaySessions): ?BreakSession
     {
         return $todaySessions->whereIn('status', ['active', 'paused'])->first();
@@ -356,15 +429,45 @@ class BreakTimerService
                 $session->overage_seconds,
                 $session->shift_date,
             );
-            $this->notificationService->notifyBreakOverageToAdmins(
-                $session->user_id,
-                $session->type,
-                $session->overage_seconds,
-                $session->shift_date,
-            );
+
+            if (! $session->overbreak_notified_at) {
+                $this->notificationService->notifyBreakOverageToAdmins(
+                    $session->user_id,
+                    $session->type,
+                    $session->overage_seconds,
+                    $session->shift_date,
+                );
+
+                $session->forceFill([
+                    'overbreak_notified_at' => now(),
+                ])->save();
+            }
         }
 
         return $status;
+    }
+
+    protected function getCurrentPauseSeconds(BreakSession $session): int
+    {
+        if ($session->status !== 'paused') {
+            return 0;
+        }
+
+        $lastPauseEvent = $session->relationLoaded('breakEvents')
+            ? $session->breakEvents
+                ->where('action', 'pause')
+                ->sortByDesc('occurred_at')
+                ->first()
+            : $session->breakEvents()
+                ->where('action', 'pause')
+                ->latest('occurred_at')
+                ->first();
+
+        if (! $lastPauseEvent?->occurred_at) {
+            return 0;
+        }
+
+        return (int) now()->diffInSeconds($lastPauseEvent->occurred_at, absolute: true);
     }
 
     public function resetShift(int $userId, string $date, string $approval): int
@@ -380,6 +483,7 @@ class BreakTimerService
                 return 0;
             }
 
+            /** @var BreakSession $session */
             foreach ($todaySessions as $session) {
                 // Calculate final overage/paused if session was still active
                 $totalPaused = $session->total_paused_seconds;
