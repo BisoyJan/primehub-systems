@@ -83,6 +83,7 @@ interface Filters {
     date_from?: string;
     date_to?: string;
     coachee_role?: string;
+    team_lead_id?: string;
 }
 
 interface Props extends InertiaPageProps {
@@ -90,6 +91,7 @@ interface Props extends InertiaPageProps {
     agentSummary: CoachingSummary | null;
     campaigns: Campaign[];
     allAgents: User[];
+    teamLeads: User[];
     filters: Filters;
     isAdmin: boolean;
     isTeamLead: boolean;
@@ -114,6 +116,7 @@ export default function CoachingSessionsIndex() {
         agentSummary,
         campaigns,
         allAgents,
+        teamLeads,
         filters: initialFilters,
         isAdmin,
         isTeamLead,
@@ -135,6 +138,9 @@ export default function CoachingSessionsIndex() {
     const [search, setSearch] = useState(initialFilters.search || '');
     const [agentSearchOpen, setAgentSearchOpen] = useState(false);
     const [agentSearchQuery, setAgentSearchQuery] = useState('');
+    const [teamLeadId, setTeamLeadId] = useState(initialFilters.team_lead_id || '');
+    const [teamLeadSearchOpen, setTeamLeadSearchOpen] = useState(false);
+    const [teamLeadSearchQuery, setTeamLeadSearchQuery] = useState('');
     const [ackStatus, setAckStatus] = useState(initialFilters.ack_status || '');
     const [complianceStatus, setComplianceStatus] = useState(initialFilters.compliance_status || '');
     const [purpose, setPurpose] = useState(initialFilters.purpose || '');
@@ -145,7 +151,7 @@ export default function CoachingSessionsIndex() {
 
     const deleteForm = useForm({});
 
-    const activeFilterCount = [search, ackStatus, complianceStatus, purpose, campaignId, coacheeRole, dateFrom, dateTo].filter(Boolean).length;
+    const activeFilterCount = [search, ackStatus, complianceStatus, purpose, campaignId, coacheeRole, teamLeadId, dateFrom, dateTo].filter(Boolean).length;
 
     const statusSummary = useMemo(() => {
         const counts: Record<string, number> = {};
@@ -191,17 +197,71 @@ export default function CoachingSessionsIndex() {
         return schedule?.campaign?.name ?? null;
     };
 
+    const getAgentCampaignId = (agent: User): number | null => {
+        const schedule = (agent as Record<string, unknown>).active_schedule as { campaign?: { id?: number } } | null;
+        return schedule?.campaign?.id ?? null;
+    };
+
+    const selectedTeamLeadCampaignIds = useMemo<number[] | null>(() => {
+        if (!teamLeadId) return null;
+        const tl = teamLeads.find((t) => String(t.id) === teamLeadId) as (User & { campaign_ids?: number[] }) | undefined;
+        return tl?.campaign_ids ?? [];
+    }, [teamLeads, teamLeadId]);
+
+    const agentsInScope = useMemo(() => {
+        if (!selectedTeamLeadCampaignIds) return allAgents;
+        const allowed = new Set(selectedTeamLeadCampaignIds);
+        return allAgents.filter((a) => {
+            const cid = getAgentCampaignId(a);
+            return cid !== null && allowed.has(cid);
+        });
+    }, [allAgents, selectedTeamLeadCampaignIds]);
+
     const filteredAgents = useMemo(() => {
-        if (!agentSearchQuery) return allAgents.slice(0, 50);
+        if (!agentSearchQuery) return agentsInScope.slice(0, 50);
         const q = agentSearchQuery.toLowerCase();
-        return allAgents
+        return agentsInScope
             .filter((a) => {
                 const name = `${a.first_name} ${a.last_name}`.toLowerCase();
                 const campaign = getAgentCampaign(a)?.toLowerCase() ?? '';
                 return name.includes(q) || campaign.includes(q);
             })
             .slice(0, 50);
-    }, [allAgents, agentSearchQuery]);
+    }, [agentsInScope, agentSearchQuery]);
+
+    const filteredTeamLeads = useMemo(() => {
+        if (!teamLeadSearchQuery) return teamLeads.slice(0, 50);
+        const q = teamLeadSearchQuery.toLowerCase();
+        return teamLeads
+            .filter((tl) => `${tl.first_name} ${tl.last_name}`.toLowerCase().includes(q))
+            .slice(0, 50);
+    }, [teamLeads, teamLeadSearchQuery]);
+
+    const selectedTeamLeadName = useMemo(() => {
+        if (!teamLeadId) return null;
+        const tl = teamLeads.find((t) => String(t.id) === teamLeadId);
+        return tl ? `${tl.first_name} ${tl.last_name}` : null;
+    }, [teamLeads, teamLeadId]);
+
+    const selectTeamLead = (newTeamLeadId: string) => {
+        setTeamLeadId(newTeamLeadId);
+        setTeamLeadSearchOpen(false);
+        setTeamLeadSearchQuery('');
+
+        // Clear agent search if the currently-searched agent is not under the new team lead's scope
+        if (newTeamLeadId && search) {
+            const tl = teamLeads.find((t) => String(t.id) === newTeamLeadId) as (User & { campaign_ids?: number[] }) | undefined;
+            const allowed = new Set(tl?.campaign_ids ?? []);
+            const stillInScope = allAgents.some((a) => {
+                const name = `${a.first_name} ${a.last_name}`;
+                const cid = getAgentCampaignId(a);
+                return name === search && cid !== null && allowed.has(cid);
+            });
+            if (!stillInScope) {
+                setSearch('');
+            }
+        }
+    };
 
     const handleFilter = () => {
         router.get(
@@ -216,6 +276,7 @@ export default function CoachingSessionsIndex() {
                 date_from: dateFrom || undefined,
                 date_to: dateTo || undefined,
                 coachee_role: coacheeRole || undefined,
+                team_lead_id: teamLeadId || undefined,
             },
             { preserveState: true, preserveScroll: true },
         );
@@ -230,6 +291,7 @@ export default function CoachingSessionsIndex() {
         setDateFrom('');
         setDateTo('');
         setCoacheeRole('');
+        setTeamLeadId('');
         router.get(sessionsIndex().url, (isTeamLead || isAdmin) && activeTab ? { tab: activeTab } : {});
     };
 
@@ -246,6 +308,7 @@ export default function CoachingSessionsIndex() {
                 date_from: dateFrom || undefined,
                 date_to: dateTo || undefined,
                 coachee_role: coacheeRole || undefined,
+                team_lead_id: teamLeadId || undefined,
             },
             { preserveState: false },
         );
@@ -457,16 +520,63 @@ export default function CoachingSessionsIndex() {
                                 </PopoverContent>
                             </Popover>
                         )}
-                        <Select value={ackStatus} onValueChange={setAckStatus}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Ack Status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="Pending">Pending</SelectItem>
-                                <SelectItem value="Acknowledged">Acknowledged</SelectItem>
-                                <SelectItem value="Disputed">Disputed</SelectItem>
-                            </SelectContent>
-                        </Select>
+                        {isAdmin && (
+                            <Popover open={teamLeadSearchOpen} onOpenChange={setTeamLeadSearchOpen}>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        role="combobox"
+                                        aria-expanded={teamLeadSearchOpen}
+                                        className="w-full justify-between font-normal"
+                                    >
+                                        <span className="truncate">
+                                            {selectedTeamLeadName || 'All Team Leads'}
+                                        </span>
+                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-full p-0" align="start">
+                                    <Command shouldFilter={false}>
+                                        <CommandInput
+                                            placeholder="Search team lead..."
+                                            value={teamLeadSearchQuery}
+                                            onValueChange={setTeamLeadSearchQuery}
+                                        />
+                                        <CommandList>
+                                            <CommandEmpty>No team lead found.</CommandEmpty>
+                                            <CommandGroup>
+                                                <CommandItem
+                                                    value="all"
+                                                    onSelect={() => {
+                                                        selectTeamLead('');
+                                                    }}
+                                                    className="cursor-pointer"
+                                                >
+                                                    <Check className={`mr-2 h-4 w-4 ${!teamLeadId ? 'opacity-100' : 'opacity-0'}`} />
+                                                    All Team Leads
+                                                </CommandItem>
+                                                {filteredTeamLeads.map((tl) => {
+                                                    const name = `${tl.first_name} ${tl.last_name}`;
+                                                    return (
+                                                        <CommandItem
+                                                            key={tl.id}
+                                                            value={String(tl.id)}
+                                                            onSelect={() => {
+                                                                selectTeamLead(String(tl.id));
+                                                            }}
+                                                            className="cursor-pointer"
+                                                        >
+                                                            <Check className={`mr-2 h-4 w-4 ${teamLeadId === String(tl.id) ? 'opacity-100' : 'opacity-0'}`} />
+                                                            {name}
+                                                        </CommandItem>
+                                                    );
+                                                })}
+                                            </CommandGroup>
+                                        </CommandList>
+                                    </Command>
+                                </PopoverContent>
+                            </Popover>
+                        )}
                         <Select value={complianceStatus} onValueChange={setComplianceStatus}>
                             <SelectTrigger>
                                 <SelectValue placeholder="Compliance Status" />
@@ -515,6 +625,30 @@ export default function CoachingSessionsIndex() {
                                 <SelectContent>
                                     <SelectItem value="Team Lead">Team Lead</SelectItem>
                                     <SelectItem value="Agent">Agent</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        )}
+                        {isAdmin && (
+                            <Select value={ackStatus} onValueChange={setAckStatus}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Ack Status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="Pending">Pending</SelectItem>
+                                    <SelectItem value="Acknowledged">Acknowledged</SelectItem>
+                                    <SelectItem value="Disputed">Disputed</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        )}
+                        {!isAdmin && (
+                            <Select value={ackStatus} onValueChange={setAckStatus}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Ack Status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="Pending">Pending</SelectItem>
+                                    <SelectItem value="Acknowledged">Acknowledged</SelectItem>
+                                    <SelectItem value="Disputed">Disputed</SelectItem>
                                 </SelectContent>
                             </Select>
                         )}

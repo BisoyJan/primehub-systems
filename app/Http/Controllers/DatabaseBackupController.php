@@ -17,9 +17,12 @@ class DatabaseBackupController extends Controller
 
     public function index(Request $request)
     {
-        // Auto-mark stale in-progress backups as failed (stuck longer than 15 minutes)
+        // Auto-mark stale in-progress backups as failed. The job heartbeats
+        // `updated_at` every few seconds while the dump runs, so a record
+        // that hasn't been touched in 30+ minutes is genuinely dead
+        // (worker crashed, SIGKILLed, container restarted, etc.).
         DatabaseBackup::where('status', 'in_progress')
-            ->where('updated_at', '<', now()->subMinutes(20))
+            ->where('updated_at', '<', now()->subMinutes(30))
             ->update([
                 'status' => 'failed',
                 'error_message' => 'Backup timed out or the queue worker was interrupted.',

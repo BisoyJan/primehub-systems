@@ -28,3 +28,9 @@ yarn-error.log
 /.vscode
 /.zed
 /scripts
+LEAN-CTX.md
+AGENTS.md
+.claude
+.github
+.venv
+.cursorrules

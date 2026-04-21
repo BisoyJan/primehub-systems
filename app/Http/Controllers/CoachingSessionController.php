@@ -125,6 +125,11 @@ class CoachingSessionController extends Controller
             });
         }
 
+        // Team lead (coach) filter (admin only)
+        if ($request->filled('team_lead_id') && $isAdmin) {
+            $query->where('coach_id', $request->team_lead_id);
+        }
+
         // Date range filter
         if ($request->filled('date_from') || $request->filled('date_to')) {
             $query->dateRange($request->date_from, $request->date_to);
@@ -139,6 +144,26 @@ class CoachingSessionController extends Controller
         $campaigns = ! empty($teamLeadCampaignIds)
             ? Campaign::whereIn('id', $teamLeadCampaignIds)->orderBy('name')->get(['id', 'name'])
             : Campaign::orderBy('name')->get(['id', 'name']);
+
+        // Get team leads for filter dropdown (admin only)
+        $teamLeads = collect();
+        if ($isAdmin) {
+            $teamLeads = User::where('role', 'Team Lead')
+                ->where('is_approved', true)
+                ->where('is_active', true)
+                ->with('campaigns:id')
+                ->orderBy('first_name')
+                ->orderBy('last_name')
+                ->get(['id', 'first_name', 'last_name'])
+                ->map(function ($tl) {
+                    return [
+                        'id' => $tl->id,
+                        'first_name' => $tl->first_name,
+                        'last_name' => $tl->last_name,
+                        'campaign_ids' => $tl->campaigns->pluck('id')->map(fn ($id) => (int) $id)->values()->all(),
+                    ];
+                });
+        }
 
         // Get all agents for the search combobox (for admin/TL)
         $allAgents = collect();
@@ -195,9 +220,10 @@ class CoachingSessionController extends Controller
             'agentSummary' => $agentSummary,
             'campaigns' => $campaigns,
             'allAgents' => $allAgents,
+            'teamLeads' => $teamLeads,
             'filters' => $request->only([
                 'search', 'ack_status', 'compliance_status', 'purpose',
-                'campaign_id', 'date_from', 'date_to', 'coachee_role',
+                'campaign_id', 'date_from', 'date_to', 'coachee_role', 'team_lead_id',
             ]),
             'isAdmin' => $isAdmin,
             'isTeamLead' => $isTeamLead,
