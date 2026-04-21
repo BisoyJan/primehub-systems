@@ -412,14 +412,13 @@ class CoachingSessionController extends Controller
                 $validated['is_draft'] = false;
                 $validated['submitted_at'] = now();
 
-                // Clean up any existing auto-saved draft for the same coachee/coach this week
-                $startOfWeek = now()->startOfWeek();
-                $endOfWeek = now()->endOfWeek();
-
+                // Clean up any existing auto-saved draft for the same coachee/coach/session_date.
+                // Matching by session_date (instead of current week) ensures drafts created for
+                // past weeks are still cleaned up when the TL finally submits.
                 $existingDraft = CoachingSession::where('coachee_id', $validated['coachee_id'])
                     ->where('coach_id', $validated['coach_id'])
                     ->where('is_draft', true)
-                    ->whereBetween('session_date', [$startOfWeek, $endOfWeek])
+                    ->whereDate('session_date', $validated['session_date'])
                     ->first();
 
                 if ($existingDraft) {

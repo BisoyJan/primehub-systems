@@ -17,6 +17,7 @@ import {
     create as sessionsCreate,
     store as sessionsStore,
     draft as sessionsDraft,
+    submit as sessionsSubmit,
     autoSaveDraft as sessionsAutoSaveDraft,
 } from '@/routes/coaching/sessions';
 
@@ -67,7 +68,7 @@ export default function CoachingSessionsCreate() {
     // Priority: savedForm (queue session storage) > existingDraft (server draft) > defaults
     const prefill = savedForm ?? existingDraft;
 
-    const { data, setData, post, errors, processing } = useForm({
+    const { data, setData, post, transform, errors, processing } = useForm({
         coaching_mode: coachingMode ?? 'assign',
         coach_id: '' as number | '',
         coachee_id: selectedAgentId ?? ('' as number | ''),
@@ -285,6 +286,41 @@ export default function CoachingSessionsCreate() {
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         isSubmittingRef.current = true;
+
+        // If we already have an auto-saved draft, submit it in place (PATCH /sessions/{id}/submit)
+        // so we never leave an orphaned draft row behind.
+        if (draftId) {
+            transform((d) => ({ ...d, _method: 'patch' }));
+            post(sessionsSubmit(draftId).url, {
+                forceFormData: true,
+                onError: () => { isSubmittingRef.current = false; transform((d) => d); },
+                onFinish: () => transform((d) => d),
+                onSuccess: () => {
+                    const queue = getQueue();
+                    if (queue.length > 0) {
+                        const updated = queue.map(a => a.id === selectedAgentId ? { ...a, done: true, status: 'done' as const } : a);
+                        const nextAgent = updated.find(a => !a.done);
+                        if (nextAgent) {
+                            sessionStorage.setItem('coaching_queue', JSON.stringify(updated));
+                            setQueueAgents(updated);
+                            if (selectedAgentId) {
+                                sessionStorage.setItem(`coaching_form_${selectedAgentId}`, JSON.stringify(getFormFieldsToSave()));
+                            }
+                            router.visit(sessionsCreate().url + `?coachee_id=${nextAgent.id}`);
+                            return;
+                        } else {
+                            sessionStorage.removeItem('coaching_queue');
+                            setQueueAgents([]);
+                            Object.keys(sessionStorage).forEach(key => {
+                                if (key.startsWith('coaching_form_')) sessionStorage.removeItem(key);
+                            });
+                        }
+                    }
+                },
+            });
+            return;
+        }
+
         post(sessionsStore().url, {
             forceFormData: true,
             onError: () => { isSubmittingRef.current = false; },
