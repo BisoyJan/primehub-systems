@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\Station;
+use App\Traits\AddsQrCodeBorder;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -19,7 +20,7 @@ use Endroid\QrCode\Writer\SvgWriter;
 
 class GenerateAllStationQRCodesZip implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use AddsQrCodeBorder, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     protected $jobId;
     protected $format;
@@ -61,7 +62,7 @@ class GenerateAllStationQRCodesZip implements ShouldQueue
             );
             $result = $builder->build();
             $fileName = "station-{$stationNumber}.{$this->format}";
-            $zip->addFromString($fileName, $result->getString());
+            $zip->addFromString($fileName, $this->addQrCodeBorder($result->getString(), $this->format));
             $count++;
             $percent = $total > 0 ? intval(($count / $total) * 100) : 100;
             Cache::put("station_qrcode_zip_job:{$this->jobId}", [

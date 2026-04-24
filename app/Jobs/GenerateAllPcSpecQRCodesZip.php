@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\PcSpec;
+use App\Traits\AddsQrCodeBorder;
 use Endroid\QrCode\Builder\Builder;
 use Endroid\QrCode\Encoding\Encoding;
 use Endroid\QrCode\ErrorCorrectionLevel;
@@ -16,7 +17,7 @@ use Illuminate\Support\Facades\Cache;
 
 class GenerateAllPcSpecQRCodesZip implements ShouldQueue
 {
-    use InteractsWithQueue, Queueable, SerializesModels;
+    use AddsQrCodeBorder, InteractsWithQueue, Queueable, SerializesModels;
 
     public $jobId;
 
@@ -91,7 +92,7 @@ class GenerateAllPcSpecQRCodesZip implements ShouldQueue
 
             $result = $builder->build();
             $filename = $pcNumber.".{$this->format}";
-            $zip->addFromString($filename, $result->getString());
+            $zip->addFromString($filename, $this->addQrCodeBorder($result->getString(), $this->format));
 
             $done++;
             $percent = $total > 0 ? intval(($done / $total) * 100) : 100;
