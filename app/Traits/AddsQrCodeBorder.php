@@ -11,7 +11,7 @@ trait AddsQrCodeBorder
      * @param  string  $format  Either 'png' or 'svg'.
      * @param  int  $thickness  Border thickness in pixels (PNG) or user units (SVG).
      */
-    protected function addQrCodeBorder(string $imageData, string $format, int $thickness = 4): string
+    protected function addQrCodeBorder(string $imageData, string $format, int $thickness = 2): string
     {
         if ($format === 'svg') {
             return $this->addSvgBorder($imageData, $thickness);

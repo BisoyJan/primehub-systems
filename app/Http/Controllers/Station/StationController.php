@@ -11,6 +11,7 @@ use App\Models\Campaign;
 use App\Models\PcSpec;
 use App\Models\Site;
 use App\Models\Station;
+use App\Traits\AddsQrCodeBorder;
 use App\Utils\StationNumberUtil;
 use Endroid\QrCode\Builder\Builder;
 use Endroid\QrCode\Encoding\Encoding;
@@ -27,6 +28,8 @@ use ZipArchive;
 
 class StationController extends Controller
 {
+    use AddsQrCodeBorder;
+
     // Bulk all stations QR ZIP
     public function bulkAllQRCodes(Request $request)
     {
@@ -164,7 +167,7 @@ class StationController extends Controller
 
             $result = $builder->build();
             $fileName = "station-{$stationNumber}.{$format}";
-            $zip->addFromString($fileName, $result->getString());
+            $zip->addFromString($fileName, $this->addQrCodeBorder($result->getString(), $format));
         }
 
         $zip->close();
@@ -233,7 +236,7 @@ class StationController extends Controller
 
             $result = $builder->build();
             $fileName = "station-{$stationNumber}.{$format}";
-            $zip->addFromString($fileName, $result->getString());
+            $zip->addFromString($fileName, $this->addQrCodeBorder($result->getString(), $format));
         }
 
         $zip->close();

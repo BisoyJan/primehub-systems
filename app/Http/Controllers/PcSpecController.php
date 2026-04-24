@@ -6,6 +6,7 @@ use App\Jobs\GenerateAllPcSpecQRCodesZip;
 use App\Jobs\GenerateSelectedPcSpecQRCodesZip;
 use App\Models\PcSpec;
 use App\Models\ProcessorSpec;
+use App\Traits\AddsQrCodeBorder;
 use Endroid\QrCode\Builder\Builder;
 use Endroid\QrCode\Encoding\Encoding;
 use Endroid\QrCode\ErrorCorrectionLevel;
@@ -20,6 +21,8 @@ use Inertia\Inertia;
 
 class PcSpecController extends Controller
 {
+    use AddsQrCodeBorder;
+
     /**
      * GET /motherboards
      */
@@ -467,7 +470,7 @@ class PcSpecController extends Controller
             );
 
             $result = $builder->build();
-            $zip->addFromString($pcNumber.".{$format}", $result->getString());
+            $zip->addFromString($pcNumber.".{$format}", $this->addQrCodeBorder($result->getString(), $format));
         }
 
         $zip->close();
@@ -541,7 +544,7 @@ class PcSpecController extends Controller
             );
 
             $result = $builder->build();
-            $zip->addFromString($pcNumber.".{$format}", $result->getString());
+            $zip->addFromString($pcNumber.".{$format}", $this->addQrCodeBorder($result->getString(), $format));
         }
 
         $zip->close();
