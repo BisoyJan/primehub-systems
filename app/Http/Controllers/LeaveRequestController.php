@@ -667,21 +667,26 @@ class LeaveRequestController extends Controller
         DB::beginTransaction();
         try {
             // Determine if this request requires Team Lead approval
-            // Agents need TL approval only if their campaign has a Team Lead
+            // Agents need TL approval only if their campaign has a Team Lead.
+            // Source of truth for TL <-> campaign assignment is the `campaign_user`
+            // pivot (User::campaigns()), since a TL may handle multiple campaigns
+            // while their personal employee_schedules row only stores ONE campaign_id.
             $requiresTlApproval = false;
             $campaignHasTeamLead = false;
+            /** @var \Illuminate\Database\Eloquent\Collection<int,User> $campaignTeamLeads */
+            $campaignTeamLeads = collect();
 
             if ($targetUser->role === 'Agent') {
                 $agentSchedule = $targetUser->activeSchedule;
                 if ($agentSchedule && $agentSchedule->campaign_id) {
-                    // Check if there's a Team Lead in the agent's campaign
-                    $campaignHasTeamLead = EmployeeSchedule::where('campaign_id', $agentSchedule->campaign_id)
-                        ->where('is_active', true)
-                        ->whereHas('user', function ($q) {
-                            $q->where('role', 'Team Lead')->where('is_approved', true);
+                    $campaignTeamLeads = User::where('role', 'Team Lead')
+                        ->where('is_approved', true)
+                        ->whereHas('campaigns', function ($q) use ($agentSchedule) {
+                            $q->where('campaigns.id', $agentSchedule->campaign_id);
                         })
-                        ->exists();
+                        ->get();
 
+                    $campaignHasTeamLead = $campaignTeamLeads->isNotEmpty();
                     if ($campaignHasTeamLead) {
                         $requiresTlApproval = true;
                     }
@@ -728,12 +733,9 @@ class LeaveRequestController extends Controller
 
             // Notify based on whether TL approval is required
             if ($requiresTlApproval) {
-                // Notify all Team Leads (any TL can approve the request)
-                $allTeamLeads = User::where('role', 'Team Lead')
-                    ->where('is_approved', true)
-                    ->get();
-
-                foreach ($allTeamLeads as $teamLead) {
+                // Notify only Team Leads assigned to the agent's campaign
+                // (a TL may handle multiple campaigns; only the relevant ones get notified)
+                foreach ($campaignTeamLeads as $teamLead) {
                     $this->notificationService->notifyTeamLeadAboutNewLeaveRequest(
                         $teamLead->id,
                         $targetUser->name,
