@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Traits\RedirectsWithFlashMessages;
 use App\Jobs\RunDatabaseBackup;
 use App\Models\DatabaseBackup;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -27,6 +28,10 @@ class DatabaseBackupController extends Controller
                 'status' => 'failed',
                 'error_message' => 'Backup timed out or the queue worker was interrupted.',
             ]);
+
+        // Import any backup files that exist on disk but are missing from the DB
+        // (e.g. zips written by the scheduled `backup:run` Spatie cron).
+        $this->importDiskBackups();
 
         $backups = DatabaseBackup::with('creator')
             ->when($request->input('search'), function ($query, $search) {
@@ -166,6 +171,68 @@ class DatabaseBackupController extends Controller
             Log::error('DatabaseBackup CleanOld Error: '.$e->getMessage());
 
             return $this->redirectWithFlash('database-backups.index', 'Failed to clean old backups.', 'error');
+        }
+    }
+
+    /**
+     * Import backup zips that exist on disk (written by Spatie's scheduled
+     * `backup:run` cron) but have no row in `database_backups`. Creates a
+     * "system" record so scheduled backups appear on the management page
+     * alongside manually created ones.
+     */
+    protected function importDiskBackups(): void
+    {
+        try {
+            $backupName = config('backup.backup.name', 'backups');
+            $disk = Storage::disk('local');
+
+            if (! $disk->exists($backupName)) {
+                return;
+            }
+
+            $files = collect($disk->files($backupName))
+                ->filter(fn (string $path) => str_ends_with(strtolower($path), '.zip'));
+
+            if ($files->isEmpty()) {
+                return;
+            }
+
+            $known = DatabaseBackup::query()
+                ->whereIn('path', $files->all())
+                ->pluck('path')
+                ->all();
+
+            foreach ($files as $path) {
+                if (in_array($path, $known, true)) {
+                    continue;
+                }
+
+                $filename = basename($path);
+                $absolute = $disk->path($path);
+                $size = file_exists($absolute) ? filesize($absolute) : 0;
+                $mtime = file_exists($absolute) ? Carbon::createFromTimestamp(filemtime($absolute)) : now();
+
+                $row = DatabaseBackup::create([
+                    'filename' => $filename,
+                    'disk' => 'local',
+                    'path' => $path,
+                    'size' => $size,
+                    'status' => 'completed',
+                    'created_by' => null,
+                    'completed_at' => $mtime,
+                ]);
+
+                // Backdate timestamps to the file's mtime so list ordering
+                // reflects when the backup was actually produced.
+                $row->timestamps = false;
+                $row->forceFill([
+                    'created_at' => $mtime,
+                    'updated_at' => $mtime,
+                ])->save();
+            }
+        } catch (\Throwable $e) {
+            // Never let the importer break the index page.
+            Log::warning('DatabaseBackup disk import skipped: '.$e->getMessage());
         }
     }
 }
