@@ -475,30 +475,35 @@ export default function EmployeeScheduleCreate() {
                                 )}
 
                                 {/* Campaign & Site */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="campaign_id">
-                                            Campaign {isRestrictedRole && <span className="text-red-500">*</span>}
-                                        </Label>
-                                        <Select
-                                            value={data.campaign_id ? String(data.campaign_id) : undefined}
-                                            onValueChange={value => setData("campaign_id", value ? parseInt(value) : null)}
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue placeholder={isRestrictedRole ? "Select campaign" : "Select campaign (optional)"} />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {campaigns.map(campaign => (
-                                                    <SelectItem key={campaign.id} value={String(campaign.id)}>
-                                                        {campaign.name}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                        {errors.campaign_id && (
-                                            <p className="text-sm text-red-500">{errors.campaign_id}</p>
-                                        )}
-                                    </div>
+                                <div className={isSelectedUserTeamLead ? "grid grid-cols-1 gap-4" : "grid grid-cols-1 md:grid-cols-2 gap-4"}>
+                                    {/* Single Campaign dropdown is hidden for Team Leads.
+                                        TLs use the "Managed Campaigns" multi-select below; the schedule's
+                                        campaign_id is derived from the first managed campaign on the server. */}
+                                    {!isSelectedUserTeamLead && (
+                                        <div className="space-y-2">
+                                            <Label htmlFor="campaign_id">
+                                                Campaign {isRestrictedRole && <span className="text-red-500">*</span>}
+                                            </Label>
+                                            <Select
+                                                value={data.campaign_id ? String(data.campaign_id) : undefined}
+                                                onValueChange={value => setData("campaign_id", value ? parseInt(value) : null)}
+                                            >
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder={isRestrictedRole ? "Select campaign" : "Select campaign (optional)"} />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {campaigns.map(campaign => (
+                                                        <SelectItem key={campaign.id} value={String(campaign.id)}>
+                                                            {campaign.name}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            {errors.campaign_id && (
+                                                <p className="text-sm text-red-500">{errors.campaign_id}</p>
+                                            )}
+                                        </div>
+                                    )}
 
                                     <div className="space-y-2">
                                         <Label htmlFor="site_id">
@@ -528,9 +533,11 @@ export default function EmployeeScheduleCreate() {
                                 {/* Managed Campaigns (Team Lead multi-select) */}
                                 {isSelectedUserTeamLead && (
                                     <div className="space-y-2">
-                                        <Label>Managed Campaigns</Label>
+                                        <Label>
+                                            Managed Campaigns <span className="text-red-500">*</span>
+                                        </Label>
                                         <p className="text-xs text-muted-foreground">
-                                            Select the campaigns this Team Lead will manage. This determines which agents they can coach and view.
+                                            Select all campaigns this Team Lead will manage. This determines which agents they can coach, view, and approve leave requests for. The first selected campaign is used as the schedule&apos;s primary campaign.
                                         </p>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 rounded-md border p-3">
                                             {campaigns.map(campaign => (

@@ -198,6 +198,13 @@ class EmployeeScheduleController extends Controller
         $isFirstTimeSetup = $isRestrictedRole && ! $currentUser->employeeSchedules()->exists();
 
         // Build validation rules based on user role
+        // Resolve the TARGET user's role (admins can create schedules for others).
+        $targetUserId = $request->input('user_id');
+        $targetUserRole = $targetUserId
+            ? optional(User::find($targetUserId))->role
+            : $currentUser->role;
+        $isTeamLeadTarget = $targetUserRole === 'Team Lead';
+
         $rules = [
             'user_id' => 'required|exists:users,id',
             'shift_type' => 'required|in:graveyard_shift,night_shift,morning_shift,afternoon_shift,utility_24h',
@@ -210,11 +217,17 @@ class EmployeeScheduleController extends Controller
             'end_date' => 'nullable|date|after:effective_date',
         ];
 
-        // Make campaign_id and site_id required for Agent and Team Lead roles
-        if ($isRestrictedRole) {
+        // For Team Leads: campaign_id is derived from the first managed campaign.
+        // The single Campaign dropdown is hidden in the UI; campaign_ids is the source of truth.
+        if ($isTeamLeadTarget) {
+            $rules['campaign_id'] = 'nullable|exists:campaigns,id';
+            $rules['site_id'] = 'required|exists:sites,id';
+            $rules['campaign_ids'] = 'required|array|min:1';
+            $rules['campaign_ids.*'] = 'exists:campaigns,id';
+        } elseif ($isRestrictedRole) {
+            // Agent self/admin-created schedule
             $rules['campaign_id'] = 'required|exists:campaigns,id';
             $rules['site_id'] = 'required|exists:sites,id';
-            // Team Leads can also optionally provide multiple campaign_ids for the pivot
             $rules['campaign_ids'] = 'nullable|array';
             $rules['campaign_ids.*'] = 'exists:campaigns,id';
         } else {
@@ -225,6 +238,13 @@ class EmployeeScheduleController extends Controller
         }
 
         $validated = $request->validate($rules);
+
+        // For Team Leads, derive the schedule's primary campaign_id from the
+        // first item in campaign_ids so the legacy single-FK column stays
+        // consistent with the campaign_user pivot.
+        if ($isTeamLeadTarget && ! empty($validated['campaign_ids'])) {
+            $validated['campaign_id'] = (int) $validated['campaign_ids'][0];
+        }
 
         // Check for duplicate schedule (same site, shift type, time in, time out for this user)
         $duplicateQuery = EmployeeSchedule::where('user_id', $validated['user_id'])
@@ -316,9 +336,11 @@ class EmployeeScheduleController extends Controller
         $currentUser = $request->user();
         $canEditEffectiveDate = in_array($currentUser->role, ['Super Admin', 'Admin', 'HR']);
 
+        $isTeamLeadTarget = $employeeSchedule->user?->role === 'Team Lead';
+
         $rules = [
             'campaign_id' => 'nullable|exists:campaigns,id',
-            'campaign_ids' => 'nullable|array',
+            'campaign_ids' => $isTeamLeadTarget ? 'required|array|min:1' : 'nullable|array',
             'campaign_ids.*' => 'exists:campaigns,id',
             'site_id' => 'nullable|exists:sites,id',
             'shift_type' => 'required|in:graveyard_shift,night_shift,morning_shift,afternoon_shift,utility_24h',
@@ -337,6 +359,13 @@ class EmployeeScheduleController extends Controller
         }
 
         $validated = $request->validate($rules);
+
+        // For Team Leads, derive the schedule's primary campaign_id from the
+        // first item in campaign_ids so the legacy single-FK column stays
+        // consistent with the campaign_user pivot.
+        if ($isTeamLeadTarget && ! empty($validated['campaign_ids'])) {
+            $validated['campaign_id'] = (int) $validated['campaign_ids'][0];
+        }
 
         // Check for duplicate schedule (same site, shift type, time in, time out for this user, excluding current schedule)
         $duplicateQuery = EmployeeSchedule::where('user_id', $employeeSchedule->user_id)
