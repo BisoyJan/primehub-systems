@@ -465,7 +465,7 @@ class PcSpecController extends Controller
                 encoding: new Encoding('UTF-8'),
                 errorCorrectionLevel: ErrorCorrectionLevel::High,
                 size: $size,
-                margin: 10,
+                margin: 4,
                 labelText: $pcNumber
             );
 
@@ -539,7 +539,7 @@ class PcSpecController extends Controller
                 encoding: new Encoding('UTF-8'),
                 errorCorrectionLevel: ErrorCorrectionLevel::High,
                 size: $size,
-                margin: 10,
+                margin: 6,
                 labelText: $pcNumber
             );
 
