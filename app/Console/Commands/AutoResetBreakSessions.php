@@ -7,51 +7,107 @@ use App\Models\BreakPolicy;
 use App\Models\BreakSession;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class AutoResetBreakSessions extends Command
 {
-    protected $signature = 'break-timer:auto-reset';
+    /**
+     * Maximum hours a break session can stay active/paused before being force-closed
+     * regardless of policy or shift_date. Catches sessions that slip past the
+     * shift-reset logic (missing/invalid shift_date, no active policy, scheduler
+     * downtime, etc.).
+     */
+    private const MAX_AGE_HOURS = 12;
 
-    protected $description = 'Auto-end orphaned break sessions from previous shifts based on the policy shift reset time';
+    protected $signature = 'break-timer:auto-reset
+                            {--max-age-hours= : Override the hard age safety net (default 12)}
+                            {--dry-run : Show what would be ended without making changes}';
+
+    protected $description = 'Auto-end orphaned break sessions from previous shifts and any session older than the safety threshold';
 
     public function handle(): int
     {
+        $maxAgeHours = (int) ($this->option('max-age-hours') ?: self::MAX_AGE_HOURS);
+        $dryRun = (bool) $this->option('dry-run');
+
         $policy = BreakPolicy::query()->where('is_active', true)->first();
-
-        if (! $policy) {
-            $this->info('No active break policy found. Skipping.');
-
-            return self::SUCCESS;
-        }
-
-        $resetTime = $policy->shift_reset_time ?? '06:00';
         $now = Carbon::now();
-        $todayReset = Carbon::today()->setTimeFromTimeString($resetTime);
 
-        // Determine the current logical shift date (accounts for graveyard shifts)
-        $currentShiftDate = $now->lt($todayReset)
-            ? Carbon::yesterday()->toDateString()
-            : $now->toDateString();
-
-        // Auto-end sessions from previous shifts (shift_date before the current logical shift)
-        $orphanedSessions = BreakSession::query()
+        // 1. Sessions older than the safety threshold (always run, even if no policy).
+        $ageCutoff = $now->copy()->subHours($maxAgeHours);
+        $aged = BreakSession::query()
             ->whereIn('status', ['active', 'paused'])
-            ->where('shift_date', '<', $currentShiftDate)
+            ->where('started_at', '<', $ageCutoff)
             ->get();
 
-        if ($orphanedSessions->isEmpty()) {
+        // 2. Sessions from previous shifts (only when an active policy exists).
+        $previousShift = collect();
+        if ($policy) {
+            $resetTime = $policy->shift_reset_time ?? '06:00';
+            $todayReset = Carbon::today()->setTimeFromTimeString($resetTime);
+            $currentShiftDate = $now->lt($todayReset)
+                ? Carbon::yesterday()->toDateString()
+                : $now->toDateString();
+
+            $previousShift = BreakSession::query()
+                ->whereIn('status', ['active', 'paused'])
+                ->where('shift_date', '<', $currentShiftDate)
+                ->whereNotIn('id', $aged->pluck('id'))
+                ->get();
+        } else {
+            $this->warn('No active break policy found — skipping shift-reset check (safety net still applies).');
+        }
+
+        $orphaned = $aged->merge($previousShift);
+
+        if ($orphaned->isEmpty()) {
             $this->info('No orphaned sessions found.');
 
             return self::SUCCESS;
         }
 
+        if ($dryRun) {
+            $this->table(
+                ['ID', 'User', 'Type', 'Status', 'Started', 'Age (h)', 'Reason'],
+                $orphaned->map(fn (BreakSession $s) => [
+                    $s->id,
+                    $s->user_id,
+                    $s->type,
+                    $s->status,
+                    $s->started_at,
+                    round($now->diffInMinutes($s->started_at, absolute: true) / 60, 1),
+                    $aged->contains('id', $s->id) ? "Older than {$maxAgeHours}h" : 'Previous shift',
+                ])->all()
+            );
+            $this->info("Dry-run: {$orphaned->count()} session(s) would be auto-ended.");
+
+            return self::SUCCESS;
+        }
+
+        $count = $this->autoEnd($orphaned, $aged, $maxAgeHours);
+
+        $this->info("Auto-ended {$count} orphaned session(s).");
+        Log::info("Break timer auto-reset: ended {$count} orphaned session(s).");
+
+        return self::SUCCESS;
+    }
+
+    private function autoEnd(Collection $orphaned, Collection $aged, int $maxAgeHours): int
+    {
         $count = 0;
 
-        DB::transaction(function () use ($orphanedSessions, &$count) {
-            foreach ($orphanedSessions as $session) {
-                $totalPaused = $session->total_paused_seconds;
+        DB::transaction(function () use ($orphaned, $aged, $maxAgeHours, &$count) {
+            foreach ($orphaned as $session) {
+                // Lock to prevent race with end / force-end.
+                $locked = BreakSession::query()->whereKey($session->id)->lockForUpdate()->first();
+                if (! $locked || ! in_array($locked->status, ['active', 'paused'], true)) {
+                    continue;
+                }
+                $session = $locked;
+
+                $totalPaused = (int) $session->total_paused_seconds;
 
                 if ($session->status === 'paused') {
                     $lastPauseEvent = $session->breakEvents()
@@ -65,22 +121,27 @@ class AutoResetBreakSessions extends Command
                 }
 
                 $elapsed = (int) now()->diffInSeconds($session->started_at, absolute: true) - $totalPaused;
-                $overage = max(0, $elapsed - $session->duration_seconds);
+                $overage = max(0, $elapsed - (int) $session->duration_seconds);
 
                 $session->update([
                     'status' => 'auto_ended',
+                    'ended_by' => 'system',
                     'ended_at' => now(),
                     'remaining_seconds' => 0,
                     'overage_seconds' => $overage,
                     'total_paused_seconds' => $totalPaused,
                 ]);
 
+                $reason = $aged->contains('id', $session->id)
+                    ? "Auto-ended: session exceeded {$maxAgeHours}h safety threshold"
+                    : 'Automatic shift reset';
+
                 BreakEvent::create([
                     'break_session_id' => $session->id,
                     'action' => 'auto_end',
                     'remaining_seconds' => 0,
                     'overage_seconds' => $overage,
-                    'reason' => 'Automatic shift reset',
+                    'reason' => $reason,
                     'occurred_at' => now(),
                 ]);
 
@@ -88,9 +149,6 @@ class AutoResetBreakSessions extends Command
             }
         });
 
-        $this->info("Auto-ended {$count} orphaned session(s).");
-        Log::info("Break timer auto-reset: ended {$count} orphaned session(s).");
-
-        return self::SUCCESS;
+        return $count;
     }
 }

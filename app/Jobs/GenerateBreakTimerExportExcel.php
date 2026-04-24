@@ -78,7 +78,7 @@ class GenerateBreakTimerExportExcel implements ShouldQueue
                 'Session ID', 'Employee Name', 'Station', 'Shift Date',
                 'Type', 'Status', 'Duration (min)', 'Started At', 'Ended At',
                 'Remaining (sec)', 'Overage (sec)', 'Total Paused (sec)',
-                'Last Pause Reason', 'Reset Approval',
+                'Last Pause Reason', 'Ended By',
             ];
 
             $sheet->fromArray($headers, null, 'A1');
@@ -103,7 +103,7 @@ class GenerateBreakTimerExportExcel implements ShouldQueue
                     $record->overage_seconds ?? 0,
                     $record->total_paused_seconds ?? 0,
                     $record->last_pause_reason ?? '',
-                    $record->reset_approval ?? '',
+                    $record->ended_by ? ucfirst($record->ended_by) : '',
                 ], null, 'A'.$row);
 
                 $this->applyStatusColor($sheet, $row, $record->status);

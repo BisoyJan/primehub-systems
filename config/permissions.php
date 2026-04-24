@@ -181,6 +181,8 @@ return [
         'break_timer.reports' => 'View Break Timer Reports',
         'break_timer.manage_policy' => 'Manage Break Policies',
         'break_timer.reset' => 'Reset Break Timer Shift',
+        'break_timer.force_end' => 'Force End Agent Break Session',
+        'break_timer.restore' => 'Restore Ended Break Session',
 
         // Database Backups
         'database_backups.view' => 'View Database Backups',
@@ -219,7 +221,7 @@ return [
             'form_requests.retention',
             'notifications.send', 'notifications.send_all',
             'coaching.view_all', 'coaching.create', 'coaching.edit', 'coaching.delete', 'coaching.review', 'coaching.export', 'coaching.settings',
-            'break_timer.view', 'break_timer.use', 'break_timer.dashboard', 'break_timer.reports', 'break_timer.manage_policy', 'break_timer.reset',
+            'break_timer.view', 'break_timer.use', 'break_timer.dashboard', 'break_timer.reports', 'break_timer.manage_policy', 'break_timer.reset', 'break_timer.force_end', 'break_timer.restore',
             'settings.view', 'settings.account', 'settings.password',
         ],
 
@@ -234,7 +236,7 @@ return [
             'it_concerns.view', 'it_concerns.create',
             'medication_requests.view', 'medication_requests.create', 'medication_requests.update',
             'coaching.view_own', 'coaching.view_team', 'coaching.create', 'coaching.edit', 'coaching.delete', 'coaching.acknowledge',
-            'break_timer.view', 'break_timer.use', 'break_timer.dashboard', 'break_timer.reports', 'break_timer.reset',
+            'break_timer.view', 'break_timer.use', 'break_timer.dashboard', 'break_timer.reports', 'break_timer.reset', 'break_timer.force_end', 'break_timer.restore',
             'notifications.send', 'notifications.send_all',
             'settings.account', 'settings.password',
         ],
@@ -263,7 +265,7 @@ return [
             'leave_credits.view_all', 'leave_credits.view_own', 'leave_credits.edit',
             'medication_requests.view', 'medication_requests.create', 'medication_requests.update', 'medication_requests.delete',
             'coaching.view_all', 'coaching.review', 'coaching.export',
-            'break_timer.view', 'break_timer.dashboard', 'break_timer.reports',
+            'break_timer.view', 'break_timer.dashboard', 'break_timer.reports', 'break_timer.force_end', 'break_timer.restore',
             'notifications.send', 'notifications.send_all',
             'settings.account', 'settings.password',
         ],

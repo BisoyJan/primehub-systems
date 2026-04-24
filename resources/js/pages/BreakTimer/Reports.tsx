@@ -17,8 +17,9 @@ import { reports as reportsRoute } from '@/routes/break-timer';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useState, useMemo } from 'react';
 import { format, parseISO } from 'date-fns';
-import { AlertTriangle, BarChart3, Check, ChevronsUpDown, Download, FileText, RotateCcw } from 'lucide-react';
+import { AlertTriangle, BarChart3, Check, ChevronsUpDown, Download, FileText, History, RotateCcw, ShieldX, Undo2 } from 'lucide-react';
 import { start as startExport } from '@/routes/break-timer/reports/export';
+import { SessionTimelineDialog } from './components/SessionTimelineDialog';
 
 interface SessionUser {
     id: number;
@@ -42,7 +43,7 @@ interface SessionData {
     total_paused_seconds: number;
     shift_date: string;
     last_pause_reason: string | null;
-    reset_approval: string | null;
+    ended_by: 'agent' | 'admin' | 'system' | null;
 }
 
 interface Summary {
@@ -50,6 +51,8 @@ interface Summary {
     total_overage: number;
     avg_overage_seconds: number;
     total_resets: number;
+    total_force_ended: number;
+    total_restored: number;
 }
 
 interface Filters {
@@ -60,6 +63,7 @@ interface Filters {
     type: string;
     status: string;
     campaign_id: string;
+    admin_action: string;
 }
 
 interface UserOption {
@@ -142,8 +146,10 @@ export default function BreakTimerReports() {
     const [type, setType] = useState(filters.type || '');
     const [status, setStatus] = useState(filters.status || '');
     const [campaignId, setCampaignId] = useState(filters.campaign_id || '');
+    const [adminAction, setAdminAction] = useState(filters.admin_action || '');
     const [showUserSearch, setShowUserSearch] = useState(false);
     const [userSearchQuery, setUserSearchQuery] = useState('');
+    const [timelineSessionId, setTimelineSessionId] = useState<number | null>(null);
 
     const selectedUserName = useMemo(() => {
         if (!userId) return '';
@@ -169,6 +175,7 @@ export default function BreakTimerReports() {
                 type: type || undefined,
                 status: status || undefined,
                 campaign_id: campaignId || undefined,
+                admin_action: adminAction || undefined,
             },
             { preserveState: true, preserveScroll: true },
         );
@@ -184,6 +191,7 @@ export default function BreakTimerReports() {
         setType('');
         setStatus('');
         setCampaignId('');
+        setAdminAction('');
         setUserSearchQuery('');
         router.get(reportsRoute().url, {}, { preserveState: true });
     }
@@ -272,7 +280,7 @@ export default function BreakTimerReports() {
                 )}
 
                 {/* Summary Stats */}
-                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
                     <Card>
                         <CardContent className="flex items-center gap-2.5 p-2.5">
                             <FileText className="text-muted-foreground h-7 w-7" />
@@ -306,6 +314,24 @@ export default function BreakTimerReports() {
                             <div>
                                 <p className="text-muted-foreground text-xs">Resets</p>
                                 <p className="text-xl font-bold leading-tight">{summary.total_resets}</p>
+                            </div>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardContent className="flex items-center gap-2.5 p-2.5">
+                            <ShieldX className="h-7 w-7 text-red-500" />
+                            <div>
+                                <p className="text-muted-foreground text-xs">Force Ended</p>
+                                <p className="text-xl font-bold leading-tight">{summary.total_force_ended}</p>
+                            </div>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardContent className="flex items-center gap-2.5 p-2.5">
+                            <Undo2 className="h-7 w-7 text-emerald-500" />
+                            <div>
+                                <p className="text-muted-foreground text-xs">Restored</p>
+                                <p className="text-xl font-bold leading-tight">{summary.total_restored}</p>
                             </div>
                         </CardContent>
                     </Card>
@@ -424,6 +450,23 @@ export default function BreakTimerReports() {
                                         <SelectItem value="paused">Paused</SelectItem>
                                         <SelectItem value="completed">Completed</SelectItem>
                                         <SelectItem value="overage">Overage</SelectItem>
+                                        <SelectItem value="reset">Reset</SelectItem>
+                                        <SelectItem value="auto_ended">Auto-Ended</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-1">
+                                <Label className="text-xs">Admin Action</Label>
+                                <Select value={adminAction || 'all'} onValueChange={(v) => setAdminAction(v === 'all' ? '' : v)}>
+                                    <SelectTrigger className="w-full">
+                                        <SelectValue placeholder="Any" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">Any</SelectItem>
+                                        <SelectItem value="force_end">Force Ended</SelectItem>
+                                        <SelectItem value="restore">Restored</SelectItem>
+                                        <SelectItem value="reset">Reset</SelectItem>
+                                        <SelectItem value="auto_end">Auto-Ended</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -465,13 +508,14 @@ export default function BreakTimerReports() {
                                     <TableHead>Started</TableHead>
                                     <TableHead>Ended</TableHead>
                                     <TableHead>Overage</TableHead>
-                                    <TableHead>Reset</TableHead>
+                                    <TableHead>Ended By</TableHead>
+                                    <TableHead className="text-right">Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {sessions.data.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={10} className="h-24 text-center text-muted-foreground">
+                                        <TableCell colSpan={11} className="h-24 text-center text-muted-foreground">
                                             <div className="space-y-1">
                                                 <p>No sessions found for this period.</p>
                                                 <p className="text-xs">Try adjusting the date range or removing filters.</p>
@@ -511,18 +555,19 @@ export default function BreakTimerReports() {
                                                 )}
                                             </TableCell>
                                             <TableCell className="max-w-[150px] text-xs">
-                                                {session.reset_approval ? (
-                                                    <TooltipProvider>
-                                                        <Tooltip>
-                                                            <TooltipTrigger asChild>
-                                                                <span className="block truncate cursor-help">{session.reset_approval}</span>
-                                                            </TooltipTrigger>
-                                                            <TooltipContent className="max-w-xs">
-                                                                <p>{session.reset_approval}</p>
-                                                            </TooltipContent>
-                                                        </Tooltip>
-                                                    </TooltipProvider>
+                                                {session.ended_by ? (
+                                                    <Badge variant="outline" className="capitalize">{session.ended_by}</Badge>
                                                 ) : '—'}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <Button
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    onClick={() => setTimelineSessionId(session.id)}
+                                                    title="View timeline"
+                                                >
+                                                    <History className="h-4 w-4" />
+                                                </Button>
                                             </TableCell>
                                         </TableRow>
                                     ))
@@ -569,9 +614,17 @@ export default function BreakTimerReports() {
                                         Overage: +{formatTime(session.overage_seconds)}
                                     </span>
                                 )}
-                                {session.reset_approval && (
-                                    <p className="text-muted-foreground text-xs">Reset: {session.reset_approval}</p>
+                                {session.ended_by && (
+                                    <p className="text-muted-foreground text-xs">Ended by: <span className="capitalize">{session.ended_by}</span></p>
                                 )}
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="w-full"
+                                    onClick={() => setTimelineSessionId(session.id)}
+                                >
+                                    <History className="mr-2 h-4 w-4" /> View Timeline
+                                </Button>
                             </div>
                         ))
                     )}
@@ -583,6 +636,12 @@ export default function BreakTimerReports() {
                     </div>
                 )}
             </div>
+
+            <SessionTimelineDialog
+                open={timelineSessionId !== null}
+                onOpenChange={(open) => !open && setTimelineSessionId(null)}
+                sessionId={timelineSessionId}
+            />
         </AppLayout>
     );
 }

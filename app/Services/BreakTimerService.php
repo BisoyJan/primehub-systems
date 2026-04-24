@@ -380,6 +380,22 @@ class BreakTimerService
     public function endSession(BreakSession $session): string
     {
         $status = DB::transaction(function () use ($session): string {
+            // Lock the row to prevent concurrent updates from auto-reset / admin actions.
+            $locked = BreakSession::query()->whereKey($session->id)->lockForUpdate()->first();
+
+            if (! $locked) {
+                return $session->status;
+            }
+
+            // If another process already ended this session, no-op.
+            if (! in_array($locked->status, ['active', 'paused'], true)) {
+                $session->setRawAttributes($locked->getAttributes(), true);
+
+                return $locked->status;
+            }
+
+            $session = $locked;
+
             $totalPaused = $session->total_paused_seconds;
 
             if ($session->status === 'paused') {
@@ -403,6 +419,7 @@ class BreakTimerService
 
             $session->update([
                 'status' => $status,
+                'ended_by' => 'agent',
                 'ended_at' => now(),
                 'remaining_seconds' => $remaining,
                 'overage_seconds' => $overage,
@@ -470,6 +487,136 @@ class BreakTimerService
         return (int) now()->diffInSeconds($lastPauseEvent->occurred_at, absolute: true);
     }
 
+    /**
+     * Force-end an active or paused session on behalf of an agent (admin/HR/TL action).
+     *
+     * Calculates final overage as if naturally ended, marks status accordingly,
+     * and records a 'force_end' audit event with the admin's identity and reason.
+     */
+    public function forceEndSession(BreakSession $session, int $adminId, string $adminName, string $reason): string
+    {
+        return DB::transaction(function () use ($session, $adminId, $adminName, $reason): string {
+            $locked = BreakSession::query()->whereKey($session->id)->lockForUpdate()->first();
+
+            if (! $locked || ! in_array($locked->status, ['active', 'paused'], true)) {
+                throw new \RuntimeException('Session is no longer active or paused.');
+            }
+
+            $session = $locked;
+
+            $totalPaused = $session->total_paused_seconds;
+
+            if ($session->status === 'paused') {
+                $lastPauseEvent = $session->breakEvents()
+                    ->where('action', 'pause')
+                    ->latest('occurred_at')
+                    ->first();
+
+                if ($lastPauseEvent) {
+                    $totalPaused += (int) now()->diffInSeconds($lastPauseEvent->occurred_at, absolute: true);
+                }
+            }
+
+            $elapsed = (int) now()->diffInSeconds($session->started_at, absolute: true) - $totalPaused;
+            $remaining = max(0, $session->duration_seconds - $elapsed);
+            $overage = $elapsed > $session->duration_seconds
+                ? $elapsed - $session->duration_seconds
+                : 0;
+
+            $status = $overage > 0 ? 'overage' : 'completed';
+
+            $session->update([
+                'status' => $status,
+                'ended_by' => 'admin',
+                'ended_at' => now(),
+                'remaining_seconds' => $remaining,
+                'overage_seconds' => $overage,
+                'total_paused_seconds' => $totalPaused,
+            ]);
+
+            BreakEvent::create([
+                'break_session_id' => $session->id,
+                'action' => 'force_end',
+                'remaining_seconds' => $remaining,
+                'overage_seconds' => $overage,
+                'reason' => "Force-ended by {$adminName} (#{$adminId}): {$reason}",
+                'occurred_at' => now(),
+            ]);
+
+            activity()
+                ->causedBy($adminId)
+                ->performedOn($session)
+                ->withProperties([
+                    'reason' => $reason,
+                    'session_id' => $session->session_id,
+                    'agent_user_id' => $session->user_id,
+                    'final_status' => $status,
+                    'overage_seconds' => $overage,
+                ])
+                ->log('Break session force-ended by admin');
+
+            return $status;
+        });
+    }
+
+    /**
+     * Restore a previously ended session (completed/overage/reset/auto_ended).
+     *
+     * Revives the session in place by setting status='active', clearing ended_at,
+     * and back-dating started_at so the agent gets back the seconds they had remaining
+     * at the time of the original end. The original duration_seconds is preserved.
+     */
+    public function restoreSession(BreakSession $session, int $adminId, string $adminName, string $reason): void
+    {
+        DB::transaction(function () use ($session, $adminId, $adminName, $reason) {
+            $locked = BreakSession::query()->whereKey($session->id)->lockForUpdate()->first();
+
+            if (! $locked || ! in_array($locked->status, ['completed', 'overage', 'reset', 'auto_ended'], true)) {
+                throw new \RuntimeException('Session is no longer in a restorable state.');
+            }
+
+            $session = $locked;
+
+            $remaining = max(0, (int) $session->remaining_seconds);
+            $duration = (int) $session->duration_seconds;
+            $consumed = max(0, $duration - $remaining);
+
+            // Back-date started_at so (now - started_at) == consumed seconds
+            // and remaining = duration - elapsed = $remaining.
+            $session->update([
+                'status' => 'active',
+                'ended_by' => null,
+                'ended_at' => null,
+                'started_at' => now()->subSeconds($consumed),
+                'remaining_seconds' => $remaining,
+                'overage_seconds' => 0,
+                'total_paused_seconds' => 0,
+                'last_pause_reason' => null,
+                'overbreak_notified_at' => null,
+            ]);
+
+            BreakEvent::create([
+                'break_session_id' => $session->id,
+                'action' => 'restore',
+                'remaining_seconds' => $remaining,
+                'overage_seconds' => 0,
+                'reason' => "Restored by {$adminName} (#{$adminId}): {$reason}",
+                'occurred_at' => now(),
+            ]);
+
+            activity()
+                ->causedBy($adminId)
+                ->performedOn($session)
+                ->withProperties([
+                    'reason' => $reason,
+                    'session_id' => $session->session_id,
+                    'agent_user_id' => $session->user_id,
+                    'restored_remaining_seconds' => $remaining,
+                ])
+                ->log('Break session restored by admin');
+        });
+    }
+
     public function resetShift(int $userId, string $date, string $approval): int
     {
         return DB::transaction(function () use ($userId, $date, $approval): int {
@@ -507,6 +654,7 @@ class BreakTimerService
 
                 $session->update([
                     'status' => 'reset',
+                    'ended_by' => 'admin',
                     'ended_at' => $session->ended_at ?? now(),
                     'remaining_seconds' => max(0, $session->duration_seconds - $elapsed),
                     'overage_seconds' => $overage,

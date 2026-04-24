@@ -32,6 +32,7 @@ class BreakSession extends Model
         'type',
         'combined_break_count',
         'status',
+        'ended_by',
         'duration_seconds',
         'started_at',
         'ended_at',
@@ -40,7 +41,6 @@ class BreakSession extends Model
         'overbreak_notified_at',
         'total_paused_seconds',
         'last_pause_reason',
-        'reset_approval',
         'shift_date',
     ];
 

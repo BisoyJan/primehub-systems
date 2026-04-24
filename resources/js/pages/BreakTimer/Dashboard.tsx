@@ -7,14 +7,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
 import { usePageMeta, useFlashMessage, usePageLoading } from '@/hooks';
+import { usePermission } from '@/hooks/use-permission';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { PageHeader } from '@/components/PageHeader';
 import { DatePicker } from '@/components/ui/date-picker';
 import { dashboard as dashboardRoute } from '@/routes/break-timer';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Users, Activity, CheckCircle, AlertTriangle, Clock, ChevronsUpDown, Check, Pause, Play, PlayCircle, StopCircle } from 'lucide-react';
+import { Users, Activity, CheckCircle, AlertTriangle, Clock, ChevronsUpDown, Check, Pause, Play, PlayCircle, StopCircle, Square, RotateCcw, History } from 'lucide-react';
+import { SessionTimelineDialog } from './components/SessionTimelineDialog';
 import { useState, useMemo, useEffect, useRef } from 'react';
 
 interface SessionUser {
@@ -145,6 +150,10 @@ function statusBadgeVariant(status: string, overageSeconds = 0): { variant: 'def
 
 export default function BreakTimerDashboard() {
     const { sessions, stats, filters, users, campaigns } = usePage<PageProps>().props;
+    const { can } = usePermission();
+    const canForceEnd = can('break_timer.force_end');
+    const canRestore = can('break_timer.restore');
+    const canActOnSessions = canForceEnd || canRestore;
 
     const { title, breadcrumbs } = usePageMeta({
         title: 'Break Dashboard',
@@ -164,6 +173,47 @@ export default function BreakTimerDashboard() {
     const [campaignId, setCampaignId] = useState(filters.campaign_id);
     const [showUserSearch, setShowUserSearch] = useState(false);
     const [userSearchQuery, setUserSearchQuery] = useState('');
+
+    const [actionDialog, setActionDialog] = useState<{ kind: 'force_end' | 'restore'; session: SessionData } | null>(null);
+    const [actionReason, setActionReason] = useState('');
+    const [isSubmittingAction, setIsSubmittingAction] = useState(false);
+    const [timelineSessionId, setTimelineSessionId] = useState<number | null>(null);
+
+    function openForceEnd(session: SessionData) {
+        setActionReason('');
+        setActionDialog({ kind: 'force_end', session });
+    }
+
+    function openRestore(session: SessionData) {
+        setActionReason('');
+        setActionDialog({ kind: 'restore', session });
+    }
+
+    function closeActionDialog() {
+        if (isSubmittingAction) return;
+        setActionDialog(null);
+        setActionReason('');
+    }
+
+    function submitAction() {
+        if (!actionDialog) return;
+        const reason = actionReason.trim();
+        if (reason.length < 3) return;
+
+        const url = actionDialog.kind === 'force_end'
+            ? `/break-timer/${actionDialog.session.id}/force-end`
+            : `/break-timer/${actionDialog.session.id}/restore`;
+
+        setIsSubmittingAction(true);
+        router.post(url, { reason }, {
+            preserveScroll: true,
+            onFinish: () => {
+                setIsSubmittingAction(false);
+                setActionDialog(null);
+                setActionReason('');
+            },
+        });
+    }
 
     // Auto-refresh every 30 seconds for live monitoring
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -409,12 +459,14 @@ export default function BreakTimerDashboard() {
                                     <TableHead>Expected End</TableHead>
                                     <TableHead>Overage</TableHead>
                                     <TableHead>Paused / Resumed</TableHead>
+                                    {canActOnSessions && <TableHead className="text-right">Actions</TableHead>}
+                                    {!canActOnSessions && <TableHead className="text-right">Timeline</TableHead>}
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {sessions.data.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
+                                        <TableCell colSpan={canActOnSessions ? 10 : 9} className="h-24 text-center text-muted-foreground">
                                             No sessions found.
                                         </TableCell>
                                     </TableRow>
@@ -516,6 +568,54 @@ export default function BreakTimerDashboard() {
                                                     '—'
                                                 )}
                                             </TableCell>
+                                            {canActOnSessions ? (
+                                                <TableCell className="text-right">
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        onClick={() => setTimelineSessionId(session.id)}
+                                                        className="mr-1"
+                                                        title="View timeline"
+                                                    >
+                                                        <History className="h-3 w-3" />
+                                                    </Button>
+                                                    {canForceEnd && (session.status === 'active' || session.status === 'paused') && (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="destructive"
+                                                            onClick={() => openForceEnd(session)}
+                                                            className="mr-2 gap-1"
+                                                        >
+                                                            <Square className="h-3 w-3" />
+                                                            Force End
+                                                        </Button>
+                                                    )}
+                                                    {canRestore
+                                                        && ['completed', 'overage', 'reset', 'auto_ended'].includes(session.status)
+                                                        && (session.remaining_seconds ?? 0) >= 30 && (
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={() => openRestore(session)}
+                                                                className="gap-1"
+                                                            >
+                                                                <RotateCcw className="h-3 w-3" />
+                                                                Restore
+                                                            </Button>
+                                                        )}
+                                                </TableCell>
+                                            ) : (
+                                                <TableCell className="text-right">
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        onClick={() => setTimelineSessionId(session.id)}
+                                                        title="View timeline"
+                                                    >
+                                                        <History className="h-4 w-4" />
+                                                    </Button>
+                                                </TableCell>
+                                            )}
                                         </TableRow>
                                     ))
                                 )}
@@ -598,6 +698,41 @@ export default function BreakTimerDashboard() {
                                         )}
                                     </div>
                                 )}
+                                <div className="flex flex-wrap gap-2 pt-2 border-t">
+                                    <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => setTimelineSessionId(session.id)}
+                                        className="flex-1 gap-1"
+                                    >
+                                        <History className="h-3 w-3" />
+                                        Timeline
+                                    </Button>
+                                    {canForceEnd && (session.status === 'active' || session.status === 'paused') && (
+                                        <Button
+                                            size="sm"
+                                            variant="destructive"
+                                            onClick={() => openForceEnd(session)}
+                                            className="flex-1 gap-1"
+                                        >
+                                            <Square className="h-3 w-3" />
+                                            Force End
+                                        </Button>
+                                    )}
+                                    {canRestore
+                                        && ['completed', 'overage', 'reset', 'auto_ended'].includes(session.status)
+                                        && (session.remaining_seconds ?? 0) >= 30 && (
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => openRestore(session)}
+                                                className="flex-1 gap-1"
+                                            >
+                                                <RotateCcw className="h-3 w-3" />
+                                                Restore
+                                            </Button>
+                                        )}
+                                </div>
                             </div>
                         ))
                     )}
@@ -609,6 +744,72 @@ export default function BreakTimerDashboard() {
                     </div>
                 )}
             </div>
+
+            <Dialog open={!!actionDialog} onOpenChange={(open) => { if (!open) closeActionDialog(); }}>
+                <DialogContent className="max-w-[90vw] sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>
+                            {actionDialog?.kind === 'force_end' ? 'Force End Break Session' : 'Restore Break Session'}
+                        </DialogTitle>
+                        <DialogDescription>
+                            {actionDialog?.kind === 'force_end'
+                                ? 'End this session on behalf of the agent (e.g., they forgot to end before their shift ended). This action is logged.'
+                                : 'Restore this previously ended session. The agent will get back the remaining time. This action is logged.'}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {actionDialog && (
+                        <div className="space-y-3 text-sm">
+                            <div className="rounded-md bg-muted p-3 space-y-1">
+                                <div><span className="text-muted-foreground">Agent:</span> {actionDialog.session.user ? `${actionDialog.session.user.first_name} ${actionDialog.session.user.last_name}` : '—'}</div>
+                                <div><span className="text-muted-foreground">Type:</span> {formatBreakType(actionDialog.session.type)}</div>
+                                <div><span className="text-muted-foreground">Status:</span> {actionDialog.session.status}</div>
+                                {actionDialog.kind === 'restore' && (
+                                    <div><span className="text-muted-foreground">Remaining to restore:</span> {formatTime(actionDialog.session.remaining_seconds ?? 0)}</div>
+                                )}
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label htmlFor="action-reason">
+                                    Reason <span className="text-red-500">*</span>
+                                </Label>
+                                <Textarea
+                                    id="action-reason"
+                                    value={actionReason}
+                                    onChange={(e) => setActionReason(e.target.value)}
+                                    placeholder={actionDialog.kind === 'force_end'
+                                        ? 'e.g., Agent logged off without ending break.'
+                                        : 'e.g., Break was accidentally ended; agent had ~10 min remaining.'}
+                                    maxLength={500}
+                                    rows={3}
+                                    disabled={isSubmittingAction}
+                                />
+                                <p className="text-xs text-muted-foreground">{actionReason.length}/500</p>
+                            </div>
+                        </div>
+                    )}
+
+                    <DialogFooter className="gap-2">
+                        <Button variant="outline" onClick={closeActionDialog} disabled={isSubmittingAction}>
+                            Cancel
+                        </Button>
+                        <Button
+                            variant={actionDialog?.kind === 'force_end' ? 'destructive' : 'default'}
+                            onClick={submitAction}
+                            disabled={isSubmittingAction || actionReason.trim().length < 3}
+                        >
+                            {isSubmittingAction
+                                ? 'Submitting...'
+                                : actionDialog?.kind === 'force_end' ? 'Force End' : 'Restore'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <SessionTimelineDialog
+                open={timelineSessionId !== null}
+                onOpenChange={(open) => !open && setTimelineSessionId(null)}
+                sessionId={timelineSessionId}
+            />
         </AppLayout>
     );
 }

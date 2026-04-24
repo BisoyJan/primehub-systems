@@ -10,6 +10,7 @@ use App\Services\BreakTimerService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 
@@ -231,6 +232,14 @@ class BreakDashboardController extends Controller
             $query->where('status', $request->query('status'));
         }
 
+        if ($action = $request->query('admin_action')) {
+            if (in_array($action, ['force_end', 'restore', 'reset', 'auto_end'], true)) {
+                $query->whereIn('id', function ($q) use ($action) {
+                    $q->select('break_session_id')->from('break_events')->where('action', $action);
+                });
+            }
+        }
+
         $paginated = $query->paginate(25)->withQueryString();
 
         $items = $paginated->getCollection()->map(function (BreakSession $session) {
@@ -254,7 +263,7 @@ class BreakDashboardController extends Controller
                 'total_paused_seconds' => $session->total_paused_seconds,
                 'shift_date' => $session->shift_date?->toDateString(),
                 'last_pause_reason' => $session->last_pause_reason,
-                'reset_approval' => $session->reset_approval,
+                'ended_by' => $session->ended_by,
             ];
         })->toArray();
 
@@ -266,7 +275,13 @@ class BreakDashboardController extends Controller
             'total_sessions' => (clone $periodQuery)->count(),
             'total_overage' => (clone $periodQuery)->where('status', 'overage')->count(),
             'avg_overage_seconds' => (int) (clone $periodQuery)->where('overage_seconds', '>', 0)->avg('overage_seconds'),
-            'total_resets' => (clone $periodQuery)->whereNotNull('reset_approval')->count(),
+            'total_resets' => (clone $periodQuery)->where('status', 'reset')->count(),
+            'total_force_ended' => (clone $periodQuery)->whereIn('id', function ($q) {
+                $q->select('break_session_id')->from('break_events')->where('action', 'force_end');
+            })->count(),
+            'total_restored' => (clone $periodQuery)->whereIn('id', function ($q) {
+                $q->select('break_session_id')->from('break_events')->where('action', 'restore');
+            })->count(),
         ];
 
         return Inertia::render('BreakTimer/Reports', [
@@ -289,6 +304,7 @@ class BreakDashboardController extends Controller
                 'type' => $request->query('type', ''),
                 'status' => $request->query('status', ''),
                 'campaign_id' => $request->query('campaign_id', ''),
+                'admin_action' => $request->query('admin_action', ''),
             ],
             'users' => $this->getScopedUsers($teamLeadCampaignIds),
             'campaigns' => $this->getScopedCampaigns($teamLeadCampaignIds),
@@ -382,5 +398,168 @@ class BreakDashboardController extends Controller
         Cache::forget($cacheKey);
 
         return response()->download($filePath, $filename)->deleteFileAfterSend(true);
+    }
+
+    /**
+     * Force-end an active or paused break session on behalf of an agent.
+     * For shifts where the agent forgot to end (logged off, left office, etc.).
+     */
+    public function forceEnd(Request $request, BreakSession $breakSession)
+    {
+        $request->validate([
+            'reason' => ['required', 'string', 'max:500'],
+        ]);
+
+        $this->ensureSessionInScope($breakSession);
+
+        if (! in_array($breakSession->status, ['active', 'paused'], true)) {
+            return redirect()->back()->with('flash', [
+                'message' => 'Only active or paused sessions can be force-ended.',
+                'type' => 'error',
+            ]);
+        }
+
+        try {
+            $admin = auth()->user();
+            $adminName = trim("{$admin->first_name} {$admin->last_name}") ?: $admin->email;
+
+            $this->breakTimerService->forceEndSession(
+                $breakSession,
+                (int) $admin->id,
+                $adminName,
+                $request->input('reason'),
+            );
+
+            return redirect()->back()->with('flash', [
+                'message' => 'Session force-ended successfully.',
+                'type' => 'success',
+            ]);
+        } catch (\Exception $e) {
+            Log::error('BreakTimer ForceEnd Error: '.$e->getMessage());
+
+            return redirect()->back()->with('flash', [
+                'message' => 'Failed to force-end session.',
+                'type' => 'error',
+            ]);
+        }
+    }
+
+    /**
+     * Restore a previously ended session that was unintentionally ended/reset
+     * with significant remaining time.
+     */
+    public function restore(Request $request, BreakSession $breakSession)
+    {
+        $request->validate([
+            'reason' => ['required', 'string', 'max:500'],
+        ]);
+
+        $this->ensureSessionInScope($breakSession);
+
+        if (! in_array($breakSession->status, ['completed', 'overage', 'reset', 'auto_ended'], true)) {
+            return redirect()->back()->with('flash', [
+                'message' => 'Only ended, reset, or auto-ended sessions can be restored.',
+                'type' => 'error',
+            ]);
+        }
+
+        if ((int) $breakSession->remaining_seconds < 30) {
+            return redirect()->back()->with('flash', [
+                'message' => 'Session has less than 30 seconds remaining and cannot be restored.',
+                'type' => 'error',
+            ]);
+        }
+
+        $hasActive = BreakSession::query()
+            ->forUser($breakSession->user_id)
+            ->forDate($breakSession->shift_date->toDateString())
+            ->active()
+            ->where('id', '!=', $breakSession->id)
+            ->exists();
+
+        if ($hasActive) {
+            return redirect()->back()->with('flash', [
+                'message' => 'Agent already has another active session. End it first before restoring.',
+                'type' => 'error',
+            ]);
+        }
+
+        try {
+            $admin = auth()->user();
+            $adminName = trim("{$admin->first_name} {$admin->last_name}") ?: $admin->email;
+
+            $this->breakTimerService->restoreSession(
+                $breakSession,
+                (int) $admin->id,
+                $adminName,
+                $request->input('reason'),
+            );
+
+            return redirect()->back()->with('flash', [
+                'message' => 'Session restored successfully.',
+                'type' => 'success',
+            ]);
+        } catch (\Exception $e) {
+            Log::error('BreakTimer Restore Error: '.$e->getMessage());
+
+            return redirect()->back()->with('flash', [
+                'message' => 'Failed to restore session.',
+                'type' => 'error',
+            ]);
+        }
+    }
+
+    /**
+     * Return the full event timeline for a session (audit trail).
+     */
+    public function timeline(BreakSession $breakSession)
+    {
+        $this->ensureSessionInScope($breakSession);
+
+        $events = $breakSession->breakEvents()
+            ->orderBy('occurred_at')
+            ->orderBy('id')
+            ->get(['id', 'action', 'remaining_seconds', 'overage_seconds', 'reason', 'occurred_at'])
+            ->map(fn ($e) => [
+                'id' => $e->id,
+                'action' => $e->action,
+                'remaining_seconds' => $e->remaining_seconds,
+                'overage_seconds' => $e->overage_seconds,
+                'reason' => $e->reason,
+                'occurred_at' => $e->occurred_at?->toDateTimeString(),
+            ])
+            ->all();
+
+        return response()->json([
+            'session' => [
+                'id' => $breakSession->id,
+                'session_id' => $breakSession->session_id,
+                'status' => $breakSession->status,
+                'ended_by' => $breakSession->ended_by,
+                'type' => $breakSession->type,
+            ],
+            'events' => $events,
+        ]);
+    }
+
+    /**
+     * Ensure a Team Lead can only act on sessions belonging to users in their campaigns.
+     */
+    private function ensureSessionInScope(BreakSession $session): void
+    {
+        $campaignIds = $this->getTeamLeadCampaignIds();
+
+        if (empty($campaignIds)) {
+            return;
+        }
+
+        $inScope = BreakSession::query()
+            ->where('id', $session->id)
+            ->whereHas('user.activeSchedule', fn ($q) => $q->whereIn('campaign_id', $campaignIds))
+            ->exists();
+
+        if (! $inScope) {
+            abort(403, 'This session is outside your assigned campaigns.');
+        }
     }
 }

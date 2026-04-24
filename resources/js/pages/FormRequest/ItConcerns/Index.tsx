@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Head, router, usePage } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
 import { useDebounce, useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
@@ -195,7 +195,8 @@ export default function ItConcernsIndex() {
         return "all";
     });
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
-    const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
+    // Auto-enable polling for IT staff so they receive desktop notifications about new concerns
+    const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(() => can('it_concerns.resolve'));
 
     useEffect(() => {
         setSearch(appliedFilters.search || "");
@@ -251,6 +252,104 @@ export default function ItConcernsIndex() {
 
         return () => clearInterval(interval);
     }, [autoRefreshEnabled, debouncedSearch, siteFilter, categoryFilter, statusFilter, priorityFilter, campaignFilter]);
+
+    // ---------- Browser desktop notification on new IT concerns ----------
+    // Mirrors the Break Timer overbreak notification pattern: tab title flash + Notification API.
+    const seenConcernIdsRef = useRef<Set<number>>(new Set());
+    const isInitialConcernSyncRef = useRef(true);
+    const titleFlashRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const baseTitleRef = useRef<string>('');
+
+    // Request notification permission once on mount
+    useEffect(() => {
+        if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission();
+        }
+        baseTitleRef.current = document.title;
+    }, []);
+
+    const stopTitleFlash = useCallback(() => {
+        if (titleFlashRef.current) {
+            clearInterval(titleFlashRef.current);
+            titleFlashRef.current = null;
+        }
+        if (baseTitleRef.current) {
+            document.title = baseTitleRef.current;
+        }
+    }, []);
+
+    const startTitleFlash = useCallback((count: number) => {
+        if (titleFlashRef.current) clearInterval(titleFlashRef.current);
+        baseTitleRef.current = document.title.replace(/^🔧 \d+ New IT Concern[s]?! - /, '');
+        let toggle = false;
+        titleFlashRef.current = setInterval(() => {
+            toggle = !toggle;
+            document.title = toggle
+                ? `🔧 ${count} New IT Concern${count > 1 ? 's' : ''}! - ${baseTitleRef.current}`
+                : baseTitleRef.current;
+        }, 1000);
+    }, []);
+
+    const showConcernNotification = useCallback((concern: ItConcern) => {
+        if (typeof window === 'undefined' || !('Notification' in window)) return;
+        const reporter = concern.user?.name ?? 'A user';
+        const title = `🔧 New IT Concern (${concern.priority.toUpperCase()})`;
+        const body = `${reporter} reported a ${concern.category} issue at Station ${concern.station_number} — ${concern.site?.name ?? ''}`;
+        const create = () => {
+            const n = new Notification(title, {
+                body,
+                icon: '/favicon.ico',
+                tag: `it-concern-${concern.id}`,
+                requireInteraction: true,
+            });
+            n.onclick = () => {
+                window.focus();
+                router.visit(`/form-requests/it-concerns/${concern.id}`);
+                n.close();
+            };
+        };
+        if (Notification.permission === 'granted') {
+            create();
+        } else if (Notification.permission !== 'denied') {
+            Notification.requestPermission().then((perm) => {
+                if (perm === 'granted') create();
+            });
+        }
+    }, []);
+
+    // Detect new pending concerns on each data update (initial load = baseline, no notify)
+    useEffect(() => {
+        const list = concernData.data;
+        const currentIds = list.map((c) => c.id);
+
+        if (isInitialConcernSyncRef.current) {
+            seenConcernIdsRef.current = new Set(currentIds);
+            isInitialConcernSyncRef.current = false;
+            return;
+        }
+
+        const newConcerns = list.filter(
+            (c) => !seenConcernIdsRef.current.has(c.id) && c.status === 'pending',
+        );
+
+        if (newConcerns.length > 0) {
+            newConcerns.forEach(showConcernNotification);
+            startTitleFlash(newConcerns.length);
+        }
+
+        seenConcernIdsRef.current = new Set(currentIds);
+    }, [concernData.data, showConcernNotification, startTitleFlash]);
+
+    // Stop the title flash when the user focuses the tab; clean up on unmount
+    useEffect(() => {
+        const handleFocus = () => stopTitleFlash();
+        window.addEventListener('focus', handleFocus);
+        return () => {
+            window.removeEventListener('focus', handleFocus);
+            stopTitleFlash();
+        };
+    }, [stopTitleFlash]);
+    // ---------- End browser desktop notification ----------
 
     const isInitialMount = React.useRef(true);
 

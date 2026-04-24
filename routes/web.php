@@ -549,6 +549,19 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
             ->middleware('permission:break_timer.dashboard')
             ->name('dashboard');
 
+        // Admin actions on agent sessions
+        Route::post('/{breakSession}/force-end', [BreakDashboardController::class, 'forceEnd'])
+            ->middleware('permission:break_timer.force_end')
+            ->name('force-end');
+        Route::post('/{breakSession}/restore', [BreakDashboardController::class, 'restore'])
+            ->middleware('permission:break_timer.restore')
+            ->name('restore');
+
+        // Session timeline (audit trail)
+        Route::get('/{breakSession}/timeline', [BreakDashboardController::class, 'timeline'])
+            ->middleware('permission:break_timer.dashboard')
+            ->name('timeline');
+
         // Reports
         Route::get('/reports', [BreakDashboardController::class, 'reports'])
             ->middleware('permission:break_timer.reports')
