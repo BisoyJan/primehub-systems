@@ -347,7 +347,7 @@ export default function Index() {
             },
             body: JSON.stringify({
                 format: 'png',
-                size: 256,
+                size: 245,
                 metadata: 0,
             }),
         })
@@ -398,7 +398,7 @@ export default function Index() {
             body: JSON.stringify({
                 pc_ids: selectedPcIds,
                 format: 'png',
-                size: 256,
+                size: 245,
                 metadata: 0,
             }),
         })

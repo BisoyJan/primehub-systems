@@ -238,7 +238,7 @@ export default function StationIndex() {
         fetch('/stations/qrcode/bulk-all-stream', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
-            body: JSON.stringify({ format: 'png', size: 256, metadata: 0 }),
+            body: JSON.stringify({ format: 'png', size: 245, metadata: 0 }),
         })
             .then(res => {
                 if (!res.ok) throw new Error('Failed to generate QR codes');
@@ -275,7 +275,7 @@ export default function StationIndex() {
         fetch('/stations/qrcode/zip-selected-stream', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
-            body: JSON.stringify({ station_ids: selectedStationIds, format: 'png', size: 256, metadata: 0 }),
+            body: JSON.stringify({ station_ids: selectedStationIds, format: 'png', size: 245, metadata: 0 }),
         })
             .then(res => {
                 if (!res.ok) throw new Error('Failed to generate QR codes');
