@@ -20,11 +20,14 @@ class GenerateCoachingLogsExportExcel implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
+    /**
+     * @param  array<int>|null  $campaignIds
+     */
     public function __construct(
         protected string $jobId,
         protected ?string $dateFrom = null,
         protected ?string $dateTo = null,
-        protected ?int $campaignId = null,
+        protected ?array $campaignIds = null,
         protected ?int $teamLeadId = null,
         protected ?string $coachingStatus = null,
     ) {}
@@ -51,10 +54,11 @@ class GenerateCoachingLogsExportExcel implements ShouldQueue
                 $query->where('coach_id', $this->teamLeadId);
             }
 
-            if ($this->campaignId) {
-                $query->whereHas('coachee', function ($q) {
-                    $q->whereHas('activeSchedule', function ($sq) {
-                        $sq->where('campaign_id', $this->campaignId);
+            if ($this->campaignIds) {
+                $campaignIds = $this->campaignIds;
+                $query->whereHas('coachee', function ($q) use ($campaignIds) {
+                    $q->whereHas('activeSchedule', function ($sq) use ($campaignIds) {
+                        $sq->whereIn('campaign_id', $campaignIds);
                     });
                 });
             }

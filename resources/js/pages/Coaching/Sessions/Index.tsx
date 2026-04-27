@@ -65,6 +65,7 @@ import type {
     Campaign,
     User,
 } from '@/types';
+import { MultiSelectFilter } from '@/components/multi-select-filter';
 
 interface PaginatedSessions {
     data: CoachingSession[];
@@ -144,14 +145,19 @@ export default function CoachingSessionsIndex() {
     const [ackStatus, setAckStatus] = useState(initialFilters.ack_status || '');
     const [complianceStatus, setComplianceStatus] = useState(initialFilters.compliance_status || '');
     const [purpose, setPurpose] = useState(initialFilters.purpose || '');
-    const [campaignId, setCampaignId] = useState(initialFilters.campaign_id || '');
+    const [campaignIds, setCampaignIds] = useState<string[]>(() => {
+        const v = initialFilters.campaign_id;
+        if (!v) return [];
+        return String(v).split(',').filter(Boolean);
+    });
+    const campaignIdsParam = campaignIds.length > 0 ? campaignIds.join(',') : undefined;
     const [dateFrom, setDateFrom] = useState(initialFilters.date_from || '');
     const [dateTo, setDateTo] = useState(initialFilters.date_to || '');
     const [coacheeRole, setCoacheeRole] = useState(initialFilters.coachee_role || '');
 
     const deleteForm = useForm({});
 
-    const activeFilterCount = [search, ackStatus, complianceStatus, purpose, campaignId, coacheeRole, teamLeadId, dateFrom, dateTo].filter(Boolean).length;
+    const activeFilterCount = [search, ackStatus, complianceStatus, purpose, campaignIds.length > 0 ? '1' : '', coacheeRole, teamLeadId, dateFrom, dateTo].filter(Boolean).length;
 
     const statusSummary = useMemo(() => {
         const counts: Record<string, number> = {};
@@ -272,7 +278,7 @@ export default function CoachingSessionsIndex() {
                 ack_status: ackStatus || undefined,
                 compliance_status: complianceStatus || undefined,
                 purpose: purpose || undefined,
-                campaign_id: campaignId || undefined,
+                campaign_id: campaignIdsParam,
                 date_from: dateFrom || undefined,
                 date_to: dateTo || undefined,
                 coachee_role: coacheeRole || undefined,
@@ -287,7 +293,7 @@ export default function CoachingSessionsIndex() {
         setAckStatus('');
         setComplianceStatus('');
         setPurpose('');
-        setCampaignId('');
+        setCampaignIds([]);
         setDateFrom('');
         setDateTo('');
         setCoacheeRole('');
@@ -304,7 +310,7 @@ export default function CoachingSessionsIndex() {
                 ack_status: ackStatus || undefined,
                 compliance_status: complianceStatus || undefined,
                 purpose: purpose || undefined,
-                campaign_id: campaignId || undefined,
+                campaign_id: campaignIdsParam,
                 date_from: dateFrom || undefined,
                 date_to: dateTo || undefined,
                 coachee_role: coacheeRole || undefined,
@@ -604,18 +610,13 @@ export default function CoachingSessionsIndex() {
 
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
                         {(isAdmin || isTeamLead) && activeTab !== 'my' && (
-                            <Select value={campaignId} onValueChange={setCampaignId}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Campaign" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {campaigns.map((c) => (
-                                        <SelectItem key={c.id} value={String(c.id)}>
-                                            {c.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            <MultiSelectFilter
+                                options={campaigns.map((c) => ({ label: c.name, value: String(c.id) }))}
+                                value={campaignIds}
+                                onChange={setCampaignIds}
+                                placeholder="Campaign"
+                                emptyMessage="No campaigns found."
+                            />
                         )}
                         {isAdmin && (
                             <Select value={coacheeRole} onValueChange={setCoacheeRole}>

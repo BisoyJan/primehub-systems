@@ -493,6 +493,17 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
         Route::get('/export/download/{jobId}', [CoachingDashboardController::class, 'downloadExport'])
             ->middleware('permission:coaching.export')
             ->name('export.download');
+
+        // Campaign Coaching Completion export
+        Route::post('/campaign-completion/export/start', [CoachingDashboardController::class, 'startCampaignCompletionExport'])
+            ->middleware('permission:coaching.export')
+            ->name('campaign-completion.export.start');
+        Route::get('/campaign-completion/export/progress/{jobId}', [CoachingDashboardController::class, 'campaignCompletionExportProgress'])
+            ->middleware('permission:coaching.export')
+            ->name('campaign-completion.export.progress');
+        Route::get('/campaign-completion/export/download/{jobId}', [CoachingDashboardController::class, 'downloadCampaignCompletionExport'])
+            ->middleware('permission:coaching.export')
+            ->name('campaign-completion.export.download');
     });
 
     // Notifications

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Traits\RedirectsWithFlashMessages;
+use App\Jobs\GenerateCampaignCoachingCompletionExportExcel;
 use App\Jobs\GenerateCoachingLogsExportExcel;
 use App\Models\Campaign;
 use App\Models\CoachingSession;
@@ -24,6 +25,28 @@ class CoachingDashboardController extends Controller
     public function __construct(
         protected CoachingDashboardService $dashboardService,
     ) {}
+
+    /**
+     * Parse a campaign filter (CSV string, scalar, or array) into a list of int ids.
+     *
+     * @return array<int>|null
+     */
+    protected function parseCampaignIds(mixed $val): ?array
+    {
+        if ($val === null || $val === '' || $val === []) {
+            return null;
+        }
+        if (is_array($val)) {
+            $ids = array_map('intval', $val);
+        } elseif (is_string($val) && str_contains($val, ',')) {
+            $ids = array_map('intval', explode(',', $val));
+        } else {
+            $ids = [(int) $val];
+        }
+        $ids = array_values(array_filter($ids, fn ($id) => $id > 0));
+
+        return empty($ids) ? null : $ids;
+    }
 
     /**
      * Display the coaching dashboard (routes to correct view by role).
@@ -146,6 +169,17 @@ class CoachingDashboardController extends Controller
 
         $queueData = $this->dashboardService->getComplianceQueueData($filters ?: null);
 
+        // Server-side, cached campaign-completion stats (only for the agent dataset).
+        $campaignCompletion = null;
+        if ($coacheeRole !== 'Team Lead') {
+            $cacheKey = 'coaching_campaign_completion:'.md5(json_encode($filters));
+            $campaignCompletion = Cache::remember(
+                $cacheKey,
+                now()->addMinutes(5),
+                fn () => $this->dashboardService->buildCampaignCompletion($dashboardData),
+            );
+        }
+
         // Get campaigns and team leads for filter dropdowns
         $campaigns = Campaign::orderBy('name')->get(['id', 'name']);
         $teamLeads = User::where('role', 'Team Lead')
@@ -157,6 +191,8 @@ class CoachingDashboardController extends Controller
 
         $followUpData = $this->dashboardService->getExpandedFollowUps(auth()->user());
 
+        $followUpCampaignIds = $this->parseCampaignIds($request->input('campaign_id'));
+
         return Inertia::render('Coaching/Admin/Index', [
             'dashboardData' => $dashboardData,
             'teamLeadCoachingData' => $teamLeadCoachingData,
@@ -165,13 +201,15 @@ class CoachingDashboardController extends Controller
             'overdueFollowUps' => $followUpData['overdue'],
             'followUpComplianceRate' => $this->dashboardService->getFollowUpComplianceRate(
                 $request->input('coach_id') ? (int) $request->input('coach_id') : null,
-                $request->input('campaign_id') ? (int) $request->input('campaign_id') : null,
+                $followUpCampaignIds[0] ?? null,
             ),
             'campaigns' => $campaigns,
             'teamLeads' => $teamLeads,
             'filters' => $request->only(['campaign_id', 'coach_id', 'coaching_status', 'coachee_role', 'date_from', 'date_to']),
             'statusColors' => CoachingDashboardService::STATUS_COLORS,
             'purposes' => CoachingSession::PURPOSE_LABELS,
+            'monthlySessionTarget' => CoachingStatusSetting::getThreshold('monthly_session_target'),
+            'campaignCompletion' => $campaignCompletion,
         ]);
     }
 
@@ -235,7 +273,7 @@ class CoachingDashboardController extends Controller
         $request->validate([
             'date_from' => 'nullable|date',
             'date_to' => 'nullable|date|after_or_equal:date_from',
-            'campaign_id' => 'nullable|exists:campaigns,id',
+            'campaign_id' => 'nullable',
             'coach_id' => 'nullable|exists:users,id',
         ]);
 
@@ -245,7 +283,7 @@ class CoachingDashboardController extends Controller
             $jobId,
             $request->input('date_from'),
             $request->input('date_to'),
-            $request->input('campaign_id') ? (int) $request->input('campaign_id') : null,
+            $this->parseCampaignIds($request->input('campaign_id')),
             $request->input('coach_id') ? (int) $request->input('coach_id') : null,
         );
 
@@ -290,11 +328,95 @@ class CoachingDashboardController extends Controller
             abort(404, 'Export file not found. Please generate a new export.');
         }
 
+        $this->pruneStaleExports($tempDir, 'coaching_export_*.xlsx');
+
         $filePath = $files[0];
         $filename = basename($filePath);
 
-        Cache::forget($cacheKey);
+        return response()->download($filePath, $filename);
+    }
 
-        return response()->download($filePath, $filename)->deleteFileAfterSend(true);
+    /**
+     * Start a campaign-completion export job (per-agent monthly session counts).
+     */
+    public function startCampaignCompletionExport(Request $request)
+    {
+        $this->authorize('export', CoachingSession::class);
+
+        $request->validate([
+            'campaign_id' => 'nullable',
+            'coach_id' => 'nullable|exists:users,id',
+        ]);
+
+        $jobId = (string) Str::uuid();
+
+        $job = new GenerateCampaignCoachingCompletionExportExcel(
+            $jobId,
+            $this->parseCampaignIds($request->input('campaign_id')),
+            $request->input('coach_id') ? (int) $request->input('coach_id') : null,
+        );
+
+        if (config('queue.default') === 'sync') {
+            Bus::dispatchSync($job);
+        } else {
+            Bus::dispatch($job);
+        }
+
+        return response()->json(['jobId' => $jobId]);
+    }
+
+    /**
+     * Check campaign-completion export progress.
+     */
+    public function campaignCompletionExportProgress(string $jobId)
+    {
+        $cacheKey = "campaign_completion_export_job:{$jobId}";
+        $progress = Cache::get($cacheKey, [
+            'percent' => 0,
+            'status' => 'Not started',
+            'finished' => false,
+            'downloadUrl' => null,
+        ]);
+
+        return response()->json($progress);
+    }
+
+    /**
+     * Download the generated campaign-completion export file.
+     */
+    public function downloadCampaignCompletionExport(string $jobId)
+    {
+        $cacheKey = "campaign_completion_export_job:{$jobId}";
+
+        $tempDir = storage_path('app/temp');
+        $pattern = $tempDir."/campaign_coaching_completion_*_{$jobId}.xlsx";
+        $files = glob($pattern);
+
+        if (empty($files)) {
+            Cache::forget($cacheKey);
+            abort(404, 'Export file not found. Please generate a new export.');
+        }
+
+        $this->pruneStaleExports($tempDir, 'campaign_coaching_completion_*.xlsx');
+
+        $filePath = $files[0];
+        $filename = basename($filePath);
+
+        return response()->download($filePath, $filename);
+    }
+
+    /**
+     * Delete export files older than 1 hour to keep the temp directory tidy.
+     * Files are kept briefly so that download-manager browser extensions
+     * (which often re-fetch the URL) don't hit a 404 after the first send.
+     */
+    protected function pruneStaleExports(string $tempDir, string $glob): void
+    {
+        $cutoff = time() - 3600;
+        foreach (glob($tempDir.'/'.$glob) ?: [] as $file) {
+            if (@filemtime($file) < $cutoff) {
+                @unlink($file);
+            }
+        }
     }
 }

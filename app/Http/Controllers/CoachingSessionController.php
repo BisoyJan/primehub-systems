@@ -113,9 +113,20 @@ class CoachingSessionController extends Controller
             $query->where('purpose', $request->purpose);
         }
 
-        // Campaign filter (admin/HR)
+        // Campaign filter (admin/HR) — accepts CSV string, scalar, or array.
         if ($request->filled('campaign_id')) {
-            $query->forCampaign($request->campaign_id);
+            $raw = $request->input('campaign_id');
+            if (is_array($raw)) {
+                $ids = array_map('intval', $raw);
+            } elseif (is_string($raw) && str_contains($raw, ',')) {
+                $ids = array_map('intval', explode(',', $raw));
+            } else {
+                $ids = [(int) $raw];
+            }
+            $ids = array_values(array_filter($ids, fn ($id) => $id > 0));
+            if (! empty($ids)) {
+                $query->forCampaign($ids);
+            }
         }
 
         // Coachee role filter (admin only)

@@ -53,6 +53,10 @@ class CoachingStatusSetting extends Model
             'value' => 60,
             'label' => 'No Record — days without any coaching session',
         ],
+        'monthly_session_target' => [
+            'value' => 4,
+            'label' => 'Monthly session target — required coaching sessions per agent per month',
+        ],
     ];
 
     /**

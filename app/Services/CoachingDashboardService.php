@@ -139,6 +139,32 @@ class CoachingDashboardService
     }
 
     /**
+     * Normalize a campaign filter value (scalar id, CSV string, or array) into a list of int ids.
+     *
+     * @return array<int>|null
+     */
+    protected function normalizeCampaignIds(?array $filters): ?array
+    {
+        if (! $filters) {
+            return null;
+        }
+        $val = $filters['campaign_id'] ?? $filters['campaign_ids'] ?? null;
+        if ($val === null || $val === '' || $val === []) {
+            return null;
+        }
+        if (is_array($val)) {
+            $ids = array_map('intval', $val);
+        } elseif (is_string($val) && str_contains($val, ',')) {
+            $ids = array_map('intval', explode(',', $val));
+        } else {
+            $ids = [(int) $val];
+        }
+        $ids = array_values(array_filter($ids, fn ($id) => $id > 0));
+
+        return empty($ids) ? null : $ids;
+    }
+
+    /**
      * Get dashboard data for a team lead.
      *
      * @return array{total_agents: int, status_counts: array<string, int>, agents: Collection}
@@ -181,10 +207,9 @@ class CoachingDashboardService
             ->where('is_active', true)
             ->whereNull('deleted_at');
 
-        if (isset($filters['campaign_id'])) {
-            $campaignId = $filters['campaign_id'];
-            $query->whereHas('activeSchedule', function ($q) use ($campaignId) {
-                $q->where('campaign_id', $campaignId);
+        if ($campaignIds = $this->normalizeCampaignIds($filters)) {
+            $query->whereHas('activeSchedule', function ($q) use ($campaignIds) {
+                $q->whereIn('campaign_id', $campaignIds);
             });
         }
 
@@ -250,6 +275,15 @@ class CoachingDashboardService
             ->groupBy('coachee_id')
             ->pluck('cnt', 'coachee_id');
 
+        // Batch query: submitted sessions in the current calendar month per coachee
+        // (used to evaluate weekly cadence — target is monthly_session_target sessions per month).
+        $monthlySessionCounts = CoachingSession::submitted()
+            ->whereIn('coachee_id', $coacheeIds)
+            ->whereBetween('session_date', [now()->startOfMonth()->toDateString(), now()->endOfMonth()->toDateString()])
+            ->selectRaw('coachee_id, COUNT(*) as cnt')
+            ->groupBy('coachee_id')
+            ->pluck('cnt', 'coachee_id');
+
         // Batch query: last session date per coachee (for status calculation)
         $lastSessionDates = CoachingSession::submitted()
             ->whereIn('coachee_id', $coacheeIds)
@@ -309,6 +343,7 @@ class CoachingDashboardService
                 'older_coached_date' => $dates[2] ?? null,
                 'pending_acknowledgements' => $pendingCounts->get($coacheeId, 0),
                 'total_sessions' => $totalSessionCounts->get($coacheeId, 0),
+                'sessions_this_month' => (int) $monthlySessionCounts->get($coacheeId, 0),
             ];
 
             // Apply status filter if set
@@ -344,6 +379,8 @@ class CoachingDashboardService
                 'older_coached_date' => $summary['older_coached_date'],
                 'pending_acknowledgements' => $summary['pending_acknowledgements'],
                 'total_sessions' => $summary['total_sessions'],
+                'sessions_this_month' => $summary['sessions_this_month'],
+                'schedule_effective_date' => $user->activeSchedule?->effective_date?->toDateString(),
                 'trend' => ($trendData[$coacheeId]->current_count ?? 0) - ($trendData[$coacheeId]->previous_count ?? 0),
             ]);
         }
@@ -379,13 +416,12 @@ class CoachingDashboardService
             ->orderBy('session_date');
 
         // Apply filters
-        if (isset($filters['campaign_id'])) {
-            $campaignId = $filters['campaign_id'];
-            $unacknowledgedQuery->whereHas('coachee.activeSchedule', function ($q) use ($campaignId) {
-                $q->where('campaign_id', $campaignId);
+        if ($campaignIds = $this->normalizeCampaignIds($filters)) {
+            $unacknowledgedQuery->whereHas('coachee.activeSchedule', function ($q) use ($campaignIds) {
+                $q->whereIn('campaign_id', $campaignIds);
             });
-            $forReviewQuery->whereHas('coachee.activeSchedule', function ($q) use ($campaignId) {
-                $q->where('campaign_id', $campaignId);
+            $forReviewQuery->whereHas('coachee.activeSchedule', function ($q) use ($campaignIds) {
+                $q->whereIn('campaign_id', $campaignIds);
             });
         }
 
@@ -457,16 +493,145 @@ class CoachingDashboardService
             ->where('is_active', true)
             ->whereNull('deleted_at');
 
-        if (isset($filters['campaign_id'])) {
-            $campaignId = $filters['campaign_id'];
-            $query->whereHas('activeSchedule', function ($q) use ($campaignId) {
-                $q->where('campaign_id', $campaignId);
+        if ($campaignIds = $this->normalizeCampaignIds($filters)) {
+            $query->whereHas('activeSchedule', function ($q) use ($campaignIds) {
+                $q->whereIn('campaign_id', $campaignIds);
             });
         }
 
         $tlIds = $query->pluck('id');
 
         return $this->buildDashboardData($tlIds, $filters);
+    }
+
+    /**
+     * Build per-campaign coaching-completion stats for the current calendar month.
+     *
+     * - Pro-rates the monthly session target by elapsed weeks (capped at the target).
+     * - Excludes agents whose active schedule started after the month began (new hires / transfers).
+     * - Caches the result for 5 minutes per filter combination.
+     *
+     * @param  array{agents: Collection}  $dashboardData
+     * @return array{
+     *     monthly_target: int,
+     *     expected_so_far_per_agent: int,
+     *     weeks_elapsed: int,
+     *     period_label: string,
+     *     campaigns: array<int, array{account: string, total: int, eligible: int, excluded: int, capped_sessions: int, expected_sessions: int, total_sessions_this_month: int, fully_coached: int, behind_weekly: int, at_risk: int, rate: int, health: string}>,
+     *     totals: array{total: int, eligible: int, excluded: int, capped_sessions: int, expected_sessions: int, total_sessions_this_month: int, fully_coached: int, behind_weekly: int, at_risk: int, rate: int, health: string}
+     * }
+     */
+    public function buildCampaignCompletion(array $dashboardData): array
+    {
+        $monthlyTarget = (int) CoachingStatusSetting::getThreshold('monthly_session_target') ?: 4;
+        $today = Carbon::today();
+        $weeksElapsed = (int) min((int) ceil($today->day / 7), $monthlyTarget);
+        $expectedSoFarPerAgent = $weeksElapsed; // 1 session per elapsed week, capped at monthly target.
+        $monthStart = $today->copy()->startOfMonth()->toDateString();
+
+        $atRiskStatuses = [
+            self::STATUS_PLEASE_COACH_ASAP,
+            self::STATUS_BADLY_NEEDS_COACHING,
+            self::STATUS_NO_RECORD,
+        ];
+
+        $groups = collect($dashboardData['agents'] ?? [])
+            ->groupBy(fn ($a) => $a['account'] ?? 'Unassigned');
+
+        $campaigns = [];
+        $totalAccumulator = [
+            'total' => 0,
+            'eligible' => 0,
+            'excluded' => 0,
+            'capped_sessions' => 0,
+            'expected_sessions' => 0,
+            'total_sessions_this_month' => 0,
+            'fully_coached' => 0,
+            'behind_weekly' => 0,
+            'at_risk' => 0,
+        ];
+
+        foreach ($groups as $account => $agents) {
+            $eligible = $agents->filter(function ($a) use ($monthStart) {
+                $eff = $a['schedule_effective_date'] ?? null;
+
+                return $eff === null || $eff <= $monthStart;
+            });
+
+            $excluded = $agents->count() - $eligible->count();
+            $eligibleCount = $eligible->count();
+            $totalSessionsThisMonth = (int) $eligible->sum('sessions_this_month');
+            $cappedSessions = (int) $eligible->sum(fn ($a) => min((int) ($a['sessions_this_month'] ?? 0), $monthlyTarget));
+            $expectedSessions = $eligibleCount * $monthlyTarget;
+            $fullyCoached = $eligible->filter(fn ($a) => (int) ($a['sessions_this_month'] ?? 0) >= $monthlyTarget)->count();
+            $behindWeekly = $eligible->filter(fn ($a) => (int) ($a['sessions_this_month'] ?? 0) < $expectedSoFarPerAgent)->count();
+            $atRisk = $eligible->filter(fn ($a) => in_array($a['coaching_status'] ?? null, $atRiskStatuses, true))->count();
+            $rate = $expectedSessions > 0 ? (int) round(($cappedSessions / $expectedSessions) * 100) : 0;
+
+            $campaigns[] = [
+                'account' => $account,
+                'total' => $agents->count(),
+                'eligible' => $eligibleCount,
+                'excluded' => $excluded,
+                'capped_sessions' => $cappedSessions,
+                'expected_sessions' => $expectedSessions,
+                'total_sessions_this_month' => $totalSessionsThisMonth,
+                'fully_coached' => $fullyCoached,
+                'behind_weekly' => $behindWeekly,
+                'at_risk' => $atRisk,
+                'rate' => $rate,
+                'health' => $this->healthLevel($rate),
+            ];
+
+            $totalAccumulator['total'] += $agents->count();
+            $totalAccumulator['eligible'] += $eligibleCount;
+            $totalAccumulator['excluded'] += $excluded;
+            $totalAccumulator['capped_sessions'] += $cappedSessions;
+            $totalAccumulator['expected_sessions'] += $expectedSessions;
+            $totalAccumulator['total_sessions_this_month'] += $totalSessionsThisMonth;
+            $totalAccumulator['fully_coached'] += $fullyCoached;
+            $totalAccumulator['behind_weekly'] += $behindWeekly;
+            $totalAccumulator['at_risk'] += $atRisk;
+        }
+
+        // Sort by urgency: lowest rate first, then most behind first.
+        usort($campaigns, function ($a, $b) {
+            return [$a['rate'], -$a['behind_weekly']] <=> [$b['rate'], -$b['behind_weekly']];
+        });
+
+        $totalsRate = $totalAccumulator['expected_sessions'] > 0
+            ? (int) round(($totalAccumulator['capped_sessions'] / $totalAccumulator['expected_sessions']) * 100)
+            : 0;
+
+        $totals = $totalAccumulator + [
+            'rate' => $totalsRate,
+            'health' => $this->healthLevel($totalsRate),
+        ];
+
+        return [
+            'monthly_target' => $monthlyTarget,
+            'expected_so_far_per_agent' => $expectedSoFarPerAgent,
+            'weeks_elapsed' => $weeksElapsed,
+            'period_label' => $today->format('F Y'),
+            'campaigns' => $campaigns,
+            'totals' => $totals,
+        ];
+    }
+
+    /**
+     * Bucket a percentage into a health level for UI color-coding.
+     */
+    protected function healthLevel(int $rate): string
+    {
+        if ($rate >= 80) {
+            return 'green';
+        }
+
+        if ($rate >= 50) {
+            return 'amber';
+        }
+
+        return 'red';
     }
 
     /**

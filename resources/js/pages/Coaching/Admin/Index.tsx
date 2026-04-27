@@ -55,6 +55,7 @@ import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { usePageMeta, useFlashMessage, usePageLoading } from '@/hooks';
 import { CoachingStatusBadge, SeverityBadge } from '@/components/coaching/CoachingStatusBadge';
 import { CoachingSummaryCards } from '@/components/coaching/CoachingSummaryCards';
+import { MultiSelectFilter } from '@/components/multi-select-filter';
 
 import { dashboard as coachingDashboard } from '@/routes/coaching';
 import {
@@ -84,6 +85,7 @@ interface AgentRow {
     older_coached_date: string | null;
     pending_acknowledgements: number;
     total_sessions: number;
+    sessions_this_month: number;
 }
 
 interface DashboardData {
@@ -128,6 +130,32 @@ interface Props extends InertiaPageProps {
     filters: Filters;
     statusColors: CoachingStatusColors;
     purposes: CoachingPurposeLabels;
+    monthlySessionTarget: number;
+    campaignCompletion: CampaignCompletionData | null;
+}
+
+interface CampaignCompletionRow {
+    account: string;
+    total: number;
+    eligible: number;
+    excluded: number;
+    capped_sessions: number;
+    expected_sessions: number;
+    total_sessions_this_month: number;
+    fully_coached: number;
+    behind_weekly: number;
+    at_risk: number;
+    rate: number;
+    health: 'green' | 'amber' | 'red';
+}
+
+interface CampaignCompletionData {
+    monthly_target: number;
+    expected_so_far_per_agent: number;
+    weeks_elapsed: number;
+    period_label: string;
+    campaigns: CampaignCompletionRow[];
+    totals: CampaignCompletionRow & { health: 'green' | 'amber' | 'red' };
 }
 
 type TabKey = 'overview' | 'unacknowledged' | 'for_review' | 'at_risk' | 'upcoming';
@@ -165,7 +193,8 @@ const getStatusRowClass = (status: string): string => {
 };
 
 export default function CoachingAdminIndex() {
-    const { dashboardData, teamLeadCoachingData, queueData, upcomingFollowUps, overdueFollowUps, followUpComplianceRate, campaigns, teamLeads, filters: initialFilters, purposes } = usePage<Props>().props;
+    const { dashboardData, teamLeadCoachingData, queueData, upcomingFollowUps, overdueFollowUps, followUpComplianceRate, campaigns, teamLeads, filters: initialFilters, purposes, monthlySessionTarget, campaignCompletion } = usePage<Props>().props;
+    const sessionTarget = monthlySessionTarget ?? 4;
 
     const { title, breadcrumbs } = usePageMeta({
         title: 'Coaching Compliance',
@@ -175,9 +204,18 @@ export default function CoachingAdminIndex() {
     const isLoading = usePageLoading();
 
     const [activeTab, setActiveTab] = useState<TabKey>('overview');
-    const [campaignCompletionOpen, setCampaignCompletionOpen] = useState(false);
+    const [campaignCompletionOpen, setCampaignCompletionOpen] = useState<boolean>(() => {
+        if (typeof window === 'undefined') return false;
+        return window.localStorage.getItem('coaching:campaignCompletionOpen') === '1';
+    });
+    const [exportingCompletion, setExportingCompletion] = useState(false);
     const [selectedForReview, setSelectedForReview] = useState<number[]>([]);
-    const [campaignId, setCampaignId] = useState(initialFilters.campaign_id || '');
+    const [campaignIds, setCampaignIds] = useState<string[]>(() => {
+        const v = initialFilters.campaign_id;
+        if (!v) return [];
+        return String(v).split(',').filter(Boolean);
+    });
+    const campaignIdsParam = campaignIds.length > 0 ? campaignIds.join(',') : undefined;
     const [coachId, setCoachId] = useState(initialFilters.coach_id || '');
     const [coachingStatus, setCoachingStatus] = useState(initialFilters.coaching_status || '');
     const [coacheeRole, setCoacheeRole] = useState(initialFilters.coachee_role || 'Agent');
@@ -209,7 +247,7 @@ export default function CoachingAdminIndex() {
         router.get(
             coachingDashboard().url,
             {
-                campaign_id: campaignId || undefined,
+                campaign_id: campaignIdsParam,
                 coach_id: newCoachId || undefined,
                 coaching_status: coachingStatus || undefined,
                 coachee_role: value || undefined,
@@ -226,7 +264,7 @@ export default function CoachingAdminIndex() {
         router.get(
             coachingDashboard().url,
             {
-                campaign_id: campaignId || undefined,
+                campaign_id: campaignIdsParam,
                 coach_id: coachId || undefined,
                 coaching_status: coachingStatus || undefined,
                 coachee_role: coacheeRole || undefined,
@@ -238,7 +276,7 @@ export default function CoachingAdminIndex() {
     };
 
     const handleReset = () => {
-        setCampaignId('');
+        setCampaignIds([]);
         setCoachId('');
         setCoachingStatus('');
         setCoacheeRole('Agent');
@@ -268,16 +306,77 @@ export default function CoachingAdminIndex() {
         return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
     }, [activeData.agents]);
 
-    const teamLeadSummary = useMemo(() => {
+    const teamLeadSummary = useMemo<CampaignCompletionRow[]>(() => {
         if (coacheeRole === 'Team Lead') return [];
-        return groupedAgents.map(([account, agents]) => {
-            const total = agents.length;
-            const coached = agents.filter(a => a.coaching_status === 'Coaching Done').length;
-            const atRisk = agents.filter(a => ['Please Coach ASAP', 'Badly Needs Coaching', 'No Record'].includes(a.coaching_status)).length;
-            const rate = total > 0 ? Math.round((coached / total) * 100) : 0;
-            return { account, total, coached, atRisk, rate };
-        }).sort((a, b) => b.rate - a.rate);
-    }, [groupedAgents, coacheeRole]);
+        return campaignCompletion?.campaigns ?? [];
+    }, [campaignCompletion, coacheeRole]);
+
+    const totalsRow = campaignCompletion?.totals ?? null;
+    const expectedSoFarPerAgent = campaignCompletion?.expected_so_far_per_agent ?? sessionTarget;
+    const weeksElapsed = campaignCompletion?.weeks_elapsed ?? sessionTarget;
+    const periodLabel = campaignCompletion?.period_label ?? '';
+
+    const persistCampaignCompletionOpen = (open: boolean) => {
+        setCampaignCompletionOpen(open);
+        if (typeof window !== 'undefined') {
+            window.localStorage.setItem('coaching:campaignCompletionOpen', open ? '1' : '0');
+        }
+    };
+
+    const drillIntoCampaign = (accountName: string) => {
+        const target = campaigns.find((c) => c.name === accountName);
+        if (!target) return;
+        setCampaignIds([String(target.id)]);
+        setActiveTab('overview');
+        router.get(
+            coachingDashboard().url,
+            {
+                campaign_id: String(target.id),
+                coach_id: coachId || undefined,
+                coaching_status: coachingStatus || undefined,
+                coachee_role: coacheeRole || undefined,
+                date_from: dateFrom || undefined,
+                date_to: dateTo || undefined,
+            },
+            { preserveState: true, preserveScroll: true },
+        );
+    };
+
+    const startCampaignCompletionExport = async () => {
+        if (exportingCompletion) return;
+        setExportingCompletion(true);
+        try {
+            const res = await fetch('/coaching/campaign-completion/export/start', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement | null)?.content ?? '',
+                },
+                body: JSON.stringify({
+                    campaign_id: campaignIdsParam ?? null,
+                    coach_id: coachId || null,
+                }),
+            });
+            if (!res.ok) throw new Error('Failed to start export');
+            const { jobId } = await res.json();
+            const poll = async () => {
+                const p = await fetch(`/coaching/campaign-completion/export/progress/${jobId}`, { credentials: 'same-origin' });
+                const data = await p.json();
+                if (data.finished) {
+                    if (data.downloadUrl) window.location.href = data.downloadUrl;
+                    setExportingCompletion(false);
+                    return;
+                }
+                setTimeout(poll, 1000);
+            };
+            poll();
+        } catch {
+            setExportingCompletion(false);
+        }
+    };
 
     const handleBulkVerify = () => {
         if (!confirm(`Verify ${selectedForReview.length} sessions?`)) return;
@@ -345,16 +444,13 @@ export default function CoachingAdminIndex() {
 
                 {/* Filters */}
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-8">
-                    <Select value={campaignId} onValueChange={setCampaignId}>
-                        <SelectTrigger>
-                            <SelectValue placeholder="Campaign" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {campaigns.map((c) => (
-                                <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                    <MultiSelectFilter
+                        options={campaigns.map((c) => ({ label: c.name, value: String(c.id) }))}
+                        value={campaignIds}
+                        onChange={setCampaignIds}
+                        placeholder="Campaign"
+                        emptyMessage="No campaigns found."
+                    />
                     {coacheeRole !== 'Team Lead' && (
                         <Select value={coachId} onValueChange={setCoachId}>
                             <SelectTrigger>
@@ -434,35 +530,91 @@ export default function CoachingAdminIndex() {
                 {/* Tab Content */}
                 {activeTab === 'overview' && (
                     <div className="space-y-2">
-                        {coacheeRole !== 'Team Lead' && teamLeadSummary.length > 1 && (
+                        {coacheeRole !== 'Team Lead' && teamLeadSummary.length > 0 && (
                             <div className="rounded-lg border bg-card p-4 shadow-sm">
-                                <button
-                                    type="button"
-                                    onClick={() => setCampaignCompletionOpen((v) => !v)}
-                                    className="flex w-full items-center justify-between text-sm font-semibold"
-                                >
-                                    <span className="flex items-center gap-2">
-                                        <BarChart3 className="h-4 w-4" /> Campaign Coaching Completion
-                                    </span>
-                                    <ChevronDown className={`h-4 w-4 transition-transform ${campaignCompletionOpen ? 'rotate-180' : ''}`} />
-                                </button>
+                                <div className="flex w-full items-center justify-between gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => persistCampaignCompletionOpen(!campaignCompletionOpen)}
+                                        className="flex flex-1 items-center justify-between text-left text-sm font-semibold"
+                                    >
+                                        <span className="flex flex-wrap items-center gap-2">
+                                            <BarChart3 className="h-4 w-4" /> Campaign Coaching Completion
+                                            <span className="text-[10px] font-normal text-muted-foreground">
+                                                {periodLabel} · target {sessionTarget}/agent · week {weeksElapsed} so far
+                                            </span>
+                                        </span>
+                                        <ChevronDown className={`h-4 w-4 transition-transform ${campaignCompletionOpen ? 'rotate-180' : ''}`} />
+                                    </button>
+                                    {campaignCompletionOpen && (
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={startCampaignCompletionExport}
+                                            disabled={exportingCompletion}
+                                        >
+                                            {exportingCompletion ? 'Exporting…' : 'Export'}
+                                        </Button>
+                                    )}
+                                </div>
                                 {campaignCompletionOpen && <div className="mt-3 space-y-2">
+                                    {totalsRow && (
+                                        <div className="flex items-center gap-3 rounded-md border border-dashed bg-muted/30 p-2">
+                                            <span className="w-32 truncate text-sm font-semibold" title="All campaigns">All Campaigns</span>
+                                            <div className="flex-1">
+                                                <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                                                    <div
+                                                        className={`h-full rounded-full transition-all ${totalsRow.health === 'green' ? 'bg-green-500' :
+                                                                totalsRow.health === 'amber' ? 'bg-amber-500' : 'bg-red-500'
+                                                            }`}
+                                                        style={{ width: `${totalsRow.rate}%` }}
+                                                    />
+                                                </div>
+                                                <div className="mt-0.5 text-[10px] text-muted-foreground">
+                                                    {totalsRow.fully_coached}/{totalsRow.eligible} fully coached · {totalsRow.total_sessions_this_month}/{totalsRow.expected_sessions} sessions{totalsRow.excluded > 0 ? ` · ${totalsRow.excluded} excluded (mid-month)` : ''}
+                                                </div>
+                                            </div>
+                                            <span className="w-12 text-right text-xs font-bold">{totalsRow.rate}%</span>
+                                            {totalsRow.behind_weekly > 0 && (
+                                                <Badge variant="secondary" className="text-[10px]">{totalsRow.behind_weekly} behind</Badge>
+                                            )}
+                                            {totalsRow.at_risk > 0 && (
+                                                <Badge variant="destructive" className="text-[10px]">{totalsRow.at_risk} at risk</Badge>
+                                            )}
+                                        </div>
+                                    )}
                                     {teamLeadSummary.map((tl) => (
-                                        <div key={tl.account} className="flex items-center gap-3">
+                                        <button
+                                            key={tl.account}
+                                            type="button"
+                                            onClick={() => drillIntoCampaign(tl.account)}
+                                            className="flex w-full items-center gap-3 rounded-md p-1 text-left transition-colors hover:bg-muted/50"
+                                            title={`Filter dashboard by ${tl.account}`}
+                                        >
                                             <span className="w-32 truncate text-sm font-medium">{tl.account}</span>
                                             <div className="flex-1">
                                                 <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
                                                     <div
-                                                        className="h-full rounded-full bg-primary transition-all"
+                                                        className={`h-full rounded-full transition-all ${tl.health === 'green' ? 'bg-green-500' :
+                                                                tl.health === 'amber' ? 'bg-amber-500' : 'bg-red-500'
+                                                            }`}
                                                         style={{ width: `${tl.rate}%` }}
                                                     />
                                                 </div>
+                                                <div className="mt-0.5 text-[10px] text-muted-foreground">
+                                                    {tl.fully_coached}/{tl.eligible} fully coached · {tl.capped_sessions}/{tl.expected_sessions} effective ({tl.total_sessions_this_month} raw){tl.excluded > 0 ? ` · ${tl.excluded} excluded` : ''}
+                                                </div>
                                             </div>
                                             <span className="w-12 text-right text-xs font-medium">{tl.rate}%</span>
-                                            {tl.atRisk > 0 && (
-                                                <Badge variant="destructive" className="text-[10px]">{tl.atRisk} at risk</Badge>
+                                            {tl.behind_weekly > 0 && (
+                                                <Badge variant="secondary" className="text-[10px]" title={`Agents below ${expectedSoFarPerAgent} session(s) so far this month`}>
+                                                    {tl.behind_weekly} behind
+                                                </Badge>
                                             )}
-                                        </div>
+                                            {tl.at_risk > 0 && (
+                                                <Badge variant="destructive" className="text-[10px]">{tl.at_risk} at risk</Badge>
+                                            )}
+                                        </button>
                                     ))}
                                 </div>}
                             </div>

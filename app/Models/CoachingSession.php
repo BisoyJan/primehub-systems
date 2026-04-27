@@ -213,11 +213,21 @@ class CoachingSession extends Model
     /**
      * Scope to sessions for agents within a specific campaign.
      */
-    public function scopeForCampaign(Builder $query, int $campaignId): Builder
+    /**
+     * Scope to sessions for agents within one or more campaigns.
+     *
+     * @param  int|array<int>  $campaignId
+     */
+    public function scopeForCampaign(Builder $query, int|array $campaignId): Builder
     {
-        return $query->whereHas('coachee', function (Builder $q) use ($campaignId) {
-            $q->whereHas('activeSchedule', function (Builder $sq) use ($campaignId) {
-                $sq->where('campaign_id', $campaignId);
+        $ids = is_array($campaignId) ? array_values(array_filter(array_map('intval', $campaignId))) : [(int) $campaignId];
+        if (empty($ids)) {
+            return $query;
+        }
+
+        return $query->whereHas('coachee', function (Builder $q) use ($ids) {
+            $q->whereHas('activeSchedule', function (Builder $sq) use ($ids) {
+                $sq->whereIn('campaign_id', $ids);
             });
         });
     }
