@@ -62,6 +62,7 @@ export default function StationCreate({
         quantity: "1",
         starting_number: "",
         increment_type: "number", // "number", "letter", or "both"
+        _page: typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('page') ?? '' : '',
     });
 
     const { title, breadcrumbs } = usePageMeta({
@@ -102,7 +103,6 @@ export default function StationCreate({
                     ? `Successfully created ${data.quantity} station(s)`
                     : "Station created";
                 toast.success(message);
-                router.visit(stationsIndexRoute().url);
             },
             onError: (errors) => {
                 const firstError = Object.values(errors)[0] as string;

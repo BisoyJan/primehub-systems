@@ -9,6 +9,7 @@ use App\Jobs\GenerateAllStationQRCodesZip;
 use App\Jobs\GenerateSelectedStationQRCodesZip;
 use App\Models\Campaign;
 use App\Models\PcSpec;
+use App\Models\ProcessorSpec;
 use App\Models\Site;
 use App\Models\Station;
 use App\Traits\AddsQrCodeBorder;
@@ -21,6 +22,7 @@ use Endroid\QrCode\Writer\SvgWriter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Response;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -279,6 +281,7 @@ class StationController extends Controller
         $query->filterBySite($request->query('site'))
             ->filterByCampaign($request->query('campaign'))
             ->filterByStatus($request->query('status'))
+            ->filterByProcessors($this->normalizeIdArray($request->input('processor_ids')))
             ->orderBy('id', 'desc');
 
         // Get all IDs matching current filters (for bulk select all)
@@ -290,16 +293,23 @@ class StationController extends Controller
         $items = $paginated->getCollection()->map(function (Station $station) {
             // Ensure pcSpec is loaded with all specs
             $pcSpecDetails = $station->pcSpec ? $station->pcSpec->getFormattedDetails() : null;
+            $firstProcessor = $station->pcSpec?->processorSpecs->first();
 
             return [
                 'id' => $station->id,
                 'site' => $station->site?->name,
                 'station_number' => $station->station_number,
                 'campaign' => $station->campaign?->name,
+                'campaign_id' => $station->campaign_id,
                 'status' => $station->status,
                 'monitor_type' => $station->monitor_type,
                 'pc_spec' => $station->pcSpec?->model,
                 'pc_spec_details' => $pcSpecDetails,
+                'processor_label' => $firstProcessor
+                    ? trim($firstProcessor->manufacturer.' '.$firstProcessor->model)
+                    : null,
+                'processor_cores' => $firstProcessor?->core_count,
+                'processor_threads' => $firstProcessor?->thread_count,
                 'created_at' => optional($station->created_at)->toDateTimeString(),
                 'updated_at' => optional($station->updated_at)->toDateTimeString(),
             ];
@@ -354,9 +364,11 @@ class StationController extends Controller
             $data['pc_spec_id'] = null;
         }
 
-        $station = Station::create($data);
+        Station::create($data);
 
-        return redirect()->back()->with('flash', ['message' => 'Station saved', 'type' => 'success']);
+        return redirect()
+            ->route('stations.index', $this->indexRedirectParams($request))
+            ->with('flash', ['message' => 'Station saved', 'type' => 'success']);
     }
 
     // Store multiple stations at once
@@ -436,10 +448,12 @@ class StationController extends Controller
             Station::create($stationData);
         }
 
-        return redirect()->back()->with('flash', [
-            'message' => "Successfully created {$quantity} station(s)",
-            'type' => 'success',
-        ]);
+        return redirect()
+            ->route('stations.index', $this->indexRedirectParams($request))
+            ->with('flash', [
+                'message' => "Successfully created {$quantity} station(s)",
+                'type' => 'success',
+            ]);
     }
 
     // Generate station numbers based on increment type
@@ -524,7 +538,9 @@ class StationController extends Controller
 
         $station->update($data);
 
-        return redirect()->back()->with('flash', ['message' => 'Station updated', 'type' => 'success']);
+        return redirect()
+            ->route('stations.index', $this->indexRedirectParams($request))
+            ->with('flash', ['message' => 'Station updated', 'type' => 'success']);
     }
 
     // Delete station
@@ -533,6 +549,132 @@ class StationController extends Controller
         $station->delete();
 
         return redirect()->back()->with('flash', ['message' => 'Station deleted', 'type' => 'success']);
+    }
+
+    /**
+     * PATCH stations/{station}/quick-update
+     * Inline-update single station's campaign_id and/or status from the index list.
+     */
+    public function quickUpdate(Request $request, Station $station)
+    {
+        $statusOptions = ['Occupied', 'Vacant', 'No PC', 'Admin'];
+        $monitorOptions = ['single', 'dual', 'none'];
+
+        $data = $request->validate([
+            'campaign_id' => ['nullable', 'integer', 'exists:campaigns,id'],
+            'status' => ['nullable', 'string', 'in:'.implode(',', $statusOptions)],
+            'monitor_type' => ['nullable', 'string', 'in:'.implode(',', $monitorOptions)],
+        ]);
+
+        // Only update fields explicitly present in the request
+        $payload = [];
+        if ($request->has('campaign_id')) {
+            $payload['campaign_id'] = $data['campaign_id'] ?? null;
+        }
+        if ($request->has('status')) {
+            $payload['status'] = $data['status'] ?? null;
+        }
+        if ($request->has('monitor_type')) {
+            $payload['monitor_type'] = $data['monitor_type'] ?? null;
+        }
+
+        if (! empty($payload)) {
+            $station->update($payload);
+        }
+
+        return redirect()->back()->with('flash', ['message' => 'Station updated', 'type' => 'success']);
+    }
+
+    /**
+     * POST stations/bulk-assign
+     * Assign campaign and/or status to grouped sets of stations in one request.
+     */
+    public function bulkAssign(Request $request)
+    {
+        $statusOptions = ['Occupied', 'Vacant', 'No PC', 'Admin'];
+        $monitorOptions = ['single', 'dual', 'none'];
+
+        $validated = $request->validate([
+            'groups' => ['required', 'array', 'min:1'],
+            'groups.*.station_ids' => ['required', 'array', 'min:1'],
+            'groups.*.station_ids.*' => ['integer', 'exists:stations,id'],
+            'groups.*.campaign_id' => ['nullable', 'integer', 'exists:campaigns,id'],
+            'groups.*.status' => ['nullable', 'string', 'in:'.implode(',', $statusOptions)],
+            'groups.*.monitor_type' => ['nullable', 'string', 'in:'.implode(',', $monitorOptions)],
+        ]);
+
+        $totalAffected = 0;
+
+        DB::transaction(function () use ($validated, &$totalAffected) {
+            foreach ($validated['groups'] as $group) {
+                $attrs = [];
+                if (array_key_exists('campaign_id', $group)) {
+                    $attrs['campaign_id'] = $group['campaign_id'];
+                }
+                if (array_key_exists('status', $group) && $group['status'] !== null) {
+                    $attrs['status'] = $group['status'];
+                }
+                if (array_key_exists('monitor_type', $group) && $group['monitor_type'] !== null) {
+                    $attrs['monitor_type'] = $group['monitor_type'];
+                }
+
+                if (empty($attrs)) {
+                    continue;
+                }
+
+                $stations = Station::whereIn('id', $group['station_ids'])->get();
+                foreach ($stations as $station) {
+                    $station->update($attrs);
+                    $totalAffected++;
+                }
+            }
+        });
+
+        return redirect()->back()->with('flash', [
+            'message' => "Bulk assignment applied to {$totalAffected} station(s)",
+            'type' => 'success',
+        ]);
+    }
+
+    /**
+     * POST stations/bulk-unassign
+     * Clear campaign and reset status to 'Vacant' for the given stations.
+     */
+    public function bulkUnassign(Request $request)
+    {
+        $validated = $request->validate([
+            'station_ids' => ['required', 'array', 'min:1'],
+            'station_ids.*' => ['integer', 'exists:stations,id'],
+        ]);
+
+        $count = 0;
+        DB::transaction(function () use ($validated, &$count) {
+            $stations = Station::whereIn('id', $validated['station_ids'])->get();
+            foreach ($stations as $station) {
+                $station->update([
+                    'campaign_id' => null,
+                    'status' => 'Vacant',
+                ]);
+                $count++;
+            }
+        });
+
+        return redirect()->back()->with('flash', [
+            'message' => "Unassigned {$count} station(s)",
+            'type' => 'success',
+        ]);
+    }
+
+    /**
+     * Build redirect parameters preserving pagination page from request.
+     *
+     * @return array<string, mixed>
+     */
+    private function indexRedirectParams(Request $request): array
+    {
+        $page = $request->input('_page');
+
+        return $page ? ['page' => (int) $page] : [];
     }
 
     // ScanResult page for a station
@@ -565,7 +707,30 @@ class StationController extends Controller
             'sites' => Site::all(['id', 'name']),
             'campaigns' => Campaign::all(['id', 'name']),
             'statuses' => Station::select('status')->distinct()->pluck('status'),
+            'processors' => ProcessorSpec::orderBy('manufacturer')
+                ->orderBy('model')
+                ->get(['id', 'manufacturer', 'model', 'core_count', 'thread_count'])
+                ->map(fn ($p) => [
+                    'id' => $p->id,
+                    'label' => trim($p->manufacturer.' '.$p->model),
+                    'core_count' => $p->core_count,
+                    'thread_count' => $p->thread_count,
+                ]),
         ];
+    }
+
+    /**
+     * Normalize a request input value into an int array (accepts arrays or null).
+     *
+     * @return array<int>
+     */
+    private function normalizeIdArray(mixed $value): array
+    {
+        if (! is_array($value)) {
+            return [];
+        }
+
+        return array_values(array_filter(array_map('intval', $value), fn ($id) => $id > 0));
     }
 
     private function getFormattedPcSpecs()

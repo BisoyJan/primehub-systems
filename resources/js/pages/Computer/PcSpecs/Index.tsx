@@ -94,6 +94,8 @@ interface PcSpec {
 interface PaginatedPcSpecs {
     data: PcSpec[];
     links: PaginationLink[];
+    current_page?: number;
+    meta?: { current_page?: number };
 }
 
 interface PcOption {
@@ -104,6 +106,7 @@ interface PcOption {
 interface ProcessorOption {
     id: number;
     label: string;
+    core_count?: number | null;
 }
 
 interface Props extends InertiaPageProps {
@@ -113,7 +116,7 @@ interface Props extends InertiaPageProps {
     allProcessors: ProcessorOption[];
     filters: {
         pc_ids: number[];
-        processor_id: string | null;
+        processor_ids: number[];
     };
 }
 
@@ -124,9 +127,18 @@ export default function Index() {
         pcspecs = { data: [], links: [] },
         allPcSpecs = [],
         allProcessors = [],
-        filters = { pc_ids: [], processor_id: null },
+        filters = { pc_ids: [], processor_ids: [] },
     } = usePage<Props>().props;
     const form = useForm({}); // Keep useForm for delete but empty for search
+
+    // Current pagination page (preserved across CRUD operations)
+    const currentPage = pcspecs.current_page
+        ?? pcspecs.meta?.current_page
+        ?? (() => {
+            const fromUrl = Number(new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '').get('page'));
+            return Number.isFinite(fromUrl) && fromUrl > 0 ? fromUrl : 1;
+        })();
+    const editLinkSuffix = currentPage && currentPage > 1 ? `?page=${currentPage}` : '';
     const [issueDialogOpen, setIssueDialogOpen] = useState(false);
     const [selectedPcSpec, setSelectedPcSpec] = useState<PcSpec | null>(null);
     const [issueText, setIssueText] = useState('');
@@ -138,12 +150,18 @@ export default function Index() {
         Array.isArray(filters.pc_ids) ? filters.pc_ids.map(Number) : []
     );
 
-    // Processor filter state
+    // Processor filter state (multi-select)
     const [processorSearchQuery, setProcessorSearchQuery] = useState('');
     const [isProcessorPopoverOpen, setIsProcessorPopoverOpen] = useState(false);
-    const [selectedProcessorId, setSelectedProcessorId] = useState<string>(
-        filters.processor_id || ''
+    const [selectedProcessorIds, setSelectedProcessorIds] = useState<number[]>(
+        Array.isArray(filters.processor_ids) ? filters.processor_ids.map(Number) : []
     );
+
+    const handleToggleProcessorSelect = (procId: number) => {
+        setSelectedProcessorIds(prev =>
+            prev.includes(procId) ? prev.filter(id => id !== procId) : [...prev, procId]
+        );
+    };
 
     // Filter PC options by search query
     const filteredPcOptions = useMemo(() => {
@@ -201,8 +219,8 @@ export default function Index() {
         if (selectedFilterPcIds.length > 0) {
             params.pc_ids = selectedFilterPcIds;
         }
-        if (selectedProcessorId) {
-            params.processor_id = selectedProcessorId;
+        if (selectedProcessorIds.length > 0) {
+            params.processor_ids = selectedProcessorIds;
         }
         router.get(
             pcSpecIndex().url,
@@ -216,7 +234,7 @@ export default function Index() {
 
     const handleReset = () => {
         setSelectedFilterPcIds([]);
-        setSelectedProcessorId('');
+        setSelectedProcessorIds([]);
         setPcSearchQuery('');
         setProcessorSearchQuery('');
         router.get(pcSpecIndex().url);
@@ -513,7 +531,7 @@ export default function Index() {
                                 </PopoverContent>
                             </Popover>
 
-                            {/* Processor Filter */}
+                            {/* Processor Filter (multi-select) */}
                             <Popover open={isProcessorPopoverOpen} onOpenChange={setIsProcessorPopoverOpen}>
                                 <PopoverTrigger asChild>
                                     <Button
@@ -523,8 +541,8 @@ export default function Index() {
                                         className="w-full justify-between font-normal"
                                     >
                                         <span className="truncate">
-                                            {selectedProcessorId
-                                                ? allProcessors.find(p => p.id.toString() === selectedProcessorId)?.label || 'Select processor...'
+                                            {selectedProcessorIds.length > 0
+                                                ? `${selectedProcessorIds.length} processor${selectedProcessorIds.length !== 1 ? 's' : ''} selected`
                                                 : 'All Processors'}
                                         </span>
                                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -540,33 +558,20 @@ export default function Index() {
                                         <CommandList>
                                             <CommandEmpty>No processor found.</CommandEmpty>
                                             <CommandGroup>
-                                                <CommandItem
-                                                    value="all"
-                                                    onSelect={() => {
-                                                        setSelectedProcessorId('');
-                                                        setIsProcessorPopoverOpen(false);
-                                                    }}
-                                                    className="cursor-pointer"
-                                                >
-                                                    <Check
-                                                        className={`mr-2 h-4 w-4 ${!selectedProcessorId ? "opacity-100" : "opacity-0"}`}
-                                                    />
-                                                    All Processors
-                                                </CommandItem>
                                                 {filteredProcessorOptions.map((proc) => (
                                                     <CommandItem
                                                         key={proc.id}
                                                         value={proc.label}
-                                                        onSelect={() => {
-                                                            setSelectedProcessorId(proc.id.toString());
-                                                            setIsProcessorPopoverOpen(false);
-                                                        }}
+                                                        onSelect={() => handleToggleProcessorSelect(proc.id)}
                                                         className="cursor-pointer"
                                                     >
                                                         <Check
-                                                            className={`mr-2 h-4 w-4 ${selectedProcessorId === proc.id.toString() ? "opacity-100" : "opacity-0"}`}
+                                                            className={`mr-2 h-4 w-4 ${selectedProcessorIds.includes(proc.id) ? "opacity-100" : "opacity-0"}`}
                                                         />
                                                         {proc.label}
+                                                        {proc.core_count != null && (
+                                                            <span className="ml-auto text-xs text-muted-foreground">{proc.core_count} cores</span>
+                                                        )}
                                                     </CommandItem>
                                                 ))}
                                             </CommandGroup>
@@ -597,7 +602,7 @@ export default function Index() {
                                     {autoRefreshEnabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                                 </Button>
                             </div>
-                            <Link href={pcSpecCreate.url()}>
+                            <Link href={pcSpecCreate.url() + editLinkSuffix}>
                                 <Button className="flex-1 sm:flex-none">
                                     <Plus className="mr-2 h-4 w-4" />
                                     Add PC Spec
@@ -702,6 +707,7 @@ export default function Index() {
                                         <TableHead>Manufacturer</TableHead>
                                         <TableHead>Model</TableHead>
                                         <TableHead className="hidden xl:table-cell">Processor</TableHead>
+                                        <TableHead className="hidden xl:table-cell">Cores</TableHead>
                                         <TableHead>RAM (GB)</TableHead>
                                         <TableHead>Disk (GB)</TableHead>
                                         <TableHead className="hidden xl:table-cell">Ports</TableHead>
@@ -731,6 +737,11 @@ export default function Index() {
                                                 <TableCell>{pc.manufacturer}</TableCell>
                                                 <TableCell>{pc.model}</TableCell>
                                                 <TableCell className="hidden xl:table-cell">{procLabel}</TableCell>
+                                                <TableCell className="hidden xl:table-cell">
+                                                    {proc?.core_count != null || proc?.thread_count != null
+                                                        ? `${proc?.core_count ?? '?'}C/${proc?.thread_count ?? '?'}T`
+                                                        : '—'}
+                                                </TableCell>
                                                 <TableCell>{pc.ram_gb}</TableCell>
                                                 <TableCell>{pc.disk_gb}</TableCell>
                                                 <TableCell className="hidden xl:table-cell">{pc.available_ports || '—'}</TableCell>
@@ -755,7 +766,7 @@ export default function Index() {
                                                 </TableCell>
                                                 <TableCell className="flex justify-center gap-2">
                                                     {/* Edit */}
-                                                    <Link href={pcSpecEdit.url(pc.id)}>
+                                                    <Link href={pcSpecEdit.url(pc.id) + editLinkSuffix}>
                                                         <Button
                                                             variant="outline"
                                                             size="sm"
@@ -936,6 +947,14 @@ export default function Index() {
                                         <span className="font-medium text-right wrap-break-word max-w-[60%]">{procLabel}</span>
                                     </div>
                                     <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Cores / Threads:</span>
+                                        <span className="font-medium">
+                                            {proc?.core_count != null || proc?.thread_count != null
+                                                ? `${proc?.core_count ?? '?'}C/${proc?.thread_count ?? '?'}T`
+                                                : '—'}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between">
                                         <span className="text-muted-foreground">RAM:</span>
                                         <span className="font-medium">{pc.ram_gb} GB</span>
                                     </div>
@@ -975,7 +994,7 @@ export default function Index() {
 
                                 <div className="flex flex-col gap-2 pt-2 border-t">
                                     <div className="flex gap-2">
-                                        <Link href={pcSpecEdit.url(pc.id)} className="flex-1">
+                                        <Link href={pcSpecEdit.url(pc.id) + editLinkSuffix} className="flex-1">
                                             <Button
                                                 variant="outline"
                                                 size="sm"

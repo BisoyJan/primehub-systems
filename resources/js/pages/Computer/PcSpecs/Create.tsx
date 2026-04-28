@@ -65,6 +65,8 @@ export default function Create() {
 
     const isPageLoading = usePageLoading();
 
+    const returnPage = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('page') ?? '' : '';
+
     const form = useForm({
         pc_number: '',
         manufacturer: '',
@@ -83,6 +85,7 @@ export default function Create() {
         processor_base_clock_ghz: '' as number | '',
         processor_boost_clock_ghz: '' as number | '',
         quantity: 1,
+        _page: returnPage,
     });
 
     const [processorOpen, setProcessorOpen] = useState(false);

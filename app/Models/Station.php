@@ -93,4 +93,16 @@ class Station extends Model
     {
         return $status ? $query->where('status', $status) : $query;
     }
+
+    // Scope for filtering by processor IDs (multi)
+    public function scopeFilterByProcessors(Builder $query, ?array $processorIds): Builder
+    {
+        if (empty($processorIds)) {
+            return $query;
+        }
+
+        return $query->whereHas('pcSpec.processorSpecs', function (Builder $q) use ($processorIds) {
+            $q->whereIn('processor_specs.id', $processorIds);
+        });
+    }
 }

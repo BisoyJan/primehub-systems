@@ -39,17 +39,22 @@ class PcSpecController extends Controller
             $query->whereIn('id', array_map('intval', $pcIds));
         }
 
-        // Filter by processor
-        $processorId = $request->input('processor_id');
-        if ($processorId) {
-            $query->whereHas('processorSpecs', function ($q) use ($processorId) {
-                $q->where('processor_specs.id', (int) $processorId);
+        // Filter by processors (multi-select)
+        $processorIds = $request->input('processor_ids', []);
+        if (! is_array($processorIds)) {
+            $processorIds = [];
+        }
+        $processorIds = array_values(array_filter(array_map('intval', $processorIds), fn ($id) => $id > 0));
+
+        if (count($processorIds) > 0) {
+            $query->whereHas('processorSpecs', function ($q) use ($processorIds) {
+                $q->whereIn('processor_specs.id', $processorIds);
             });
         }
 
         $pcspecs = $query
             ->paginate(10)
-            ->appends($request->only(['pc_ids', 'processor_id']))
+            ->appends($request->only(['pc_ids', 'processor_ids']))
             ->through(fn ($pc) => [
                 'id' => $pc->id,
                 'pc_number' => $pc->pc_number,
@@ -86,13 +91,14 @@ class PcSpecController extends Controller
             ]);
 
         // All processors for filter dropdown
-        $allProcessors = ProcessorSpec::select('id', 'manufacturer', 'model')
+        $allProcessors = ProcessorSpec::select('id', 'manufacturer', 'model', 'core_count')
             ->orderBy('manufacturer')
             ->orderBy('model')
             ->get()
             ->map(fn ($p) => [
                 'id' => $p->id,
                 'label' => "{$p->manufacturer} {$p->model}",
+                'core_count' => $p->core_count,
             ]);
 
         return Inertia::render('Computer/PcSpecs/Index', [
@@ -101,7 +107,7 @@ class PcSpecController extends Controller
             'allProcessors' => $allProcessors,
             'filters' => [
                 'pc_ids' => $pcIds,
-                'processor_id' => $processorId,
+                'processor_ids' => $processorIds,
             ],
         ]);
     }
@@ -173,7 +179,7 @@ class PcSpecController extends Controller
             ? "{$quantity} identical PC Specs created successfully"
             : 'PC Spec created successfully';
 
-        return redirect()->route('pcspecs.index')
+        return redirect()->route('pcspecs.index', $this->indexRedirectParams($request))
             ->with('message', $message)
             ->with('type', 'success');
     }
@@ -255,7 +261,7 @@ class PcSpecController extends Controller
             $pcspec->processorSpecs()->sync([$procId]);
         });
 
-        return redirect()->route('pcspecs.index')
+        return redirect()->route('pcspecs.index', $this->indexRedirectParams($request))
             ->with('message', 'PC Spec updated')
             ->with('type', 'success');
     }
@@ -279,6 +285,18 @@ class PcSpecController extends Controller
     }
 
     /**
+     * Build redirect parameters preserving pagination page from request.
+     *
+     * @return array<string, mixed>
+     */
+    private function indexRedirectParams(Request $request): array
+    {
+        $page = $request->input('_page');
+
+        return $page ? ['page' => (int) $page] : [];
+    }
+
+    /**
      * DELETE /motherboards/{motherboard}
      */
     public function destroy(PcSpec $pcspec)
@@ -297,7 +315,7 @@ class PcSpecController extends Controller
             $pcspec->delete();
         });
 
-        return redirect()->route('pcspecs.index')
+        return back()
             ->with('message', 'PC Spec deleted')
             ->with('type', 'success');
     }

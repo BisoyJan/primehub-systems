@@ -57,6 +57,7 @@ export default function StationEdit({ station, sites, campaigns, pcSpecs, usedPc
         status: station.status || "",
         monitor_type: station.monitor_type || 'single',
         pc_spec_id: String(station.pc_spec_id),
+        _page: typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('page') ?? '' : '',
     });
 
     const { title, breadcrumbs } = usePageMeta({
@@ -94,7 +95,6 @@ export default function StationEdit({ station, sites, campaigns, pcSpecs, usedPc
         }, {
             onSuccess: () => {
                 toast.success("Station updated");
-                router.visit(stationsIndexRoute().url);
             },
             onError: (errors) => {
                 const firstError = Object.values(errors)[0] as string;

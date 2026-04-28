@@ -95,6 +95,15 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
     Route::post('stations/bulk', [StationController::class, 'storeBulk'])
         ->middleware('permission:stations.bulk')
         ->name('stations.bulk');
+    Route::patch('stations/{station}/quick-update', [StationController::class, 'quickUpdate'])
+        ->middleware('permission:stations.edit')
+        ->name('stations.quickUpdate');
+    Route::post('stations/bulk-assign', [StationController::class, 'bulkAssign'])
+        ->middleware('permission:stations.edit')
+        ->name('stations.bulkAssign');
+    Route::post('stations/bulk-unassign', [StationController::class, 'bulkUnassign'])
+        ->middleware('permission:stations.edit')
+        ->name('stations.bulkUnassign');
     Route::resource('stations', StationController::class)
         ->except(['show'])
         ->middleware('permission:stations.view,stations.create,stations.edit,stations.delete');

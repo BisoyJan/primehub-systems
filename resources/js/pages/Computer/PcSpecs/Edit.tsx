@@ -91,6 +91,8 @@ export default function Edit() {
 
     const isPageLoading = usePageLoading();
 
+    const returnPage = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('page') ?? '' : '';
+
     const form = useForm({
         pc_number: pcspec.pc_number || '',
         manufacturer: pcspec.manufacturer,
@@ -108,6 +110,7 @@ export default function Edit() {
         processor_thread_count: '' as number | '',
         processor_base_clock_ghz: '' as number | '',
         processor_boost_clock_ghz: '' as number | '',
+        _page: returnPage,
     });
 
     const [processorOpen, setProcessorOpen] = useState(false);
