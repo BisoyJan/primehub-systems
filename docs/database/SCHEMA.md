@@ -88,13 +88,12 @@ Computer specifications.
 | pc_number | varchar(255) | Unique PC identifier |
 | manufacturer | varchar(255) | PC manufacturer |
 | model | varchar(255) | PC model |
-| form_factor | varchar(255) | Form factor type |
 | memory_type | varchar(255) | Memory type (DDR4, etc) |
-| ram_slots | integer | Number of RAM slots |
-| max_ram_capacity_gb | integer | Maximum RAM capacity |
-| max_ram_speed | integer | Maximum RAM speed |
-| m2_slots | integer | Number of M.2 slots |
-| sata_ports | integer | Number of SATA ports |
+| ram_gb | integer | Installed RAM capacity in GB |
+| disk_gb | integer | Installed disk capacity in GB |
+| available_ports | varchar(500) | Available ports summary (nullable) |
+| notes | text | Additional notes (nullable) |
+| bios_release_date | date | BIOS release date (nullable) |
 | issue | text | Current issues (nullable) |
 | created_at | timestamp | Created timestamp |
 | updated_at | timestamp | Updated timestamp |

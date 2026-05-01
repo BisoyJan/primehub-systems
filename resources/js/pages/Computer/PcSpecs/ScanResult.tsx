@@ -30,11 +30,11 @@ interface PcSpec {
     id: number;
     pc_number?: string | null;
     manufacturer: string;
-    model: string;
     memory_type: string;
     ram_gb: number;
     disk_gb: number;
     available_ports?: string | null;
+    notes?: string | null;
     bios_release_date?: string | null;
     issue?: string | null;
     processorSpecs: ProcessorSpec[];
@@ -104,7 +104,7 @@ export default function ScanResult({ pcspec, error }: { pcspec?: PcSpec; error?:
                                     </div>
                                     <div>
                                         <CardTitle className="text-xl sm:text-2xl">{pcLabel}</CardTitle>
-                                        <p className="text-sm text-muted-foreground">{pcspec.manufacturer} {pcspec.model}</p>
+                                        <p className="text-sm text-muted-foreground">{pcspec.manufacturer}</p>
                                     </div>
                                 </div>
                                 <Badge variant={pcspec.issue ? 'destructive' : 'secondary'}>
@@ -166,6 +166,18 @@ export default function ScanResult({ pcspec, error }: { pcspec?: PcSpec; error?:
                             </CardHeader>
                             <CardContent>
                                 <p>{pcspec.available_ports}</p>
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {/* Notes */}
+                    {pcspec.notes && (
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-sm font-medium text-muted-foreground">Notes</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <p className="text-sm whitespace-pre-wrap">{pcspec.notes}</p>
                             </CardContent>
                         </Card>
                     )}

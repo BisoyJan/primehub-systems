@@ -82,13 +82,12 @@ pc_specs
 ├── pc_number (unique identifier)
 ├── manufacturer
 ├── model
-├── form_factor
 ├── memory_type
-├── ram_slots
-├── max_ram_capacity_gb
-├── max_ram_speed
-├── m2_slots
-├── sata_ports
+├── ram_gb
+├── disk_gb
+├── available_ports
+├── notes
+├── bios_release_date
 ├── issue (text, nullable)
 └── timestamps
 

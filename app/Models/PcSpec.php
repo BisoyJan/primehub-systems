@@ -28,6 +28,7 @@ class PcSpec extends Model
         'ram_gb',
         'disk_gb',
         'available_ports',
+        'notes',
         'bios_release_date',
     ];
 
@@ -86,6 +87,7 @@ class PcSpec extends Model
             'available_ports' => $this->available_ports,
             'bios_release_date' => $this->bios_release_date?->format('Y-m-d'),
             'issue' => $this->issue,
+            'notes' => $this->notes,
             'processor' => $this->processorSpecs->pluck('model')->implode(', '),
             'processorSpecs' => $this->processorSpecs->map(fn ($p) => [
                 'id' => $p->id,
@@ -106,10 +108,14 @@ class PcSpec extends Model
             'id' => $this->id,
             'pc_number' => $this->pc_number,
             'model' => $this->model,
+            'memory_type' => $this->memory_type,
             'ram_gb' => $this->ram_gb,
             'disk_gb' => $this->disk_gb,
             'available_ports' => $this->available_ports,
+            'issue' => $this->issue,
+            'notes' => $this->notes,
             'processor' => $this->processorSpecs->pluck('model')->implode(', '),
+            'processor_manufacturer' => $this->processorSpecs->pluck('manufacturer')->unique()->filter()->implode(', '),
         ];
     }
 }

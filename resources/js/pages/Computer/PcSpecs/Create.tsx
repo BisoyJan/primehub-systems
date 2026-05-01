@@ -70,7 +70,7 @@ export default function Create() {
     const form = useForm({
         pc_number: '',
         manufacturer: '',
-        model: '',
+        notes: '',
         memory_type: '',
         ram_gb: 0,
         disk_gb: 0,
@@ -87,6 +87,38 @@ export default function Create() {
         quantity: 1,
         _page: returnPage,
     });
+
+    // Normalize PC number for display (pure digits → PC{n}, otherwise uppercase)
+    const normalizePcNumber = (value: string): string => {
+        if (/^\d+$/.test(value)) return 'PC' + value;
+        return value.toUpperCase();
+    };
+
+    const isValidPcFormat = (value: string) => /^(?:PC)?\d+$/i.test(value);
+
+    // Generate sequential preview of PC numbers using normalized form
+    const sequentialPreview = (() => {
+        const { pc_number, quantity } = form.data;
+        if (!pc_number || !isValidPcFormat(pc_number)) return [];
+        const normalized = normalizePcNumber(pc_number);
+        if (quantity <= 1) return [];
+        const match = normalized.match(/^(.*?)(\d+)$/);
+        if (match) {
+            const prefix = match[1];
+            const startNum = parseInt(match[2], 10);
+            const padLen = match[2].length;
+            return Array.from({ length: quantity }, (_, i) => {
+                const n = startNum + i;
+                const str = String(n);
+                return prefix + (str.length <= padLen ? str.padStart(padLen, '0') : str);
+            });
+        }
+        return [normalized];
+    })();
+
+    const pcNumberNormalized = form.data.pc_number && isValidPcFormat(form.data.pc_number)
+        ? normalizePcNumber(form.data.pc_number)
+        : null;
 
     const [processorOpen, setProcessorOpen] = useState(false);
 
@@ -127,34 +159,26 @@ export default function Create() {
                         <h2 className="mb-2 text-lg font-semibold">Core Info</h2>
                         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                             <div>
-                                <Label htmlFor="pc_number">PC Number (Optional)</Label>
+                                <Label htmlFor="pc_number">PC Number <span className="text-red-500">*</span></Label>
                                 <Input
                                     id="pc_number"
                                     value={form.data.pc_number}
                                     onChange={(e) => form.setData('pc_number', e.target.value)}
-                                    placeholder="e.g., PC-2025-001"
+                                    placeholder="e.g., 1 or PC1"
+                                    required
                                 />
                                 {form.errors.pc_number && <p className="text-sm text-red-600">{form.errors.pc_number}</p>}
-                            </div>
-
-                            <div>
-                                <Label htmlFor="manufacturer">Manufacturer</Label>
-                                <Input
-                                    id="manufacturer"
-                                    value={form.data.manufacturer}
-                                    onChange={(e) => form.setData('manufacturer', e.target.value)}
-                                />
-                                {form.errors.manufacturer && <p className="text-sm text-red-600">{form.errors.manufacturer}</p>}
-                            </div>
-
-                            <div>
-                                <Label htmlFor="model">Model</Label>
-                                <Input
-                                    id="model"
-                                    value={form.data.model}
-                                    onChange={(e) => form.setData('model', e.target.value)}
-                                />
-                                {form.errors.model && <p className="text-sm text-red-600">{form.errors.model}</p>}
+                                {!form.errors.pc_number && form.data.pc_number && !isValidPcFormat(form.data.pc_number) && (
+                                    <p className="text-sm text-red-500">Only a number (e.g. 1) or PC + number (e.g. PC1) is allowed.</p>
+                                )}
+                                {pcNumberNormalized && pcNumberNormalized !== form.data.pc_number.toUpperCase() && (
+                                    <p className="text-xs text-muted-foreground mt-1">Will be saved as: <strong>{pcNumberNormalized}</strong></p>
+                                )}
+                                {sequentialPreview.length > 1 && (
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                        Will create: {sequentialPreview.join(', ')}
+                                    </p>
+                                )}
                             </div>
 
                             <div>
@@ -168,6 +192,28 @@ export default function Create() {
                                     onChange={(e) => form.setData('quantity', parseInt(e.target.value) || 1)}
                                 />
                                 {form.errors.quantity && <p className="text-sm text-red-600">{form.errors.quantity}</p>}
+                            </div>
+
+                            <div>
+                                <Label htmlFor="manufacturer">Manufacturer</Label>
+                                <Input
+                                    id="manufacturer"
+                                    value={form.data.manufacturer}
+                                    onChange={(e) => form.setData('manufacturer', e.target.value)}
+                                />
+                                {form.errors.manufacturer && <p className="text-sm text-red-600">{form.errors.manufacturer}</p>}
+                            </div>
+
+                            <div className="md:col-span-2">
+                                <Label htmlFor="notes">Notes</Label>
+                                <textarea
+                                    id="notes"
+                                    className="w-full min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                    value={form.data.notes}
+                                    onChange={(e) => form.setData('notes', e.target.value)}
+                                    placeholder="Optional notes..."
+                                />
+                                {form.errors.notes && <p className="text-sm text-red-600">{form.errors.notes}</p>}
                             </div>
                         </div>
                     </section>

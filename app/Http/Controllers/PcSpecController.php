@@ -30,8 +30,11 @@ class PcSpecController extends Controller
     {
         $this->authorize('viewAny', PcSpec::class);
 
+        $sortDirection = in_array($request->input('sort_dir'), ['asc', 'desc']) ? $request->input('sort_dir') : 'asc';
+
         $query = PcSpec::with(['processorSpecs'])
-            ->orderBy('id', 'desc');
+            ->orderByRaw("CAST(REGEXP_REPLACE(pc_number, '[^0-9]', '') AS UNSIGNED) {$sortDirection}")
+            ->orderBy('pc_number', $sortDirection);
 
         // Filter by selected PC IDs (multi-select)
         $pcIds = $request->input('pc_ids', []);
@@ -54,14 +57,14 @@ class PcSpecController extends Controller
 
         $pcspecs = $query
             ->paginate(10)
-            ->appends($request->only(['pc_ids', 'processor_ids']))
+            ->appends($request->only(['pc_ids', 'processor_ids', 'sort_dir']))
             ->through(fn ($pc) => [
                 'id' => $pc->id,
                 'pc_number' => $pc->pc_number,
                 'manufacturer' => $pc->manufacturer,
-                'model' => $pc->model,
                 'memory_type' => $pc->memory_type,
                 'issue' => $pc->issue,
+                'notes' => $pc->notes,
                 'ram_gb' => $pc->ram_gb,
                 'disk_gb' => $pc->disk_gb,
                 'available_ports' => $pc->available_ports,
@@ -78,7 +81,7 @@ class PcSpecController extends Controller
             ]);
 
         // All PCs for multi-select dropdown (lightweight)
-        $allPcSpecs = PcSpec::select('id', 'pc_number', 'manufacturer', 'model')
+        $allPcSpecs = PcSpec::select('id', 'pc_number', 'manufacturer')
             ->orderByRaw("CAST(REGEXP_REPLACE(pc_number, '[^0-9]', '') AS UNSIGNED)")
             ->orderBy('pc_number')
             ->orderBy('manufacturer')
@@ -86,12 +89,12 @@ class PcSpecController extends Controller
             ->map(fn ($pc) => [
                 'id' => $pc->id,
                 'label' => $pc->pc_number
-                    ? "{$pc->pc_number} — {$pc->manufacturer} {$pc->model}"
-                    : "{$pc->manufacturer} {$pc->model} (ID: {$pc->id})",
+                    ? "{$pc->pc_number} — {$pc->manufacturer}"
+                    : "{$pc->manufacturer} (ID: {$pc->id})",
             ]);
 
         // All processors for filter dropdown
-        $allProcessors = ProcessorSpec::select('id', 'manufacturer', 'model', 'core_count')
+        $allProcessors = ProcessorSpec::select('id', 'manufacturer', 'model', 'core_count', 'thread_count')
             ->orderBy('manufacturer')
             ->orderBy('model')
             ->get()
@@ -99,6 +102,7 @@ class PcSpecController extends Controller
                 'id' => $p->id,
                 'label' => "{$p->manufacturer} {$p->model}",
                 'core_count' => $p->core_count,
+                'thread_count' => $p->thread_count,
             ]);
 
         return Inertia::render('Computer/PcSpecs/Index', [
@@ -108,6 +112,7 @@ class PcSpecController extends Controller
             'filters' => [
                 'pc_ids' => $pcIds,
                 'processor_ids' => $processorIds,
+                'sort_dir' => $sortDirection,
             ],
         ]);
     }
@@ -137,9 +142,9 @@ class PcSpecController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'pc_number' => 'nullable|string|max:100|unique:pc_specs,pc_number',
+            'pc_number' => ['required', 'string', 'max:100', 'regex:/^(?:PC)?\d+$/i'],
             'manufacturer' => 'required|string|max:255',
-            'model' => 'required|string|max:255',
+            'notes' => 'nullable|string',
             'memory_type' => 'required|string|max:10',
             'ram_gb' => 'required|integer|min:0',
             'disk_gb' => 'required|integer|min:0',
@@ -156,7 +161,21 @@ class PcSpecController extends Controller
             'quantity' => 'nullable|integer|min:1|max:100',
         ]);
 
+        // Normalize: pure digits → prefix with PC (e.g. "1" → "PC1")
+        $data['pc_number'] = preg_match('/^\d+$/', $data['pc_number'])
+            ? 'PC'.$data['pc_number']
+            : strtoupper($data['pc_number']);
+
         $quantity = max(1, (int) ($data['quantity'] ?? 1));
+        $pcNumbers = $this->generateSequentialPcNumbers($data['pc_number'], $quantity);
+
+        // Validate that none of the generated PC numbers are already taken
+        $takenNumbers = PcSpec::whereIn('pc_number', $pcNumbers)->pluck('pc_number')->toArray();
+        if (! empty($takenNumbers)) {
+            return back()->withErrors([
+                'pc_number' => 'The following PC number(s) are already taken: '.implode(', ', $takenNumbers),
+            ])->withInput();
+        }
 
         $processorFields = [
             'processor_mode', 'processor_spec_id', 'processor_manufacturer',
@@ -164,19 +183,20 @@ class PcSpecController extends Controller
             'processor_base_clock_ghz', 'processor_boost_clock_ghz',
         ];
 
-        $pcData = collect($data)->except(array_merge($processorFields, ['quantity']))->toArray();
+        $pcData = collect($data)->except(array_merge($processorFields, ['quantity', 'pc_number']))->toArray();
 
-        DB::transaction(function () use ($pcData, $data, $quantity) {
+        DB::transaction(function () use ($pcData, $data, $pcNumbers) {
             $procId = $this->resolveProcessorId($data);
 
-            for ($i = 0; $i < $quantity; $i++) {
-                $pc = PcSpec::create($pcData);
+            foreach ($pcNumbers as $pcNumber) {
+                $pc = PcSpec::create(array_merge($pcData, ['pc_number' => $pcNumber]));
                 $pc->processorSpecs()->sync([$procId]);
             }
         });
 
+        $quantity = count($pcNumbers);
         $message = $quantity > 1
-            ? "{$quantity} identical PC Specs created successfully"
+            ? "{$quantity} PC Specs created successfully (".implode(', ', $pcNumbers).')'
             : 'PC Spec created successfully';
 
         return redirect()->route('pcspecs.index', $this->indexRedirectParams($request))
@@ -194,11 +214,11 @@ class PcSpecController extends Controller
                 'id' => $pcspec->id,
                 'pc_number' => $pcspec->pc_number,
                 'manufacturer' => $pcspec->manufacturer,
-                'model' => $pcspec->model,
                 'memory_type' => $pcspec->memory_type,
                 'ram_gb' => $pcspec->ram_gb,
                 'disk_gb' => $pcspec->disk_gb,
                 'available_ports' => $pcspec->available_ports,
+                'notes' => $pcspec->notes,
                 'bios_release_date' => $pcspec->bios_release_date?->format('Y-m-d'),
                 'processorSpecs' => $pcspec->processorSpecs->map(fn ($p) => [
                     'id' => $p->id,
@@ -229,9 +249,9 @@ class PcSpecController extends Controller
     public function update(Request $request, PcSpec $pcspec)
     {
         $data = $request->validate([
-            'pc_number' => 'nullable|string|max:100|unique:pc_specs,pc_number,'.$pcspec->id,
+            'pc_number' => ['required', 'string', 'max:100', 'regex:/^(?:PC)?\d+$/i'],
             'manufacturer' => 'required|string|max:255',
-            'model' => 'required|string|max:255',
+            'notes' => 'nullable|string',
             'memory_type' => 'required|string|max:10',
             'ram_gb' => 'required|integer|min:0',
             'disk_gb' => 'required|integer|min:0',
@@ -246,6 +266,20 @@ class PcSpecController extends Controller
             'processor_boost_clock_ghz' => 'nullable|numeric|min:0',
             'bios_release_date' => 'nullable|date',
         ]);
+
+        // Normalize: pure digits → prefix with PC (e.g. "1" → "PC1")
+        $data['pc_number'] = preg_match('/^\d+$/', $data['pc_number'])
+            ? 'PC'.$data['pc_number']
+            : strtoupper($data['pc_number']);
+
+        // Check uniqueness (excluding current record) after normalization
+        $duplicate = PcSpec::where('pc_number', $data['pc_number'])
+            ->where('id', '!=', $pcspec->id)
+            ->exists();
+
+        if ($duplicate) {
+            return back()->withErrors(['pc_number' => 'The PC number '.$data['pc_number'].' is already taken.'])->withInput();
+        }
 
         $processorFields = [
             'processor_mode', 'processor_spec_id', 'processor_manufacturer',
@@ -285,6 +319,24 @@ class PcSpecController extends Controller
     }
 
     /**
+     * PATCH /pcspecs/{pcspec}/notes
+     * Update only the notes field
+     */
+    public function updateNotes(Request $request, PcSpec $pcspec)
+    {
+        $data = $request->validate([
+            'notes' => 'nullable|string',
+        ]);
+
+        $pcspec->update($data);
+
+        return back()->with([
+            'message' => 'Notes updated successfully',
+            'type' => 'success',
+        ]);
+    }
+
+    /**
      * Build redirect parameters preserving pagination page from request.
      *
      * @return array<string, mixed>
@@ -294,6 +346,46 @@ class PcSpecController extends Controller
         $page = $request->input('_page');
 
         return $page ? ['page' => (int) $page] : [];
+    }
+
+    /**
+     * Generate sequential PC numbers starting from the given PC number.
+     * Extracts the numeric suffix and increments it for each quantity.
+     *
+     * @return string[]
+     */
+    private function generateSequentialPcNumbers(string $pcNumber, int $quantity): array
+    {
+        if ($quantity === 1) {
+            return [$pcNumber];
+        }
+
+        if (preg_match('/^(.*?)(\d+)$/', $pcNumber, $matches)) {
+            $prefix = $matches[1];
+            $startNum = (int) $matches[2];
+            $padLength = strlen($matches[2]);
+
+            $numbers = [];
+            for ($i = 0; $i < $quantity; $i++) {
+                $num = $startNum + $i;
+                $numStr = (string) $num;
+                // Preserve zero-padding only when the number fits within the original digit width
+                $formatted = strlen($numStr) <= $padLength
+                    ? str_pad($numStr, $padLength, '0', STR_PAD_LEFT)
+                    : $numStr;
+                $numbers[] = $prefix.$formatted;
+            }
+
+            return $numbers;
+        }
+
+        // No numeric suffix — append -2, -3, etc. for extras
+        $numbers = [$pcNumber];
+        for ($i = 2; $i <= $quantity; $i++) {
+            $numbers[] = $pcNumber.'-'.$i;
+        }
+
+        return $numbers;
     }
 
     /**
@@ -469,7 +561,6 @@ class PcSpecController extends Controller
                     'url' => route('pcspecs.scanResult', $pcspec->id),
                     'pc_number' => $pcspec->pc_number ?? "PC-{$pcspec->id}",
                     'manufacturer' => $pcspec->manufacturer,
-                    'model' => $pcspec->model,
                     'memory_type' => $pcspec->memory_type,
                 ])
                 : route('pcspecs.scanResult', $pcspec->id);
@@ -623,11 +714,11 @@ class PcSpecController extends Controller
                 'id' => $pcspec->id,
                 'pc_number' => $pcspec->pc_number,
                 'manufacturer' => $pcspec->manufacturer,
-                'model' => $pcspec->model,
                 'memory_type' => $pcspec->memory_type,
                 'ram_gb' => $pcspec->ram_gb,
                 'disk_gb' => $pcspec->disk_gb,
                 'available_ports' => $pcspec->available_ports,
+                'notes' => $pcspec->notes,
                 'issue' => $pcspec->issue,
                 'bios_release_date' => $pcspec->bios_release_date?->format('Y-m-d'),
                 'processorSpecs' => $pcspec->processorSpecs->map(fn ($p) => [

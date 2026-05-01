@@ -21,15 +21,14 @@ export interface PcSpec {
     id: number;
     pc_number?: string;
     model: string;
-    ram?: string;
+    memory_type?: string | null;
     ram_gb?: number;
-    ram_capacities?: string;
-    ram_ddr?: string;
-    disk?: string;
     disk_gb?: number;
-    disk_capacities?: string;
-    disk_type?: string;
     processor?: string;
+    processor_manufacturer?: string | null;
+    available_ports?: string | null;
+    issue?: string | null;
+    notes?: string | null;
     [key: string]: unknown;
 }
 
@@ -47,8 +46,8 @@ const columns: DataTableColumn<PcSpec>[] = [
     { accessor: "pc_number", header: "PC Number" },
     { accessor: "model", header: "Model" },
     { accessor: "processor", header: "Processor" },
-    { accessor: "ram", header: "RAM", cell: (value, row) => `${row.ram} (${row.ram_gb ?? ''} GB)` },
-    { accessor: "disk", header: "Disk", cell: (value, row) => `${row.disk} (${row.disk_gb ?? ''} GB)` },
+    { accessor: "ram_gb", header: "RAM (GB)" },
+    { accessor: "disk_gb", header: "Disk (GB)" },
 ];
 
 export default function PcSpecTable({
@@ -77,8 +76,8 @@ export default function PcSpecTable({
             (spec.pc_number?.toLowerCase().includes(search.toLowerCase()) ?? false) ||
             spec.model.toLowerCase().includes(search.toLowerCase()) ||
             (spec.processor?.toLowerCase().includes(search.toLowerCase()) ?? false);
-        const matchesRam = filterRam ? (spec.ram?.toLowerCase().includes(filterRam.toLowerCase()) ?? false) : true;
-        const matchesDisk = filterDisk ? (spec.disk?.toLowerCase().includes(filterDisk.toLowerCase()) ?? false) : true;
+        const matchesRam = filterRam ? String(spec.ram_gb ?? '').includes(filterRam) : true;
+        const matchesDisk = filterDisk ? String(spec.disk_gb ?? '').includes(filterDisk) : true;
 
         return isNotUsed && matchesSearch && matchesRam && matchesDisk;
     });
@@ -221,20 +220,20 @@ export default function PcSpecTable({
                                         <div className="space-y-1.5 text-sm">
                                             <div className="flex justify-between">
                                                 <span className={isSelected ? 'text-blue-700 dark:text-blue-300' : 'text-muted-foreground'}>Processor:</span>
-                                                <span className={`font-medium text-right break-words max-w-[60%] ${isSelected ? 'text-blue-900 dark:text-blue-100' : ''}`}>
+                                                <span className={`font-medium text-right wrap-break-word max-w-[60%] ${isSelected ? 'text-blue-900 dark:text-blue-100' : ''}`}>
                                                     {spec.processor}
                                                 </span>
                                             </div>
                                             <div className="flex justify-between">
                                                 <span className={isSelected ? 'text-blue-700 dark:text-blue-300' : 'text-muted-foreground'}>RAM:</span>
                                                 <span className={`font-medium ${isSelected ? 'text-blue-900 dark:text-blue-100' : ''}`}>
-                                                    {spec.ram} ({spec.ram_gb ?? ''} GB)
+                                                    {spec.ram_gb ? `${spec.ram_gb} GB` : '—'}
                                                 </span>
                                             </div>
                                             <div className="flex justify-between">
                                                 <span className={isSelected ? 'text-blue-700 dark:text-blue-300' : 'text-muted-foreground'}>Disk:</span>
                                                 <span className={`font-medium ${isSelected ? 'text-blue-900 dark:text-blue-100' : ''}`}>
-                                                    {spec.disk} ({spec.disk_gb ?? ''} GB)
+                                                    {spec.disk_gb ? `${spec.disk_gb} GB` : '—'}
                                                 </span>
                                             </div>
                                         </div>
@@ -261,52 +260,84 @@ export default function PcSpecTable({
             </div>
 
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                <DialogContent className="max-w-[90vw] sm:max-w-2xl">
+                <DialogContent className="max-w-[95vw] sm:max-w-lg w-full">
                     <DialogHeader>
-                        <DialogTitle>PC Spec Details</DialogTitle>
+                        <DialogTitle className="text-lg font-semibold">
+                            {dialogRow?.pc_number || (dialogRow ? `PC #${dialogRow.id}` : 'PC Details')}
+                        </DialogTitle>
                         <DialogDescription>
-                            {dialogRow && (
-                                <div className="space-y-4 text-left mt-4">
-                                    <div className="space-y-3">
-                                        {dialogRow.pc_number && (
+                            {dialogRow ? `${dialogRow.model}` : 'No PC selected'}
+                        </DialogDescription>
+                    </DialogHeader>
+                    {dialogRow && (
+                        <div className="space-y-4 text-sm max-h-[60vh] overflow-y-auto pr-1">
+                            <div className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-lg border p-4">
+                                {dialogRow.memory_type && (
+                                    <div>
+                                        <span className="text-xs text-muted-foreground">Memory Type</span>
+                                        <p className="font-medium">{dialogRow.memory_type}</p>
+                                    </div>
+                                )}
+                                <div>
+                                    <span className="text-xs text-muted-foreground">RAM</span>
+                                    <p className="font-medium">{dialogRow.ram_gb ? `${dialogRow.ram_gb} GB` : 'N/A'}</p>
+                                </div>
+                                <div>
+                                    <span className="text-xs text-muted-foreground">Disk</span>
+                                    <p className="font-medium">{dialogRow.disk_gb ? `${dialogRow.disk_gb} GB` : 'N/A'}</p>
+                                </div>
+                                {dialogRow.available_ports && (
+                                    <div className="col-span-2">
+                                        <span className="text-xs text-muted-foreground">Available Ports</span>
+                                        <p className="font-medium">{dialogRow.available_ports}</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {(dialogRow.processor || dialogRow.processor_manufacturer) && (
+                                <div className="space-y-2">
+                                    <h4 className="text-sm font-semibold">Processor</h4>
+                                    <div className="rounded-lg border p-4 space-y-1">
+                                        {dialogRow.processor_manufacturer && (
                                             <div>
-                                                <div className="font-semibold text-foreground mb-1">PC Number:</div>
-                                                <div className="text-foreground pl-2 break-words">{dialogRow.pc_number}</div>
+                                                <span className="text-xs text-muted-foreground">Manufacturer</span>
+                                                <p className="font-medium">{dialogRow.processor_manufacturer}</p>
                                             </div>
                                         )}
-
-                                        <div>
-                                            <div className="font-semibold text-foreground mb-1">Model:</div>
-                                            <div className="text-foreground pl-2 break-words">{dialogRow.model}</div>
-                                        </div>
-
-                                        <div>
-                                            <div className="font-semibold text-foreground mb-1">Processor:</div>
-                                            <div className="text-foreground pl-2 break-words">{dialogRow.processor}</div>
-                                        </div>
-
-                                        <div>
-                                            <div className="font-semibold text-foreground mb-1">
-                                                RAM {dialogRow.ram_ddr ? `(${dialogRow.ram_ddr})` : ''}:
+                                        {dialogRow.processor && (
+                                            <div>
+                                                <span className="text-xs text-muted-foreground">Model</span>
+                                                <p className="font-medium">{dialogRow.processor}</p>
                                             </div>
-                                            <div className="text-foreground pl-2 break-words">
-                                                {dialogRow.ram} ({dialogRow.ram_capacities ?? dialogRow.ram_gb + ' GB'})
-                                            </div>
-                                        </div>
-
-                                        <div>
-                                            <div className="font-semibold text-foreground mb-1">
-                                                Disk {dialogRow.disk_type ? `(${dialogRow.disk_type})` : ''}:
-                                            </div>
-                                            <div className="text-foreground pl-2 break-words">
-                                                {dialogRow.disk} ({dialogRow.disk_capacities ?? dialogRow.disk_gb + ' GB'})
-                                            </div>
-                                        </div>
+                                        )}
                                     </div>
                                 </div>
                             )}
-                        </DialogDescription>
-                    </DialogHeader>
+
+                            {dialogRow.issue && (
+                                <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-4">
+                                    <span className="text-xs text-muted-foreground">Issue</span>
+                                    <p className="font-medium text-red-600 dark:text-red-400 whitespace-pre-wrap">{dialogRow.issue}</p>
+                                </div>
+                            )}
+
+                            {dialogRow.notes && (
+                                <div className="rounded-lg border p-4">
+                                    <span className="text-xs text-muted-foreground">Notes</span>
+                                    <p className="font-medium whitespace-pre-wrap">{dialogRow.notes}</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                    <div className="flex justify-end mt-2">
+                        <button
+                            type="button"
+                            onClick={() => setDialogOpen(false)}
+                            className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium shadow-sm hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring w-full"
+                        >
+                            Close
+                        </button>
+                    </div>
                 </DialogContent>
             </Dialog>
             <div className="flex justify-center items-center mt-2">

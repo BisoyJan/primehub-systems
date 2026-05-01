@@ -117,9 +117,9 @@ A comprehensive computer and hardware management system for tracking PC specific
 
 ```sql
 -- PC Specifications
-pc_specs (id, pc_number, manufacturer, model, form_factor, 
-          memory_type, ram_slots, max_ram_capacity_gb, max_ram_speed,
-          m2_slots, sata_ports, issue, timestamps)
+pc_specs (id, pc_number, manufacturer, model,
+          memory_type, ram_gb, disk_gb, available_ports,
+          notes, bios_release_date, issue, timestamps)
 
 -- Hardware Specs
 ram_specs (id, model, capacity_gb, speed, type, timestamps)

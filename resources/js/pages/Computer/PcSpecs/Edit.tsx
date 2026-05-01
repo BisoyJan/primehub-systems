@@ -48,11 +48,11 @@ interface PcSpecData {
     id: number;
     pc_number: string | null;
     manufacturer: string;
-    model: string;
     memory_type: string;
     ram_gb: number;
     disk_gb: number;
     available_ports: string | null;
+    notes: string | null;
     bios_release_date: string | null;
     processorSpecs: ProcessorSpecDetail[];
 }
@@ -79,7 +79,7 @@ export default function Edit() {
 
     const { pcspec, processorOptions } = usePage<PageProps>().props;
 
-    const specLabel = pcspec.pc_number?.trim() || pcspec.model || `PC Spec #${pcspec.id}`;
+    const specLabel = pcspec.pc_number?.trim() || `PC Spec #${pcspec.id}`;
 
     const { title, breadcrumbs } = usePageMeta({
         title: `Edit ${specLabel}`,
@@ -96,7 +96,7 @@ export default function Edit() {
     const form = useForm({
         pc_number: pcspec.pc_number || '',
         manufacturer: pcspec.manufacturer,
-        model: pcspec.model,
+        notes: pcspec.notes || '',
         memory_type: pcspec.memory_type,
         ram_gb: pcspec.ram_gb,
         disk_gb: pcspec.disk_gb,
@@ -114,6 +114,17 @@ export default function Edit() {
     });
 
     const [processorOpen, setProcessorOpen] = useState(false);
+
+    const normalizePcNumber = (value: string): string => {
+        if (/^\d+$/.test(value)) return 'PC' + value;
+        return value.toUpperCase();
+    };
+
+    const isValidPcFormat = (value: string) => /^(?:PC)?\d+$/i.test(value);
+
+    const pcNumberNormalized = form.data.pc_number && isValidPcFormat(form.data.pc_number)
+        ? normalizePcNumber(form.data.pc_number)
+        : null;
 
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
@@ -152,14 +163,21 @@ export default function Edit() {
                         <h2 className="mb-2 text-lg font-semibold">Core Info</h2>
                         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                             <div>
-                                <Label htmlFor="pc_number">PC Number (Optional)</Label>
+                                <Label htmlFor="pc_number">PC Number <span className="text-red-500">*</span></Label>
                                 <Input
                                     id="pc_number"
                                     value={form.data.pc_number}
                                     onChange={(e) => form.setData('pc_number', e.target.value)}
-                                    placeholder="e.g., PC-2025-001"
+                                    placeholder="e.g., 1 or PC1"
+                                    required
                                 />
                                 {form.errors.pc_number && <p className="text-sm text-red-600">{form.errors.pc_number}</p>}
+                                {!form.errors.pc_number && form.data.pc_number && !isValidPcFormat(form.data.pc_number) && (
+                                    <p className="text-sm text-red-500">Only a number (e.g. 1) or PC + number (e.g. PC1) is allowed.</p>
+                                )}
+                                {pcNumberNormalized && pcNumberNormalized !== form.data.pc_number.toUpperCase() && (
+                                    <p className="text-xs text-muted-foreground mt-1">Will be saved as: <strong>{pcNumberNormalized}</strong></p>
+                                )}
                             </div>
 
                             <div>
@@ -172,14 +190,16 @@ export default function Edit() {
                                 {form.errors.manufacturer && <p className="text-sm text-red-600">{form.errors.manufacturer}</p>}
                             </div>
 
-                            <div>
-                                <Label htmlFor="model">Model</Label>
-                                <Input
-                                    id="model"
-                                    value={form.data.model}
-                                    onChange={(e) => form.setData('model', e.target.value)}
+                            <div className="md:col-span-2">
+                                <Label htmlFor="notes">Notes</Label>
+                                <textarea
+                                    id="notes"
+                                    className="w-full min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                    value={form.data.notes}
+                                    onChange={(e) => form.setData('notes', e.target.value)}
+                                    placeholder="Optional notes..."
                                 />
-                                {form.errors.model && <p className="text-sm text-red-600">{form.errors.model}</p>}
+                                {form.errors.notes && <p className="text-sm text-red-600">{form.errors.notes}</p>}
                             </div>
                         </div>
                     </section>

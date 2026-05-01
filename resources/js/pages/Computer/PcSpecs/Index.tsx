@@ -51,6 +51,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
 import { RefreshCw, Filter, Plus, Play, Pause, ChevronsUpDown, Check, X } from 'lucide-react';
 
@@ -81,11 +82,11 @@ interface PcSpec {
     id: number;
     pc_number?: string | null;
     manufacturer: string;
-    model: string;
     memory_type: string;
     ram_gb: number;
     disk_gb: number;
     available_ports?: string | null;
+    notes?: string | null;
     bios_release_date?: string | null;
     issue?: string | null;
     processorSpecs: ProcessorSpec[];
@@ -107,6 +108,7 @@ interface ProcessorOption {
     id: number;
     label: string;
     core_count?: number | null;
+    thread_count?: number | null;
 }
 
 interface Props extends InertiaPageProps {
@@ -117,6 +119,7 @@ interface Props extends InertiaPageProps {
     filters: {
         pc_ids: number[];
         processor_ids: number[];
+        sort_dir?: 'asc' | 'desc';
     };
 }
 
@@ -127,7 +130,7 @@ export default function Index() {
         pcspecs = { data: [], links: [] },
         allPcSpecs = [],
         allProcessors = [],
-        filters = { pc_ids: [], processor_ids: [] },
+        filters = { pc_ids: [], processor_ids: [], sort_dir: 'asc' },
     } = usePage<Props>().props;
     const form = useForm({}); // Keep useForm for delete but empty for search
 
@@ -142,6 +145,8 @@ export default function Index() {
     const [issueDialogOpen, setIssueDialogOpen] = useState(false);
     const [selectedPcSpec, setSelectedPcSpec] = useState<PcSpec | null>(null);
     const [issueText, setIssueText] = useState('');
+    const [notesDialogOpen, setNotesDialogOpen] = useState(false);
+    const [notesText, setNotesText] = useState('');
 
     // Multi-select PC search state
     const [pcSearchQuery, setPcSearchQuery] = useState('');
@@ -149,6 +154,9 @@ export default function Index() {
     const [selectedFilterPcIds, setSelectedFilterPcIds] = useState<number[]>(
         Array.isArray(filters.pc_ids) ? filters.pc_ids.map(Number) : []
     );
+
+    // Sort state
+    const [sortDir, setSortDir] = useState<'asc' | 'desc'>(filters.sort_dir ?? 'asc');
 
     // Processor filter state (multi-select)
     const [processorSearchQuery, setProcessorSearchQuery] = useState('');
@@ -222,6 +230,9 @@ export default function Index() {
         if (selectedProcessorIds.length > 0) {
             params.processor_ids = selectedProcessorIds;
         }
+        if (sortDir !== 'asc') {
+            params.sort_dir = sortDir;
+        }
         router.get(
             pcSpecIndex().url,
             params,
@@ -237,6 +248,7 @@ export default function Index() {
         setSelectedProcessorIds([]);
         setPcSearchQuery('');
         setProcessorSearchQuery('');
+        setSortDir('asc');
         router.get(pcSpecIndex().url);
     };
 
@@ -326,6 +338,28 @@ export default function Index() {
             },
             onError: () => {
                 toast.error('Failed to update issue');
+            },
+        });
+    }
+
+    function handleOpenNotesDialog(pcSpec: PcSpec) {
+        setSelectedPcSpec(pcSpec);
+        setNotesText(pcSpec.notes || '');
+        setNotesDialogOpen(true);
+    }
+
+    function handleSaveNotes() {
+        if (!selectedPcSpec) return;
+
+        router.patch(`/pcspecs/${selectedPcSpec.id}/notes`, {
+            notes: notesText || null,
+        }, {
+            preserveScroll: true,
+            onSuccess: () => {
+                setNotesDialogOpen(false);
+            },
+            onError: () => {
+                toast.error('Failed to update notes');
             },
         });
     }
@@ -484,7 +518,7 @@ export default function Index() {
 
                 <div className="flex flex-col gap-4">
                     <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
-                        <div className="w-full sm:w-auto flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="w-full sm:w-auto flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                             {/* Multi-select PC Search */}
                             <Popover open={isPcPopoverOpen} onOpenChange={setIsPcPopoverOpen}>
                                 <PopoverTrigger asChild>
@@ -570,7 +604,7 @@ export default function Index() {
                                                         />
                                                         {proc.label}
                                                         {proc.core_count != null && (
-                                                            <span className="ml-auto text-xs text-muted-foreground">{proc.core_count} cores</span>
+                                                            <span className="ml-auto text-xs text-muted-foreground">{proc.core_count != null ? `${proc.core_count}C` : ''}/{proc.thread_count != null ? `${proc.thread_count}T` : ''}</span>
                                                         )}
                                                     </CommandItem>
                                                 ))}
@@ -579,6 +613,16 @@ export default function Index() {
                                     </Command>
                                 </PopoverContent>
                             </Popover>
+
+                            <Select value={sortDir} onValueChange={(value: 'asc' | 'desc') => setSortDir(value)}>
+                                <SelectTrigger className="w-full font-normal">
+                                    <SelectValue placeholder="PC Number Order" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="asc">PC Number: Ascending (A-Z)</SelectItem>
+                                    <SelectItem value="desc">PC Number: Descending (Z-A)</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
 
                         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
@@ -702,15 +746,14 @@ export default function Index() {
                                                 aria-label="Select all PC specs"
                                             />
                                         </TableHead>
-                                        <TableHead className="hidden lg:table-cell">ID</TableHead>
                                         <TableHead>PC Number</TableHead>
                                         <TableHead>Manufacturer</TableHead>
-                                        <TableHead>Model</TableHead>
                                         <TableHead className="hidden xl:table-cell">Processor</TableHead>
                                         <TableHead className="hidden xl:table-cell">Cores</TableHead>
                                         <TableHead>RAM (GB)</TableHead>
                                         <TableHead>Disk (GB)</TableHead>
                                         <TableHead className="hidden xl:table-cell">Ports</TableHead>
+                                        <TableHead className="hidden xl:table-cell">Notes</TableHead>
                                         <TableHead>Issue</TableHead>
                                         <TableHead className="text-center">Actions</TableHead>
                                     </TableRow>
@@ -730,12 +773,10 @@ export default function Index() {
                                                         aria-label={`Select PC ${pc.pc_number || pc.id}`}
                                                     />
                                                 </TableCell>
-                                                <TableCell className="hidden lg:table-cell">{pc.id}</TableCell>
                                                 <TableCell className="font-medium">
                                                     {pc.pc_number || <span className="text-gray-400">—</span>}
                                                 </TableCell>
                                                 <TableCell>{pc.manufacturer}</TableCell>
-                                                <TableCell>{pc.model}</TableCell>
                                                 <TableCell className="hidden xl:table-cell">{procLabel}</TableCell>
                                                 <TableCell className="hidden xl:table-cell">
                                                     {proc?.core_count != null || proc?.thread_count != null
@@ -745,6 +786,23 @@ export default function Index() {
                                                 <TableCell>{pc.ram_gb}</TableCell>
                                                 <TableCell>{pc.disk_gb}</TableCell>
                                                 <TableCell className="hidden xl:table-cell">{pc.available_ports || '—'}</TableCell>
+                                                <TableCell className="hidden xl:table-cell">
+                                                    <div className="flex items-center gap-2">
+                                                        {pc.notes ? (
+                                                            <span className="text-xs truncate max-w-40 block" title={pc.notes}>{pc.notes}</span>
+                                                        ) : (
+                                                            <span className="text-xs text-gray-400">No notes</span>
+                                                        )}
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => handleOpenNotesDialog(pc)}
+                                                            className="h-7 px-2 text-xs"
+                                                        >
+                                                            {pc.notes ? 'Edit' : 'Add'}
+                                                        </Button>
+                                                    </div>
+                                                </TableCell>
                                                 <TableCell>
                                                     <div className="flex items-center gap-2">
                                                         {pc.issue ? (
@@ -789,7 +847,7 @@ export default function Index() {
                                                                     {pc.pc_number || `PC #${pc.id}`}
                                                                 </DialogTitle>
                                                                 <DialogDescription>
-                                                                    {pc.manufacturer} {pc.model}
+                                                                    {pc.manufacturer}
                                                                 </DialogDescription>
                                                             </DialogHeader>
 
@@ -869,7 +927,7 @@ export default function Index() {
                                                             <AlertDialogHeader>
                                                                 <AlertDialogTitle>Confirm Delete</AlertDialogTitle>
                                                                 <AlertDialogDescription>
-                                                                    Are you sure you want to delete {pc.manufacturer} {pc.model}? This action cannot be undone.
+                                                                    Are you sure you want to delete {pc.pc_number || pc.manufacturer}? This action cannot be undone.
                                                                 </AlertDialogDescription>
                                                             </AlertDialogHeader>
                                                             <AlertDialogFooter className="flex-col sm:flex-row gap-2">
@@ -924,20 +982,12 @@ export default function Index() {
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="text-right">
-                                        <div className="text-xs text-muted-foreground">ID</div>
-                                        <div className="font-medium text-sm">#{pc.id}</div>
-                                    </div>
                                 </div>
 
                                 <div className="flex justify-between items-start">
                                     <div>
                                         <div className="text-xs text-muted-foreground">Manufacturer</div>
                                         <div className="font-semibold text-lg">{pc.manufacturer}</div>
-                                    </div>
-                                    <div className="text-right">
-                                        <div className="text-xs text-muted-foreground">Model</div>
-                                        <div className="font-medium text-sm">{pc.model}</div>
                                     </div>
                                 </div>
 
@@ -990,6 +1040,28 @@ export default function Index() {
                                             </div>
                                         </div>
                                     </div>
+                                    <div className="pt-1">
+                                        <div className="flex justify-between items-start gap-2">
+                                            <span className="text-muted-foreground">Notes:</span>
+                                            <div className="flex items-center gap-2 flex-1 justify-end">
+                                                {pc.notes ? (
+                                                    <span className="text-xs text-muted-foreground truncate max-w-30" title={pc.notes}>
+                                                        {pc.notes}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-xs text-gray-400">No notes</span>
+                                                )}
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => handleOpenNotesDialog(pc)}
+                                                    className="h-7 px-2 text-xs"
+                                                >
+                                                    {pc.notes ? 'Edit' : 'Add'}
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <div className="flex flex-col gap-2 pt-2 border-t">
@@ -1015,7 +1087,7 @@ export default function Index() {
                                                         {pc.pc_number || `PC #${pc.id}`}
                                                     </DialogTitle>
                                                     <DialogDescription>
-                                                        {pc.manufacturer} {pc.model}
+                                                        {pc.manufacturer}
                                                     </DialogDescription>
                                                 </DialogHeader>
 
@@ -1094,7 +1166,7 @@ export default function Index() {
                                             <AlertDialogHeader>
                                                 <AlertDialogTitle>Confirm Delete</AlertDialogTitle>
                                                 <AlertDialogDescription>
-                                                    Are you sure you want to delete {pc.manufacturer} {pc.model}? This action cannot be undone.
+                                                    Are you sure you want to delete {pc.pc_number || pc.manufacturer}? This action cannot be undone.
                                                 </AlertDialogDescription>
                                             </AlertDialogHeader>
                                             <AlertDialogFooter className="flex-col sm:flex-row gap-2">
@@ -1132,7 +1204,7 @@ export default function Index() {
                             <DialogDescription>
                                 {selectedPcSpec && (
                                     <span className="text-sm wrap-break-word">
-                                        {selectedPcSpec.manufacturer} {selectedPcSpec.model}
+                                        {selectedPcSpec.pc_number || selectedPcSpec.manufacturer}
                                     </span>
                                 )}
                             </DialogDescription>
@@ -1159,6 +1231,46 @@ export default function Index() {
                             </Button>
                             <Button onClick={handleSaveIssue} className="w-full sm:w-auto">
                                 Save Issue
+                            </Button>
+                        </div>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Notes Dialog */}
+                <Dialog open={notesDialogOpen} onOpenChange={setNotesDialogOpen}>
+                    <DialogContent className="max-w-[90vw] sm:max-w-md">
+                        <DialogHeader>
+                            <DialogTitle>Manage Notes</DialogTitle>
+                            <DialogDescription>
+                                {selectedPcSpec && (
+                                    <span className="text-sm wrap-break-word">
+                                        {selectedPcSpec.pc_number || `PC #${selectedPcSpec.id}`} — {selectedPcSpec.manufacturer}
+                                    </span>
+                                )}
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="notes">Notes</Label>
+                                <Textarea
+                                    id="notes"
+                                    placeholder="Add notes for this PC spec..."
+                                    value={notesText}
+                                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNotesText(e.target.value)}
+                                    rows={5}
+                                    className="resize-none"
+                                />
+                                <p className="text-xs text-gray-500">
+                                    Leave empty to remove the notes.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex flex-col sm:flex-row justify-end gap-2">
+                            <Button variant="outline" onClick={() => setNotesDialogOpen(false)} className="w-full sm:w-auto">
+                                Cancel
+                            </Button>
+                            <Button onClick={handleSaveNotes} className="w-full sm:w-auto">
+                                Save Notes
                             </Button>
                         </div>
                     </DialogContent>

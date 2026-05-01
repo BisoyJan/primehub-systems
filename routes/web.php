@@ -67,6 +67,9 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
     Route::patch('pcspecs/{pcspec}/issue', [PcSpecController::class, 'updateIssue'])
         ->middleware('permission:pcspecs.update_issue')
         ->name('pcspecs.updateIssue');
+    Route::patch('pcspecs/{pcspec}/notes', [PcSpecController::class, 'updateNotes'])
+        ->middleware('permission:pcspecs.edit')
+        ->name('pcspecs.updateNotes');
     Route::resource('pcspecs', PcSpecController::class)
         ->middleware('permission:pcspecs.view,pcspecs.create,pcspecs.edit,pcspecs.delete');
 

@@ -84,6 +84,7 @@ interface Station {
         available_ports?: string | null;
         bios_release_date?: string | null;
         issue?: string | null;
+        notes?: string | null;
         processorSpecs: ProcessorSpec[];
     };
 }
@@ -362,6 +363,8 @@ export default function StationIndex() {
 
     const [issueDialogOpen, setIssueDialogOpen] = useState(false);
     const [issueText, setIssueText] = useState("");
+    const [notesDialogOpen, setNotesDialogOpen] = useState(false);
+    const [notesText, setNotesText] = useState("");
     const [selectedEmptyStations, setSelectedEmptyStations] = useState<number[]>([]);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
@@ -568,6 +571,30 @@ export default function StationIndex() {
         });
     };
 
+    const handleOpenNotesDialog = (pcSpecDetails: Station['pc_spec_details']) => {
+        if (!pcSpecDetails) return;
+        setSelectedPcSpec(pcSpecDetails);
+        setNotesText(pcSpecDetails.notes || '');
+        setNotesDialogOpen(true);
+    };
+
+    const handleSaveNotes = () => {
+        if (!selectedPcSpec) return;
+
+        router.patch(`/pcspecs/${selectedPcSpec.id}/notes`, {
+            notes: notesText || null,
+        }, {
+            preserveScroll: true,
+            onSuccess: () => {
+                toast.success('Notes updated successfully');
+                setNotesDialogOpen(false);
+            },
+            onError: () => {
+                toast.error('Failed to update notes');
+            },
+        });
+    };
+
     const handleBulkAssign = () => {
         if (selectedEmptyStations.length === 0) {
             toast.error('Please select at least one empty station');
@@ -641,7 +668,7 @@ export default function StationIndex() {
                     </div>
 
                     {/* Filter card */}
-                    <div className="rounded-lg border bg-card p-4 space-y-4">
+                    <div className="rounded-lg border bg-card p-3 space-y-4">
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
                             <div className="space-y-1.5">
                                 <Label className="text-xs text-muted-foreground">Stations</Label>
@@ -787,7 +814,7 @@ export default function StationIndex() {
                             </div>
                         </div>
 
-                        <div className="flex items-center justify-end gap-2 pt-1 border-t">
+                        <div className="flex items-center justify-end gap-2 pt-2 border-t">
                             {(siteFilter !== "all" || campaignFilter !== "all" || statusFilter !== "all" || selectedFilterStationIds.length > 0 || selectedFilterProcessorIds.length > 0) && (
                                 <Button variant="ghost" size="sm" onClick={resetFilters}>
                                     Reset
@@ -950,6 +977,7 @@ export default function StationIndex() {
                                         <TableHead>PC Spec</TableHead>
                                         <TableHead className="hidden lg:table-cell">Processor</TableHead>
                                         <TableHead className="hidden xl:table-cell">PC Issue</TableHead>
+                                        <TableHead className="hidden xl:table-cell">PC Notes</TableHead>
                                         <TableHead>Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -1153,6 +1181,29 @@ export default function StationIndex() {
                                                         <span className="text-xs text-gray-400">—</span>
                                                     )}
                                                 </TableCell>
+                                                <TableCell className="hidden xl:table-cell">
+                                                    {station.pc_spec_details ? (
+                                                        <div className="flex items-center gap-2">
+                                                            {station.pc_spec_details.notes ? (
+                                                                <span className="text-xs text-gray-700 truncate max-w-37.5" title={station.pc_spec_details.notes}>
+                                                                    {station.pc_spec_details.notes}
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-xs text-gray-400">No notes</span>
+                                                            )}
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => handleOpenNotesDialog(station.pc_spec_details)}
+                                                                className="h-7 px-2 text-xs"
+                                                            >
+                                                                {station.pc_spec_details.notes ? 'Edit' : 'Add'}
+                                                            </Button>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-xs text-gray-400">—</span>
+                                                    )}
+                                                </TableCell>
                                                 <TableCell>
                                                     <div className="flex items-center gap-2">
                                                         <Can permission="stations.edit">
@@ -1320,6 +1371,32 @@ export default function StationIndex() {
                                             </div>
                                         </div>
                                     )}
+
+                                    {/* PC Notes Section */}
+                                    {station.pc_spec_details && (
+                                        <div className="pt-2 border-t">
+                                            <div className="flex justify-between items-start gap-2">
+                                                <span className="text-muted-foreground">PC Notes:</span>
+                                                <div className="flex items-center gap-2 flex-1 justify-end">
+                                                    {station.pc_spec_details.notes ? (
+                                                        <span className="text-xs text-gray-700 truncate max-w-30" title={station.pc_spec_details.notes}>
+                                                            {station.pc_spec_details.notes}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-xs text-gray-400">No notes</span>
+                                                    )}
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => handleOpenNotesDialog(station.pc_spec_details)}
+                                                        className="h-7 px-2 text-xs"
+                                                    >
+                                                        {station.pc_spec_details.notes ? 'Edit' : 'Add'}
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Action Buttons */}
@@ -1436,6 +1513,46 @@ export default function StationIndex() {
                     </DialogContent>
                 </Dialog>
 
+                {/* Notes Management Dialog */}
+                <Dialog open={notesDialogOpen} onOpenChange={setNotesDialogOpen}>
+                    <DialogContent className="max-w-[90vw] sm:max-w-md">
+                        <DialogHeader>
+                            <DialogTitle>Manage PC Notes</DialogTitle>
+                            <DialogDescription>
+                                {selectedPcSpec && (
+                                    <span className="text-sm wrap-break-word">
+                                        {selectedPcSpec.pc_number || selectedPcSpec.model}
+                                    </span>
+                                )}
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="notes">Notes</Label>
+                                <Textarea
+                                    id="notes"
+                                    placeholder="Add notes for this PC spec..."
+                                    value={notesText}
+                                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNotesText(e.target.value)}
+                                    rows={5}
+                                    className="resize-none"
+                                />
+                                <p className="text-xs text-gray-500">
+                                    Leave empty to remove the notes.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex flex-col sm:flex-row justify-end gap-2">
+                            <Button variant="outline" onClick={() => setNotesDialogOpen(false)} className="w-full sm:w-auto">
+                                Cancel
+                            </Button>
+                            <Button onClick={handleSaveNotes} className="w-full sm:w-auto">
+                                Save Notes
+                            </Button>
+                        </div>
+                    </DialogContent>
+                </Dialog>
+
                 {/* Issue Management Dialog */}
                 <Dialog open={issueDialogOpen} onOpenChange={setIssueDialogOpen}>
                     <DialogContent className="max-w-[90vw] sm:max-w-md">
@@ -1471,6 +1588,46 @@ export default function StationIndex() {
                             </Button>
                             <Button onClick={handleSaveIssue} className="w-full sm:w-auto">
                                 Save Issue
+                            </Button>
+                        </div>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Notes Management Dialog */}
+                <Dialog open={notesDialogOpen} onOpenChange={setNotesDialogOpen}>
+                    <DialogContent className="max-w-[90vw] sm:max-w-md">
+                        <DialogHeader>
+                            <DialogTitle>Manage PC Notes</DialogTitle>
+                            <DialogDescription>
+                                {selectedPcSpec && (
+                                    <span className="text-sm wrap-break-word">
+                                        {selectedPcSpec.pc_number || selectedPcSpec.model}
+                                    </span>
+                                )}
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="notes">Notes</Label>
+                                <Textarea
+                                    id="notes"
+                                    placeholder="Add notes for this PC spec..."
+                                    value={notesText}
+                                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNotesText(e.target.value)}
+                                    rows={5}
+                                    className="resize-none"
+                                />
+                                <p className="text-xs text-gray-500">
+                                    Leave empty to remove the notes.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex flex-col sm:flex-row justify-end gap-2">
+                            <Button variant="outline" onClick={() => setNotesDialogOpen(false)} className="w-full sm:w-auto">
+                                Cancel
+                            </Button>
+                            <Button onClick={handleSaveNotes} className="w-full sm:w-auto">
+                                Save Notes
                             </Button>
                         </div>
                     </DialogContent>
