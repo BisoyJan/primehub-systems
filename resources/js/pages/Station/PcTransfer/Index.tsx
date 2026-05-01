@@ -49,6 +49,7 @@ type PcSpecDetails = {
     disk_gb: number;
     disk_capacities: string;
     disk_type: string;
+    available_ports?: string | null;
     issue?: string | null;
 };
 
@@ -495,6 +496,9 @@ export default function Index({ stations: stationsPayload, filters }: PageProps)
                                                         <div>
                                                             {station.pc_spec_details.disk_type} {station.pc_spec_details.disk_gb}GB
                                                         </div>
+                                                        <div>
+                                                            Ports: {station.pc_spec_details.available_ports || 'N/A'}
+                                                        </div>
                                                     </div>
                                                 )}
                                             </TableCell>
@@ -606,6 +610,7 @@ export default function Index({ stations: stationsPayload, filters }: PageProps)
                                                     <div>{station.pc_spec_details.processor}</div>
                                                     <div>{station.pc_spec_details.ram_ddr} {station.pc_spec_details.ram_gb}GB RAM</div>
                                                     <div>{station.pc_spec_details.disk_type} {station.pc_spec_details.disk_gb}GB</div>
+                                                    <div>Ports: {station.pc_spec_details.available_ports || 'N/A'}</div>
                                                 </div>
                                             )}
                                         </div>
