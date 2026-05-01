@@ -575,7 +575,7 @@ class PcSpecController extends Controller
                 errorCorrectionLevel: ErrorCorrectionLevel::High,
                 size: $size,
                 margin: 4,
-                labelText: $pcNumber
+                labelText: preg_replace('/[^0-9]/', '', $pcNumber)
             );
 
             $result = $builder->build();
@@ -649,7 +649,7 @@ class PcSpecController extends Controller
                 errorCorrectionLevel: ErrorCorrectionLevel::High,
                 size: $size,
                 margin: 6,
-                labelText: $pcNumber
+                labelText: preg_replace('/[^0-9]/', '', $pcNumber)
             );
 
             $result = $builder->build();

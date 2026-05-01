@@ -89,7 +89,7 @@ class GenerateSelectedPcSpecQRCodesZip implements ShouldQueue
                 errorCorrectionLevel: ErrorCorrectionLevel::High,
                 size: $this->size,
                 margin: 10,
-                labelText: $pcNumber
+                labelText: preg_replace('/[^0-9]/', '', $pcNumber)
             );
 
             $result = $builder->build();
