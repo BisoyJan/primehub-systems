@@ -132,6 +132,22 @@ export default function BreakTimerIndex() {
     const [isFullscreen, setIsFullscreen] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
 
+    // Detect actual touch/mobile device (not just narrow viewport).
+    // Uses pointer:coarse + hover:none which correctly identifies touch-primary
+    // devices regardless of browser window size.
+    const [isMobileDevice, setIsMobileDevice] = useState(() =>
+        typeof window !== 'undefined'
+            ? window.matchMedia('(pointer: coarse) and (hover: none)').matches
+            : false,
+    );
+
+    useEffect(() => {
+        const mq = window.matchMedia('(pointer: coarse) and (hover: none)');
+        const handler = (e: MediaQueryListEvent) => setIsMobileDevice(e.matches);
+        mq.addEventListener('change', handler);
+        return () => mq.removeEventListener('change', handler);
+    }, []);
+
     // Snapshot: when props arrive, record the server remaining_seconds and the client timestamp.
     // This avoids server-vs-client clock skew by only using Date.now() deltas.
     const propsReceivedAtRef = useRef<number>(Date.now());
@@ -443,10 +459,10 @@ export default function BreakTimerIndex() {
                     />
                 )}
                 <ThemeDecor theme={theme} isDark={isDark || theme.alwaysDark} timerOver={isOverage} overageSeconds={overageSeconds} />
-                <div className="relative mx-auto flex min-h-[calc(100svh-7rem)] max-w-lg flex-col items-center justify-center gap-5 px-3 py-4 md:min-h-0 md:max-w-2xl md:justify-start md:gap-4 md:px-4 md:py-4">
+                <div className={`relative mx-auto flex max-w-2xl flex-col items-center gap-4 px-4 py-4 ${isMobileDevice ? 'min-h-[calc(100svh-7rem)] justify-center' : 'justify-start'}`}>
 
                     {/* ─── Theme Selector, Alarm & Fullscreen ─── */}
-                    <div className="hidden w-full items-center justify-end gap-2 md:flex">
+                    <div className={isMobileDevice ? 'hidden' : 'flex w-full items-center justify-end gap-2'}>
                         <button
                             onClick={toggleFullscreen}
                             className="flex h-8 w-8 items-center justify-center rounded-full border border-white/20 backdrop-blur-md transition-opacity hover:opacity-80 dark:border-white/10"
@@ -505,7 +521,7 @@ export default function BreakTimerIndex() {
 
                     {/* ─── Glass Card ─── */}
                     <div
-                        className="flex w-full max-w-sm flex-col items-center gap-4 rounded-[1.75rem] border border-white/25 p-5 shadow-2xl backdrop-blur-xl dark:border-white/10 md:max-w-none md:gap-6 md:rounded-3xl md:p-10"
+                        className={`flex w-full flex-col items-center border border-white/25 shadow-2xl backdrop-blur-xl dark:border-white/10 ${isMobileDevice ? 'max-w-sm gap-4 rounded-[1.75rem] p-5' : 'gap-6 rounded-3xl p-10'}`}
                         style={glassStyle}
                     >
 
@@ -593,7 +609,7 @@ export default function BreakTimerIndex() {
                             {/* Center content */}
                             <div className="absolute inset-0 flex flex-col items-center justify-center">
                                 {/* ─── Status label with AnimatePresence transition ─── */}
-                                <div className="relative hidden h-5 overflow-hidden md:block md:h-9">
+                                <div className={isMobileDevice ? 'hidden' : 'relative h-9 overflow-hidden'}>
                                     <AnimatePresence mode="wait">
                                         <motion.span
                                             key={statusText}
@@ -647,12 +663,12 @@ export default function BreakTimerIndex() {
                                     )}
                                 </motion.span>
                                 {hasSession && (
-                                    <span className="text-muted-foreground mt-2 hidden text-xs md:mt-3 md:block md:text-lg">
+                                    <span className={isMobileDevice ? 'hidden' : 'text-muted-foreground mt-3 block text-lg'}>
                                         of {Math.floor(totalDuration / 60)} min
                                     </span>
                                 )}
                                 {activeSession?.status === 'paused' && activeSession?.last_pause_reason && (
-                                    <span className="text-muted-foreground mt-1 hidden max-w-45 truncate text-[11px] italic md:max-w-75 md:block md:text-sm">
+                                    <span className={isMobileDevice ? 'hidden' : 'text-muted-foreground mt-1 block max-w-75 truncate text-sm italic'}>
                                         Paused: {activeSession.last_pause_reason}
                                     </span>
                                 )}
@@ -661,13 +677,13 @@ export default function BreakTimerIndex() {
 
                         {/* ─── Theme Quote ─── */}
                         {theme.quote && (
-                            <p className="hidden max-w-xs text-center text-xs italic leading-relaxed opacity-50 md:block">
+                            <p className={isMobileDevice ? 'hidden' : 'max-w-xs text-center text-xs italic leading-relaxed opacity-50'}>
                                 "{theme.quote}"
                             </p>
                         )}
 
                         {/* ─── Action Buttons ─── */}
-                        <div className="hidden flex-wrap items-center justify-center gap-3 md:flex">
+                        <div className={isMobileDevice ? 'hidden' : 'flex flex-wrap items-center justify-center gap-3'}>
                             {!hasSession && (
                                 <>
                                     <Can permission="break_timer.use">
@@ -813,7 +829,7 @@ export default function BreakTimerIndex() {
                     </div>{/* end glass card */}
 
                     {/* ─── Info Pills ─── */}
-                    <div className="hidden flex-wrap justify-center gap-3 md:flex">
+                    <div className={isMobileDevice ? 'hidden' : 'flex flex-wrap justify-center gap-3'}>
                         {!hasSession && (
                             <div className="w-56">
                                 <Label className="mb-1 block text-[11px] uppercase tracking-wider opacity-60">
@@ -861,7 +877,7 @@ export default function BreakTimerIndex() {
 
                     {/* ─── Today's Sessions ─── */}
                     {todaySessions.length > 0 && (
-                        <div className="hidden w-full space-y-3 md:block">
+                        <div className={isMobileDevice ? 'hidden' : 'w-full space-y-3'}>
                             <h3 className="text-xs font-semibold uppercase tracking-wider opacity-50">
                                 Today's Sessions
                             </h3>
