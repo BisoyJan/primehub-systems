@@ -88,7 +88,7 @@ class GenerateSelectedPcSpecQRCodesZip implements ShouldQueue
                 encoding: new Encoding('UTF-8'),
                 errorCorrectionLevel: ErrorCorrectionLevel::High,
                 size: $this->size,
-                margin: 10,
+                margin: 4,
                 labelText: preg_replace('/[^0-9]/', '', $pcNumber)
             );
 

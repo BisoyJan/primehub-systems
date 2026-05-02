@@ -648,7 +648,7 @@ class PcSpecController extends Controller
                 encoding: new Encoding('UTF-8'),
                 errorCorrectionLevel: ErrorCorrectionLevel::High,
                 size: $size,
-                margin: 6,
+                margin: 4,
                 labelText: preg_replace('/[^0-9]/', '', $pcNumber)
             );
 
