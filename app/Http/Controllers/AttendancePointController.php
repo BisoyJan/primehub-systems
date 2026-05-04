@@ -181,6 +181,11 @@ class AttendancePointController extends Controller
 
     /**
      * Excuse an attendance point.
+     *
+     * Excused points must NEVER be expired (Bug #1). If the point was already
+     * expired (SRO or GBRO) before being excused, we reset the expiration
+     * flags so the row is internally consistent and stops being counted by
+     * any "expired" reports.
      */
     public function excuse(Request $request, AttendancePoint $point)
     {
@@ -191,15 +196,23 @@ class AttendancePointController extends Controller
             'notes' => 'nullable|string|max:1000',
         ]);
 
-        $point->update([
-            'is_excused' => true,
-            'excused_by' => $request->user()->id,
-            'excused_at' => now(),
-            'excuse_reason' => $request->excuse_reason,
-            'notes' => $request->notes,
-        ]);
+        DB::transaction(function () use ($point, $request) {
+            $point->update([
+                'is_excused' => true,
+                'excused_by' => $request->user()->id,
+                'excused_at' => now(),
+                'excuse_reason' => $request->excuse_reason,
+                'notes' => $request->notes,
+                // Reset expiration flags — an excused point cannot also be expired.
+                'is_expired' => false,
+                'expired_at' => null,
+                'expiration_type' => $point->isNcnsOrFtn() ? 'none' : 'sro',
+                'gbro_applied_at' => null,
+                'gbro_batch_id' => null,
+            ]);
 
-        $this->gbroService->cascadeRecalculateGbro($point->user_id);
+            $this->gbroService->cascadeRecalculateGbro($point->user_id);
+        });
 
         return redirect()->back()->with('success', 'Attendance point excused successfully.');
     }

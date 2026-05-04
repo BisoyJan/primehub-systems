@@ -88,9 +88,11 @@ class ProcessPointExpirationsCommandTest extends TestCase
 
         Artisan::call('points:process-expirations');
 
-        // NCNS should be expired via SRO after 1 year
+        // NCNS expires after 1 year but the expiration_type stays 'none' —
+        // it is NOT relabeled as 'sro' (Bug #4 fix). The 6-month SRO rule
+        // does not apply to NCNS / FTN.
         $this->assertTrue($ncns->fresh()->is_expired);
-        $this->assertEquals('sro', $ncns->fresh()->expiration_type);
+        $this->assertEquals('none', $ncns->fresh()->expiration_type);
     }
 
     #[Test]

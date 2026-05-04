@@ -60,9 +60,11 @@ class AttendancePoint extends Model
             'expires_at' => 'date:Y-m-d',
             'gbro_expires_at' => 'date:Y-m-d',
             'is_expired' => 'boolean',
-            'expired_at' => 'date:Y-m-d',
+            // Bug #7 fix: these track WHEN the action happened, so the time
+            // component must be preserved for accurate audit trails.
+            'expired_at' => 'datetime',
             'eligible_for_gbro' => 'boolean',
-            'gbro_applied_at' => 'date:Y-m-d',
+            'gbro_applied_at' => 'datetime',
         ];
     }
 
@@ -111,10 +113,24 @@ class AttendancePoint extends Model
 
     /**
      * Scope to filter active (non-excused) points.
+     *
+     * NOTE: kept loose (excused-only) for backwards compatibility with
+     * existing callers that still want to count expired-but-not-excused
+     * historical points. For "currently counting against the employee"
+     * use scopeActiveAndNotExpired().
      */
     public function scopeActive($query)
     {
         return $query->where('is_excused', false);
+    }
+
+    /**
+     * Bug #8 fix: stricter scope — points that are CURRENTLY counting
+     * against the employee (not excused, not expired).
+     */
+    public function scopeActiveAndNotExpired($query)
+    {
+        return $query->where('is_excused', false)->where('is_expired', false);
     }
 
     /**
@@ -262,13 +278,22 @@ class AttendancePoint extends Model
 
     /**
      * Mark point as expired.
+     *
+     * Bug #4 fix: NCNS / FTN points are stored with expiration_type='none'
+     * (they roll off after 1 year, separate from SRO's 6-month rule).
+     * When the cron expires them via the standard expiry path, we must NOT
+     * relabel them as 'sro' — that would corrupt the expiration audit trail.
      */
     public function markAsExpired(string $type = 'sro'): void
     {
+        $resolvedType = $this->isNcnsOrFtn() && $type === 'sro'
+            ? 'none'
+            : $type;
+
         $this->update([
             'is_expired' => true,
             'expired_at' => now(),
-            'expiration_type' => $type,
+            'expiration_type' => $resolvedType,
         ]);
     }
 

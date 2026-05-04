@@ -91,14 +91,15 @@ class ProcessPointExpirations extends Command
     {
         $this->info('Processing Standard Roll Off (SRO)...');
 
-        // Find points that have reached their expiration date (compare dates only, not time)
-        $expiredPoints = AttendancePoint::where('is_expired', false)
+        // Find points that have reached their expiration date (compare dates only, not time).
+        // Bug #10 fix: stream with cursor() so memory stays flat regardless of dataset size.
+        $baseQuery = AttendancePoint::with('user:id,first_name,last_name')
+            ->where('is_expired', false)
             ->where('is_excused', false)
             ->whereNotNull('expires_at')
-            ->whereDate('expires_at', '<=', today())
-            ->get();
+            ->whereDate('expires_at', '<=', today());
 
-        $count = $expiredPoints->count();
+        $count = (clone $baseQuery)->count();
 
         if ($count === 0) {
             $this->comment('  No points ready for SRO expiration.');
@@ -107,22 +108,27 @@ class ProcessPointExpirations extends Command
 
         $this->comment("  Found {$count} points ready for SRO expiration:");
 
-        foreach ($expiredPoints as $point) {
+        /** @var AttendancePoint $point */
+        foreach ($baseQuery->cursor() as $point) {
             $this->line("    - {$point->user->name}: {$point->formatted_type} ({$point->points} pts) - {$point->shift_date->format('Y-m-d')}");
 
-            if (!$dryRun) {
-                $point->markAsExpired('sro');
+            if ($dryRun) {
+                continue;
+            }
 
-                // Send notification to the employee (if enabled)
-                if ($notify) {
-                    $this->notificationService->notifyAttendancePointExpired(
-                        $point->user_id,
-                        $point->point_type,
-                        $point->shift_date->format('M d, Y'),
-                        (float) $point->points,
-                        'sro'
-                    );
-                }
+            // Bug #6 fix: each point's mutation + notification dispatched together.
+            DB::transaction(function () use ($point) {
+                $point->markAsExpired('sro');
+            });
+
+            if ($notify) {
+                $this->notificationService->notifyAttendancePointExpired(
+                    $point->user_id,
+                    $point->point_type,
+                    $point->shift_date->format('M d, Y'),
+                    (float) $point->points,
+                    $point->isNcnsOrFtn() ? 'ncns' : 'sro'
+                );
             }
         }
 
@@ -139,20 +145,7 @@ class ProcessPointExpirations extends Command
     {
         $this->info('Processing Good Behavior Roll Off (GBRO)...');
 
-        // Check if GBRO already ran today (prevent multiple cascading cycles)
         $force = $this->option('force');
-        if (!$force && !$dryRun) {
-            $todayBatchExists = AttendancePoint::where('expiration_type', 'gbro')
-                ->whereDate('gbro_applied_at', today())
-                ->exists();
-
-            if ($todayBatchExists) {
-                $this->warn('  ⚠️  GBRO already processed today. Use --force to run again.');
-                $this->comment('  This prevents multiple cascading GBRO cycles in a single day.');
-                return 0;
-            }
-        }
-
         $totalExpired = 0;
         $batchId = now()->format('YmdHis');
 
@@ -164,6 +157,19 @@ class ProcessPointExpirations extends Command
         })->get();
 
         foreach ($usersWithPoints as $user) {
+            // Bug #5 fix: per-user same-day guard (was global — caused new
+            // users in the afternoon to be silently skipped).
+            if (!$force && !$dryRun) {
+                $userBatchExists = AttendancePoint::where('user_id', $user->id)
+                    ->where('expiration_type', 'gbro')
+                    ->whereDate('gbro_applied_at', today())
+                    ->exists();
+
+                if ($userBatchExists) {
+                    continue;
+                }
+            }
+
             // Get all active, non-excused, non-expired, GBRO-eligible points for this user
             $activeGbroEligiblePoints = $user->attendancePoints()
                 ->where('is_expired', false)
@@ -196,17 +202,23 @@ class ProcessPointExpirations extends Command
             $todayDate = today()->startOfDay();
 
             if ($firstPointGbroDate->lte($todayDate)) {
-                // GBRO date reached - expire the first 2 points
                 $pointsToExpire = $pointsWithGbroDate;
 
                 if ($pointsToExpire->count() > 0) {
                     $daysOverdue = $todayDate->diffInDays($firstPointGbroDate);
                     $this->comment("  {$user->name}: GBRO date {$firstPointGbroDate->format('Y-m-d')} reached (" . ($daysOverdue > 0 ? "{$daysOverdue} days overdue" : "today") . ")");
 
-                    foreach ($pointsToExpire as $point) {
-                        $this->line("    - Expiring: {$point->formatted_type} ({$point->points} pts) - " . Carbon::parse($point->shift_date)->format('Y-m-d'));
+                    if ($dryRun) {
+                        foreach ($pointsToExpire as $point) {
+                            $this->line("    - Expiring: {$point->formatted_type} ({$point->points} pts) - " . Carbon::parse($point->shift_date)->format('Y-m-d'));
+                            $totalExpired++;
+                        }
+                        continue;
+                    }
 
-                        if (!$dryRun) {
+                    // Bug #6 fix: atomic per-user batch (expire pair + recompute remaining).
+                    DB::transaction(function () use ($user, $pointsToExpire, $batchId, $firstPointGbroDate) {
+                        foreach ($pointsToExpire as $point) {
                             $point->update([
                                 'is_expired' => true,
                                 'expired_at' => now(),
@@ -214,26 +226,9 @@ class ProcessPointExpirations extends Command
                                 'gbro_applied_at' => now(),
                                 'gbro_batch_id' => $batchId,
                             ]);
-
-                            // Send notification to the employee (if enabled)
-                            if ($notify) {
-                                $this->notificationService->notifyAttendancePointExpired(
-                                    $point->user_id,
-                                    $point->point_type,
-                                    Carbon::parse($point->shift_date)->format('M d, Y'),
-                                    (float) $point->points,
-                                    'gbro'
-                                );
-                            }
                         }
 
-                        $totalExpired++;
-                    }
-
-                    // After expiring points, update remaining points' gbro_expires_at
-                    // The new reference date is the SCHEDULED GBRO date (not the actual run date)
-                    // This ensures fairness - employee shouldn't be penalized if the system runs late
-                    if (!$dryRun) {
+                        // After expiring points, update remaining points' gbro_expires_at
                         $remainingPoints = $user->attendancePoints()
                             ->where('is_expired', false)
                             ->where('is_excused', false)
@@ -243,10 +238,23 @@ class ProcessPointExpirations extends Command
                             ->get();
 
                         if ($remainingPoints->isNotEmpty()) {
-                            // Use the scheduled GBRO date + 60 days for the new prediction
                             $newGbroPrediction = $firstPointGbroDate->copy()->addDays(60);
                             $this->updateGbroExpiresAt($remainingPoints, $newGbroPrediction);
-                            $this->line("    → Updated remaining {$remainingPoints->count()} points: new GBRO prediction = " . $newGbroPrediction->format('Y-m-d'));
+                        }
+                    });
+
+                    foreach ($pointsToExpire as $point) {
+                        $this->line("    - Expired: {$point->formatted_type} ({$point->points} pts) - " . Carbon::parse($point->shift_date)->format('Y-m-d'));
+                        $totalExpired++;
+
+                        if ($notify) {
+                            $this->notificationService->notifyAttendancePointExpired(
+                                $point->user_id,
+                                $point->point_type,
+                                Carbon::parse($point->shift_date)->format('M d, Y'),
+                                (float) $point->points,
+                                'gbro'
+                            );
                         }
                     }
                 }

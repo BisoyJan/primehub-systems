@@ -3956,7 +3956,8 @@ class LeaveRequestController extends Controller
                 'created_by' => auth()->id(),
                 'violation_details' => "NCNS during SL period - Leave Request #{$leaveRequestId}",
                 'expires_at' => Carbon::parse($dateStr)->addYear(), // NCNS = 1 year expiration
-                'expiration_type' => 'sro',
+                'expiration_type' => 'none', // Bug #4 fix: NCNS uses 'none', not 'sro'.
+                'eligible_for_gbro' => false, // Bug #3 fix: NCNS must not be GBRO-eligible.
             ]);
         }
     }
