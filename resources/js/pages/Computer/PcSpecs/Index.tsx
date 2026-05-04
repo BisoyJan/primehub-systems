@@ -120,6 +120,8 @@ interface Props extends InertiaPageProps {
         pc_ids: number[];
         processor_ids: number[];
         sort_dir?: 'asc' | 'desc';
+        pc_number_from?: number | null;
+        pc_number_to?: number | null;
     };
 }
 
@@ -157,6 +159,10 @@ export default function Index() {
 
     // Sort state
     const [sortDir, setSortDir] = useState<'asc' | 'desc'>(filters.sort_dir ?? 'asc');
+
+    // PC number range filter state
+    const [pcNumberFrom, setPcNumberFrom] = useState<string>(filters.pc_number_from != null ? String(filters.pc_number_from) : '');
+    const [pcNumberTo, setPcNumberTo] = useState<string>(filters.pc_number_to != null ? String(filters.pc_number_to) : '');
 
     // Processor filter state (multi-select)
     const [processorSearchQuery, setProcessorSearchQuery] = useState('');
@@ -233,6 +239,10 @@ export default function Index() {
         if (sortDir !== 'asc') {
             params.sort_dir = sortDir;
         }
+        const from = parseInt(pcNumberFrom, 10);
+        const to = parseInt(pcNumberTo, 10);
+        if (!isNaN(from) && from > 0) params.pc_number_from = from;
+        if (!isNaN(to) && to > 0) params.pc_number_to = to;
         router.get(
             pcSpecIndex().url,
             params,
@@ -249,6 +259,8 @@ export default function Index() {
         setPcSearchQuery('');
         setProcessorSearchQuery('');
         setSortDir('asc');
+        setPcNumberFrom('');
+        setPcNumberTo('');
         router.get(pcSpecIndex().url);
     };
 
@@ -518,7 +530,7 @@ export default function Index() {
 
                 <div className="flex flex-col gap-4">
                     <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
-                        <div className="w-full sm:w-auto flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        <div className="w-full sm:w-auto flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                             {/* Multi-select PC Search */}
                             <Popover open={isPcPopoverOpen} onOpenChange={setIsPcPopoverOpen}>
                                 <PopoverTrigger asChild>
@@ -613,6 +625,33 @@ export default function Index() {
                                     </Command>
                                 </PopoverContent>
                             </Popover>
+
+                            {/* PC Number Range Filter */}
+                            <div className="flex items-center gap-1.5">
+                                <div className="relative flex-1">
+                                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">PC</span>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        placeholder="From"
+                                        value={pcNumberFrom}
+                                        onChange={e => setPcNumberFrom(e.target.value)}
+                                        className="w-full pl-8 pr-2 h-9 rounded-md border border-input bg-background text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                    />
+                                </div>
+                                <span className="text-muted-foreground text-sm shrink-0">–</span>
+                                <div className="relative flex-1">
+                                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">PC</span>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        placeholder="To"
+                                        value={pcNumberTo}
+                                        onChange={e => setPcNumberTo(e.target.value)}
+                                        className="w-full pl-8 pr-2 h-9 rounded-md border border-input bg-background text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                    />
+                                </div>
+                            </div>
 
                             <Select value={sortDir} onValueChange={(value: 'asc' | 'desc') => setSortDir(value)}>
                                 <SelectTrigger className="w-full font-normal">

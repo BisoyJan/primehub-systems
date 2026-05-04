@@ -42,6 +42,18 @@ class PcSpecController extends Controller
             $query->whereIn('id', array_map('intval', $pcIds));
         }
 
+        // Filter by PC number range (pc_number_from / pc_number_to)
+        $pcNumberFrom = $request->input('pc_number_from');
+        $pcNumberTo   = $request->input('pc_number_to');
+
+        if (is_numeric($pcNumberFrom) && (int) $pcNumberFrom > 0) {
+            $query->whereRaw("CAST(REGEXP_REPLACE(pc_number, '[^0-9]', '') AS UNSIGNED) >= ?", [(int) $pcNumberFrom]);
+        }
+
+        if (is_numeric($pcNumberTo) && (int) $pcNumberTo > 0) {
+            $query->whereRaw("CAST(REGEXP_REPLACE(pc_number, '[^0-9]', '') AS UNSIGNED) <= ?", [(int) $pcNumberTo]);
+        }
+
         // Filter by processors (multi-select)
         $processorIds = $request->input('processor_ids', []);
         if (! is_array($processorIds)) {
@@ -57,7 +69,7 @@ class PcSpecController extends Controller
 
         $pcspecs = $query
             ->paginate(10)
-            ->appends($request->only(['pc_ids', 'processor_ids', 'sort_dir']))
+            ->appends($request->only(['pc_ids', 'processor_ids', 'sort_dir', 'pc_number_from', 'pc_number_to']))
             ->through(fn ($pc) => [
                 'id' => $pc->id,
                 'pc_number' => $pc->pc_number,
@@ -113,6 +125,8 @@ class PcSpecController extends Controller
                 'pc_ids' => $pcIds,
                 'processor_ids' => $processorIds,
                 'sort_dir' => $sortDirection,
+                'pc_number_from' => $pcNumberFrom !== null ? (int) $pcNumberFrom : null,
+                'pc_number_to' => $pcNumberTo !== null ? (int) $pcNumberTo : null,
             ],
         ]);
     }

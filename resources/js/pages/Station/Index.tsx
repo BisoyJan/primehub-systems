@@ -347,6 +347,10 @@ export default function StationIndex() {
     const [selectedFilterProcessorIds, setSelectedFilterProcessorIds] = useState<number[]>(initialProcessorIds);
     const [processorSearchQuery, setProcessorSearchQuery] = useState('');
     const [isProcessorPopoverOpen, setIsProcessorPopoverOpen] = useState(false);
+
+    // Station number range filter state
+    const [stationNumberFrom, setStationNumberFrom] = useState(urlParams.get('station_number_from') ?? '');
+    const [stationNumberTo, setStationNumberTo] = useState(urlParams.get('station_number_to') ?? '');
     const filteredProcessorOptions = useMemo(() => {
         const opts = filters.processors ?? [];
         if (!processorSearchQuery) return opts;
@@ -478,6 +482,10 @@ export default function StationIndex() {
         if (campaignFilter && campaignFilter !== "all") params.campaign = campaignFilter;
         if (statusFilter && statusFilter !== "all") params.status = statusFilter;
         if (selectedFilterProcessorIds.length > 0) params.processor_ids = selectedFilterProcessorIds;
+        const from = parseInt(stationNumberFrom, 10);
+        const to = parseInt(stationNumberTo, 10);
+        if (!isNaN(from) && from > 0) params.station_number_from = from;
+        if (!isNaN(to) && to > 0) params.station_number_to = to;
 
         setLoading(true);
         router.get(stationsIndexRoute().url, params, {
@@ -496,6 +504,8 @@ export default function StationIndex() {
         setStatusFilter("all");
         setSelectedFilterProcessorIds([]);
         setProcessorSearchQuery('');
+        setStationNumberFrom('');
+        setStationNumberTo('');
         setLoading(true);
         router.get(stationsIndexRoute().url, {}, {
             preserveState: true,
@@ -669,7 +679,7 @@ export default function StationIndex() {
 
                     {/* Filter card */}
                     <div className="rounded-lg border bg-card p-3 space-y-4">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
                             <div className="space-y-1.5">
                                 <Label className="text-xs text-muted-foreground">Stations</Label>
                                 <Popover open={isStationPopoverOpen} onOpenChange={setIsStationPopoverOpen}>
@@ -715,6 +725,31 @@ export default function StationIndex() {
                                         </Command>
                                     </PopoverContent>
                                 </Popover>
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <Label className="text-xs text-muted-foreground">Station #</Label>
+                                <div className="flex items-center gap-1.5">
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        placeholder="From"
+                                        value={stationNumberFrom}
+                                        onChange={e => setStationNumberFrom(e.target.value)}
+                                        onKeyDown={e => e.key === 'Enter' && applyFilters()}
+                                        className="w-full h-9 rounded-md border border-input bg-background px-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                    />
+                                    <span className="text-muted-foreground text-sm shrink-0">–</span>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        placeholder="To"
+                                        value={stationNumberTo}
+                                        onChange={e => setStationNumberTo(e.target.value)}
+                                        onKeyDown={e => e.key === 'Enter' && applyFilters()}
+                                        className="w-full h-9 rounded-md border border-input bg-background px-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                    />
+                                </div>
                             </div>
 
                             <div className="space-y-1.5">
@@ -815,7 +850,7 @@ export default function StationIndex() {
                         </div>
 
                         <div className="flex items-center justify-end gap-2 pt-2 border-t">
-                            {(siteFilter !== "all" || campaignFilter !== "all" || statusFilter !== "all" || selectedFilterStationIds.length > 0 || selectedFilterProcessorIds.length > 0) && (
+                            {(siteFilter !== "all" || campaignFilter !== "all" || statusFilter !== "all" || selectedFilterStationIds.length > 0 || selectedFilterProcessorIds.length > 0 || stationNumberFrom !== '' || stationNumberTo !== '') && (
                                 <Button variant="ghost" size="sm" onClick={resetFilters}>
                                     Reset
                                 </Button>

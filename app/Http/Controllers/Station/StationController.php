@@ -281,8 +281,21 @@ class StationController extends Controller
         $query->filterBySite($request->query('site'))
             ->filterByCampaign($request->query('campaign'))
             ->filterByStatus($request->query('status'))
-            ->filterByProcessors($this->normalizeIdArray($request->input('processor_ids')))
-            ->orderBy('id', 'desc');
+            ->filterByProcessors($this->normalizeIdArray($request->input('processor_ids')));
+
+        // Filter by station number range
+        $stationNumberFrom = $request->input('station_number_from');
+        $stationNumberTo   = $request->input('station_number_to');
+
+        if (is_numeric($stationNumberFrom) && (int) $stationNumberFrom > 0) {
+            $query->whereRaw("CAST(REGEXP_REPLACE(station_number, '[^0-9]', '') AS UNSIGNED) >= ?", [(int) $stationNumberFrom]);
+        }
+
+        if (is_numeric($stationNumberTo) && (int) $stationNumberTo > 0) {
+            $query->whereRaw("CAST(REGEXP_REPLACE(station_number, '[^0-9]', '') AS UNSIGNED) <= ?", [(int) $stationNumberTo]);
+        }
+
+        $query->orderBy('id', 'desc');
 
         // Get all IDs matching current filters (for bulk select all)
         $allMatchingIds = (clone $query)->pluck('id')->toArray();
