@@ -418,9 +418,9 @@ class AttendancePointController extends Controller
     /**
      * Get management statistics.
      */
-    public function managementStats()
+    public function managementStats(Request $request)
     {
-        $this->authorize('viewAny', AttendancePoint::class);
+        $this->authorizeAdminHrAction($request->user(), 'view management statistics');
 
         try {
             return response()->json($this->maintenanceService->getManagementStats());
@@ -437,9 +437,9 @@ class AttendancePointController extends Controller
     /**
      * Remove duplicate attendance points.
      */
-    public function removeDuplicates()
+    public function removeDuplicates(Request $request)
     {
-        $this->authorize('viewAny', AttendancePoint::class);
+        $this->authorizeAdminHrAction($request->user(), 'remove duplicate points');
 
         try {
             return response()->json($this->maintenanceService->removeDuplicates());
@@ -458,7 +458,7 @@ class AttendancePointController extends Controller
      */
     public function expireAllPending(Request $request)
     {
-        $this->authorize('viewAny', AttendancePoint::class);
+        $this->authorizeAdminHrAction($request->user(), 'expire pending points');
 
         try {
             $expirationType = $request->input('expiration_type', 'both');
@@ -477,9 +477,9 @@ class AttendancePointController extends Controller
     /**
      * Initialize GBRO expiration dates for existing active points.
      */
-    public function initializeGbroDates()
+    public function initializeGbroDates(Request $request)
     {
-        $this->authorize('viewAny', AttendancePoint::class);
+        $this->authorizeAdminHrAction($request->user(), 'initialize GBRO dates');
 
         try {
             return response()->json($this->maintenanceService->initializeGbroDates());
@@ -496,9 +496,9 @@ class AttendancePointController extends Controller
     /**
      * Fix GBRO expiration dates for points with wrong reference.
      */
-    public function fixGbroDates()
+    public function fixGbroDates(Request $request)
     {
-        $this->authorize('viewAny', AttendancePoint::class);
+        $this->authorizeAdminHrAction($request->user(), 'fix GBRO dates');
 
         try {
             return response()->json($this->maintenanceService->fixGbroDates());
@@ -517,7 +517,7 @@ class AttendancePointController extends Controller
      */
     public function resetExpired(Request $request)
     {
-        $this->authorize('viewAny', AttendancePoint::class);
+        $this->authorizeAdminHrAction($request->user(), 'reset expired points');
 
         try {
             $userIds = $request->filled('user_ids') && is_array($request->user_ids) ? $request->user_ids : null;
@@ -539,7 +539,7 @@ class AttendancePointController extends Controller
      */
     public function regeneratePoints(Request $request)
     {
-        $this->authorize('viewAny', AttendancePoint::class);
+        $this->authorizeAdminHrAction($request->user(), 'regenerate points');
 
         try {
             $result = $this->maintenanceService->regeneratePoints(
@@ -563,9 +563,9 @@ class AttendancePointController extends Controller
     /**
      * Full cleanup: remove duplicates + expire all pending.
      */
-    public function cleanup()
+    public function cleanup(Request $request)
     {
-        $this->authorize('viewAny', AttendancePoint::class);
+        $this->authorizeAdminHrAction($request->user(), 'run full cleanup');
 
         try {
             return response()->json($this->maintenanceService->cleanup());
