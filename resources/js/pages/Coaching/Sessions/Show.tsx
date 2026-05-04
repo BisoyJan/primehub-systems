@@ -39,7 +39,6 @@ import {
     edit as sessionsEdit,
     acknowledge as sessionsAcknowledge,
     review as sessionsReview,
-    submit as sessionsSubmit,
     attachment as sessionsAttachment,
 } from '@/routes/coaching/sessions';
 
@@ -127,6 +126,48 @@ export default function CoachingSessionsShow() {
         original_filename: string;
     } | null>(null);
     const [imageZoom, setImageZoom] = useState(100);
+
+    // Coaching history year-tab + month-pill filter
+    const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+    const currentYear = currentMonth.slice(0, 4);
+    const [historyYear, setHistoryYear] = useState<string>(currentYear);
+    const [historyMonth, setHistoryMonth] = useState<string>(currentMonth);
+
+    // Group history months by year: { '2026': ['2026-05', '2026-04', ...], ... }
+    const historyMonthsByYear: Record<string, string[]> = {};
+    if (coaching_history) {
+        const uniqueMonths = Array.from(
+            new Set(coaching_history.map((item) => item.session_date.slice(0, 7)))
+        ).sort().reverse();
+        for (const m of uniqueMonths) {
+            const year = m.slice(0, 4);
+            if (!historyMonthsByYear[year]) historyMonthsByYear[year] = [];
+            historyMonthsByYear[year].push(m);
+        }
+    }
+    const historyYears = Object.keys(historyMonthsByYear).sort().reverse();
+
+    const handleYearChange = (year: string) => {
+        setHistoryYear(year);
+        if (year === 'all') {
+            setHistoryMonth('all');
+        } else if (historyMonthsByYear[year]?.includes(currentMonth)) {
+            setHistoryMonth(currentMonth);
+        } else {
+            setHistoryMonth('all');
+        }
+    };
+
+    const filteredHistory = coaching_history
+        ? historyYear === 'all' || historyMonth === 'all'
+            ? historyYear === 'all'
+                ? coaching_history
+                : coaching_history.filter((item) => item.session_date.startsWith(historyYear))
+            : coaching_history.filter((item) => item.session_date.slice(0, 7) === historyMonth)
+        : [];
+
+    const monthLabel = (m: string) =>
+        new Date(m + '-01').toLocaleDateString('en-US', { month: 'short' });
 
     // Acknowledge form
     const ackForm = useForm({ ack_comment: '', agent_response: '' });
@@ -382,29 +423,98 @@ export default function CoachingSessionsShow() {
                 {/* Coaching History */}
                 {coaching_history && coaching_history.length > 0 && (
                     <div className="rounded-lg border bg-card p-4 shadow-sm">
+                        {/* Header */}
                         <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold">
                             <History className="h-4 w-4" />
-                            Recent Coaching History ({coaching_history.length})
+                            Coaching History
+                            <span className="text-xs font-normal text-muted-foreground">
+                                ({filteredHistory.length} shown)
+                            </span>
                         </h3>
-                        <div className="space-y-2">
-                            {coaching_history.map((item) => (
-                                <Link key={item.id} href={sessionsShow.url(item.id)}>
-                                    <div className="flex items-center justify-between rounded-md border p-3 transition-colors hover:bg-muted/50">
-                                        <div className="flex flex-col gap-0.5">
-                                            <span className="text-sm font-medium">
-                                                {formatDate(item.session_date)}
-                                            </span>
-                                            <span className="text-xs text-muted-foreground">
-                                                {item.purpose}{item.coach ? ` \u2022 Coach: ${item.coach.first_name} ${item.coach.last_name}` : ''}
-                                            </span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <ComplianceStatusBadge status={item.compliance_status} />
-                                        </div>
-                                    </div>
-                                </Link>
+
+                        {/* Year tabs */}
+                        <div className="mb-2 flex flex-wrap items-center gap-1 border-b pb-2">
+                            {historyYears.map((year) => (
+                                <button
+                                    key={year}
+                                    type="button"
+                                    onClick={() => handleYearChange(year)}
+                                    className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${historyYear === year
+                                            ? 'bg-primary text-primary-foreground'
+                                            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                                        }`}
+                                >
+                                    {year}
+                                </button>
                             ))}
+                            <button
+                                type="button"
+                                onClick={() => handleYearChange('all')}
+                                className={`ml-auto rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${historyYear === 'all'
+                                        ? 'bg-primary text-primary-foreground'
+                                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                                    }`}
+                            >
+                                All ({coaching_history.length})
+                            </button>
                         </div>
+
+                        {/* Month pills — only when a specific year is selected */}
+                        {historyYear !== 'all' && historyMonthsByYear[historyYear] && (
+                            <div className="mb-3 flex flex-wrap gap-1">
+                                <button
+                                    type="button"
+                                    onClick={() => setHistoryMonth('all')}
+                                    className={`rounded-full px-2.5 py-0.5 text-xs transition-colors ${historyMonth === 'all'
+                                            ? 'bg-secondary text-secondary-foreground font-medium'
+                                            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                                        }`}
+                                >
+                                    All
+                                </button>
+                                {historyMonthsByYear[historyYear].map((m) => (
+                                    <button
+                                        key={m}
+                                        type="button"
+                                        onClick={() => setHistoryMonth(m)}
+                                        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs transition-colors ${historyMonth === m
+                                                ? 'bg-secondary text-secondary-foreground font-medium'
+                                                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                                            }`}
+                                    >
+                                        {monthLabel(m)}
+                                        {m === currentMonth && (
+                                            <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary" />
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Session list */}
+                        {filteredHistory.length === 0 ? (
+                            <p className="py-4 text-center text-xs text-muted-foreground">No sessions for this period.</p>
+                        ) : (
+                            <div className="space-y-2">
+                                {filteredHistory.map((item) => (
+                                    <Link key={item.id} href={sessionsShow.url(item.id)}>
+                                        <div className="flex items-center justify-between rounded-md border p-3 transition-colors hover:bg-muted/50">
+                                            <div className="flex flex-col gap-0.5">
+                                                <span className="text-sm font-medium">
+                                                    {formatDate(item.session_date)}
+                                                </span>
+                                                <span className="text-xs text-muted-foreground">
+                                                    {item.purpose}{item.coach ? ` \u2022 Coach: ${item.coach.first_name} ${item.coach.last_name}` : ''}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <ComplianceStatusBadge status={item.compliance_status} />
+                                            </div>
+                                        </div>
+                                    </Link>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 )}
 

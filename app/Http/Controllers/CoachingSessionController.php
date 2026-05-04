@@ -749,12 +749,11 @@ class CoachingSessionController extends Controller
         $canReview = $user->can('review', $session);
         $canEdit = $user->can('update', $session);
 
-        // Load last 5 coaching sessions for the same coachee (excluding current, submitted only)
+        // Load all coaching sessions for the same coachee (excluding current, submitted only)
         $coachingHistory = CoachingSession::where('coachee_id', $session->coachee_id)
             ->where('id', '!=', $session->id)
             ->submitted()
             ->orderByDesc('session_date')
-            ->limit(5)
             ->select(['id', 'session_date', 'purpose', 'severity_flag', 'compliance_status', 'ack_status'])
             ->with(['coach:id,first_name,last_name'])
             ->get();
