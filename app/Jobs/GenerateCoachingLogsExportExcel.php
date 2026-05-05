@@ -74,6 +74,7 @@ class GenerateCoachingLogsExportExcel implements ShouldQueue
             $headers = [
                 'Session Date',
                 'Coachee Name',
+                'Coachee Excluded?',
                 'Coach',
                 'Purpose',
                 'Severity',
@@ -94,7 +95,7 @@ class GenerateCoachingLogsExportExcel implements ShouldQueue
             ];
 
             $sheet->fromArray($headers, null, 'A1');
-            $this->styleHeaderRow($sheet, 'A1:S1');
+            $this->styleHeaderRow($sheet, 'A1:T1');
 
             $this->updateProgress($cacheKey, 25, 'Writing coaching data...');
 
@@ -118,6 +119,7 @@ class GenerateCoachingLogsExportExcel implements ShouldQueue
                     $sheet->fromArray([
                         Carbon::parse($record->session_date)->format('Y-m-d'),
                         $agentName,
+                        $record->coachee && $record->coachee->isCoachingExcluded() ? 'Yes' : 'No',
                         $teamLeadName,
                         CoachingSession::PURPOSE_LABELS[$record->purpose] ?? $record->purpose,
                         $record->severity_flag,
@@ -149,12 +151,12 @@ class GenerateCoachingLogsExportExcel implements ShouldQueue
 
             $this->updateProgress($cacheKey, 80, 'Auto-sizing columns...');
 
-            foreach (range('A', 'S') as $col) {
+            foreach (range('A', 'T') as $col) {
                 $sheet->getColumnDimension($col)->setAutoSize(true);
             }
 
             // Wrap text for long columns
-            foreach (['H', 'I', 'J', 'K'] as $col) {
+            foreach (['I', 'J', 'K', 'L'] as $col) {
                 $sheet->getStyle("{$col}2:{$col}{$row}")
                     ->getAlignment()
                     ->setWrapText(true);

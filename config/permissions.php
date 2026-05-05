@@ -173,6 +173,7 @@ return [
         'coaching.review' => 'Review/Verify Coaching Sessions',
         'coaching.export' => 'Export Coaching Logs',
         'coaching.settings' => 'Manage Coaching Settings',
+        'coaching.manage_exclusions' => 'Manage Coaching Exclusions',
 
         // Break Timer
         'break_timer.view' => 'View Break Timer',
@@ -220,7 +221,7 @@ return [
             'medication_requests.view', 'medication_requests.create', 'medication_requests.update', 'medication_requests.delete',
             'form_requests.retention',
             'notifications.send', 'notifications.send_all',
-            'coaching.view_all', 'coaching.create', 'coaching.edit', 'coaching.delete', 'coaching.review', 'coaching.export', 'coaching.settings',
+            'coaching.view_all', 'coaching.create', 'coaching.edit', 'coaching.delete', 'coaching.review', 'coaching.export', 'coaching.settings', 'coaching.manage_exclusions',
             'break_timer.view', 'break_timer.use', 'break_timer.dashboard', 'break_timer.reports', 'break_timer.manage_policy', 'break_timer.reset', 'break_timer.force_end', 'break_timer.restore',
             'settings.view', 'settings.account', 'settings.password',
         ],
@@ -264,7 +265,7 @@ return [
             'leave.view', 'leave.create', 'leave.edit', 'leave.approve', 'leave.deny', 'leave.cancel', 'leave.delete', 'leave.view_all',
             'leave_credits.view_all', 'leave_credits.view_own', 'leave_credits.edit',
             'medication_requests.view', 'medication_requests.create', 'medication_requests.update', 'medication_requests.delete',
-            'coaching.view_all', 'coaching.review', 'coaching.export',
+            'coaching.view_all', 'coaching.review', 'coaching.export', 'coaching.manage_exclusions',
             'break_timer.view', 'break_timer.dashboard', 'break_timer.reports', 'break_timer.force_end', 'break_timer.restore',
             'notifications.send', 'notifications.send_all',
             'settings.account', 'settings.password',

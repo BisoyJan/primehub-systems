@@ -15,6 +15,7 @@ use App\Http\Controllers\BreakDashboardController;
 use App\Http\Controllers\BreakPolicyController;
 use App\Http\Controllers\BreakTimerController;
 use App\Http\Controllers\CoachingDashboardController;
+use App\Http\Controllers\CoachingExclusionsController;
 use App\Http\Controllers\CoachingSessionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DatabaseBackupController;
@@ -516,6 +517,17 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
         Route::get('/campaign-completion/export/download/{jobId}', [CoachingDashboardController::class, 'downloadCampaignCompletionExport'])
             ->middleware('permission:coaching.export')
             ->name('campaign-completion.export.download');
+
+        // Coaching Exclusions (manage who is excluded from coaching)
+        Route::prefix('exclusions')->name('exclusions.')
+            ->middleware('permission:coaching.manage_exclusions')
+            ->group(function () {
+                Route::get('/', [CoachingExclusionsController::class, 'index'])->name('index');
+                Route::post('/', [CoachingExclusionsController::class, 'store'])->name('store');
+                Route::post('/bulk', [CoachingExclusionsController::class, 'bulkStore'])->name('bulk');
+                Route::delete('/users/{user}', [CoachingExclusionsController::class, 'destroy'])->name('destroy');
+                Route::get('/users/{user}/history', [CoachingExclusionsController::class, 'history'])->name('history');
+            });
     });
 
     // Notifications

@@ -70,6 +70,11 @@ interface Props extends InertiaPageProps {
     canSubmitDraft: boolean;
     purposes: CoachingPurposeLabels;
     coaching_history: CoachingHistoryItem[];
+    coacheeExclusion: null | {
+        reason: string;
+        excluded_at: string | null;
+        expires_at: string | null;
+    };
 }
 
 function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -104,7 +109,7 @@ function SectionCard({ title, children }: { title: string; children: React.React
 }
 
 export default function CoachingSessionsShow() {
-    const { session, canAcknowledge, canReview, canEdit, canSubmitDraft, purposes, coaching_history } = usePage<Props>().props;
+    const { session, canAcknowledge, canReview, canEdit, canSubmitDraft, purposes, coaching_history, coacheeExclusion } = usePage<Props>().props;
 
     const { title, breadcrumbs } = usePageMeta({
         title: 'Coaching Session Details',
@@ -281,7 +286,19 @@ export default function CoachingSessionsShow() {
                 {/* Session Details */}
                 <SectionCard title="Session Details">
                     <dl className="space-y-3">
-                        <InfoRow label="Coachee">{formatName(session.coachee)}</InfoRow>
+                        <InfoRow label="Coachee">
+                            <span className="inline-flex items-center gap-2">
+                                {formatName(session.coachee)}
+                                {coacheeExclusion && (
+                                    <span
+                                        className="inline-flex items-center rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+                                        title={`Excluded from coaching: ${coacheeExclusion.reason}${coacheeExclusion.expires_at ? ` (until ${new Date(coacheeExclusion.expires_at).toLocaleDateString()})` : ''}`}
+                                    >
+                                        Coaching Excluded · {coacheeExclusion.reason}
+                                    </span>
+                                )}
+                            </span>
+                        </InfoRow>
                         <InfoRow label="Coach">{formatName(session.coach)}</InfoRow>
                         <InfoRow label="Session Date">{formatDate(session.session_date)}</InfoRow>
                         <InfoRow label="Purpose">{purposes[session.purpose] ?? session.purpose}</InfoRow>
@@ -440,8 +457,8 @@ export default function CoachingSessionsShow() {
                                     type="button"
                                     onClick={() => handleYearChange(year)}
                                     className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${historyYear === year
-                                            ? 'bg-primary text-primary-foreground'
-                                            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                                        ? 'bg-primary text-primary-foreground'
+                                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                                         }`}
                                 >
                                     {year}
@@ -451,8 +468,8 @@ export default function CoachingSessionsShow() {
                                 type="button"
                                 onClick={() => handleYearChange('all')}
                                 className={`ml-auto rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${historyYear === 'all'
-                                        ? 'bg-primary text-primary-foreground'
-                                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                                    ? 'bg-primary text-primary-foreground'
+                                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                                     }`}
                             >
                                 All ({coaching_history.length})
@@ -466,8 +483,8 @@ export default function CoachingSessionsShow() {
                                     type="button"
                                     onClick={() => setHistoryMonth('all')}
                                     className={`rounded-full px-2.5 py-0.5 text-xs transition-colors ${historyMonth === 'all'
-                                            ? 'bg-secondary text-secondary-foreground font-medium'
-                                            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                                        ? 'bg-secondary text-secondary-foreground font-medium'
+                                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                                         }`}
                                 >
                                     All
@@ -478,8 +495,8 @@ export default function CoachingSessionsShow() {
                                         type="button"
                                         onClick={() => setHistoryMonth(m)}
                                         className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs transition-colors ${historyMonth === m
-                                                ? 'bg-secondary text-secondary-foreground font-medium'
-                                                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                                            ? 'bg-secondary text-secondary-foreground font-medium'
+                                            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                                             }`}
                                     >
                                         {monthLabel(m)}

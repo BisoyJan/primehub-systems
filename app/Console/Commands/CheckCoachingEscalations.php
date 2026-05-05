@@ -39,6 +39,11 @@ class CheckCoachingEscalations extends Command
             ->get();
 
         foreach ($overdueSessions as $session) {
+            // Skip if the coachee is currently excluded from coaching.
+            if ($session->coachee && $session->coachee->isCoachingExcluded()) {
+                continue;
+            }
+
             $hasSubsequentSession = CoachingSession::where('coachee_id', $session->coachee_id)
                 ->where('session_date', '>', $session->session_date)
                 ->exists();
@@ -72,6 +77,7 @@ class CheckCoachingEscalations extends Command
         $agents = User::where('role', 'Agent')
             ->where('is_approved', true)
             ->where('is_active', true)
+            ->notCoachingExcluded()
             ->with('activeSchedule')
             ->get();
 

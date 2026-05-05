@@ -53,10 +53,13 @@ class CoachingSessionController extends Controller
 
         $query = CoachingSession::with(['coachee', 'coach', 'complianceReviewer']);
 
-        // Handle drafts tab — coaches see their own drafts
+        // Handle drafts tab — admins see all drafts; coaches see only their own
         $showDrafts = $request->input('tab') === 'drafts';
         if ($showDrafts) {
-            $query->draft()->where('coach_id', $user->id);
+            $query->draft();
+            if (! $isAdmin) {
+                $query->where('coach_id', $user->id);
+            }
         } else {
             // Exclude drafts from all non-draft views
             $query->submitted();
@@ -141,8 +144,8 @@ class CoachingSessionController extends Controller
             $query->where('coach_id', $request->team_lead_id);
         }
 
-        // Date range filter
-        if ($request->filled('date_from') || $request->filled('date_to')) {
+        // Date range filter (not applied to drafts — show all own drafts regardless of date)
+        if (! $showDrafts && ($request->filled('date_from') || $request->filled('date_to'))) {
             $query->dateRange($request->date_from, $request->date_to);
         }
 
@@ -162,6 +165,7 @@ class CoachingSessionController extends Controller
             $teamLeads = User::where('role', 'Team Lead')
                 ->where('is_approved', true)
                 ->where('is_active', true)
+                ->notCoachingExcluded()
                 ->with('campaigns:id')
                 ->orderBy('first_name')
                 ->orderBy('last_name')
@@ -182,6 +186,7 @@ class CoachingSessionController extends Controller
             $allAgents = User::whereIn('role', ['Agent', 'Team Lead'])
                 ->where('is_approved', true)
                 ->where('is_active', true)
+                ->notCoachingExcluded()
                 ->with('activeSchedule.campaign:id,name')
                 ->orderBy('first_name')
                 ->orderBy('last_name')
@@ -192,7 +197,8 @@ class CoachingSessionController extends Controller
                 ->whereHas('user', function ($q) {
                     $q->where('role', 'Agent')
                         ->where('is_approved', true)
-                        ->where('is_active', true);
+                        ->where('is_active', true)
+                        ->notCoachingExcluded();
                 })
                 ->pluck('user_id')
                 ->unique();
@@ -222,7 +228,7 @@ class CoachingSessionController extends Controller
             $activeTabValue = $request->input('tab', 'team');
         } elseif ($isAdmin) {
             $pendingReviewCount = CoachingSession::submitted()->where('compliance_status', 'For_Review')->count();
-            $draftCount = CoachingSession::draft()->where('coach_id', $user->id)->count();
+            $draftCount = CoachingSession::draft()->count();
             $activeTabValue = $request->input('tab', 'all');
         }
 
@@ -268,6 +274,7 @@ class CoachingSessionController extends Controller
             $agents = User::where('role', 'Agent')
                 ->where('is_approved', true)
                 ->where('is_active', true)
+                ->notCoachingExcluded()
                 ->with('activeSchedule.campaign:id,name')
                 ->orderBy('first_name')
                 ->orderBy('last_name')
@@ -277,6 +284,7 @@ class CoachingSessionController extends Controller
             $teamLeads = User::where('role', 'Team Lead')
                 ->where('is_approved', true)
                 ->where('is_active', true)
+                ->notCoachingExcluded()
                 ->whereHas('activeSchedule', fn ($q) => $q->whereNotNull('campaign_id'))
                 ->with('activeSchedule.campaign:id,name')
                 ->orderBy('first_name')
@@ -294,7 +302,8 @@ class CoachingSessionController extends Controller
                     ->whereHas('user', function ($q) {
                         $q->where('role', 'Agent')
                             ->where('is_approved', true)
-                            ->where('is_active', true);
+                            ->where('is_active', true)
+                            ->notCoachingExcluded();
                     })
                     ->pluck('user_id')
                     ->unique();
@@ -397,6 +406,12 @@ class CoachingSessionController extends Controller
     {
         $this->authorize('create', CoachingSession::class);
 
+        // Defense in depth: block creating sessions for excluded coachees.
+        $coacheeId = (int) $request->input('coachee_id');
+        if ($coacheeId && optional(User::find($coacheeId))->isCoachingExcluded()) {
+            return $this->backWithFlash('This user is currently excluded from coaching.', 'error');
+        }
+
         try {
             $session = DB::transaction(function () use ($request) {
                 $validated = $request->validated();
@@ -486,6 +501,11 @@ class CoachingSessionController extends Controller
     {
         $this->authorize('create', CoachingSession::class);
 
+        $coacheeId = (int) $request->input('coachee_id');
+        if ($coacheeId && optional(User::find($coacheeId))->isCoachingExcluded()) {
+            return $this->backWithFlash('This user is currently excluded from coaching.', 'error');
+        }
+
         try {
             $session = DB::transaction(function () use ($request) {
                 $validated = $request->validated();
@@ -568,6 +588,11 @@ class CoachingSessionController extends Controller
     public function autoSaveDraft(StoreDraftCoachingSessionRequest $request): JsonResponse
     {
         $this->authorize('create', CoachingSession::class);
+
+        $coacheeId = (int) $request->input('coachee_id');
+        if ($coacheeId && optional(User::find($coacheeId))->isCoachingExcluded()) {
+            return response()->json(['error' => 'This user is currently excluded from coaching.'], 422);
+        }
 
         try {
             $validated = $request->validated();
@@ -760,6 +785,8 @@ class CoachingSessionController extends Controller
 
         $canSubmitDraft = $session->is_draft && $user->can('update', $session);
 
+        $coacheeExclusion = $session->coachee?->activeCoachingExclusion()->first();
+
         return Inertia::render('Coaching/Sessions/Show', [
             'session' => $session,
             'coaching_history' => $coachingHistory,
@@ -768,6 +795,11 @@ class CoachingSessionController extends Controller
             'canEdit' => $canEdit,
             'canSubmitDraft' => $canSubmitDraft,
             'purposes' => CoachingSession::PURPOSE_LABELS,
+            'coacheeExclusion' => $coacheeExclusion ? [
+                'reason' => $coacheeExclusion->reason,
+                'excluded_at' => $coacheeExclusion->excluded_at?->toIso8601String(),
+                'expires_at' => $coacheeExclusion->expires_at?->toIso8601String(),
+            ] : null,
         ]);
     }
 

@@ -298,6 +298,67 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     /**
+     * Get all coaching exclusion records for this user (history).
+     */
+    public function coachingExclusions()
+    {
+        return $this->hasMany(CoachingExclusion::class, 'user_id')->orderByDesc('excluded_at');
+    }
+
+    /**
+     * Get the user's currently active coaching exclusion (if any).
+     */
+    public function activeCoachingExclusion()
+    {
+        return $this->hasOne(CoachingExclusion::class, 'user_id')
+            ->whereNull('revoked_at')
+            ->where(function ($q) {
+                $q->whereNull('expires_at')
+                    ->orWhere('expires_at', '>', now());
+            })
+            ->latestOfMany('excluded_at');
+    }
+
+    /**
+     * Check if the user is currently excluded from coaching.
+     */
+    public function isCoachingExcluded(): bool
+    {
+        return CoachingExclusion::query()
+            ->where('user_id', $this->id)
+            ->active()
+            ->exists();
+    }
+
+    /**
+     * Scope: users who are NOT currently excluded from coaching.
+     */
+    public function scopeNotCoachingExcluded($query)
+    {
+        return $query->whereDoesntHave('coachingExclusions', function ($q) {
+            $q->whereNull('revoked_at')
+                ->where(function ($qq) {
+                    $qq->whereNull('expires_at')
+                        ->orWhere('expires_at', '>', now());
+                });
+        });
+    }
+
+    /**
+     * Scope: users who ARE currently excluded from coaching.
+     */
+    public function scopeCoachingExcluded($query)
+    {
+        return $query->whereHas('coachingExclusions', function ($q) {
+            $q->whereNull('revoked_at')
+                ->where(function ($qq) {
+                    $qq->whereNull('expires_at')
+                        ->orWhere('expires_at', '>', now());
+                });
+        });
+    }
+
+    /**
      * Get the notifications for the user.
      */
     public function notifications()

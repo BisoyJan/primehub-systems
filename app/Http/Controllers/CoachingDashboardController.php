@@ -154,6 +154,7 @@ class CoachingDashboardController extends Controller
             'coachee_role' => $request->input('coachee_role'),
             'date_from' => $request->input('date_from'),
             'date_to' => $request->input('date_to'),
+            'include_excluded' => $request->boolean('include_excluded') ?: null,
         ]);
 
         $coacheeRole = $filters['coachee_role'] ?? null;
@@ -185,6 +186,7 @@ class CoachingDashboardController extends Controller
         $teamLeads = User::where('role', 'Team Lead')
             ->where('is_approved', true)
             ->where('is_active', true)
+            ->notCoachingExcluded()
             ->orderBy('first_name')
             ->orderBy('last_name')
             ->get(['id', 'first_name', 'middle_name', 'last_name']);
@@ -205,7 +207,7 @@ class CoachingDashboardController extends Controller
             ),
             'campaigns' => $campaigns,
             'teamLeads' => $teamLeads,
-            'filters' => $request->only(['campaign_id', 'coach_id', 'coaching_status', 'coachee_role', 'date_from', 'date_to']),
+            'filters' => $request->only(['campaign_id', 'coach_id', 'coaching_status', 'coachee_role', 'date_from', 'date_to', 'include_excluded']),
             'statusColors' => CoachingDashboardService::STATUS_COLORS,
             'purposes' => CoachingSession::PURPOSE_LABELS,
             'monthlySessionTarget' => CoachingStatusSetting::getThreshold('monthly_session_target'),

@@ -47,7 +47,7 @@ class GenerateCampaignCoachingCompletionExportExcel implements ShouldQueue
             $userQuery = User::where('role', 'Agent')
                 ->where('is_active', true)
                 ->whereNull('deleted_at')
-                ->with('activeSchedule.campaign');
+                ->with(['activeSchedule.campaign', 'activeCoachingExclusion']);
 
             if ($this->campaignIds) {
                 $campaignIds = $this->campaignIds;
@@ -77,6 +77,7 @@ class GenerateCampaignCoachingCompletionExportExcel implements ShouldQueue
             $perAgentSheet->fromArray([
                 'Campaign',
                 'Agent',
+                'Excluded?',
                 'Schedule Effective Date',
                 'Eligible (active full month)',
                 'Sessions This Month',
@@ -86,7 +87,7 @@ class GenerateCampaignCoachingCompletionExportExcel implements ShouldQueue
                 'Fully Coached?',
                 'Completion %',
             ], null, 'A1');
-            $this->styleHeaderRow($perAgentSheet, 'A1:J1');
+            $this->styleHeaderRow($perAgentSheet, 'A1:K1');
 
             $row = 2;
             $byCampaign = [];
@@ -94,7 +95,8 @@ class GenerateCampaignCoachingCompletionExportExcel implements ShouldQueue
             foreach ($agents as $agent) {
                 $campaignName = $agent->activeSchedule?->campaign?->name ?? 'N/A';
                 $eff = $agent->activeSchedule?->effective_date;
-                $eligible = $eff === null || $eff->lte($monthStart);
+                $isExcluded = $agent->activeCoachingExclusion !== null;
+                $eligible = ! $isExcluded && ($eff === null || $eff->lte($monthStart));
                 $sessions = (int) ($monthlySessionCounts[$agent->id] ?? 0);
                 $capped = min($sessions, $monthlyTarget);
                 $rate = $monthlyTarget > 0 ? (int) round(($capped / $monthlyTarget) * 100) : 0;
@@ -102,6 +104,7 @@ class GenerateCampaignCoachingCompletionExportExcel implements ShouldQueue
                 $perAgentSheet->fromArray([
                     $campaignName,
                     $agent->first_name.' '.$agent->last_name,
+                    $isExcluded ? ($agent->activeCoachingExclusion->reason ?? 'Yes') : 'No',
                     $eff?->toDateString() ?? '',
                     $eligible ? 'Yes' : 'No',
                     $sessions,
@@ -173,7 +176,7 @@ class GenerateCampaignCoachingCompletionExportExcel implements ShouldQueue
 
             $this->updateProgress($cacheKey, 85, 'Auto-sizing columns...');
 
-            foreach (range('A', 'J') as $col) {
+            foreach (range('A', 'K') as $col) {
                 $perAgentSheet->getColumnDimension($col)->setAutoSize(true);
             }
             foreach (range('A', 'H') as $col) {

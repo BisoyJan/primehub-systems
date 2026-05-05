@@ -184,10 +184,13 @@ class CoachingDashboardService
 
         $agentIds = EmployeeSchedule::whereIn('campaign_id', $campaignIds)
             ->where('is_active', true)
-            ->whereHas('user', function ($q) {
+            ->whereHas('user', function ($q) use ($filters) {
                 $q->where('role', 'Agent')
                     ->where('is_active', true)
                     ->whereNull('deleted_at');
+                if (empty($filters['include_excluded'])) {
+                    $q->notCoachingExcluded();
+                }
             })
             ->pluck('user_id')
             ->unique()
@@ -206,6 +209,10 @@ class CoachingDashboardService
         $query = User::where('role', 'Agent')
             ->where('is_active', true)
             ->whereNull('deleted_at');
+
+        if (empty($filters['include_excluded'])) {
+            $query->notCoachingExcluded();
+        }
 
         if ($campaignIds = $this->normalizeCampaignIds($filters)) {
             $query->whereHas('activeSchedule', function ($q) use ($campaignIds) {
@@ -247,7 +254,7 @@ class CoachingDashboardService
 
         // Batch load all users with their active schedules and campaigns
         $users = User::whereIn('id', $coacheeIds)
-            ->with('activeSchedule.campaign')
+            ->with(['activeSchedule.campaign', 'activeCoachingExclusion'])
             ->get()
             ->keyBy('id');
 
@@ -382,6 +389,8 @@ class CoachingDashboardService
                 'sessions_this_month' => $summary['sessions_this_month'],
                 'schedule_effective_date' => $user->activeSchedule?->effective_date?->toDateString(),
                 'trend' => ($trendData[$coacheeId]->current_count ?? 0) - ($trendData[$coacheeId]->previous_count ?? 0),
+                'is_coaching_excluded' => $user->activeCoachingExclusion !== null,
+                'coaching_exclusion_reason' => $user->activeCoachingExclusion?->reason,
             ]);
         }
 
@@ -440,6 +449,10 @@ class CoachingDashboardService
         $atRiskAgents = collect();
         $atRiskQuery = User::where('is_active', true)->whereNull('deleted_at');
 
+        if (empty($filters['include_excluded'])) {
+            $atRiskQuery->notCoachingExcluded();
+        }
+
         if (isset($filters['coachee_role'])) {
             $atRiskQuery->where('role', $filters['coachee_role']);
         } else {
@@ -492,6 +505,10 @@ class CoachingDashboardService
         $query = User::where('role', 'Team Lead')
             ->where('is_active', true)
             ->whereNull('deleted_at');
+
+        if (empty($filters['include_excluded'])) {
+            $query->notCoachingExcluded();
+        }
 
         if ($campaignIds = $this->normalizeCampaignIds($filters)) {
             $query->whereHas('activeSchedule', function ($q) use ($campaignIds) {
@@ -553,6 +570,10 @@ class CoachingDashboardService
 
         foreach ($groups as $account => $agents) {
             $eligible = $agents->filter(function ($a) use ($monthStart) {
+                // Skip coaching-excluded users from completion math.
+                if (! empty($a['is_coaching_excluded'])) {
+                    return false;
+                }
                 $eff = $a['schedule_effective_date'] ?? null;
 
                 return $eff === null || $eff <= $monthStart;
