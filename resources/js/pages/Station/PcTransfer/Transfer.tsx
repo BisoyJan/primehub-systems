@@ -252,7 +252,7 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
         const search = pcSearch.toLowerCase();
         const matchesSearch = (
             (pc.pc_number && pc.pc_number.toLowerCase().includes(search)) ||
-            pc.label.toLowerCase().includes(search) ||
+            (pc.label ?? '').toLowerCase().includes(search) ||
             (pc.details.model && pc.details.model.toLowerCase().includes(search)) ||
             (pc.details.processor && pc.details.processor.toLowerCase().includes(search))
         );
@@ -271,9 +271,9 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
     const filteredStations = stations.filter(station => {
         const search = stationSearch.toLowerCase();
         const matchesSearch = (
-            station.station_number.toLowerCase().includes(search) ||
-            station.site.toLowerCase().includes(search) ||
-            station.campaign.toLowerCase().includes(search)
+            (station.station_number ?? '').toLowerCase().includes(search) ||
+            (station.site ?? '').toLowerCase().includes(search) ||
+            (station.campaign ?? '').toLowerCase().includes(search)
         );
 
         const matchesSite = stationSiteFilter === 'all' || String(station.site_id) === stationSiteFilter;
