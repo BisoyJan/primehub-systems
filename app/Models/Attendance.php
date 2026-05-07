@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\ValueObjects\AttendanceWarning;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -266,6 +267,20 @@ class Attendance extends Model
             'failed_bio_out',
             'needs_manual_review',
         ]) || ! empty($this->warnings);
+    }
+
+    /**
+     * Returns warnings as typed AttendanceWarning value objects.
+     * Handles backward compatibility with legacy plain-string warnings.
+     *
+     * @return AttendanceWarning[]
+     */
+    public function typedWarnings(): array
+    {
+        return array_map(
+            fn ($raw) => AttendanceWarning::fromRaw($raw),
+            $this->warnings ?? []
+        );
     }
 
     /**

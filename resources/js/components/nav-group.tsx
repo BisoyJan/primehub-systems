@@ -32,11 +32,31 @@ export function NavGroup({ label, items = [], groupId, isOpen, onToggle }: NavGr
         return null;
     }
 
+    const currentPath = page.url.split('?')[0];
+
+    const getHref = (item: NavItem): string =>
+        typeof item.href === 'string' ? item.href : item.href.url;
+
+    /**
+     * Returns true only when this item is the most-specific match.
+     * Prevents a parent prefix (e.g. /attendance-points) from highlighting
+     * when a more-specific sibling (e.g. /attendance-points/leaderboard) also matches.
+     */
+    const isItemActive = (item: NavItem): boolean => {
+        const href = getHref(item);
+        if (!currentPath.startsWith(href)) return false;
+        return !items.some((other) => {
+            const otherHref = getHref(other);
+            return (
+                otherHref !== href &&
+                otherHref.length > href.length &&
+                currentPath.startsWith(otherHref)
+            );
+        });
+    };
+
     // Check if any item in this group is active
-    const hasActiveItem = items.some((item) => {
-        const href = typeof item.href === 'string' ? item.href : item.href.url;
-        return page.url.startsWith(href);
-    });
+    const hasActiveItem = items.some(isItemActive);
 
     const isExpanded = isOpen || hasActiveItem;
     const isCollapsed = state === 'collapsed';
@@ -50,11 +70,7 @@ export function NavGroup({ label, items = [], groupId, isOpen, onToggle }: NavGr
                         <SidebarMenuItem key={item.title}>
                             <SidebarMenuButton
                                 asChild
-                                isActive={page.url.startsWith(
-                                    typeof item.href === 'string'
-                                        ? item.href
-                                        : item.href.url,
-                                )}
+                                isActive={isItemActive(item)}
                                 tooltip={{ children: item.title }}
                             >
                                 <Link href={item.href} prefetch="mount">
@@ -100,11 +116,7 @@ export function NavGroup({ label, items = [], groupId, isOpen, onToggle }: NavGr
                             <SidebarMenuItem key={item.title}>
                                 <SidebarMenuButton
                                     asChild
-                                    isActive={page.url.startsWith(
-                                        typeof item.href === 'string'
-                                            ? item.href
-                                            : item.href.url,
-                                    )}
+                                    isActive={isItemActive(item)}
                                     tooltip={{ children: item.title }}
                                 >
                                     <Link href={item.href} prefetch="mount">

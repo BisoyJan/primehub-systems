@@ -2,11 +2,12 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 class AttendancePoint extends Model
 {
@@ -231,15 +232,15 @@ class AttendancePoint extends Model
      */
     public function isNcnsOrFtn(): bool
     {
-        return $this->point_type === 'whole_day_absence' && !$this->is_advised;
+        return $this->point_type === 'whole_day_absence' && ! $this->is_advised;
     }
 
     /**
      * Calculate expiration date based on point type and rules.
      */
-    public function calculateExpirationDate(): \Carbon\Carbon
+    public function calculateExpirationDate(): Carbon
     {
-        $shiftDate = \Carbon\Carbon::parse($this->shift_date);
+        $shiftDate = Carbon::parse($this->shift_date);
 
         if ($this->isNcnsOrFtn()) {
             // NCNS/FTN: 1 year expiration
@@ -269,7 +270,7 @@ class AttendancePoint extends Model
             return false;
         }
 
-        if (!$this->expires_at) {
+        if (! $this->expires_at) {
             return false;
         }
 
@@ -307,7 +308,7 @@ class AttendancePoint extends Model
         }
 
         // Get grace period from attendance's employee schedule
-        $gracePeriod = $this->attendance?->employeeSchedule?->grace_period_minutes ?? 15;
+        $gracePeriod = $this->attendance?->employeeSchedule?->grace_period_minutes ?? 0;
 
         // Generate violation details based on type
         return match ($this->point_type) {
@@ -337,6 +338,7 @@ class AttendancePoint extends Model
                 'sro' => 'SRO (Standard)',
                 default => 'Expired',
             };
+
             return "Expired via {$type}";
         }
 
@@ -345,10 +347,10 @@ class AttendancePoint extends Model
             if ($daysUntilExpiration < 0) {
                 return 'Pending expiration';
             }
+
             return "Expires in {$daysUntilExpiration} days";
         }
 
         return 'No expiration set';
     }
 }
-

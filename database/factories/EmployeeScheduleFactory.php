@@ -2,14 +2,14 @@
 
 namespace Database\Factories;
 
-use App\Models\EmployeeSchedule;
-use App\Models\User;
 use App\Models\Campaign;
+use App\Models\EmployeeSchedule;
 use App\Models\Site;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\EmployeeSchedule>
+ * @extends Factory<EmployeeSchedule>
  */
 class EmployeeScheduleFactory extends Factory
 {
@@ -30,7 +30,7 @@ class EmployeeScheduleFactory extends Factory
             'scheduled_time_in' => '09:00:00',
             'scheduled_time_out' => '18:00:00',
             'work_days' => ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
-            'grace_period_minutes' => 15,
+            'grace_period_minutes' => 0,
             'is_active' => true,
             'effective_date' => now()->subMonth(),
             'end_date' => null,

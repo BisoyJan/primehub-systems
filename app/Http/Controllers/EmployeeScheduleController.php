@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Traits\RedirectsWithFlashMessages;
 use App\Models\Campaign;
 use App\Models\EmployeeSchedule;
 use App\Models\Site;
@@ -12,6 +13,8 @@ use Inertia\Inertia;
 
 class EmployeeScheduleController extends Controller
 {
+    use RedirectsWithFlashMessages;
+
     /**
      * Display a listing of employee schedules.
      */
@@ -284,12 +287,10 @@ class EmployeeScheduleController extends Controller
 
         // If first-time setup for Agent/Team Lead, redirect to dashboard
         if ($isFirstTimeSetup) {
-            return redirect()->route('dashboard')
-                ->with('flash', ['message' => 'Your schedule has been set up successfully. Welcome!', 'type' => 'success']);
+            return $this->redirectWithFlash('dashboard', 'Your schedule has been set up successfully. Welcome!');
         }
 
-        return redirect()->route('employee-schedules.index')
-            ->with('flash', ['message' => 'Employee schedule created successfully', 'type' => 'success']);
+        return $this->redirectWithFlash('employee-schedules.index', 'Employee schedule created successfully');
     }
 
     /**
@@ -404,8 +405,7 @@ class EmployeeScheduleController extends Controller
             $scheduleOwner->campaigns()->sync($validated['campaign_ids']);
         }
 
-        return redirect()->route('employee-schedules.index')
-            ->with('flash', ['message' => 'Employee schedule updated successfully', 'type' => 'success']);
+        return $this->redirectWithFlash('employee-schedules.index', 'Employee schedule updated successfully');
     }
 
     /**
@@ -415,8 +415,7 @@ class EmployeeScheduleController extends Controller
     {
         $employeeSchedule->delete();
 
-        return redirect()->route('employee-schedules.index')
-            ->with('flash', ['message' => 'Employee schedule deleted successfully', 'type' => 'success']);
+        return $this->redirectWithFlash('employee-schedules.index', 'Employee schedule deleted successfully');
     }
 
     /**
@@ -435,8 +434,7 @@ class EmployeeScheduleController extends Controller
 
         $employeeSchedule->update(['is_active' => $newStatus]);
 
-        return redirect()->back()
-            ->with('flash', ['message' => 'Schedule status updated successfully', 'type' => 'success']);
+        return $this->backWithFlash('Schedule status updated successfully');
     }
 
     /**
@@ -485,14 +483,12 @@ class EmployeeScheduleController extends Controller
 
         // Only allow Agent and Team Lead roles
         if (! in_array($currentUser->role, ['Agent', 'Team Lead'])) {
-            return redirect()->route('dashboard')
-                ->with('flash', ['message' => 'You do not need to set up a schedule.', 'type' => 'info']);
+            return $this->redirectWithFlash('dashboard', 'You do not need to set up a schedule.', 'info');
         }
 
         // Check if user already has a schedule
         if ($currentUser->employeeSchedules()->exists()) {
-            return redirect()->route('dashboard')
-                ->with('flash', ['message' => 'You already have a schedule set up.', 'type' => 'info']);
+            return $this->redirectWithFlash('dashboard', 'You already have a schedule set up.', 'info');
         }
 
         $campaigns = Campaign::orderBy('name')->get();
@@ -523,14 +519,12 @@ class EmployeeScheduleController extends Controller
 
         // Only allow Agent and Team Lead roles
         if (! in_array($currentUser->role, ['Agent', 'Team Lead'])) {
-            return redirect()->route('dashboard')
-                ->with('flash', ['message' => 'You do not need to set up a schedule.', 'type' => 'info']);
+            return $this->redirectWithFlash('dashboard', 'You do not need to set up a schedule.', 'info');
         }
 
         // Check if user already has a schedule
         if ($currentUser->employeeSchedules()->exists()) {
-            return redirect()->route('dashboard')
-                ->with('flash', ['message' => 'You already have a schedule set up.', 'type' => 'info']);
+            return $this->redirectWithFlash('dashboard', 'You already have a schedule set up.', 'info');
         }
 
         $validated = $request->validate([
@@ -575,7 +569,6 @@ class EmployeeScheduleController extends Controller
 
         EmployeeSchedule::create($validated);
 
-        return redirect()->route('dashboard')
-            ->with('flash', ['message' => 'Your schedule has been set up successfully. Welcome!', 'type' => 'success']);
+        return $this->redirectWithFlash('dashboard', 'Your schedule has been set up successfully. Welcome!');
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Traits\RedirectsWithFlashMessages;
 use App\Jobs\GenerateBreakTimerExportExcel;
 use App\Models\BreakSession;
 use App\Models\Campaign;
@@ -16,6 +17,8 @@ use Inertia\Inertia;
 
 class BreakDashboardController extends Controller
 {
+    use RedirectsWithFlashMessages;
+
     public function __construct(protected BreakTimerService $breakTimerService) {}
 
     /**
@@ -170,13 +173,22 @@ class BreakDashboardController extends Controller
             ->filter(fn (BreakSession $session) => $this->breakTimerService->getSessionTimingSnapshot($session)['is_overbreak_now'])
             ->count();
 
+        // Single aggregated query replaces 5 clone+count calls (3.5)
+        $aggCounts = (clone $sessionsForDate)->selectRaw("
+            COUNT(*) as total_sessions,
+            SUM(status IN ('active', 'paused')) as active_now,
+            SUM(status = 'completed') as completed,
+            SUM(status = 'overage') as overage,
+            AVG(CASE WHEN overage_seconds > 0 THEN overage_seconds ELSE NULL END) as avg_overage_seconds
+        ")->first();
+
         $stats = [
-            'total_sessions' => (clone $sessionsForDate)->count(),
-            'active_now' => (clone $sessionsForDate)->whereIn('status', ['active', 'paused'])->count(),
+            'total_sessions' => (int) ($aggCounts->total_sessions ?? 0),
+            'active_now' => (int) ($aggCounts->active_now ?? 0),
             'currently_overbreak' => $currentlyOverbreak,
-            'completed' => (clone $sessionsForDate)->where('status', 'completed')->count(),
-            'overage' => (clone $sessionsForDate)->where('status', 'overage')->count(),
-            'avg_overage_seconds' => (int) (clone $sessionsForDate)->where('overage_seconds', '>', 0)->avg('overage_seconds'),
+            'completed' => (int) ($aggCounts->completed ?? 0),
+            'overage' => (int) ($aggCounts->overage ?? 0),
+            'avg_overage_seconds' => (int) ($aggCounts->avg_overage_seconds ?? 0),
             'auto_reset_today' => (int) Cache::get('break_timer:auto_reset:daily_count:'.now()->toDateString(), 0),
         ];
 
@@ -414,10 +426,7 @@ class BreakDashboardController extends Controller
         $this->ensureSessionInScope($breakSession);
 
         if (! in_array($breakSession->status, ['active', 'paused'], true)) {
-            return redirect()->back()->with('flash', [
-                'message' => 'Only active or paused sessions can be force-ended.',
-                'type' => 'error',
-            ]);
+            return $this->backWithFlash('Only active or paused sessions can be force-ended.', 'error');
         }
 
         try {
@@ -431,17 +440,11 @@ class BreakDashboardController extends Controller
                 $request->input('reason'),
             );
 
-            return redirect()->back()->with('flash', [
-                'message' => 'Session force-ended successfully.',
-                'type' => 'success',
-            ]);
+            return $this->backWithFlash('Session force-ended successfully.');
         } catch (\Exception $e) {
             Log::error('BreakTimer ForceEnd Error: '.$e->getMessage());
 
-            return redirect()->back()->with('flash', [
-                'message' => 'Failed to force-end session.',
-                'type' => 'error',
-            ]);
+            return $this->backWithFlash('Failed to force-end session.', 'error');
         }
     }
 
@@ -458,17 +461,11 @@ class BreakDashboardController extends Controller
         $this->ensureSessionInScope($breakSession);
 
         if (! in_array($breakSession->status, ['completed', 'overage', 'reset', 'auto_ended'], true)) {
-            return redirect()->back()->with('flash', [
-                'message' => 'Only ended, reset, or auto-ended sessions can be restored.',
-                'type' => 'error',
-            ]);
+            return $this->backWithFlash('Only ended, reset, or auto-ended sessions can be restored.', 'error');
         }
 
         if ((int) $breakSession->remaining_seconds < 30) {
-            return redirect()->back()->with('flash', [
-                'message' => 'Session has less than 30 seconds remaining and cannot be restored.',
-                'type' => 'error',
-            ]);
+            return $this->backWithFlash('Session has less than 30 seconds remaining and cannot be restored.', 'error');
         }
 
         $hasActive = BreakSession::query()
@@ -479,10 +476,7 @@ class BreakDashboardController extends Controller
             ->exists();
 
         if ($hasActive) {
-            return redirect()->back()->with('flash', [
-                'message' => 'Agent already has another active session. End it first before restoring.',
-                'type' => 'error',
-            ]);
+            return $this->backWithFlash('Agent already has another active session. End it first before restoring.', 'error');
         }
 
         try {
@@ -496,17 +490,11 @@ class BreakDashboardController extends Controller
                 $request->input('reason'),
             );
 
-            return redirect()->back()->with('flash', [
-                'message' => 'Session restored successfully.',
-                'type' => 'success',
-            ]);
+            return $this->backWithFlash('Session restored successfully.');
         } catch (\Exception $e) {
             Log::error('BreakTimer Restore Error: '.$e->getMessage());
 
-            return redirect()->back()->with('flash', [
-                'message' => 'Failed to restore session.',
-                'type' => 'error',
-            ]);
+            return $this->backWithFlash('Failed to restore session.', 'error');
         }
     }
 

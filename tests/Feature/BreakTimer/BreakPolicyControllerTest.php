@@ -165,7 +165,7 @@ class BreakPolicyControllerTest extends TestCase
             ->delete(route('break-timer.policies.destroy', $policy));
 
         $response->assertRedirect();
-        $response->assertSessionHas('flash.type', 'error');
+        $response->assertSessionHas('type', 'error');
         $this->assertDatabaseHas('break_policies', ['id' => $policy->id]);
     }
 

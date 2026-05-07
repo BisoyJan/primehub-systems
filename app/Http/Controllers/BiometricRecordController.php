@@ -4,11 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\BiometricRecord;
 use App\Models\BiometricRetentionPolicy;
-use App\Models\User;
 use App\Models\Site;
+use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
-use Carbon\Carbon;
 
 class BiometricRecordController extends Controller
 {
@@ -43,11 +43,11 @@ class BiometricRecordController extends Controller
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('employee_name', 'like', "%{$search}%")
-                  ->orWhereHas('user', function ($userQuery) use ($search) {
-                      $userQuery->where('first_name', 'like', "%{$search}%")
-                               ->orWhere('last_name', 'like', "%{$search}%")
-                               ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%{$search}%"]);
-                  });
+                    ->orWhereHas('user', function ($userQuery) use ($search) {
+                        $userQuery->where('first_name', 'like', "%{$search}%")
+                            ->orWhere('last_name', 'like', "%{$search}%")
+                            ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%{$search}%"]);
+                    });
             });
         }
 
@@ -65,7 +65,7 @@ class BiometricRecordController extends Controller
             ->map(function ($user) {
                 return [
                     'id' => $user->id,
-                    'name' => $user->first_name . ' ' . $user->last_name,
+                    'name' => $user->first_name.' '.$user->last_name,
                 ];
             });
         $sites = Site::orderBy('name')->get(['id', 'name']);
@@ -94,7 +94,7 @@ class BiometricRecordController extends Controller
         $today = BiometricRecord::whereDate('record_date', Carbon::today())->count();
         $thisWeek = BiometricRecord::whereBetween('record_date', [
             Carbon::now()->startOfWeek(),
-            Carbon::now()->endOfWeek()
+            Carbon::now()->endOfWeek(),
         ])->count();
         $thisMonth = BiometricRecord::whereYear('record_date', Carbon::now()->year)
             ->whereMonth('record_date', Carbon::now()->month)
@@ -131,27 +131,26 @@ class BiometricRecordController extends Controller
      */
     protected function countRecordsEligibleForCleanup(): int
     {
-        $count = 0;
         $sites = Site::all();
 
-        foreach ($sites as $site) {
-            $retentionMonths = BiometricRetentionPolicy::getRetentionMonths($site->id);
-            $cutoffDate = Carbon::now()->subMonths($retentionMonths);
+        // Build a single COUNT query with per-site cutoff conditions instead of N separate queries.
+        return BiometricRecord::query()
+            ->where(function ($q) use ($sites): void {
+                foreach ($sites as $site) {
+                    $cutoff = Carbon::now()->subMonths(BiometricRetentionPolicy::getRetentionMonths($site->id));
+                    $q->orWhere(fn ($sub) => $sub
+                        ->where('site_id', $site->id)
+                        ->where('record_date', '<', $cutoff)
+                    );
+                }
 
-            $count += BiometricRecord::where('site_id', $site->id)
-                ->where('record_date', '<', $cutoffDate)
-                ->count();
-        }
-
-        // Also count records without a site (using global policy)
-        $globalRetentionMonths = BiometricRetentionPolicy::getRetentionMonths();
-        $globalCutoffDate = Carbon::now()->subMonths($globalRetentionMonths);
-
-        $count += BiometricRecord::whereNull('site_id')
-            ->where('record_date', '<', $globalCutoffDate)
+                $globalCutoff = Carbon::now()->subMonths(BiometricRetentionPolicy::getRetentionMonths());
+                $q->orWhere(fn ($sub) => $sub
+                    ->whereNull('site_id')
+                    ->where('record_date', '<', $globalCutoff)
+                );
+            })
             ->count();
-
-        return $count;
     }
 
     /**

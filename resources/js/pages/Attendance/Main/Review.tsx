@@ -112,7 +112,7 @@ interface AttendanceRecord {
     is_partially_verified?: boolean;
     verification_notes?: string;
     notes?: string;
-    warnings?: string[];
+    warnings?: { type: string; message: string; severity: string; raised_at: string }[];
     is_set_home?: boolean;
     // Undertime approval fields
     undertime_approval_status?: 'pending' | 'approved' | 'rejected' | null;
@@ -886,7 +886,7 @@ export default function AttendanceReview() {
                                         {Object.values(statusCounts).reduce((a, b) => a + b, 0)} total
                                     </Badge>
                                 </div>
-                                <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-200 [[data-state=open]_&]:rotate-180" />
+                                <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-200 in-data-[state=open]:rotate-180" />
                             </button>
                         </CollapsibleTrigger>
                         <CollapsibleContent>
@@ -1703,7 +1703,7 @@ export default function AttendanceReview() {
                         {selectedRecord?.leave_request && (
                             <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-4 rounded-md">
                                 <div className="flex items-start gap-3">
-                                    <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                                    <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
                                     <div className="flex-1">
                                         <h4 className="font-semibold text-amber-800 dark:text-amber-200">
                                             {selectedRecord.actual_time_in || selectedRecord.actual_time_out
@@ -2377,8 +2377,10 @@ export default function AttendanceReview() {
                                     {warningsDialogRecord.warnings?.map((warning, idx) => (
                                         <div key={idx} className="bg-amber-50 border border-amber-200 rounded-md p-3">
                                             <div className="flex items-start gap-2">
-                                                <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                                                <div className="text-sm text-amber-900">{warning}</div>
+                                                <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                                                <div className="text-sm text-amber-900">
+                                                    {typeof warning === 'string' ? warning : warning.message}
+                                                </div>
                                             </div>
                                         </div>
                                     ))}
@@ -2388,7 +2390,7 @@ export default function AttendanceReview() {
                             {/* Recommendation */}
                             <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
                                 <div className="flex items-start gap-2">
-                                    <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                                    <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
                                     <div className="text-sm text-blue-900">
                                         <span className="font-medium block mb-1">Recommended Action:</span>
                                         Review the biometric records and employee schedule. Verify with the employee or supervisor to determine the correct attendance status.

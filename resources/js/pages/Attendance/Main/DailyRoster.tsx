@@ -382,6 +382,22 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
         );
     }, [employees, employeeSearchQuery]);
 
+    // Group employees by campaign, sorted alphabetically
+    const groupedEmployees = useMemo(() => {
+        const groups: Record<string, Employee[]> = {};
+        for (const emp of employees) {
+            const key = emp.schedule?.campaign_name || 'No Campaign';
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(emp);
+        }
+        return Object.entries(groups)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([campaignName, emps]) => ({
+                campaignName,
+                employees: [...emps].sort((a, b) => a.name.localeCompare(b.name)),
+            }));
+    }, [employees]);
+
     // Get selected employee name for display
     const selectedEmployeeName = selectedEmployeeId
         ? employees.find(e => String(e.id) === selectedEmployeeId)?.name || 'Unknown'
@@ -796,102 +812,114 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {employees.map((employee) => (
-                                <TableRow key={employee.id} className="hover:bg-muted/30">
-                                    <TableCell>
-                                        <div>
-                                            <div className="font-medium truncate">{employee.name}</div>
-                                            <div className="text-xs text-muted-foreground truncate">{employee.email}</div>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        {employee.schedule ? (
-                                            <div>
-                                                <div className="font-medium truncate">{employee.schedule.site_name || 'No site'}</div>
-                                                {employee.schedule.campaign_name && (
-                                                    <div className="text-xs text-muted-foreground">
-                                                        {employee.schedule.campaign_name}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ) : (
-                                            <span className="text-muted-foreground">-</span>
-                                        )}
-                                    </TableCell>
-                                    <TableCell>
-                                        {employee.schedule ? (
-                                            getShiftTypeBadge(employee.schedule.shift_type)
-                                        ) : (
-                                            <span className="text-muted-foreground">-</span>
-                                        )}
-                                    </TableCell>
-                                    <TableCell>
-                                        {employee.schedule ? (
-                                            <span className="text-sm whitespace-nowrap">
-                                                {formatTime(employee.schedule.scheduled_time_in)} - {formatTime(employee.schedule.scheduled_time_out)}
-                                            </span>
-                                        ) : (
-                                            <span className="text-muted-foreground">-</span>
-                                        )}
-                                    </TableCell>
-                                    <TableCell>
-                                        {employee.on_leave ? (
-                                            <div className="flex items-center gap-1">
-                                                <Badge className="bg-blue-600">
-                                                    On {employee.on_leave.leave_type}
-                                                </Badge>
-                                                {employee.existing_attendance?.admin_verified && (
-                                                    <span title="Attendance verified"><CheckCircle className="h-3.5 w-3.5 text-green-500" /></span>
-                                                )}
-                                            </div>
-                                        ) : employee.existing_attendance ? (
-                                            getStatusBadges(employee.existing_attendance)
-                                        ) : (
-                                            <Badge variant="outline" className="text-yellow-600 border-yellow-600">
-                                                Pending Entry
-                                            </Badge>
-                                        )}
-                                    </TableCell>
-                                    {!isTeamLead && (
-                                        <TableCell className="text-right">
-                                            <div className="flex items-center justify-end gap-1">
-                                                {employee.on_leave && (
-                                                    <Button
-                                                        size="sm"
-                                                        variant="ghost"
-                                                        className="h-8 px-2"
-                                                        onClick={() => window.open(`/attendance/review?date_from=${selectedDate}&date_to=${selectedDate}&user_id=${employee.id}`, '_blank')}
-                                                    >
-                                                        <ExternalLink className="h-4 w-4 mr-1" />
-                                                        Review
-                                                    </Button>
-                                                )}
-                                                {!employee.on_leave && !employee.existing_attendance && employee.schedule && (
-                                                    <Button
-                                                        size="sm"
-                                                        className="h-8"
-                                                        onClick={() => handleGenerateClick(employee)}
-                                                    >
-                                                        Generate
-                                                    </Button>
-                                                )}
-                                                {!employee.on_leave && employee.existing_attendance && employee.schedule && (
-                                                    <Button
-                                                        size="sm"
-                                                        variant="ghost"
-                                                        className="h-8 px-2"
-                                                        onClick={() => handleEditClick(employee)}
-                                                    >
-                                                        <Pencil className="h-4 w-4 mr-1" />
-                                                        Edit
-                                                    </Button>
-                                                )}
+                            {groupedEmployees.map(({ campaignName, employees: groupEmps }) => (
+                                <React.Fragment key={campaignName}>
+                                    <TableRow className="bg-muted/60 hover:bg-muted/60">
+                                        <TableCell colSpan={isTeamLead ? 5 : 6} className="py-2 px-4">
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-semibold text-sm">{campaignName}</span>
+                                                <Badge variant="secondary" className="font-normal text-xs">{groupEmps.length}</Badge>
                                             </div>
                                         </TableCell>
-                                    )}
-                                </TableRow>
+                                    </TableRow>
+                                    {groupEmps.map((employee) => (
+                                        <TableRow key={employee.id} className="hover:bg-muted/30">
+                                            <TableCell>
+                                                <div>
+                                                    <div className="font-medium truncate">{employee.name}</div>
+                                                    <div className="text-xs text-muted-foreground truncate">{employee.email}</div>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                {employee.schedule ? (
+                                                    <div>
+                                                        <div className="font-medium truncate">{employee.schedule.site_name || 'No site'}</div>
+                                                        {employee.schedule.campaign_name && (
+                                                            <div className="text-xs text-muted-foreground">
+                                                                {employee.schedule.campaign_name}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-muted-foreground">-</span>
+                                                )}
+                                            </TableCell>
+                                            <TableCell>
+                                                {employee.schedule ? (
+                                                    getShiftTypeBadge(employee.schedule.shift_type)
+                                                ) : (
+                                                    <span className="text-muted-foreground">-</span>
+                                                )}
+                                            </TableCell>
+                                            <TableCell>
+                                                {employee.schedule ? (
+                                                    <span className="text-sm whitespace-nowrap">
+                                                        {formatTime(employee.schedule.scheduled_time_in)} - {formatTime(employee.schedule.scheduled_time_out)}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-muted-foreground">-</span>
+                                                )}
+                                            </TableCell>
+                                            <TableCell>
+                                                {employee.on_leave ? (
+                                                    <div className="flex items-center gap-1">
+                                                        <Badge className="bg-blue-600">
+                                                            On {employee.on_leave.leave_type}
+                                                        </Badge>
+                                                        {employee.existing_attendance?.admin_verified && (
+                                                            <span title="Attendance verified"><CheckCircle className="h-3.5 w-3.5 text-green-500" /></span>
+                                                        )}
+                                                    </div>
+                                                ) : employee.existing_attendance ? (
+                                                    getStatusBadges(employee.existing_attendance)
+                                                ) : (
+                                                    <Badge variant="outline" className="text-yellow-600 border-yellow-600">
+                                                        Pending Entry
+                                                    </Badge>
+                                                )}
+                                            </TableCell>
+                                            {!isTeamLead && (
+                                                <TableCell className="text-right">
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        {employee.on_leave && (
+                                                            <Button
+                                                                size="sm"
+                                                                variant="ghost"
+                                                                className="h-8 px-2"
+                                                                onClick={() => window.open(`/attendance/review?date_from=${selectedDate}&date_to=${selectedDate}&user_id=${employee.id}`, '_blank')}
+                                                            >
+                                                                <ExternalLink className="h-4 w-4 mr-1" />
+                                                                Review
+                                                            </Button>
+                                                        )}
+                                                        {!employee.on_leave && !employee.existing_attendance && employee.schedule && (
+                                                            <Button
+                                                                size="sm"
+                                                                className="h-8"
+                                                                onClick={() => handleGenerateClick(employee)}
+                                                            >
+                                                                Generate
+                                                            </Button>
+                                                        )}
+                                                        {!employee.on_leave && employee.existing_attendance && employee.schedule && (
+                                                            <Button
+                                                                size="sm"
+                                                                variant="ghost"
+                                                                className="h-8 px-2"
+                                                                onClick={() => handleEditClick(employee)}
+                                                            >
+                                                                <Pencil className="h-4 w-4 mr-1" />
+                                                                Edit
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                </TableCell>
+                                            )}
+                                        </TableRow>
+                                    ))}
+                                </React.Fragment>
                             ))}
-                            {employees.length === 0 && (
+                            {groupedEmployees.length === 0 && (
                                 <TableRow>
                                     <TableCell colSpan={isTeamLead ? 5 : 6} className="h-24 text-center text-muted-foreground">
                                         No employees expected to work today
@@ -904,91 +932,100 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
 
                 {/* Mobile Cards */}
                 <div className="md:hidden space-y-4">
-                    {employees.map((employee) => (
-                        <div key={employee.id} className="bg-card border rounded-lg p-4 shadow-sm space-y-3">
-                            <div className="flex justify-between items-start">
-                                <div>
-                                    <div className="text-lg font-semibold">{employee.name}</div>
-                                    <div className="text-sm text-muted-foreground">{employee.email}</div>
-                                </div>
-                                {employee.on_leave ? (
-                                    <div className="flex flex-col items-end gap-1">
-                                        <Badge className="bg-blue-600">
-                                            On {employee.on_leave.leave_type}
-                                        </Badge>
-                                        {employee.existing_attendance?.admin_verified && (
-                                            <span title="Attendance verified"><CheckCircle className="h-4 w-4 text-green-500" /></span>
-                                        )}
-                                    </div>
-                                ) : employee.existing_attendance ? (
-                                    <div className="flex flex-wrap items-end justify-end gap-1">
-                                        {getStatusBadges(employee.existing_attendance)}
-                                    </div>
-                                ) : (
-                                    <Badge variant="outline" className="text-yellow-600 border-yellow-600">
-                                        Pending
-                                    </Badge>
-                                )}
+                    {groupedEmployees.map(({ campaignName, employees: groupEmps }) => (
+                        <div key={campaignName}>
+                            <div className="flex items-center gap-2 px-1 py-2">
+                                <span className="font-semibold text-sm">{campaignName}</span>
+                                <Badge variant="secondary" className="font-normal text-xs">{groupEmps.length}</Badge>
                             </div>
+                            <div className="space-y-3">
+                                {groupEmps.map((employee) => (
+                                    <div key={employee.id} className="bg-card border rounded-lg p-4 shadow-sm space-y-3">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <div className="text-lg font-semibold">{employee.name}</div>
+                                                <div className="text-sm text-muted-foreground">{employee.email}</div>
+                                            </div>
+                                            {employee.on_leave ? (
+                                                <div className="flex flex-col items-end gap-1">
+                                                    <Badge className="bg-blue-600">
+                                                        On {employee.on_leave.leave_type}
+                                                    </Badge>
+                                                    {employee.existing_attendance?.admin_verified && (
+                                                        <span title="Attendance verified"><CheckCircle className="h-4 w-4 text-green-500" /></span>
+                                                    )}
+                                                </div>
+                                            ) : employee.existing_attendance ? (
+                                                <div className="flex flex-wrap items-end justify-end gap-1">
+                                                    {getStatusBadges(employee.existing_attendance)}
+                                                </div>
+                                            ) : (
+                                                <Badge variant="outline" className="text-yellow-600 border-yellow-600">
+                                                    Pending
+                                                </Badge>
+                                            )}
+                                        </div>
 
-                            {employee.schedule && (
-                                <div className="space-y-2 text-sm">
-                                    <div>
-                                        <span className="font-medium">Site:</span> {employee.schedule.site_name || 'No site'}
-                                        {employee.schedule.campaign_name && (
-                                            <span className="text-muted-foreground"> / {employee.schedule.campaign_name}</span>
+                                        {employee.schedule && (
+                                            <div className="space-y-2 text-sm">
+                                                <div>
+                                                    <span className="font-medium">Site:</span> {employee.schedule.site_name || 'No site'}
+                                                    {employee.schedule.campaign_name && (
+                                                        <span className="text-muted-foreground"> / {employee.schedule.campaign_name}</span>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-medium">Shift:</span>
+                                                    {getShiftTypeBadge(employee.schedule.shift_type)}
+                                                </div>
+                                                <div>
+                                                    <span className="font-medium">Schedule:</span>{' '}
+                                                    {formatTime(employee.schedule.scheduled_time_in)} - {formatTime(employee.schedule.scheduled_time_out)}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {!isTeamLead && (
+                                            <div className="pt-2 border-t flex gap-2">
+                                                {employee.on_leave && (
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        className="flex-1"
+                                                        onClick={() => window.open(`/attendance/review?date_from=${selectedDate}&date_to=${selectedDate}&user_id=${employee.id}`, '_blank')}
+                                                    >
+                                                        <ExternalLink className="h-4 w-4 mr-1" />
+                                                        Review in New Tab
+                                                    </Button>
+                                                )}
+                                                {!employee.on_leave && !employee.existing_attendance && employee.schedule && (
+                                                    <Button
+                                                        size="sm"
+                                                        className="flex-1"
+                                                        onClick={() => handleGenerateClick(employee)}
+                                                    >
+                                                        Generate Attendance
+                                                    </Button>
+                                                )}
+                                                {!employee.on_leave && employee.existing_attendance && employee.schedule && (
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        className="flex-1"
+                                                        onClick={() => handleEditClick(employee)}
+                                                    >
+                                                        <Pencil className="h-4 w-4 mr-1" />
+                                                        Edit Record
+                                                    </Button>
+                                                )}
+                                            </div>
                                         )}
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="font-medium">Shift:</span>
-                                        {getShiftTypeBadge(employee.schedule.shift_type)}
-                                    </div>
-                                    <div>
-                                        <span className="font-medium">Schedule:</span>{' '}
-                                        {formatTime(employee.schedule.scheduled_time_in)} - {formatTime(employee.schedule.scheduled_time_out)}
-                                    </div>
-                                </div>
-                            )}
-
-                            {!isTeamLead && (
-                                <div className="pt-2 border-t flex gap-2">
-                                    {employee.on_leave && (
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            className="flex-1"
-                                            onClick={() => window.open(`/attendance/review?date_from=${selectedDate}&date_to=${selectedDate}&user_id=${employee.id}`, '_blank')}
-                                        >
-                                            <ExternalLink className="h-4 w-4 mr-1" />
-                                            Review in New Tab
-                                        </Button>
-                                    )}
-                                    {!employee.on_leave && !employee.existing_attendance && employee.schedule && (
-                                        <Button
-                                            size="sm"
-                                            className="flex-1"
-                                            onClick={() => handleGenerateClick(employee)}
-                                        >
-                                            Generate Attendance
-                                        </Button>
-                                    )}
-                                    {!employee.on_leave && employee.existing_attendance && employee.schedule && (
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            className="flex-1"
-                                            onClick={() => handleEditClick(employee)}
-                                        >
-                                            <Pencil className="h-4 w-4 mr-1" />
-                                            Edit Record
-                                        </Button>
-                                    )}
-                                </div>
-                            )}
+                                ))}
+                            </div>
                         </div>
                     ))}
-
-                    {employees.length === 0 && (
+                    {groupedEmployees.length === 0 && (
                         <div className="py-12 text-center text-gray-500 border rounded-lg bg-card">
                             No employees expected to work today
                         </div>

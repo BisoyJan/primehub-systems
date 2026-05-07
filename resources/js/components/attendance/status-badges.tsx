@@ -38,7 +38,7 @@ interface AttendanceStatusProps {
     adminVerified?: boolean;
     overtimeMinutes?: number;
     overtimeApproved?: boolean;
-    warnings?: string[];
+    warnings?: unknown[];
     /** Show "On Leave (Manual)" label when status is on_leave */
     showManualLeaveLabel?: boolean;
 }
@@ -114,7 +114,7 @@ export const getStatusBadges = (record: {
     admin_verified?: boolean;
     overtime_minutes?: number;
     overtime_approved?: boolean;
-    warnings?: string[];
+    warnings?: unknown[];
 }) => {
     return (
         <AttendanceStatusBadges

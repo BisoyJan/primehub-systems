@@ -3,21 +3,20 @@
 namespace App\Http\Controllers;
 
 use App\Models\Attendance;
+use App\Models\AttendancePoint;
 use App\Models\BiometricRecord;
+use App\Models\Campaign;
+use App\Models\EmployeeSchedule;
 use App\Models\User;
 use App\Services\AttendanceProcessor;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
 class BiometricReprocessingController extends Controller
 {
-    protected AttendanceProcessor $processor;
-
-    public function __construct(AttendanceProcessor $processor)
-    {
-        $this->processor = $processor;
-    }
+    public function __construct(protected AttendanceProcessor $processor) {}
 
     /**
      * Display the reprocessing interface
@@ -41,7 +40,7 @@ class BiometricReprocessingController extends Controller
             ]);
 
         // Get campaigns
-        $campaigns = \App\Models\Campaign::orderBy('name')->get(['id', 'name']);
+        $campaigns = Campaign::orderBy('name')->get(['id', 'name']);
 
         return Inertia::render('Attendance/BiometricRecords/Reprocessing', [
             'stats' => [
@@ -88,7 +87,7 @@ class BiometricReprocessingController extends Controller
         if ($request->filled('campaign_ids')) {
             $campaignIds = array_filter(explode(',', $request->campaign_ids));
             if (count($campaignIds) > 0) {
-                $campaignUserIds = \App\Models\EmployeeSchedule::whereIn('campaign_id', $campaignIds)
+                $campaignUserIds = EmployeeSchedule::whereIn('campaign_id', $campaignIds)
                     ->pluck('user_id')
                     ->unique()
                     ->toArray();
@@ -115,10 +114,19 @@ class BiometricReprocessingController extends Controller
     {
         $request->validate([
             'start_date' => 'required|date',
-            'end_date' => 'required|date|after_or_equal:start_date',
-            'user_ids' => 'nullable|array',
+            'end_date' => [
+                'required',
+                'date',
+                'after_or_equal:start_date',
+                function (string $attr, mixed $value, \Closure $fail) use ($request): void {
+                    if (Carbon::parse($value)->diffInDays(Carbon::parse($request->start_date)) > 365) {
+                        $fail('Reprocess date range cannot exceed 1 year.');
+                    }
+                },
+            ],
+            'user_ids' => 'nullable|array|max:500',
             'user_ids.*' => 'exists:users,id',
-            'campaign_ids' => 'nullable|array',
+            'campaign_ids' => 'nullable|array|max:500',
             'campaign_ids.*' => 'exists:campaigns,id',
         ]);
 
@@ -133,7 +141,7 @@ class BiometricReprocessingController extends Controller
         }
         // Filter by campaigns if provided (get users from those campaigns' schedules)
         elseif ($request->campaign_ids && count($request->campaign_ids) > 0) {
-            $campaignUserIds = \App\Models\EmployeeSchedule::whereIn('campaign_id', $request->campaign_ids)
+            $campaignUserIds = EmployeeSchedule::whereIn('campaign_id', $request->campaign_ids)
                 ->pluck('user_id')
                 ->unique()
                 ->toArray();
@@ -170,10 +178,19 @@ class BiometricReprocessingController extends Controller
     {
         $request->validate([
             'start_date' => 'required|date',
-            'end_date' => 'required|date|after_or_equal:start_date',
-            'user_ids' => 'nullable|array',
+            'end_date' => [
+                'required',
+                'date',
+                'after_or_equal:start_date',
+                function (string $attr, mixed $value, \Closure $fail) use ($request): void {
+                    if (Carbon::parse($value)->diffInDays(Carbon::parse($request->start_date)) > 365) {
+                        $fail('Reprocess date range cannot exceed 1 year.');
+                    }
+                },
+            ],
+            'user_ids' => 'nullable|array|max:500',
             'user_ids.*' => 'exists:users,id',
-            'campaign_ids' => 'nullable|array',
+            'campaign_ids' => 'nullable|array|max:500',
             'campaign_ids.*' => 'exists:campaigns,id',
             'delete_existing' => 'boolean',
         ]);
@@ -189,7 +206,7 @@ class BiometricReprocessingController extends Controller
         if ($request->user_ids && count($request->user_ids) > 0) {
             $userIds = $request->user_ids;
         } elseif ($request->campaign_ids && count($request->campaign_ids) > 0) {
-            $userIds = \App\Models\EmployeeSchedule::whereIn('campaign_id', $request->campaign_ids)
+            $userIds = EmployeeSchedule::whereIn('campaign_id', $request->campaign_ids)
                 ->pluck('user_id')
                 ->unique()
                 ->toArray();
@@ -226,12 +243,22 @@ class BiometricReprocessingController extends Controller
                     continue;
                 }
 
-                // Delete existing attendance if requested, but preserve admin-verified records
+                // Delete existing attendance if requested, but preserve admin-verified records.
+                // IMPORTANT: also delete any child AttendancePoint rows for those
+                // attendances. Without this cascade, the points (NCNS / FTN / tardy / etc.)
+                // become orphans that keep counting against the user's totals while
+                // referencing a deleted attendance_id.
                 if ($deleteExisting) {
-                    Attendance::where('user_id', $user->id)
+                    $deletedAttendanceIds = Attendance::where('user_id', $user->id)
                         ->whereBetween('shift_date', [$startDate, $endDate])
-                        ->where('admin_verified', false) // Only delete unverified records
-                        ->delete();
+                        ->where('admin_verified', false)
+                        ->pluck('id');
+
+                    if ($deletedAttendanceIds->isNotEmpty()) {
+                        AttendancePoint::whereIn('attendance_id', $deletedAttendanceIds)->delete();
+
+                        Attendance::whereIn('id', $deletedAttendanceIds)->delete();
+                    }
                 }
 
                 // Normalize the user's name for matching (same as upload process)
@@ -260,7 +287,7 @@ class BiometricReprocessingController extends Controller
                     'error' => $e->getMessage(),
                 ];
 
-                \Log::error('Reprocessing failed for user', [
+                Log::error('Reprocessing failed for user', [
                     'user_id' => $user->id,
                     'error' => $e->getMessage(),
                     'trace' => $e->getTraceAsString(),
@@ -320,40 +347,47 @@ class BiometricReprocessingController extends Controller
                 $att->status = 'failed_bio_in';
                 $att->secondary_status = null;
             } elseif ($hasTimeIn && ! $hasTimeOut) {
-                // Calculate tardiness
+                // Calculate tardiness honoring the schedule's grace period as a
+                // forgiveness window. Mirrors AttendanceProcessor::
+                // determineTimeInStatus(): tardy_minutes <= grace ⇒ on_time;
+                // beyond grace ⇒ tardy. half_day_absence is never auto-applied.
                 $shiftDate = is_string($att->shift_date) ? $att->shift_date : $att->shift_date->format('Y-m-d');
                 $scheduledIn = Carbon::parse($shiftDate.' '.$att->employeeSchedule->scheduled_time_in);
                 $actualIn = Carbon::parse($att->actual_time_in);
                 $tardyMins = (int) $scheduledIn->diffInMinutes($actualIn, false);
+                $gracePeriod = (int) ($att->employeeSchedule->grace_period_minutes ?? 0);
 
                 if ($tardyMins <= 0 || $actualIn->lessThanOrEqualTo($scheduledIn)) {
-                    $att->status = 'failed_bio_out'; // On time but missing out
+                    $att->status = 'failed_bio_out';
                     $att->secondary_status = null;
                     $att->tardy_minutes = null;
-                } elseif ($tardyMins >= 1 && $tardyMins <= 15) {
-                    $att->status = 'tardy'; // Keep tardy as primary
-                    $att->secondary_status = 'failed_bio_out'; // Add missing out as secondary
+                } elseif ($tardyMins > $gracePeriod) {
+                    $att->status = 'tardy';
+                    $att->secondary_status = 'failed_bio_out';
                     $att->tardy_minutes = $tardyMins;
                 } else {
-                    $att->status = 'half_day_absence'; // Keep half day as primary
-                    $att->secondary_status = 'failed_bio_out'; // Add missing out as secondary
+                    // Within grace window — no penalty, but bio-out still missing.
+                    $att->status = 'failed_bio_out';
+                    $att->secondary_status = null;
                     $att->tardy_minutes = $tardyMins;
                 }
             } elseif ($hasTimeIn && $hasTimeOut) {
-                // Both exist, recalculate full status
+                // Both exist, recalculate full status honoring grace as forgiveness.
                 $shiftDate = is_string($att->shift_date) ? $att->shift_date : Carbon::parse($att->shift_date)->format('Y-m-d');
                 $scheduledIn = Carbon::parse($shiftDate.' '.$att->employeeSchedule->scheduled_time_in);
                 $actualIn = Carbon::parse($att->actual_time_in);
                 $tardyMins = (int) $scheduledIn->diffInMinutes($actualIn, false);
+                $gracePeriod = (int) ($att->employeeSchedule->grace_period_minutes ?? 0);
 
                 if ($tardyMins <= 0 || $actualIn->lessThanOrEqualTo($scheduledIn)) {
                     $att->status = 'on_time';
                     $att->tardy_minutes = null;
-                } elseif ($tardyMins >= 1 && $tardyMins <= 15) {
+                } elseif ($tardyMins > $gracePeriod) {
                     $att->status = 'tardy';
                     $att->tardy_minutes = $tardyMins;
                 } else {
-                    $att->status = 'half_day_absence';
+                    // Within grace — record raw lateness, but no penalty.
+                    $att->status = 'on_time';
                     $att->tardy_minutes = $tardyMins;
                 }
 

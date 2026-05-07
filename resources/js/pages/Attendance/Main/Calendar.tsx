@@ -68,7 +68,7 @@ interface AttendanceRecord {
     admin_verified: boolean;
     verification_notes?: string;
     notes?: string;
-    warnings?: string[];
+    warnings?: { type: string; message: string; severity: string; raised_at: string }[];
 }
 
 interface PageProps extends SharedData {

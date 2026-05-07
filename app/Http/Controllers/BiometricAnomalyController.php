@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Attendance;
 use App\Models\BiometricRecord;
 use App\Services\BiometricAnomalyDetector;
 use Carbon\Carbon;
@@ -241,13 +242,30 @@ class BiometricAnomalyController extends Controller
             return 0;
         }
 
-        // Flag attendance records for these users in the date range
-        $flaggedCount = \App\Models\Attendance::whereIn('user_id', array_unique($highSeverityUserIds))
+        // Flag attendance records for these users in the date range. We iterate
+        // models (instead of a raw CONCAT mass update) so we can:
+        //   1. Skip records that already carry the auto-flag banner (idempotent
+        //      reruns no longer duplicate the line).
+        //   2. Avoid driver-specific SQL and keep activity-log dirty tracking.
+        $banner = '[AUTO-FLAGGED] High severity biometric anomaly detected';
+
+        $candidates = Attendance::whereIn('user_id', array_unique($highSeverityUserIds))
             ->whereBetween('shift_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
-            ->where('admin_verified', false) // Only flag unverified records
-            ->update([
-                'verification_notes' => \DB::raw("CONCAT(COALESCE(verification_notes, ''), '\\n[AUTO-FLAGGED] High severity biometric anomaly detected')"),
-            ]);
+            ->where('admin_verified', false)
+            ->get();
+
+        foreach ($candidates as $attendance) {
+            $existingNotes = (string) ($attendance->verification_notes ?? '');
+            if (str_contains($existingNotes, $banner)) {
+                continue;
+            }
+
+            $attendance->verification_notes = $existingNotes === ''
+                ? $banner
+                : $existingNotes."\n".$banner;
+            $attendance->save();
+            $flaggedCount++;
+        }
 
         return $flaggedCount;
     }

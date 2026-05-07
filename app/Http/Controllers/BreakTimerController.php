@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\BreakSessionRequest;
+use App\Http\Traits\RedirectsWithFlashMessages;
 use App\Models\BreakSession;
 use App\Services\BreakTimerService;
 use Illuminate\Database\QueryException;
@@ -13,6 +14,8 @@ use Inertia\Inertia;
 
 class BreakTimerController extends Controller
 {
+    use RedirectsWithFlashMessages;
+
     public function __construct(protected BreakTimerService $breakTimerService) {}
 
     public function index()
@@ -52,10 +55,7 @@ class BreakTimerController extends Controller
         $today = $this->breakTimerService->getShiftDate($policy);
 
         if (! $policy) {
-            return redirect()->back()->with('flash', [
-                'message' => 'No active break policy found. Contact your administrator.',
-                'type' => 'error',
-            ]);
+            return $this->backWithFlash('No active break policy found. Contact your administrator.', 'error');
         }
 
         try {
@@ -94,38 +94,24 @@ class BreakTimerController extends Controller
                 return $duration;
             });
 
-            return redirect()->back()->with('flash', [
-                'message' => ucfirst(str_replace('_', ' ', $result['type'])).' started.',
-                'type' => 'success',
-            ]);
-        } catch (\RuntimeException $e) {
-            return redirect()->back()->with('flash', [
-                'message' => $e->getMessage(),
-                'type' => 'error',
-            ]);
+            return $this->backWithFlash(ucfirst(str_replace('_', ' ', $result['type'])).' started.');
         } catch (QueryException $e) {
             // 1062 = MySQL duplicate-key on `break_sessions_active_guard_unique`.
             // Means a parallel request beat this one to start a session.
+            // NOTE: QueryException extends RuntimeException, so this must come first.
             if ((int) ($e->errorInfo[1] ?? 0) === 1062) {
-                return redirect()->back()->with('flash', [
-                    'message' => 'You already have an active break/lunch session.',
-                    'type' => 'error',
-                ]);
+                return $this->backWithFlash('You already have an active break/lunch session.', 'error');
             }
 
             Log::error('BreakTimer Start DB Error: '.$e->getMessage());
 
-            return redirect()->back()->with('flash', [
-                'message' => 'Failed to start break. Please try again.',
-                'type' => 'error',
-            ]);
+            return $this->backWithFlash('Failed to start break. Please try again.', 'error');
+        } catch (\RuntimeException $e) {
+            return $this->backWithFlash($e->getMessage(), 'error');
         } catch (\Exception $e) {
             Log::error('BreakTimer Start Error: '.$e->getMessage());
 
-            return redirect()->back()->with('flash', [
-                'message' => 'Failed to start break. Please try again.',
-                'type' => 'error',
-            ]);
+            return $this->backWithFlash('Failed to start break. Please try again.', 'error');
         }
     }
 
@@ -140,26 +126,17 @@ class BreakTimerController extends Controller
         }
 
         if ($breakSession->status !== 'active') {
-            return redirect()->back()->with('flash', [
-                'message' => 'This session is not active.',
-                'type' => 'error',
-            ]);
+            return $this->backWithFlash('This session is not active.', 'error');
         }
 
         try {
             $this->breakTimerService->pauseSession($breakSession, $request->input('reason'));
 
-            return redirect()->back()->with('flash', [
-                'message' => 'Timer paused.',
-                'type' => 'success',
-            ]);
+            return $this->backWithFlash('Timer paused.');
         } catch (\Exception $e) {
             Log::error('BreakTimer Pause Error: '.$e->getMessage());
 
-            return redirect()->back()->with('flash', [
-                'message' => 'Failed to pause timer.',
-                'type' => 'error',
-            ]);
+            return $this->backWithFlash('Failed to pause timer.', 'error');
         }
     }
 
@@ -170,26 +147,17 @@ class BreakTimerController extends Controller
         }
 
         if ($breakSession->status !== 'paused') {
-            return redirect()->back()->with('flash', [
-                'message' => 'This session is not paused.',
-                'type' => 'error',
-            ]);
+            return $this->backWithFlash('This session is not paused.', 'error');
         }
 
         try {
             $this->breakTimerService->resumeSession($breakSession);
 
-            return redirect()->back()->with('flash', [
-                'message' => 'Timer resumed.',
-                'type' => 'success',
-            ]);
+            return $this->backWithFlash('Timer resumed.');
         } catch (\Exception $e) {
             Log::error('BreakTimer Resume Error: '.$e->getMessage());
 
-            return redirect()->back()->with('flash', [
-                'message' => 'Failed to resume timer.',
-                'type' => 'error',
-            ]);
+            return $this->backWithFlash('Failed to resume timer.', 'error');
         }
     }
 
@@ -200,26 +168,17 @@ class BreakTimerController extends Controller
         }
 
         if (! in_array($breakSession->status, ['active', 'paused'])) {
-            return redirect()->back()->with('flash', [
-                'message' => 'This session is already ended.',
-                'type' => 'error',
-            ]);
+            return $this->backWithFlash('This session is already ended.', 'error');
         }
 
         try {
             $this->breakTimerService->endSession($breakSession);
 
-            return redirect()->back()->with('flash', [
-                'message' => 'Break ended successfully.',
-                'type' => 'success',
-            ]);
+            return $this->backWithFlash('Break ended successfully.');
         } catch (\Exception $e) {
             Log::error('BreakTimer End Error: '.$e->getMessage());
 
-            return redirect()->back()->with('flash', [
-                'message' => 'Failed to end break.',
-                'type' => 'error',
-            ]);
+            return $this->backWithFlash('Failed to end break.', 'error');
         }
     }
 
@@ -236,17 +195,11 @@ class BreakTimerController extends Controller
         try {
             $this->breakTimerService->resetShift($user->id, $today, $request->input('approval'));
 
-            return redirect()->back()->with('flash', [
-                'message' => 'Shift reset successfully.',
-                'type' => 'success',
-            ]);
+            return $this->backWithFlash('Shift reset successfully.');
         } catch (\Exception $e) {
             Log::error('BreakTimer Reset Error: '.$e->getMessage());
 
-            return redirect()->back()->with('flash', [
-                'message' => 'Failed to reset shift.',
-                'type' => 'error',
-            ]);
+            return $this->backWithFlash('Failed to reset shift.', 'error');
         }
     }
 
@@ -260,40 +213,19 @@ class BreakTimerController extends Controller
             ->forUser($user->id)
             ->forDate($today)
             ->active()
-            ->with('breakEvents')
             ->first();
 
         if (! $activeSession) {
             return response()->json(['active' => false]);
         }
 
-        // Calculate real-time remaining seconds
-        $totalPaused = $activeSession->total_paused_seconds;
-        if ($activeSession->status === 'paused') {
-            $lastPauseEvent = $activeSession->breakEvents()
-                ->where('action', 'pause')
-                ->latest('occurred_at')
-                ->first();
-
-            if ($lastPauseEvent) {
-                $totalPaused += now()->diffInSeconds($lastPauseEvent->occurred_at);
-            }
-        }
-
-        $elapsed = $activeSession->status === 'paused'
-            ? $activeSession->duration_seconds - $activeSession->remaining_seconds
-            : now()->diffInSeconds($activeSession->started_at) - $totalPaused;
-
-        $remaining = max(0, $activeSession->duration_seconds - $elapsed);
-        $overage = $elapsed > $activeSession->duration_seconds
-            ? $elapsed - $activeSession->duration_seconds
-            : 0;
+        $timing = $this->breakTimerService->getSessionTimingSnapshot($activeSession);
 
         return response()->json([
             'active' => true,
             'session' => $activeSession,
-            'remaining_seconds' => $remaining,
-            'overage_seconds' => $overage,
+            'remaining_seconds' => $timing['remaining_seconds'],
+            'overage_seconds' => $timing['overage_seconds'],
         ]);
     }
 }

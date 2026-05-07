@@ -124,7 +124,7 @@ class BreakTimerTest extends TestCase
             ]);
 
         $response->assertRedirect();
-        $response->assertSessionHas('flash.type', 'error');
+        $response->assertSessionHas('type', 'error');
     }
 
     #[Test]
@@ -162,7 +162,7 @@ class BreakTimerTest extends TestCase
             ]);
 
         $response->assertRedirect();
-        $response->assertSessionHas('flash.type', 'error');
+        $response->assertSessionHas('type', 'error');
     }
 
     #[Test]
@@ -181,7 +181,7 @@ class BreakTimerTest extends TestCase
             ]);
 
         $response->assertRedirect();
-        $response->assertSessionHas('flash.type', 'error');
+        $response->assertSessionHas('type', 'error');
     }
 
     #[Test]
@@ -199,7 +199,7 @@ class BreakTimerTest extends TestCase
             ]);
 
         $response->assertRedirect();
-        $response->assertSessionHas('flash.type', 'success');
+        $response->assertSessionHas('type', 'success');
 
         $session->refresh();
         $this->assertEquals('paused', $session->status);
@@ -243,7 +243,7 @@ class BreakTimerTest extends TestCase
             ->post(route('break-timer.resume', $session));
 
         $response->assertRedirect();
-        $response->assertSessionHas('flash.type', 'success');
+        $response->assertSessionHas('type', 'success');
 
         $session->refresh();
         $this->assertEquals('active', $session->status);
@@ -264,7 +264,7 @@ class BreakTimerTest extends TestCase
             ->post(route('break-timer.end', $session));
 
         $response->assertRedirect();
-        $response->assertSessionHas('flash.type', 'success');
+        $response->assertSessionHas('type', 'success');
 
         $session->refresh();
         $this->assertContains($session->status, ['completed', 'overage']);
@@ -310,7 +310,7 @@ class BreakTimerTest extends TestCase
             ]);
 
         $response->assertRedirect();
-        $response->assertSessionHas('flash.type', 'success');
+        $response->assertSessionHas('type', 'success');
 
         // Sessions are preserved with 'reset' status (not deleted)
         $this->assertEquals(2, BreakSession::where('user_id', $this->user->id)->count());

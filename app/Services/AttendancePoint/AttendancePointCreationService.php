@@ -287,7 +287,7 @@ class AttendancePointCreationService
         $scheduledOut = $attendance->scheduled_time_out ? Carbon::parse($attendance->scheduled_time_out)->format('H:i') : 'N/A';
         $actualIn = $attendance->actual_time_in ? $attendance->actual_time_in->format('H:i') : 'No scan';
         $actualOut = $attendance->actual_time_out ? $attendance->actual_time_out->format('H:i') : 'No scan';
-        $gracePeriod = $attendance->employeeSchedule?->grace_period_minutes ?? 15;
+        $gracePeriod = $attendance->employeeSchedule?->grace_period_minutes ?? 0;
 
         return match ($attendance->status) {
             'ncns' => $attendance->is_advised

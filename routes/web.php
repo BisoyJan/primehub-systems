@@ -194,26 +194,26 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
             Route::get('/calendar/{user?}', [AttendanceController::class, 'calendar'])->name('calendar');
             Route::get('/create', [AttendanceController::class, 'create'])->name('create')->middleware('permission:attendance.create');
             Route::post('/', [AttendanceController::class, 'store'])->name('store')->middleware('permission:attendance.create');
-            Route::post('/bulk', [AttendanceController::class, 'bulkStore'])->name('bulkStore')->middleware('permission:attendance.create');
+            Route::post('/bulk', [AttendanceController::class, 'bulkStore'])->name('bulkStore')->middleware(['permission:attendance.create', 'throttle:10,1']);
             Route::get('import', [AttendanceController::class, 'import'])->name('import')->middleware('permission:attendance.import');
-            Route::post('preview-upload', [AttendanceController::class, 'previewUpload'])->name('previewUpload')->middleware('permission:attendance.import');
-            Route::post('upload', [AttendanceController::class, 'upload'])->name('upload')->middleware('permission:attendance.import');
+            Route::post('preview-upload', [AttendanceController::class, 'previewUpload'])->name('previewUpload')->middleware(['permission:attendance.import', 'throttle:10,1']);
+            Route::post('upload', [AttendanceController::class, 'upload'])->name('upload')->middleware(['permission:attendance.import', 'throttle:10,1']);
             Route::get('review', [AttendanceController::class, 'review'])->name('review')->middleware('permission:attendance.review');
             Route::post('{attendance}/verify', [AttendanceController::class, 'verify'])->name('verify')->middleware('permission:attendance.verify');
-            Route::post('batch-verify', [AttendanceController::class, 'batchVerify'])->name('batchVerify')->middleware('permission:attendance.verify');
+            Route::post('batch-verify', [AttendanceController::class, 'batchVerify'])->name('batchVerify')->middleware(['permission:attendance.verify', 'throttle:10,1']);
             Route::post('{attendance}/mark-advised', [AttendanceController::class, 'markAdvised'])->name('markAdvised')->middleware('permission:attendance.approve');
             Route::post('{attendance}/quick-approve', [AttendanceController::class, 'quickApprove'])->name('quickApprove')->middleware('permission:attendance.approve');
-            Route::post('bulk-quick-approve', [AttendanceController::class, 'bulkQuickApprove'])->name('bulkQuickApprove')->middleware('permission:attendance.approve');
+            Route::post('bulk-quick-approve', [AttendanceController::class, 'bulkQuickApprove'])->name('bulkQuickApprove')->middleware(['permission:attendance.approve', 'throttle:10,1']);
             Route::get('statistics', [AttendanceController::class, 'statistics'])->name('statistics')->middleware('permission:attendance.statistics');
-            Route::delete('bulk-delete', [AttendanceController::class, 'bulkDelete'])->name('bulkDelete')->middleware('permission:attendance.delete');
+            Route::delete('bulk-delete', [AttendanceController::class, 'bulkDelete'])->name('bulkDelete')->middleware(['permission:attendance.delete', 'throttle:10,1']);
 
             // Daily Roster
             Route::get('daily-roster', [AttendanceController::class, 'dailyRoster'])->name('dailyRoster')->middleware('permission:attendance.create');
             Route::post('generate', [AttendanceController::class, 'generateAttendance'])->name('generate')->middleware('permission:attendance.create');
 
             // Partial Approval (Time Out pending)
-            Route::post('{attendance}/partial-approve', [AttendanceController::class, 'partialApprove'])->name('partialApprove')->middleware('permission:attendance.verify');
-            Route::post('batch-partial-approve', [AttendanceController::class, 'batchPartialApprove'])->name('batchPartialApprove')->middleware('permission:attendance.verify');
+            Route::post('{attendance}/partial-approve', [AttendanceController::class, 'partialApprove'])->name('partialApprove')->middleware(['permission:attendance.verify', 'throttle:10,1']);
+            Route::post('batch-partial-approve', [AttendanceController::class, 'batchPartialApprove'])->name('batchPartialApprove')->middleware(['permission:attendance.verify', 'throttle:10,1']);
 
             // Undertime Approval Workflow
             Route::post('{attendance}/request-undertime-approval', [AttendanceController::class, 'requestUndertimeApproval'])->name('requestUndertimeApproval')->middleware('permission:attendance.request_undertime_approval');
@@ -291,43 +291,82 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
         });
 
     // Attendance Points
-    Route::prefix('attendance-points')->name('attendance-points.')
-        ->middleware('permission:attendance_points.view,attendance_points.create,attendance_points.edit,attendance_points.delete,attendance_points.excuse,attendance_points.export,attendance_points.rescan')
-        ->group(function () {
-            Route::get('/', [AttendancePointController::class, 'index'])->name('index');
-            Route::post('/', [AttendancePointController::class, 'store'])->name('store');
-            Route::post('/rescan', [AttendancePointController::class, 'rescan'])->name('rescan');
+    // Per-route permission gates (previously a single OR-group permitted any caller with `view`
+    // to hit destroy/excuse/management endpoints).
+    Route::prefix('attendance-points')->name('attendance-points.')->group(function () {
+        Route::get('/', [AttendancePointController::class, 'index'])
+            ->middleware('permission:attendance_points.view')->name('index');
+        Route::post('/', [AttendancePointController::class, 'store'])
+            ->middleware('permission:attendance_points.create')->name('store');
+        Route::post('/rescan', [AttendancePointController::class, 'rescan'])
+            ->middleware('permission:attendance_points.rescan')->name('rescan');
 
-            // Job-based Excel exports (all employees)
-            Route::post('/start-export-all-excel', [AttendancePointController::class, 'startExportAllExcel'])->name('start-export-all-excel');
-            Route::get('/export-all-excel/status/{jobId}', [AttendancePointController::class, 'checkExportAllExcelStatus'])->name('export-all-excel.status');
-            Route::get('/export-all-excel/download/{jobId}', [AttendancePointController::class, 'downloadExportAllExcel'])->name('export-all-excel.download');
+        // Job-based Excel exports (all employees)
+        Route::post('/start-export-all-excel', [AttendancePointController::class, 'startExportAllExcel'])
+            ->middleware('permission:attendance_points.export')->name('start-export-all-excel');
+        Route::get('/export-all-excel/status/{jobId}', [AttendancePointController::class, 'checkExportAllExcelStatus'])
+            ->middleware('permission:attendance_points.export')->name('export-all-excel.status');
+        Route::get('/export-all-excel/download/{jobId}', [AttendancePointController::class, 'downloadExportAllExcel'])
+            ->middleware('permission:attendance_points.export')->name('export-all-excel.download');
 
-            // Management actions (admin only) - MUST be before {user} routes
-            Route::get('/management/stats', [AttendancePointController::class, 'managementStats'])->name('management.stats');
-            Route::post('/management/remove-duplicates', [AttendancePointController::class, 'removeDuplicates'])->name('management.remove-duplicates');
-            Route::post('/management/expire-all', [AttendancePointController::class, 'expireAllPending'])->name('management.expire-all');
-            Route::post('/management/reset-expired', [AttendancePointController::class, 'resetExpired'])->name('management.reset-expired');
-            Route::post('/management/regenerate', [AttendancePointController::class, 'regeneratePoints'])->name('management.regenerate');
-            Route::post('/management/cleanup', [AttendancePointController::class, 'cleanup'])->name('management.cleanup');
-            Route::post('/management/initialize-gbro-dates', [AttendancePointController::class, 'initializeGbroDates'])->name('management.initialize-gbro-dates');
-            Route::post('/management/fix-gbro-dates', [AttendancePointController::class, 'fixGbroDates'])->name('management.fix-gbro-dates');
+        // Management actions (admin only) - declared BEFORE {user} routes to avoid wildcard collision.
+        Route::prefix('management')->name('management.')
+            ->middleware('permission:attendance_points.manage')
+            ->group(function () {
+                Route::get('/stats', [AttendancePointController::class, 'managementStats'])->name('stats');
+                Route::post('/remove-duplicates', [AttendancePointController::class, 'removeDuplicates'])->name('remove-duplicates');
+                Route::post('/expire-all', [AttendancePointController::class, 'expireAllPending'])->name('expire-all');
+                Route::post('/reset-expired', [AttendancePointController::class, 'resetExpired'])->name('reset-expired');
+                Route::post('/regenerate', [AttendancePointController::class, 'regeneratePoints'])->name('regenerate');
+                Route::post('/cleanup', [AttendancePointController::class, 'cleanup'])->name('cleanup');
+                Route::post('/initialize-gbro-dates', [AttendancePointController::class, 'initializeGbroDates'])->name('initialize-gbro-dates');
+                Route::post('/fix-gbro-dates', [AttendancePointController::class, 'fixGbroDates'])->name('fix-gbro-dates');
+            });
 
-            Route::get('/{user}', [AttendancePointController::class, 'show'])->name('show');
-            Route::get('/{user}/statistics', [AttendancePointController::class, 'statistics'])->name('statistics');
-            Route::get('/{user}/export', [AttendancePointController::class, 'export'])->name('export');
-            Route::post('/{user}/recalculate-gbro', [AttendancePointController::class, 'recalculateGbro'])->name('recalculate-gbro');
+        // Streak leaderboard (Audit feature 5.2) — declared BEFORE {user} routes.
+        Route::get('/leaderboard', [AttendancePointController::class, 'leaderboard'])
+            ->middleware('permission:attendance_points.view')->name('leaderboard');
 
-            // Job-based Excel exports (single user)
-            Route::post('/{user}/start-export-excel', [AttendancePointController::class, 'startExportExcel'])->name('start-export-excel');
-            Route::get('/export-excel/status/{jobId}', [AttendancePointController::class, 'checkExportExcelStatus'])->name('export-excel.status');
-            Route::get('/export-excel/download/{jobId}', [AttendancePointController::class, 'downloadExportExcel'])->name('export-excel.download');
+        // Per-user routes — numeric constraint prevents wildcard collisions.
+        Route::get('/{user}', [AttendancePointController::class, 'show'])
+            ->where('user', '[0-9]+')
+            ->middleware('permission:attendance_points.view')->name('show');
+        Route::get('/{user}/statistics', [AttendancePointController::class, 'statistics'])
+            ->where('user', '[0-9]+')
+            ->middleware('permission:attendance_points.view')->name('statistics');
+        Route::get('/{user}/streak', [AttendancePointController::class, 'streak'])
+            ->where('user', '[0-9]+')
+            ->middleware('permission:attendance_points.view')->name('streak');
+        Route::get('/{user}/export', [AttendancePointController::class, 'export'])
+            ->where('user', '[0-9]+')
+            ->middleware('permission:attendance_points.export')->name('export');
+        Route::post('/{user}/recalculate-gbro', [AttendancePointController::class, 'recalculateGbro'])
+            ->where('user', '[0-9]+')
+            ->middleware('permission:attendance_points.manage')->name('recalculate-gbro');
 
-            Route::put('/{point}', [AttendancePointController::class, 'update'])->name('update');
-            Route::delete('/{point}', [AttendancePointController::class, 'destroy'])->name('destroy');
-            Route::post('/{point}/excuse', [AttendancePointController::class, 'excuse'])->name('excuse');
-            Route::post('/{point}/unexcuse', [AttendancePointController::class, 'unexcuse'])->name('unexcuse');
-        });
+        // Job-based Excel exports (single user)
+        Route::post('/{user}/start-export-excel', [AttendancePointController::class, 'startExportExcel'])
+            ->where('user', '[0-9]+')
+            ->middleware('permission:attendance_points.export')->name('start-export-excel');
+        Route::get('/export-excel/status/{jobId}', [AttendancePointController::class, 'checkExportExcelStatus'])
+            ->middleware('permission:attendance_points.export')->name('export-excel.status');
+        Route::get('/export-excel/download/{jobId}', [AttendancePointController::class, 'downloadExportExcel'])
+            ->middleware('permission:attendance_points.export')->name('export-excel.download');
+
+        // Per-point routes — numeric constraint prevents wildcard collisions.
+        Route::put('/{point}', [AttendancePointController::class, 'update'])
+            ->where('point', '[0-9]+')
+            ->middleware('permission:attendance_points.edit')->name('update');
+        Route::delete('/{point}', [AttendancePointController::class, 'destroy'])
+            ->where('point', '[0-9]+')
+            ->middleware('permission:attendance_points.delete')->name('destroy');
+        Route::post('/{point}/excuse', [AttendancePointController::class, 'excuse'])
+            ->where('point', '[0-9]+')
+            ->middleware('permission:attendance_points.excuse')->name('excuse');
+        Route::post('/{point}/unexcuse', [AttendancePointController::class, 'unexcuse'])
+            ->where('point', '[0-9]+')
+            ->middleware('permission:attendance_points.excuse')->name('unexcuse');
+    });
 
     // Biometric Retention Policies
     Route::prefix('biometric-retention-policies')->name('biometric-retention-policies.')

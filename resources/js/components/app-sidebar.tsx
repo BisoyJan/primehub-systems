@@ -25,7 +25,7 @@ import { index as breakTimerIndex, dashboard as breakDashboard, reports as break
 import { index as breakPoliciesIndex } from '@/routes/break-timer/policies'
 import { index as databaseBackupsIndex } from '@/routes/database-backups'
 import { Link } from '@inertiajs/react';
-import { ArrowUpDown, CalendarCheck, ClipboardCheck, Computer, CpuIcon, CreditCard, Database, DatabaseBackup, LayoutGrid, Microchip, User, Wrench, Clock, Award, Plane, LucideIcon, AlertCircle, Pill, Activity, Settings, Shield, FileText, Timer, BarChart3, Coffee, UserMinus } from 'lucide-react';
+import { ArrowUpDown, CalendarCheck, ClipboardCheck, Computer, CpuIcon, CreditCard, Database, DatabaseBackup, LayoutGrid, Microchip, User, Wrench, Clock, Award, Plane, LucideIcon, AlertCircle, Pill, Activity, Settings, Shield, FileText, Timer, BarChart3, Coffee, UserMinus, Trophy } from 'lucide-react';
 import AppLogo from './app-logo';
 import { usePermission } from '@/hooks/useAuthorization';
 import type { NavItem } from '@/types';
@@ -132,6 +132,14 @@ const getNavigationConfig = (userId: number, userRole: string, coachingPendingAc
                     title: 'Attendance Points',
                     href: attendancePointsHref,
                     icon: Award,
+                    permission: 'attendance.view',
+                },
+                {
+                    title: isRestrictedUser ? 'My Streak' : 'Streak Leaderboard',
+                    href: isRestrictedUser
+                        ? `/attendance-points/${userId}/streak`
+                        : '/attendance-points/leaderboard',
+                    icon: Trophy,
                     permission: 'attendance.view',
                 },
                 {

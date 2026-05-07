@@ -67,7 +67,7 @@ class AttendanceFileParser
 
         // Remove null bytes and other non-printable characters
         $content = str_replace("\0", '', $content);
-        $content = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $content);
+        $content = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $content) ?? $content;
 
         // Normalize line endings (handle Windows CRLF, Mac CR, Unix LF)
         $content = str_replace("\r\n", "\n", $content);
@@ -142,10 +142,10 @@ class AttendanceFileParser
         try {
             // Handle double-space format in datetime: "2025-11-05  05:50:25"
             // Collapse multiple spaces into single space
-            $dateTimeStr = preg_replace('/\s{2,}/', ' ', $dateTimeStr);
+            $dateTimeStr = preg_replace('/\s{2,}/', ' ', $dateTimeStr) ?? $dateTimeStr;
 
             // Additional safety: ensure no hidden characters
-            $dateTimeStr = preg_replace('/[^\d\-\s:]/', '', $dateTimeStr);
+            $dateTimeStr = preg_replace('/[^\d\-\s:]/', '', $dateTimeStr) ?? $dateTimeStr;
             $dateTimeStr = trim($dateTimeStr);
 
             // Remove trailing digits that might be line numbers (e.g., "2025-01-13 22:26:181" -> "2025-01-13 22:26:18")
@@ -160,7 +160,7 @@ class AttendanceFileParser
             $datetime = Carbon::createFromFormat('Y-m-d H:i:s', $dateTimeStr);
 
             if (! $datetime) {
-                \Log::warning('Failed to create Carbon instance', [
+                Log::warning('Failed to create Carbon instance', [
                     'line' => $line,
                     'datetime_str' => $dateTimeStr,
                 ]);
@@ -169,7 +169,7 @@ class AttendanceFileParser
             }
         } catch (\Exception $e) {
             // Log the error for debugging
-            \Log::warning('Failed to parse datetime', [
+            Log::warning('Failed to parse datetime', [
                 'line' => $line,
                 'datetime_str' => $dateTimeStr,
                 'columns_count' => count($columns),
@@ -207,7 +207,7 @@ class AttendanceFileParser
         $normalized = str_replace('-', ' ', $normalized);
 
         // Collapse multiple spaces to single space
-        $normalized = preg_replace('/\s+/', ' ', $normalized);
+        $normalized = preg_replace('/\s+/', ' ', $normalized) ?? $normalized;
 
         // Convert to lowercase for case-insensitive matching
         $normalized = strtolower($normalized);
