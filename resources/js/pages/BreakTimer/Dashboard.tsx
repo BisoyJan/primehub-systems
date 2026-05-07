@@ -62,6 +62,7 @@ interface Stats {
     completed: number;
     overage: number;
     avg_overage_seconds: number;
+    auto_reset_today?: number;
 }
 
 interface Filters {
@@ -274,7 +275,7 @@ export default function BreakTimerDashboard() {
                 <PageHeader title={title} description="Live break session monitoring" />
 
                 {/* Stats Cards */}
-                <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-7">
                     <Card>
                         <CardContent className="flex items-center gap-2.5 p-2.5">
                             <Users className="text-muted-foreground h-7 w-7" />
@@ -326,6 +327,15 @@ export default function BreakTimerDashboard() {
                             <div>
                                 <p className="text-muted-foreground text-xs">Avg Overage</p>
                                 <p className="text-xl font-bold leading-tight">{formatTime(stats.avg_overage_seconds)}</p>
+                            </div>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardContent className="flex items-center gap-2.5 p-2.5">
+                            <Activity className="h-7 w-7 text-orange-500" />
+                            <div>
+                                <p className="text-muted-foreground text-xs">Auto-Reset Today</p>
+                                <p className="text-xl font-bold leading-tight">{stats.auto_reset_today ?? 0}</p>
                             </div>
                         </CardContent>
                     </Card>

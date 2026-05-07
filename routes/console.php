@@ -116,6 +116,15 @@ Schedule::command('break-timer:auto-reset')
     ->withoutOverlapping()
     ->onOneServer();
 
+// Proactively notify admins when an agent goes into overbreak while their session
+// is still active (i.e. before auto-reset eventually closes it). Idempotent via
+// `overbreak_notified_at` — each session triggers at most one admin alert.
+// Priority: LOW - Lightweight query, runs every 5 minutes for timely alerts.
+Schedule::command('break-timer:notify-overbreaks')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->onOneServer();
+
 // ============================================================================
 // EXPIRY NOTIFICATIONS (8:35 AM - 8:45 AM)
 // ============================================================================

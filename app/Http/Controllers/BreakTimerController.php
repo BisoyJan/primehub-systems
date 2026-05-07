@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use App\Http\Requests\BreakSessionRequest;
 use App\Models\BreakSession;
 use App\Services\BreakTimerService;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
@@ -56,38 +58,41 @@ class BreakTimerController extends Controller
             ]);
         }
 
-        // Check for existing active session
-        $existing = BreakSession::query()
-            ->forUser($user->id)
-            ->forDate($today)
-            ->active()
-            ->exists();
-
-        if ($existing) {
-            return redirect()->back()->with('flash', [
-                'message' => 'You already have an active break/lunch session.',
-                'type' => 'error',
-            ]);
-        }
-
         try {
-            $result = $this->breakTimerService->validateAndGetDuration(
-                $validated['type'],
-                $user->id,
-                $today,
-                $policy,
-                $validated['combined_break_count'] ?? null,
-            );
+            // Serialize concurrent start attempts for the same user/shift to prevent
+            // duplicate active sessions from double-submits or multi-tab clicks.
+            $result = DB::transaction(function () use ($user, $today, $policy, $validated) {
+                $existing = BreakSession::query()
+                    ->forUser($user->id)
+                    ->forDate($today)
+                    ->active()
+                    ->lockForUpdate()
+                    ->exists();
 
-            $this->breakTimerService->startSession(
-                $user->id,
-                $result['type'],
-                $result['duration_seconds'],
-                $policy->id,
-                $validated['station'] ?? null,
-                $today,
-                $result['combined_break_count'] ?? null,
-            );
+                if ($existing) {
+                    throw new \RuntimeException('You already have an active break/lunch session.');
+                }
+
+                $duration = $this->breakTimerService->validateAndGetDuration(
+                    $validated['type'],
+                    $user->id,
+                    $today,
+                    $policy,
+                    $validated['combined_break_count'] ?? null,
+                );
+
+                $this->breakTimerService->startSession(
+                    $user->id,
+                    $duration['type'],
+                    $duration['duration_seconds'],
+                    $policy->id,
+                    $validated['station'] ?? null,
+                    $today,
+                    $duration['combined_break_count'] ?? null,
+                );
+
+                return $duration;
+            });
 
             return redirect()->back()->with('flash', [
                 'message' => ucfirst(str_replace('_', ' ', $result['type'])).' started.',
@@ -96,6 +101,22 @@ class BreakTimerController extends Controller
         } catch (\RuntimeException $e) {
             return redirect()->back()->with('flash', [
                 'message' => $e->getMessage(),
+                'type' => 'error',
+            ]);
+        } catch (QueryException $e) {
+            // 1062 = MySQL duplicate-key on `break_sessions_active_guard_unique`.
+            // Means a parallel request beat this one to start a session.
+            if ((int) ($e->errorInfo[1] ?? 0) === 1062) {
+                return redirect()->back()->with('flash', [
+                    'message' => 'You already have an active break/lunch session.',
+                    'type' => 'error',
+                ]);
+            }
+
+            Log::error('BreakTimer Start DB Error: '.$e->getMessage());
+
+            return redirect()->back()->with('flash', [
+                'message' => 'Failed to start break. Please try again.',
                 'type' => 'error',
             ]);
         } catch (\Exception $e) {

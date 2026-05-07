@@ -561,19 +561,19 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
             ->middleware('permission:break_timer.view')
             ->name('index');
         Route::post('/start', [BreakTimerController::class, 'start'])
-            ->middleware('permission:break_timer.use')
+            ->middleware(['permission:break_timer.use', 'throttle:30,1'])
             ->name('start');
         Route::post('/{breakSession}/pause', [BreakTimerController::class, 'pause'])
-            ->middleware('permission:break_timer.use')
+            ->middleware(['permission:break_timer.use', 'throttle:60,1'])
             ->name('pause');
         Route::post('/{breakSession}/resume', [BreakTimerController::class, 'resume'])
-            ->middleware('permission:break_timer.use')
+            ->middleware(['permission:break_timer.use', 'throttle:60,1'])
             ->name('resume');
         Route::post('/{breakSession}/end', [BreakTimerController::class, 'end'])
-            ->middleware('permission:break_timer.use')
+            ->middleware(['permission:break_timer.use', 'throttle:30,1'])
             ->name('end');
         Route::post('/reset', [BreakTimerController::class, 'reset'])
-            ->middleware('permission:break_timer.reset')
+            ->middleware(['permission:break_timer.reset', 'throttle:10,1'])
             ->name('reset');
         Route::get('/status', [BreakTimerController::class, 'status'])
             ->middleware('permission:break_timer.view')

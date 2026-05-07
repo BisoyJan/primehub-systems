@@ -34,12 +34,13 @@ class CleanOldBreakSessionsTest extends TestCase
     }
 
     #[Test]
-    public function it_skips_cleanup_when_no_active_policy(): void
+    public function it_skips_cleanup_when_no_policies_have_retention(): void
     {
-        $this->policy->update(['is_active' => false]);
+        // Per-policy retention: skip when no policy has a retention period.
+        $this->policy->update(['retention_months' => null]);
 
         $this->artisan('break-timer:clean-old-sessions --force')
-            ->expectsOutput('No active break policy found. Skipping cleanup.')
+            ->expectsOutput('No break policies with retention configured. Skipping cleanup.')
             ->assertSuccessful();
     }
 
@@ -49,7 +50,7 @@ class CleanOldBreakSessionsTest extends TestCase
         $this->policy->update(['retention_months' => null]);
 
         $this->artisan('break-timer:clean-old-sessions --force')
-            ->expectsOutput('Active policy has no retention period configured. Skipping cleanup.')
+            ->expectsOutput('No break policies with retention configured. Skipping cleanup.')
             ->assertSuccessful();
     }
 

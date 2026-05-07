@@ -97,6 +97,8 @@ class BreakTimerService
             ->with(['breakEvents', 'user'])
             ->get();
 
+        $overbreakRows = [];
+
         foreach ($sessions as $session) {
             $timing = $this->getSessionTimingSnapshot($session);
 
@@ -104,10 +106,57 @@ class BreakTimerService
                 continue;
             }
 
+            $overbreakRows[] = [
+                'session' => $session,
+                'overage' => $timing['overage_seconds'],
+            ];
+        }
+
+        if (empty($overbreakRows)) {
+            return 0;
+        }
+
+        // Batch threshold: when many agents are simultaneously in overbreak,
+        // collapse the per-agent admin pings into a single digest notification.
+        // Each session is still individually marked as notified to prevent
+        // re-firing on the next cron tick.
+        $batchThreshold = 5;
+
+        if (count($overbreakRows) >= $batchThreshold) {
+            $payload = array_map(function (array $row) {
+                /** @var BreakSession $session */
+                $session = $row['session'];
+                $user = $session->user;
+                $name = $user ? trim($user->first_name.' '.$user->last_name) : 'Unknown';
+
+                return [
+                    'user_id' => $session->user_id,
+                    'agent_name' => $name,
+                    'break_type' => $session->type,
+                    'overage_seconds' => $row['overage'],
+                    'date' => $session->shift_date,
+                ];
+            }, $overbreakRows);
+
+            $this->notificationService->notifyBreakOverageDigestToAdmins($payload);
+
+            foreach ($overbreakRows as $row) {
+                $row['session']->forceFill(['overbreak_notified_at' => now()])->save();
+                $notifiedSessions++;
+            }
+
+            return $notifiedSessions;
+        }
+
+        // Below threshold: individual notifications.
+        foreach ($overbreakRows as $row) {
+            /** @var BreakSession $session */
+            $session = $row['session'];
+
             $this->notificationService->notifyBreakOverageToAdmins(
                 $session->user_id,
                 $session->type,
-                $timing['overage_seconds'],
+                $row['overage'],
                 $session->shift_date,
             );
 
@@ -329,6 +378,14 @@ class BreakTimerService
     public function pauseSession(BreakSession $session, string $reason): void
     {
         DB::transaction(function () use ($session, $reason) {
+            $locked = BreakSession::query()->whereKey($session->id)->lockForUpdate()->first();
+
+            if (! $locked || $locked->status !== 'active') {
+                return;
+            }
+
+            $session = $locked;
+
             $elapsed = (int) now()->diffInSeconds($session->started_at, absolute: true) - $session->total_paused_seconds;
             $remaining = max(0, $session->duration_seconds - $elapsed);
 
@@ -352,6 +409,14 @@ class BreakTimerService
     public function resumeSession(BreakSession $session): void
     {
         DB::transaction(function () use ($session) {
+            $locked = BreakSession::query()->whereKey($session->id)->lockForUpdate()->first();
+
+            if (! $locked || $locked->status !== 'paused') {
+                return;
+            }
+
+            $session = $locked;
+
             $lastPauseEvent = $session->breakEvents()
                 ->where('action', 'pause')
                 ->latest('occurred_at')
@@ -620,51 +685,68 @@ class BreakTimerService
     public function resetShift(int $userId, string $date, string $approval): int
     {
         return DB::transaction(function () use ($userId, $date, $approval): int {
-            $todaySessions = BreakSession::query()
+            // All non-reset sessions for the day get status='reset' so they no longer
+            // count toward the agent's break quota. For sessions that were still
+            // in-flight (active/paused) we compute the final overage and stamp
+            // ended_by='admin'. For already-closed sessions (completed/overage/
+            // auto_ended) we preserve the original ended_by/ended_at so audit
+            // attribution isn't clobbered.
+            $sessions = BreakSession::query()
                 ->forUser($userId)
                 ->forDate($date)
                 ->whereNotIn('status', ['reset'])
+                ->lockForUpdate()
                 ->get();
 
-            if ($todaySessions->isEmpty()) {
+            if ($sessions->isEmpty()) {
                 return 0;
             }
 
             /** @var BreakSession $session */
-            foreach ($todaySessions as $session) {
-                // Calculate final overage/paused if session was still active
-                $totalPaused = $session->total_paused_seconds;
+            foreach ($sessions as $session) {
+                $isInFlight = in_array($session->status, ['active', 'paused'], true);
 
-                if ($session->status === 'paused') {
-                    $lastPauseEvent = $session->breakEvents()
-                        ->where('action', 'pause')
-                        ->latest('occurred_at')
-                        ->first();
+                if ($isInFlight) {
+                    $totalPaused = $session->total_paused_seconds;
 
-                    if ($lastPauseEvent) {
-                        $totalPaused += (int) now()->diffInSeconds($lastPauseEvent->occurred_at, absolute: true);
+                    if ($session->status === 'paused') {
+                        $lastPauseEvent = $session->breakEvents()
+                            ->where('action', 'pause')
+                            ->latest('occurred_at')
+                            ->first();
+
+                        if ($lastPauseEvent) {
+                            $totalPaused += (int) now()->diffInSeconds($lastPauseEvent->occurred_at, absolute: true);
+                        }
                     }
+
+                    $elapsed = (int) now()->diffInSeconds($session->started_at, absolute: true) - $totalPaused;
+                    $overage = max(0, $elapsed - $session->duration_seconds);
+                    $remaining = max(0, $session->duration_seconds - $elapsed);
+
+                    $session->update([
+                        'status' => 'reset',
+                        'ended_by' => 'admin',
+                        'ended_at' => now(),
+                        'remaining_seconds' => $remaining,
+                        'overage_seconds' => $overage,
+                        'total_paused_seconds' => $totalPaused,
+                    ]);
+                } else {
+                    // Preserve original ended_by/ended_at attribution; only flip status
+                    // so the session no longer counts toward the quota.
+                    $remaining = max(0, (int) $session->remaining_seconds);
+                    $overage = max(0, (int) $session->overage_seconds);
+
+                    $session->update([
+                        'status' => 'reset',
+                    ]);
                 }
-
-                $elapsed = in_array($session->status, ['active', 'paused'])
-                    ? (int) now()->diffInSeconds($session->started_at, absolute: true) - $totalPaused
-                    : ($session->duration_seconds - $session->remaining_seconds) + ($session->overage_seconds ?? 0);
-
-                $overage = max(0, $elapsed - $session->duration_seconds);
-
-                $session->update([
-                    'status' => 'reset',
-                    'ended_by' => 'admin',
-                    'ended_at' => $session->ended_at ?? now(),
-                    'remaining_seconds' => max(0, $session->duration_seconds - $elapsed),
-                    'overage_seconds' => $overage,
-                    'total_paused_seconds' => $totalPaused,
-                ]);
 
                 BreakEvent::create([
                     'break_session_id' => $session->id,
                     'action' => 'reset',
-                    'remaining_seconds' => max(0, $session->duration_seconds - $elapsed),
+                    'remaining_seconds' => $remaining,
                     'overage_seconds' => $overage,
                     'reason' => "Shift reset — approval: {$approval}",
                     'occurred_at' => now(),
@@ -675,12 +757,12 @@ class BreakTimerService
                 ->causedBy($userId)
                 ->withProperties([
                     'approval' => $approval,
-                    'sessions_reset' => $todaySessions->count(),
+                    'sessions_reset' => $sessions->count(),
                     'date' => $date,
                 ])
                 ->log('Break shift reset');
 
-            return $todaySessions->count();
+            return $sessions->count();
         });
     }
 }

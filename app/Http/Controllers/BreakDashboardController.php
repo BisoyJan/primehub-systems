@@ -177,6 +177,7 @@ class BreakDashboardController extends Controller
             'completed' => (clone $sessionsForDate)->where('status', 'completed')->count(),
             'overage' => (clone $sessionsForDate)->where('status', 'overage')->count(),
             'avg_overage_seconds' => (int) (clone $sessionsForDate)->where('overage_seconds', '>', 0)->avg('overage_seconds'),
+            'auto_reset_today' => (int) Cache::get('break_timer:auto_reset:daily_count:'.now()->toDateString(), 0),
         ];
 
         return Inertia::render('BreakTimer/Dashboard', [

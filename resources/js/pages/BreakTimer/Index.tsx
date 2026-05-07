@@ -951,20 +951,34 @@ export default function BreakTimerIndex() {
                                             <div className="border-t border-white/15 px-4 py-3 dark:border-white/5">
                                                 <p className="text-muted-foreground mb-2 text-[10px] font-semibold uppercase tracking-wider">Timeline</p>
                                                 <div className="relative ml-2 space-y-2 border-l border-zinc-200 pl-4 dark:border-zinc-700">
-                                                    {session.break_events.map((event) => (
-                                                        <div key={event.id} className="relative">
-                                                            <div className="bg-background absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full border-2 border-zinc-300 dark:border-zinc-600" />
-                                                            <div className="flex items-baseline gap-2">
-                                                                <span className="text-xs font-medium capitalize">{event.action}</span>
-                                                                <span className="text-muted-foreground text-[10px]">
-                                                                    {new Date(event.occurred_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                                                                </span>
+                                                    {session.break_events.map((event) => {
+                                                        const actionStyle: Record<string, { dot: string; label: string; text: string }> = {
+                                                            start: { dot: 'border-emerald-400 bg-emerald-100 dark:bg-emerald-500/20', label: 'Started', text: 'text-emerald-600 dark:text-emerald-400' },
+                                                            pause: { dot: 'border-amber-400 bg-amber-100 dark:bg-amber-500/20', label: 'Paused', text: 'text-amber-600 dark:text-amber-400' },
+                                                            resume: { dot: 'border-blue-400 bg-blue-100 dark:bg-blue-500/20', label: 'Resumed', text: 'text-blue-600 dark:text-blue-400' },
+                                                            end: { dot: 'border-zinc-400 bg-zinc-100 dark:bg-zinc-500/20', label: 'Ended', text: 'text-zinc-600 dark:text-zinc-400' },
+                                                            time_up: { dot: 'border-orange-400 bg-orange-100 dark:bg-orange-500/20', label: 'Time Up', text: 'text-orange-600 dark:text-orange-400' },
+                                                            reset: { dot: 'border-purple-400 bg-purple-100 dark:bg-purple-500/20', label: 'Reset (Admin)', text: 'text-purple-600 dark:text-purple-400' },
+                                                            force_end: { dot: 'border-red-500 bg-red-100 dark:bg-red-500/20', label: 'Force-Ended (Admin)', text: 'text-red-600 dark:text-red-400' },
+                                                            restore: { dot: 'border-green-500 bg-green-100 dark:bg-green-500/20', label: 'Restored (Admin)', text: 'text-green-600 dark:text-green-400' },
+                                                            auto_end: { dot: 'border-orange-500 bg-orange-100 dark:bg-orange-500/20', label: 'Auto-Ended', text: 'text-orange-600 dark:text-orange-400' },
+                                                        };
+                                                        const style = actionStyle[event.action] ?? { dot: 'border-zinc-300 dark:border-zinc-600 bg-background', label: event.action, text: '' };
+                                                        return (
+                                                            <div key={event.id} className="relative">
+                                                                <div className={`absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full border-2 ${style.dot}`} />
+                                                                <div className="flex items-baseline gap-2">
+                                                                    <span className={`text-xs font-medium capitalize ${style.text}`}>{style.label}</span>
+                                                                    <span className="text-muted-foreground text-[10px]">
+                                                                        {new Date(event.occurred_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                                                    </span>
+                                                                </div>
+                                                                {event.reason && (
+                                                                    <p className="text-muted-foreground text-[11px] italic">{event.reason}</p>
+                                                                )}
                                                             </div>
-                                                            {event.reason && (
-                                                                <p className="text-muted-foreground text-[11px] italic">{event.reason}</p>
-                                                            )}
-                                                        </div>
-                                                    ))}
+                                                        );
+                                                    })}
                                                 </div>
                                             </div>
                                         )}

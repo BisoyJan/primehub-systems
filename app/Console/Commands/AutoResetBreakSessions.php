@@ -5,9 +5,11 @@ namespace App\Console\Commands;
 use App\Models\BreakEvent;
 use App\Models\BreakPolicy;
 use App\Models\BreakSession;
+use App\Services\NotificationService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -88,6 +90,14 @@ class AutoResetBreakSessions extends Command
 
         $count = $this->autoEnd($orphaned, $aged, $maxAgeHours);
 
+        if ($count > 0) {
+            // Daily counter — surfaces total auto-ends per day for ops dashboards.
+            // Resets naturally as the cache key rotates with the date.
+            $cacheKey = 'break_timer:auto_reset:daily_count:'.Carbon::today()->toDateString();
+            Cache::add($cacheKey, 0, now()->endOfDay());
+            Cache::increment($cacheKey, $count);
+        }
+
         $this->info("Auto-ended {$count} orphaned session(s).");
         Log::info("Break timer auto-reset: ended {$count} orphaned session(s).");
 
@@ -97,8 +107,10 @@ class AutoResetBreakSessions extends Command
     private function autoEnd(Collection $orphaned, Collection $aged, int $maxAgeHours): int
     {
         $count = 0;
+        $notifications = [];
+        $notificationService = app(NotificationService::class);
 
-        DB::transaction(function () use ($orphaned, $aged, $maxAgeHours, &$count) {
+        DB::transaction(function () use ($orphaned, $aged, $maxAgeHours, &$count, &$notifications) {
             foreach ($orphaned as $session) {
                 // Lock to prevent race with end / force-end.
                 $locked = BreakSession::query()->whereKey($session->id)->lockForUpdate()->first();
@@ -122,6 +134,7 @@ class AutoResetBreakSessions extends Command
 
                 $elapsed = (int) now()->diffInSeconds($session->started_at, absolute: true) - $totalPaused;
                 $overage = max(0, $elapsed - (int) $session->duration_seconds);
+                $needsAdminNotify = $overage > 0 && is_null($session->overbreak_notified_at);
 
                 $session->update([
                     'status' => 'auto_ended',
@@ -130,6 +143,7 @@ class AutoResetBreakSessions extends Command
                     'remaining_seconds' => 0,
                     'overage_seconds' => $overage,
                     'total_paused_seconds' => $totalPaused,
+                    'overbreak_notified_at' => $needsAdminNotify ? now() : $session->overbreak_notified_at,
                 ]);
 
                 $reason = $aged->contains('id', $session->id)
@@ -145,9 +159,38 @@ class AutoResetBreakSessions extends Command
                     'occurred_at' => now(),
                 ]);
 
+                if ($needsAdminNotify) {
+                    $notifications[] = [
+                        'user_id' => $session->user_id,
+                        'type' => $session->type,
+                        'overage' => $overage,
+                        'shift_date' => $session->shift_date instanceof \DateTimeInterface
+                            ? $session->shift_date->format('Y-m-d')
+                            : (string) $session->shift_date,
+                    ];
+                }
+
                 $count++;
             }
         });
+
+        // Dispatch notifications outside the transaction so a notification failure
+        // can't roll back the auto-end DB writes.
+        foreach ($notifications as $payload) {
+            try {
+                $notificationService->notifyBreakOverageToAdmins(
+                    $payload['user_id'],
+                    $payload['type'],
+                    $payload['overage'],
+                    $payload['shift_date'],
+                );
+            } catch (\Throwable $e) {
+                Log::warning('Break auto-reset overbreak admin notification failed', [
+                    'user_id' => $payload['user_id'],
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
 
         return $count;
     }

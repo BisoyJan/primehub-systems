@@ -1254,4 +1254,36 @@ class NotificationService
         $this->notifyUsersByRole('Admin', 'break_overage', $title, $message, $data);
         $this->notifyUsersByRole('Super Admin', 'break_overage', $title, $message, $data);
     }
+
+    /**
+     * Send a single digest notification to admins summarising multiple agents
+     * currently in overbreak. Used when the number of simultaneous overbreaks
+     * crosses a threshold (configured by the caller).
+     *
+     * @param  array<int, array{user_id:int|null, agent_name:string, break_type:string, overage_seconds:int, date:string}>  $rows
+     */
+    public function notifyBreakOverageDigestToAdmins(array $rows): void
+    {
+        if (empty($rows)) {
+            return;
+        }
+
+        $count = count($rows);
+        $title = "{$count} agents currently in overbreak";
+
+        $previewNames = array_slice(array_map(fn ($r) => $r['agent_name'], $rows), 0, 3);
+        $extra = $count - count($previewNames);
+        $namesText = implode(', ', $previewNames).($extra > 0 ? " and {$extra} more" : '');
+
+        $message = "{$namesText} have exceeded their break duration. Review the break dashboard for details.";
+
+        $data = [
+            'agent_count' => $count,
+            'sessions' => $rows,
+            'link' => route('break-timer.dashboard'),
+        ];
+
+        $this->notifyUsersByRole('Admin', 'break_overage_digest', $title, $message, $data);
+        $this->notifyUsersByRole('Super Admin', 'break_overage_digest', $title, $message, $data);
+    }
 }
