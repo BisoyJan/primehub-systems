@@ -102,13 +102,22 @@ class EmployeeScheduleController extends Controller
             'Utility',
         ];
 
-        // Get users without any schedules
+        // Scope: exclude resigned employees (hired_date set AND is_active = false)
+        $activeEmployeeScope = function ($q) {
+            $q->where(function ($sub) {
+                $sub->whereNull('hired_date')
+                    ->orWhere('is_active', true);
+            });
+        };
+
+        // Get users without any schedules (active employees only)
         $usersWithoutSchedules = User::doesntHave('employeeSchedules')
+            ->where($activeEmployeeScope)
             ->orderBy('first_name')
             ->orderBy('last_name')
             ->get(['id', 'first_name', 'last_name']);
 
-        // Get users with schedules but no active schedule
+        // Get users with schedules but no active schedule (active employees only)
         $usersWithInactiveSchedules = User::whereHas('employeeSchedules', function ($query) {
             // Has at least one schedule
         })
@@ -116,12 +125,14 @@ class EmployeeScheduleController extends Controller
                 // But no active schedule
                 $query->where('is_active', true);
             })
+            ->where($activeEmployeeScope)
             ->orderBy('first_name')
             ->orderBy('last_name')
             ->get(['id', 'first_name', 'last_name']);
 
-        // Get users with multiple schedules
+        // Get users with multiple schedules (active employees only)
         $usersWithMultipleSchedules = User::withCount('employeeSchedules')
+            ->where($activeEmployeeScope)
             ->having('employee_schedules_count', '>', 1)
             ->orderBy('first_name')
             ->orderBy('last_name')
