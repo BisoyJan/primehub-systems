@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\BulkStoreAttendancePointRequest;
 use App\Http\Requests\StoreAttendancePointRequest;
 use App\Http\Requests\UpdateAttendancePointRequest;
 use App\Http\Traits\RedirectsWithFlashMessages;
@@ -114,6 +115,54 @@ class AttendancePointController extends Controller
                 'show_all' => $showAll,
             ],
         ]);
+    }
+
+    /**
+     * Show the bulk create page.
+     */
+    public function bulkCreate(Request $request)
+    {
+        $this->authorize('create', AttendancePoint::class);
+
+        $users = User::where('is_active', true)->orderBy('first_name')->get();
+        $campaigns = Campaign::orderBy('name')->get();
+
+        return Inertia::render('Attendance/Points/BulkCreate', [
+            'users' => $users,
+            'campaigns' => $campaigns,
+        ]);
+    }
+
+    /**
+     * Store bulk manual attendance points.
+     */
+    public function storeBulk(BulkStoreAttendancePointRequest $request)
+    {
+        $entries = $request->validated()['entries'];
+        $createdById = $request->user()->id;
+        $created = 0;
+        $skipped = 0;
+
+        foreach ($entries as $entry) {
+            try {
+                DB::transaction(function () use ($entry, $createdById) {
+                    $this->creationService->createManualPoint($entry, $createdById);
+                });
+                $created++;
+            } catch (\Exception $e) {
+                $skipped++;
+                Log::warning('BulkStore skipped entry for user '.($entry['user_id'] ?? '?').': '.$e->getMessage());
+            }
+        }
+
+        $message = "Successfully created {$created} attendance point(s).";
+        if ($skipped > 0) {
+            $message .= " {$skipped} entr".($skipped === 1 ? 'y was' : 'ies were').' skipped (duplicates or errors).';
+
+            return $this->redirectWithFlash('attendance-points.index', $message, 'warning');
+        }
+
+        return $this->redirectWithFlash('attendance-points.index', $message);
     }
 
     /**

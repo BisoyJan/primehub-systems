@@ -51,6 +51,9 @@ interface AgentRow {
     pending_acknowledgements: number;
     total_sessions: number;
     trend?: number;
+    is_coaching_excluded?: boolean;
+    coaching_exclusion_reason?: string | null;
+    exclusion_expires_at?: string | null;
 }
 
 interface DashboardData {
@@ -126,6 +129,7 @@ const STATUS_PRIORITY: Record<string, number> = {
     'Coaching Done': 3,
     'No Record': 4,
     'Draft': 5,
+    'Excluded': 6,
 };
 
 function getStatusRowClass(status: string): string {
@@ -135,6 +139,7 @@ function getStatusRowClass(status: string): string {
         case 'Badly Needs Coaching': return 'bg-orange-50/50 dark:bg-orange-950/20';
         case 'Please Coach ASAP': return 'bg-red-50/50 dark:bg-red-950/20';
         case 'Draft': return 'bg-blue-50/50 dark:bg-blue-950/20';
+        case 'Excluded': return 'bg-slate-50/50 dark:bg-slate-950/20 opacity-70';
         default: return '';
     }
 }
@@ -520,7 +525,18 @@ export default function CoachingDashboardIndex() {
                                                             }}
                                                         />
                                                     </TableCell>
-                                                    <TableCell className="font-medium">{agent.name}</TableCell>
+                                                    <TableCell className="font-medium">
+                                                        <div className="flex flex-col">
+                                                            <span>{agent.name}</span>
+                                                            {agent.is_coaching_excluded && (
+                                                                <span className="text-[10px] text-slate-500">
+                                                                    {agent.exclusion_expires_at
+                                                                        ? `Until ${new Date(agent.exclusion_expires_at).toLocaleDateString()}`
+                                                                        : 'Forever'}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </TableCell>
                                                     <TableCell>{agent.account}</TableCell>
                                                     <TableCell>
                                                         <CoachingStatusBadge status={agent.coaching_status} />
@@ -583,6 +599,13 @@ export default function CoachingDashboardIndex() {
                                                 <div>
                                                     <p className="font-medium">{agent.name}</p>
                                                     <p className="text-xs text-muted-foreground">{agent.account}</p>
+                                                    {agent.is_coaching_excluded && (
+                                                        <p className="text-[10px] text-slate-500">
+                                                            Excluded {agent.exclusion_expires_at
+                                                                ? `until ${new Date(agent.exclusion_expires_at).toLocaleDateString()}`
+                                                                : '(forever)'}
+                                                        </p>
+                                                    )}
                                                 </div>
                                             </div>
                                             <CoachingStatusBadge status={agent.coaching_status} />

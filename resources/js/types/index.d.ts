@@ -72,7 +72,8 @@ export type CoachingStatusLabel =
     | 'Badly Needs Coaching'
     | 'Please Coach ASAP'
     | 'No Record'
-    | 'Draft';
+    | 'Draft'
+    | 'Excluded';
 
 export interface CoachingSessionAttachment {
     id: number;

@@ -673,7 +673,7 @@ export default function AttendanceCalendar() {
                                         <div className="text-sm mt-1 space-y-1">
                                             {selectedAttendance.warnings.map((warning, idx) => (
                                                 <div key={idx} className="bg-amber-50 p-2 rounded text-amber-900">
-                                                    {warning}
+                                                    {typeof warning === 'string' ? warning : warning.message}
                                                 </div>
                                             ))}
                                         </div>

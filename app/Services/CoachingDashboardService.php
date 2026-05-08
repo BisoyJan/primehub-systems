@@ -26,6 +26,8 @@ class CoachingDashboardService
 
     public const STATUS_DRAFT = 'Draft';
 
+    public const STATUS_EXCLUDED = 'Excluded';
+
     /**
      * Status color mapping for frontend.
      */
@@ -36,6 +38,7 @@ class CoachingDashboardService
         self::STATUS_PLEASE_COACH_ASAP => 'red',
         self::STATUS_NO_RECORD => 'gray',
         self::STATUS_DRAFT => 'blue',
+        self::STATUS_EXCLUDED => 'slate',
     ];
 
     /**
@@ -48,6 +51,7 @@ class CoachingDashboardService
         self::STATUS_NO_RECORD => 4,
         self::STATUS_COACHING_DONE => 5,
         self::STATUS_DRAFT => 6,
+        self::STATUS_EXCLUDED => 7,
     ];
 
     /**
@@ -184,13 +188,10 @@ class CoachingDashboardService
 
         $agentIds = EmployeeSchedule::whereIn('campaign_id', $campaignIds)
             ->where('is_active', true)
-            ->whereHas('user', function ($q) use ($filters) {
+            ->whereHas('user', function ($q) {
                 $q->where('role', 'Agent')
                     ->where('is_active', true)
                     ->whereNull('deleted_at');
-                if (empty($filters['include_excluded'])) {
-                    $q->notCoachingExcluded();
-                }
             })
             ->pluck('user_id')
             ->unique()
@@ -209,10 +210,6 @@ class CoachingDashboardService
         $query = User::where('role', 'Agent')
             ->where('is_active', true)
             ->whereNull('deleted_at');
-
-        if (empty($filters['include_excluded'])) {
-            $query->notCoachingExcluded();
-        }
 
         if ($campaignIds = $this->normalizeCampaignIds($filters)) {
             $query->whereHas('activeSchedule', function ($q) use ($campaignIds) {
@@ -320,6 +317,41 @@ class CoachingDashboardService
             }
 
             // Calculate status from batch data
+            $exclusion = $user->activeCoachingExclusion;
+            $campaign = $user->activeSchedule?->campaign;
+
+            // Short-circuit for actively excluded agents — they always show with "Excluded" status.
+            if ($exclusion !== null) {
+                if (isset($filters['coaching_status']) && $filters['coaching_status'] !== self::STATUS_EXCLUDED) {
+                    continue;
+                }
+
+                $statusCounts[self::STATUS_EXCLUDED] = ($statusCounts[self::STATUS_EXCLUDED] ?? 0) + 1;
+                $dates = $recentSessions->get($coacheeId, []);
+
+                $agents->push([
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'account' => $campaign?->name ?? 'No Campaign',
+                    'campaign_id' => $campaign?->id,
+                    'coaching_status' => self::STATUS_EXCLUDED,
+                    'status_color' => self::STATUS_COLORS[self::STATUS_EXCLUDED],
+                    'last_coached_date' => $dates[0] ?? null,
+                    'previous_coached_date' => $dates[1] ?? null,
+                    'older_coached_date' => $dates[2] ?? null,
+                    'pending_acknowledgements' => $pendingCounts->get($coacheeId, 0),
+                    'total_sessions' => $totalSessionCounts->get($coacheeId, 0),
+                    'sessions_this_month' => (int) $monthlySessionCounts->get($coacheeId, 0),
+                    'schedule_effective_date' => $user->activeSchedule?->effective_date?->toDateString(),
+                    'trend' => ($trendData[$coacheeId]->current_count ?? 0) - ($trendData[$coacheeId]->previous_count ?? 0),
+                    'is_coaching_excluded' => true,
+                    'coaching_exclusion_reason' => $exclusion->reason,
+                    'exclusion_expires_at' => $exclusion->expires_at?->toDateString(),
+                ]);
+
+                continue;
+            }
+
             $lastDate = $lastSessionDates->get($coacheeId);
             if (! $lastDate) {
                 $status = $coacheesWithDrafts->has($coacheeId) ? self::STATUS_DRAFT : self::STATUS_NO_RECORD;
@@ -372,12 +404,10 @@ class CoachingDashboardService
 
             $statusCounts[$summary['coaching_status']] = ($statusCounts[$summary['coaching_status']] ?? 0) + 1;
 
-            $campaign = $user->activeSchedule?->campaign;
-
             $agents->push([
                 'id' => $user->id,
                 'name' => $user->name,
-                'account' => $campaign?->name ?? 'N/A',
+                'account' => $campaign?->name ?? 'No Campaign',
                 'campaign_id' => $campaign?->id,
                 'coaching_status' => $summary['coaching_status'],
                 'status_color' => $summary['status_color'],
@@ -389,8 +419,9 @@ class CoachingDashboardService
                 'sessions_this_month' => $summary['sessions_this_month'],
                 'schedule_effective_date' => $user->activeSchedule?->effective_date?->toDateString(),
                 'trend' => ($trendData[$coacheeId]->current_count ?? 0) - ($trendData[$coacheeId]->previous_count ?? 0),
-                'is_coaching_excluded' => $user->activeCoachingExclusion !== null,
-                'coaching_exclusion_reason' => $user->activeCoachingExclusion?->reason,
+                'is_coaching_excluded' => false,
+                'coaching_exclusion_reason' => null,
+                'exclusion_expires_at' => null,
             ]);
         }
 
@@ -468,7 +499,7 @@ class CoachingDashboardService
                     $atRiskAgents->push([
                         'id' => $user->id,
                         'name' => $user->name,
-                        'account' => $user->activeSchedule?->campaign?->name ?? 'N/A',
+                        'account' => $user->activeSchedule?->campaign?->name ?? 'No Campaign',
                         'coaching_status' => $status,
                         'status_color' => self::STATUS_COLORS[$status],
                     ]);
@@ -505,10 +536,6 @@ class CoachingDashboardService
         $query = User::where('role', 'Team Lead')
             ->where('is_active', true)
             ->whereNull('deleted_at');
-
-        if (empty($filters['include_excluded'])) {
-            $query->notCoachingExcluded();
-        }
 
         if ($campaignIds = $this->normalizeCampaignIds($filters)) {
             $query->whereHas('activeSchedule', function ($q) use ($campaignIds) {
@@ -553,13 +580,15 @@ class CoachingDashboardService
         ];
 
         $groups = collect($dashboardData['agents'] ?? [])
-            ->groupBy(fn ($a) => $a['account'] ?? 'Unassigned');
+            ->groupBy(fn ($a) => $a['account'] ?? 'No Campaign');
 
         $campaigns = [];
         $totalAccumulator = [
             'total' => 0,
             'eligible' => 0,
             'excluded' => 0,
+            'excluded_coaching' => 0,
+            'excluded_mid_month' => 0,
             'capped_sessions' => 0,
             'expected_sessions' => 0,
             'total_sessions_this_month' => 0,
@@ -569,6 +598,8 @@ class CoachingDashboardService
         ];
 
         foreach ($groups as $account => $agents) {
+            $excludedCoaching = $agents->filter(fn ($a) => ! empty($a['is_coaching_excluded']))->count();
+
             $eligible = $agents->filter(function ($a) use ($monthStart) {
                 // Skip coaching-excluded users from completion math.
                 if (! empty($a['is_coaching_excluded'])) {
@@ -579,7 +610,7 @@ class CoachingDashboardService
                 return $eff === null || $eff <= $monthStart;
             });
 
-            $excluded = $agents->count() - $eligible->count();
+            $excludedMidMonth = $agents->count() - $excludedCoaching - $eligible->count();
             $eligibleCount = $eligible->count();
             $totalSessionsThisMonth = (int) $eligible->sum('sessions_this_month');
             $cappedSessions = (int) $eligible->sum(fn ($a) => min((int) ($a['sessions_this_month'] ?? 0), $monthlyTarget));
@@ -593,7 +624,9 @@ class CoachingDashboardService
                 'account' => $account,
                 'total' => $agents->count(),
                 'eligible' => $eligibleCount,
-                'excluded' => $excluded,
+                'excluded' => $excludedCoaching + $excludedMidMonth,
+                'excluded_coaching' => $excludedCoaching,
+                'excluded_mid_month' => $excludedMidMonth,
                 'capped_sessions' => $cappedSessions,
                 'expected_sessions' => $expectedSessions,
                 'total_sessions_this_month' => $totalSessionsThisMonth,
@@ -606,7 +639,9 @@ class CoachingDashboardService
 
             $totalAccumulator['total'] += $agents->count();
             $totalAccumulator['eligible'] += $eligibleCount;
-            $totalAccumulator['excluded'] += $excluded;
+            $totalAccumulator['excluded'] += $excludedCoaching + $excludedMidMonth;
+            $totalAccumulator['excluded_coaching'] += $excludedCoaching;
+            $totalAccumulator['excluded_mid_month'] += $excludedMidMonth;
             $totalAccumulator['capped_sessions'] += $cappedSessions;
             $totalAccumulator['expected_sessions'] += $expectedSessions;
             $totalAccumulator['total_sessions_this_month'] += $totalSessionsThisMonth;
@@ -669,6 +704,7 @@ class CoachingDashboardService
             self::STATUS_PLEASE_COACH_ASAP => 0,
             self::STATUS_NO_RECORD => 0,
             self::STATUS_DRAFT => 0,
+            self::STATUS_EXCLUDED => 0,
         ];
     }
 

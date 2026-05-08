@@ -2535,6 +2535,65 @@ class AttendanceController extends Controller
             })->values();
         }
 
+        // Pending time-outs: partially-verified records (no time-out yet) for the
+        // same scope (campaign / site / team-lead). Surfaced at the top of the
+        // roster so the admin completes them BEFORE recording today's time-ins.
+        $pendingTimeOutsQuery = Attendance::with(['user:id,first_name,last_name,middle_name,email', 'employeeSchedule:id,user_id,shift_type,scheduled_time_in,scheduled_time_out,site_id,campaign_id,grace_period_minutes', 'employeeSchedule.site:id,name', 'employeeSchedule.campaign:id,name'])
+            ->where('is_partially_verified', true)
+            ->whereNull('actual_time_out')
+            ->whereNotNull('actual_time_in');
+
+        if (! empty($teamLeadCampaignIds)) {
+            $pendingTimeOutsQuery->whereHas('employeeSchedule', function ($q) use ($teamLeadCampaignIds) {
+                $q->whereIn('campaign_id', $teamLeadCampaignIds);
+            });
+        }
+        if ($request->filled('site_id')) {
+            $pendingTimeOutsQuery->whereHas('employeeSchedule', function ($q) use ($request) {
+                $q->where('site_id', $request->site_id);
+            });
+        }
+        if ($request->filled('campaign_id')) {
+            $pendingTimeOutsQuery->whereHas('employeeSchedule', function ($q) use ($request) {
+                $q->where('campaign_id', $request->campaign_id);
+            });
+        }
+
+        $pendingTimeOuts = $pendingTimeOutsQuery
+            ->orderBy('shift_date', 'asc')
+            ->get()
+            ->map(function ($att) {
+                $sched = $att->employeeSchedule;
+                $user = $att->user;
+
+                return [
+                    'id' => $att->id,
+                    'user_id' => $att->user_id,
+                    'name' => $user
+                        ? $user->last_name.', '.$user->first_name.($user->middle_name ? ' '.$user->middle_name : '')
+                        : '—',
+                    'email' => $user?->email,
+                    'shift_date' => Carbon::parse($att->shift_date)->format('Y-m-d'),
+                    'shift_date_formatted' => Carbon::parse($att->shift_date)->format('M d, Y (D)'),
+                    'actual_time_in' => $att->actual_time_in?->format('Y-m-d\TH:i'),
+                    'status' => $att->status,
+                    'secondary_status' => $att->secondary_status,
+                    'tardy_minutes' => $att->tardy_minutes,
+                    'verification_notes' => $att->verification_notes,
+                    'schedule' => $sched ? [
+                        'id' => $sched->id,
+                        'shift_type' => $sched->shift_type,
+                        'scheduled_time_in' => $sched->scheduled_time_in,
+                        'scheduled_time_out' => $sched->scheduled_time_out,
+                        'site_name' => $sched->site?->name,
+                        'campaign_id' => $sched->campaign_id,
+                        'campaign_name' => $sched->campaign?->name,
+                        'grace_period_minutes' => $sched->grace_period_minutes ?? 0,
+                    ] : null,
+                ];
+            })
+            ->values();
+
         return Inertia::render('Attendance/Main/DailyRoster', [
             'employees' => $employees,
             'sites' => $sites,
@@ -2542,6 +2601,7 @@ class AttendanceController extends Controller
             'teamLeadCampaignIds' => $teamLeadCampaignIds,
             'selectedDate' => $selectedDate->format('Y-m-d'),
             'dayName' => ucfirst($dayName),
+            'pendingTimeOuts' => $pendingTimeOuts,
             'filters' => [
                 'site_id' => $request->site_id,
                 'campaign_id' => $request->campaign_id,
@@ -2600,9 +2660,14 @@ class AttendanceController extends Controller
                 ->with('type', 'error');
         }
 
+        // Detect partial creation: time-in present, time-out missing.
+        // Used for BPO night shifts where the admin records the in-time at the
+        // start of shift and completes the out-time on the next shift's morning.
+        $isPartial = ! empty($validated['actual_time_in']) && empty($validated['actual_time_out']);
+
         // Parse times
-        $actualTimeIn = Carbon::parse($validated['actual_time_in']);
-        $actualTimeOut = Carbon::parse($validated['actual_time_out']);
+        $actualTimeIn = ! empty($validated['actual_time_in']) ? Carbon::parse($validated['actual_time_in']) : null;
+        $actualTimeOut = ! empty($validated['actual_time_out']) ? Carbon::parse($validated['actual_time_out']) : null;
         $shiftDate = Carbon::parse($validated['shift_date']);
 
         // Build scheduled times
@@ -2625,38 +2690,40 @@ class AttendanceController extends Controller
         // Calculate tardy (late arrival). Grace period is a forgiveness window:
         // tardy_minutes is always recorded, but status only flips to `tardy`
         // when actual lateness exceeds the schedule's grace_period_minutes.
-        if ($actualTimeIn->gt($scheduledTimeIn)) {
+        if ($actualTimeIn && $actualTimeIn->gt($scheduledTimeIn)) {
             $tardyMinutes = $scheduledTimeIn->diffInMinutes($actualTimeIn);
             if ($tardyMinutes > $gracePeriod) {
                 $calculatedStatus = 'tardy';
             }
         }
 
-        // Calculate undertime (early leave) or overtime (late leave)
-        if ($actualTimeOut->lt($scheduledTimeOut)) {
-            $undertimeMinutes = $actualTimeOut->diffInMinutes($scheduledTimeOut);
-            if ($undertimeMinutes > 60) {
-                if ($calculatedStatus === 'on_time') {
-                    $calculatedStatus = 'undertime_more_than_hour';
-                } else {
-                    $calculatedSecondaryStatus = 'undertime_more_than_hour';
+        // Calculate undertime (early leave) or overtime (late leave) — only when time-out is provided.
+        if ($actualTimeOut) {
+            if ($actualTimeOut->lt($scheduledTimeOut)) {
+                $undertimeMinutes = $actualTimeOut->diffInMinutes($scheduledTimeOut);
+                if ($undertimeMinutes > 60) {
+                    if ($calculatedStatus === 'on_time') {
+                        $calculatedStatus = 'undertime_more_than_hour';
+                    } else {
+                        $calculatedSecondaryStatus = 'undertime_more_than_hour';
+                    }
+                } elseif ($undertimeMinutes > 0) {
+                    if ($calculatedStatus === 'on_time') {
+                        $calculatedStatus = 'undertime';
+                    } else {
+                        $calculatedSecondaryStatus = 'undertime';
+                    }
                 }
-            } elseif ($undertimeMinutes > 0) {
-                if ($calculatedStatus === 'on_time') {
-                    $calculatedStatus = 'undertime';
-                } else {
-                    $calculatedSecondaryStatus = 'undertime';
-                }
+            } elseif ($actualTimeOut->gt($scheduledTimeOut)) {
+                $overtimeMinutes = $scheduledTimeOut->diffInMinutes($actualTimeOut);
             }
-        } elseif ($actualTimeOut->gt($scheduledTimeOut)) {
-            $overtimeMinutes = $scheduledTimeOut->diffInMinutes($actualTimeOut);
         }
 
         // Use provided status or calculated status
         $status = $validated['status'] ?? $calculatedStatus;
         $secondaryStatus = $validated['secondary_status'] ?? $calculatedSecondaryStatus;
 
-        // Create attendance record - VERIFIED immediately
+        // Create attendance record - VERIFIED immediately (or PARTIALLY VERIFIED if no time-out yet)
         $attendance = Attendance::create([
             'user_id' => $validated['user_id'],
             'employee_schedule_id' => $schedule->id,
@@ -2675,8 +2742,11 @@ class AttendanceController extends Controller
             'overtime_approved_by' => ($validated['overtime_approved'] ?? false) ? auth()->id() : null,
             'is_set_home' => $request->boolean('is_set_home'),
             'admin_verified' => true, // Auto-verified
-            'verification_notes' => $validated['verification_notes'],
-            'notes' => $validated['notes'],
+            'is_partially_verified' => $isPartial,
+            'verification_notes' => $isPartial
+                ? ($validated['verification_notes'] ?? 'Time-in recorded — time-out pending next shift.')
+                : ($validated['verification_notes'] ?? null),
+            'notes' => $validated['notes'] ?? null,
         ]);
 
         // Generate attendance points for new record - force regeneration

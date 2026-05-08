@@ -65,6 +65,7 @@ import {
     excuse as attendancePointsExcuse,
     unexcuse as attendancePointsUnexcuse,
     recalculateGbro as attendancePointsRecalculateGbro,
+    bulkCreate as attendancePointsBulkCreate,
 } from "@/routes/attendance-points";
 import exportAllExcelRoutes from "@/routes/attendance-points/export-all-excel";
 import managementRoutes from "@/routes/attendance-points/management";
@@ -299,7 +300,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
     const [, setExportJobId] = useState<string | null>(null);
     const [exportError, setExportError] = useState(false);
     const [exportDownloadUrl, setExportDownloadUrl] = useState<string | null>(null);
-    const exportPollingRef = useRef<NodeJS.Timeout | null>(null);
+    const exportPollingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Management state
     const [isManagementDialogOpen, setIsManagementDialogOpen] = useState(false);
@@ -1110,6 +1111,14 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                 </Can>
                                 <Can permission="attendance_points.create">
                                     <Button
+                                        variant="outline"
+                                        onClick={() => router.visit(attendancePointsBulkCreate().url)}
+                                        className="gap-2"
+                                    >
+                                        <Users className="h-4 w-4" />
+                                        Bulk Add
+                                    </Button>
+                                    <Button
                                         onClick={openManualEntryDialog}
                                         className="gap-2"
                                     >
@@ -1672,7 +1681,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                                 setIsViolationDetailsOpen(true);
                                             }}
                                         >
-                                            <FileText className="h-4 w-4 mr-2 flex-shrink-0" />
+                                            <FileText className="h-4 w-4 mr-2 shrink-0" />
                                             <span className="line-clamp-1">{point.violation_details}</span>
                                         </Button>
                                     </div>
@@ -1889,7 +1898,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
 
             {/* Excuse Point Dialog */}
             <Dialog open={isExcuseDialogOpen} onOpenChange={setIsExcuseDialogOpen}>
-                <DialogContent className="sm:max-w-[500px]">
+                <DialogContent className="sm:max-w-125">
                     <DialogHeader>
                         <DialogTitle>
                             {selectedPoint?.is_excused ? 'Point Details' : 'Excuse Attendance Point'}
@@ -2017,7 +2026,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
 
             {/* Violation Details Dialog */}
             <Dialog open={isViolationDetailsOpen} onOpenChange={setIsViolationDetailsOpen}>
-                <DialogContent className="sm:max-w-[600px]">
+                <DialogContent className="sm:max-w-150">
                     <DialogHeader>
                         <DialogTitle>Violation Details</DialogTitle>
                         <DialogDescription>
@@ -2132,7 +2141,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                 <div className="pt-4 border-t">
                                     <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-950 p-4">
                                         <div className="flex items-start gap-3">
-                                            <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+                                            <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5 shrink-0" />
                                             <div>
                                                 <p className="font-semibold text-green-800 dark:text-green-200">
                                                     GBRO Eligible Point
@@ -2152,7 +2161,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                 <div className="pt-4 border-t">
                                     <div className="rounded-lg border border-orange-200 bg-orange-50 dark:bg-orange-950 p-4">
                                         <div className="flex items-start gap-3">
-                                            <AlertCircle className="h-5 w-5 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" />
+                                            <AlertCircle className="h-5 w-5 text-orange-600 dark:text-orange-400 mt-0.5 shrink-0" />
                                             <div>
                                                 <p className="font-semibold text-orange-800 dark:text-orange-200">
                                                     Not Eligible for GBRO
@@ -2201,7 +2210,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                 if (!open) resetManualEntryForm();
                 setIsManualEntryOpen(open);
             }}>
-                <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+                <DialogContent className="sm:max-w-150 max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>
                             {isEditMode ? 'Edit Manual Attendance Point' : 'Add Manual Attendance Point'}
@@ -2584,7 +2593,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                     setSelectedHighPointsEmployee(null);
                 }
             }}>
-                <DialogContent className="sm:max-w-[700px] max-h-[85vh] overflow-hidden flex flex-col">
+                <DialogContent className="sm:max-w-175 max-h-[85vh] overflow-hidden flex flex-col">
                     <DialogHeader>
                         <DialogTitle>
                             {selectedHighPointsEmployee
@@ -2715,7 +2724,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
 
             {/* Management Statistics Dialog */}
             <Dialog open={isManagementDialogOpen} onOpenChange={setIsManagementDialogOpen}>
-                <DialogContent className="sm:max-w-[550px] max-h-[85vh] overflow-y-auto">
+                <DialogContent className="sm:max-w-137.5 max-h-[85vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>Attendance Points Management</DialogTitle>
                         <DialogDescription>
@@ -3023,7 +3032,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                     setExpirationType('both');
                 }
             }}>
-                <AlertDialogContent className="sm:max-w-[500px]">
+                <AlertDialogContent className="sm:max-w-125">
                     <AlertDialogHeader>
                         <AlertDialogTitle>
                             {confirmAction === 'regenerate' && 'Regenerate Attendance Points'}

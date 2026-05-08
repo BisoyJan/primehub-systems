@@ -323,6 +323,12 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
                 Route::post('/fix-gbro-dates', [AttendancePointController::class, 'fixGbroDates'])->name('fix-gbro-dates');
             });
 
+        // Bulk manual entry page + submit endpoint — declared BEFORE {user} routes.
+        Route::get('/bulk-create', [AttendancePointController::class, 'bulkCreate'])
+            ->middleware('permission:attendance_points.create')->name('bulk-create');
+        Route::post('/bulk-store', [AttendancePointController::class, 'storeBulk'])
+            ->middleware('permission:attendance_points.create')->name('bulk-store');
+
         // Streak leaderboard (Audit feature 5.2) — declared BEFORE {user} routes.
         Route::get('/leaderboard', [AttendancePointController::class, 'leaderboard'])
             ->middleware('permission:attendance_points.view')->name('leaderboard');

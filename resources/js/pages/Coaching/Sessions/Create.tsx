@@ -1,5 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Head, Link, useForm, usePage, router } from '@inertiajs/react';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
 import { ArrowLeft, CheckCircle2, Circle, Users, UserPlus, X, Save, SaveAll, CloudUpload, Check, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
@@ -145,6 +153,8 @@ export default function CoachingSessionsCreate() {
     const isSubmittingRef = useRef(false);
     const isNavigatingRef = useRef(false);
     const formDataRef = useRef(data);
+    const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
+    const pendingNavUrlRef = useRef<string | null>(null);
     const initialDataRef = useRef(JSON.stringify(data));
 
     // Keep formDataRef in sync
@@ -255,16 +265,25 @@ export default function CoachingSessionsCreate() {
         const removeListener = router.on('before', (event) => {
             if (isSubmittingRef.current || isNavigatingRef.current) return true;
             if (isFormDirty()) {
-                if (!window.confirm('You have unsaved changes. Your draft has been auto-saved, but any recent changes may be lost. Leave anyway?')) {
-                    event.preventDefault();
-                    return false;
-                }
+                const url = (event as CustomEvent).detail?.visit?.url;
+                pendingNavUrlRef.current = url instanceof URL ? url.href : (typeof url === 'string' ? url : null);
+                event.preventDefault();
+                setLeaveDialogOpen(true);
+                return false;
             }
             return true;
         });
 
         return removeListener;
     }, [isFormDirty]);
+
+    const handleConfirmLeave = () => {
+        setLeaveDialogOpen(false);
+        isNavigatingRef.current = true;
+        const url = pendingNavUrlRef.current;
+        pendingNavUrlRef.current = null;
+        if (url) router.visit(url);
+    };
     // ─── End auto-save logic ────────────────────────────────────────
 
     const handleModeSwitch = (mode: CoachingMode) => {
@@ -544,6 +563,26 @@ export default function CoachingSessionsCreate() {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={title} />
+
+            {/* Unsaved changes confirmation dialog */}
+            <Dialog open={leaveDialogOpen} onOpenChange={(open) => { if (!open) setLeaveDialogOpen(false); }}>
+                <DialogContent className="max-w-[90vw] sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Unsaved Changes</DialogTitle>
+                        <DialogDescription>
+                            You have unsaved changes. Your draft has been auto-saved, but any recent changes may be lost. Leave anyway?
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="flex gap-2 sm:justify-end">
+                        <Button variant="outline" onClick={() => setLeaveDialogOpen(false)}>
+                            Stay
+                        </Button>
+                        <Button variant="destructive" onClick={handleConfirmLeave}>
+                            Leave anyway
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             <div className="relative mx-auto flex w-full max-w-4xl flex-col gap-4 rounded-xl p-3 md:p-6">
                 <LoadingOverlay isLoading={isPageLoading || processing} message={processing ? 'Saving session...' : undefined} />

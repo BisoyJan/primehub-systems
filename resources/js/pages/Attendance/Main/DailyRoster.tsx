@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { TimeInput } from '@/components/ui/time-input';
 import { DatePicker } from '@/components/ui/date-picker';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { formatTime } from '@/lib/utils';
 import {
     Select,
@@ -102,6 +103,30 @@ interface Campaign {
     name: string;
 }
 
+interface PendingTimeOut {
+    id: number;
+    user_id: number;
+    name: string;
+    email: string | null;
+    shift_date: string;
+    shift_date_formatted: string;
+    actual_time_in: string | null;
+    status: string;
+    secondary_status: string | null;
+    tardy_minutes: number | null;
+    verification_notes: string | null;
+    schedule: {
+        id: number;
+        shift_type: string;
+        scheduled_time_in: string;
+        scheduled_time_out: string;
+        site_name: string | null;
+        campaign_id: number | null;
+        campaign_name: string | null;
+        grace_period_minutes: number;
+    } | null;
+}
+
 interface Props {
     employees: Employee[];
     sites: Site[];
@@ -109,6 +134,7 @@ interface Props {
     teamLeadCampaignIds?: number[];
     selectedDate: string;
     dayName: string;
+    pendingTimeOuts?: PendingTimeOut[];
     filters: {
         site_id?: string;
         campaign_id?: string;
@@ -320,7 +346,7 @@ const calculateSuggestedStatus = (
     return { status, secondaryStatus, tardyMinutes, undertimeMinutes, overtimeMinutes, reason, isPartial, violations };
 };
 
-export default function DailyRoster({ employees, sites, campaigns, teamLeadCampaignIds, selectedDate, dayName, filters }: Props) {
+export default function DailyRoster({ employees, sites, campaigns, teamLeadCampaignIds, selectedDate, dayName, pendingTimeOuts = [], filters }: Props) {
     useFlashMessage();
     const isPageLoading = usePageLoading();
     const { can } = usePermission();
@@ -348,6 +374,22 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
     const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+
+    // "Time-in only" partial creation toggle: when true, the time-out field is
+    // hidden and the record is created with is_partially_verified=true so that
+    // the next-shift admin can complete the time-out via the Pending Time-Outs panel.
+    const [partialOnly, setPartialOnly] = useState(false);
+
+    // Active roster tab: 'time_out' (complete previous) | 'time_in' (record today's)
+    // Default to Time-In; Complete Time-Out is a secondary step shown in the second tab.
+    const [activeRosterTab, setActiveRosterTab] = useState<'time_out' | 'time_in'>('time_in');
+
+    const [pendingDialogOpen, setPendingDialogOpen] = useState(false);
+    const [activePending, setActivePending] = useState<PendingTimeOut | null>(null);
+    const [timeOutValue, setTimeOutValue] = useState<string>('');
+    const [timeOutNotes, setTimeOutNotes] = useState<string>('');
+    const [isSubmittingTimeOut, setIsSubmittingTimeOut] = useState(false);
+    const [overtimeApprovedForPending, setOvertimeApprovedForPending] = useState(false);
     const [suggestedStatus, setSuggestedStatus] = useState<{
         status: string;
         secondaryStatus?: string;
@@ -445,6 +487,7 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
         const suggestion = calculateSuggestedStatus(employee.schedule, selectedDate, timeIn, timeOut);
         setSuggestedStatus(suggestion);
         setIsStatusManuallyOverridden(false);
+        setPartialOnly(false);
 
         setData({
             user_id: String(employee.id),
@@ -565,12 +608,24 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
         if (!selectedEmployee || !isDialogOpen) return;
 
         const timer = setTimeout(() => {
-            recalculateSuggestedStatus(data.actual_time_in, data.actual_time_out);
+            // For partial-only creation, synthesize a time-out equal to the scheduled
+            // time-out so the suggester ignores failed_bio_out / undertime checks and
+            // only evaluates tardiness from the actual time-in.
+            let timeOutForCalc = data.actual_time_out;
+            if (partialOnly && selectedEmployee.schedule && data.actual_time_in) {
+                const isNight = selectedEmployee.schedule.shift_type === 'night_shift'
+                    || selectedEmployee.schedule.shift_type === 'graveyard_shift';
+                const outDate = isNight
+                    ? new Date(new Date(selectedDate).getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+                    : selectedDate;
+                timeOutForCalc = `${outDate}T${selectedEmployee.schedule.scheduled_time_out.slice(0, 5)}`;
+            }
+            recalculateSuggestedStatus(data.actual_time_in, timeOutForCalc);
         }, 300);
 
         return () => clearTimeout(timer);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [data.actual_time_in, data.actual_time_out, selectedEmployee?.id, isDialogOpen]);
+    }, [data.actual_time_in, data.actual_time_out, selectedEmployee?.id, isDialogOpen, partialOnly]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -586,15 +641,83 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
                 },
             });
         } else {
-            // Create new attendance
+            // For partial-only creation, blank out the time-out so the backend
+            // creates a partially-verified record (time-out completed next shift).
+            if (partialOnly) {
+                setData('actual_time_out', '');
+            }
+
             post(generateAttendance().url, {
                 onSuccess: () => {
                     setIsDialogOpen(false);
                     setSelectedEmployee(null);
+                    setPartialOnly(false);
                     reset();
                 },
             });
         }
+    };
+
+    // Open the small "Add Time-Out" dialog for a pending record from the previous shift.
+    const openPendingTimeOutDialog = (pending: PendingTimeOut) => {
+        if (!pending.schedule) return;
+        setActivePending(pending);
+
+        // Suggested time-out: schedule's time-out on the day after shift_date for night shifts,
+        // or same day for other shifts.
+        const isNight = pending.schedule.shift_type === 'night_shift'
+            || pending.schedule.shift_type === 'graveyard_shift';
+        const suggestedDate = isNight
+            ? new Date(new Date(pending.shift_date).getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+            : pending.shift_date;
+        setTimeOutValue(`${suggestedDate}T${pending.schedule.scheduled_time_out.slice(0, 5)}`);
+        setTimeOutNotes('');
+        setPendingDialogOpen(true);
+    };
+
+    // Live-recalculate suggestion as the admin types a time-out value.
+    const pendingTimeOutSuggestion = useMemo(() => {
+        if (!activePending?.schedule || !timeOutValue) return null;
+        return calculateSuggestedStatus(
+            { ...activePending.schedule, work_days: [] } as unknown as Schedule,
+            activePending.shift_date,
+            activePending.actual_time_in || '',
+            timeOutValue,
+        );
+    }, [activePending, timeOutValue]);
+
+    const submitPendingTimeOut = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!activePending || !activePending.schedule || !timeOutValue) return;
+
+        // Use the already-computed live suggestion.
+        const suggestion = pendingTimeOutSuggestion ?? calculateSuggestedStatus(
+            { ...activePending.schedule, work_days: [] } as unknown as Schedule,
+            activePending.shift_date,
+            activePending.actual_time_in || '',
+            timeOutValue,
+        );
+
+        setIsSubmittingTimeOut(true);
+        router.post(
+            verify(activePending.id).url,
+            {
+                status: suggestion.status,
+                secondary_status: suggestion.secondaryStatus || '',
+                actual_time_in: activePending.actual_time_in,
+                actual_time_out: timeOutValue,
+                overtime_approved: overtimeApprovedForPending,
+                verification_notes: timeOutNotes || `Time-out completed on ${new Date().toISOString().split('T')[0]}.`,
+            },
+            {
+                preserveScroll: true,
+                onFinish: () => {
+                    setIsSubmittingTimeOut(false);
+                    setPendingDialogOpen(false);
+                    setActivePending(null);
+                },
+            },
+        );
     };
 
     const handleApplyFilters = () => {
@@ -769,268 +892,395 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
                     </div>
                 </div>
 
-                {/* Statistics Row */}
-                <div className="flex flex-wrap items-center gap-4 text-sm">
-                    <div className="flex items-center gap-2">
-                        <Users className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-medium">{totalEmployees}</span>
-                        <span className="text-muted-foreground">Total</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-yellow-500" />
-                        <span className="font-medium">{pendingCount}</span>
-                        <span className="text-muted-foreground">Pending</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <Check className="h-4 w-4 text-green-500" />
-                        <span className="font-medium">{recordedCount}</span>
-                        <span className="text-muted-foreground">Recorded</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-blue-500" />
-                        <span className="font-medium">{onLeaveCount}</span>
-                        <span className="text-muted-foreground">On Leave</span>
-                    </div>
-                    {hasFilters && (
-                        <Badge variant="secondary" className="font-normal">
-                            Filtered
-                        </Badge>
-                    )}
-                </div>
+                {/* Roster Tabs */}
+                <Tabs value={activeRosterTab} onValueChange={(v) => setActiveRosterTab(v as 'time_out' | 'time_in')}>
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <TabsList>
+                            <TabsTrigger value="time_in" className="flex items-center gap-1.5">
+                                <Users className="h-4 w-4" />
+                                <span>Record Time-In</span>
+                            </TabsTrigger>
+                            <TabsTrigger value="time_out" className="flex items-center gap-1.5">
+                                <Clock className="h-4 w-4" />
+                                <span>Complete Time-Out</span>
+                                {pendingTimeOuts.length > 0 && (
+                                    <Badge className="ml-1 h-5 px-1.5 text-xs bg-amber-600 hover:bg-amber-600">
+                                        {pendingTimeOuts.length}
+                                    </Badge>
+                                )}
+                            </TabsTrigger>
+                        </TabsList>
 
-                {/* Desktop Table */}
-                <div className="hidden md:block border rounded-lg overflow-hidden">
-                    <Table className="table-fixed w-full">
-                        <TableHeader>
-                            <TableRow className="bg-muted/50">
-                                <TableHead className="w-[22%]">Employee</TableHead>
-                                <TableHead className="w-[18%]">Site / Campaign</TableHead>
-                                <TableHead className="w-[12%]">Shift</TableHead>
-                                <TableHead className="w-[18%]">Schedule</TableHead>
-                                <TableHead className="w-[15%]">Status</TableHead>
-                                {!isTeamLead && <TableHead className="w-[15%] text-right pr-4">Actions</TableHead>}
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {groupedEmployees.map(({ campaignName, employees: groupEmps }) => (
-                                <React.Fragment key={campaignName}>
-                                    <TableRow className="bg-muted/60 hover:bg-muted/60">
-                                        <TableCell colSpan={isTeamLead ? 5 : 6} className="py-2 px-4">
-                                            <div className="flex items-center gap-2">
-                                                <span className="font-semibold text-sm">{campaignName}</span>
-                                                <Badge variant="secondary" className="font-normal text-xs">{groupEmps.length}</Badge>
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
-                                    {groupEmps.map((employee) => (
-                                        <TableRow key={employee.id} className="hover:bg-muted/30">
-                                            <TableCell>
-                                                <div>
-                                                    <div className="font-medium truncate">{employee.name}</div>
-                                                    <div className="text-xs text-muted-foreground truncate">{employee.email}</div>
+                        {/* Statistics — always visible, tab-independent */}
+                        <div className="flex flex-wrap items-center gap-4 text-sm">
+                            <div className="flex items-center gap-1.5">
+                                <Users className="h-4 w-4 text-muted-foreground" />
+                                <span className="font-medium">{totalEmployees}</span>
+                                <span className="text-muted-foreground">Total</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                                <Clock className="h-4 w-4 text-yellow-500" />
+                                <span className="font-medium">{pendingCount}</span>
+                                <span className="text-muted-foreground">Pending</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                                <Check className="h-4 w-4 text-green-500" />
+                                <span className="font-medium">{recordedCount}</span>
+                                <span className="text-muted-foreground">Recorded</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                                <Calendar className="h-4 w-4 text-blue-500" />
+                                <span className="font-medium">{onLeaveCount}</span>
+                                <span className="text-muted-foreground">On Leave</span>
+                            </div>
+                            {hasFilters && <Badge variant="secondary" className="font-normal">Filtered</Badge>}
+                        </div>
+                    </div>
+
+                    {/* ── TAB: Complete Time-Out ── */}
+                    <TabsContent value="time_out" className="mt-4">
+                        {pendingTimeOuts.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-16 text-center border rounded-lg bg-card">
+                                <Check className="h-10 w-10 text-green-500 mb-3" />
+                                <p className="font-medium text-lg">All time-outs are complete</p>
+                                <p className="text-sm text-muted-foreground mt-1">
+                                    No pending time-outs from previous shifts.
+                                </p>
+                                <Button
+                                    variant="outline"
+                                    className="mt-4"
+                                    onClick={() => setActiveRosterTab('time_in')}
+                                >
+                                    ← Back to Record Time-In
+                                </Button>
+                            </div>
+                        ) : (
+                            <div className="border rounded-lg overflow-hidden">
+                                <div className="px-4 py-3 bg-amber-50 dark:bg-amber-950/20 border-b border-amber-200 dark:border-amber-800">
+                                    <p className="text-sm text-amber-800 dark:text-amber-300 font-medium">
+                                        Complete time-outs from previous shifts before recording today's time-ins.
+                                    </p>
+                                </div>
+
+                                {/* Desktop */}
+                                <div className="hidden md:block">
+                                    <Table className="table-fixed w-full">
+                                        <TableHeader>
+                                            <TableRow className="bg-muted/50">
+                                                <TableHead className="w-[24%]">Employee</TableHead>
+                                                <TableHead className="w-[14%]">Shift Date</TableHead>
+                                                <TableHead className="w-[14%]">Shift</TableHead>
+                                                <TableHead className="w-[14%]">Time In</TableHead>
+                                                <TableHead className="w-[16%]">Scheduled Out</TableHead>
+                                                {!isTeamLead && <TableHead className="w-[18%] text-right pr-4">Action</TableHead>}
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {pendingTimeOuts.map((p) => (
+                                                <TableRow key={p.id} className="hover:bg-muted/30">
+                                                    <TableCell>
+                                                        <div className="font-medium truncate">{p.name}</div>
+                                                        {p.schedule?.campaign_name && (
+                                                            <div className="text-xs text-muted-foreground">{p.schedule.campaign_name}</div>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell className="text-sm">{p.shift_date_formatted}</TableCell>
+                                                    <TableCell>
+                                                        {p.schedule ? getShiftTypeBadge(p.schedule.shift_type) : <span className="text-muted-foreground">—</span>}
+                                                    </TableCell>
+                                                    <TableCell className="font-mono text-sm">
+                                                        {p.actual_time_in?.split('T')[1]?.slice(0, 5) ?? '—'}
+                                                    </TableCell>
+                                                    <TableCell className="font-mono text-sm">
+                                                        {p.schedule ? formatTime(p.schedule.scheduled_time_out) : '—'}
+                                                    </TableCell>
+                                                    {!isTeamLead && (
+                                                        <TableCell className="text-right">
+                                                            <Button
+                                                                size="sm"
+                                                                onClick={() => openPendingTimeOutDialog(p)}
+                                                            >
+                                                                <Clock className="h-4 w-4 mr-1" />
+                                                                Add Time-Out
+                                                            </Button>
+                                                        </TableCell>
+                                                    )}
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+
+                                {/* Mobile */}
+                                <div className="md:hidden divide-y">
+                                    {pendingTimeOuts.map((p) => (
+                                        <div key={p.id} className="px-4 py-3 flex items-center gap-3">
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex flex-wrap items-center gap-1.5">
+                                                    <span className="font-medium">{p.name}</span>
+                                                    {p.schedule && getShiftTypeBadge(p.schedule.shift_type)}
                                                 </div>
-                                            </TableCell>
-                                            <TableCell>
-                                                {employee.schedule ? (
-                                                    <div>
-                                                        <div className="font-medium truncate">{employee.schedule.site_name || 'No site'}</div>
-                                                        {employee.schedule.campaign_name && (
-                                                            <div className="text-xs text-muted-foreground">
-                                                                {employee.schedule.campaign_name}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                ) : (
-                                                    <span className="text-muted-foreground">-</span>
-                                                )}
-                                            </TableCell>
-                                            <TableCell>
-                                                {employee.schedule ? (
-                                                    getShiftTypeBadge(employee.schedule.shift_type)
-                                                ) : (
-                                                    <span className="text-muted-foreground">-</span>
-                                                )}
-                                            </TableCell>
-                                            <TableCell>
-                                                {employee.schedule ? (
-                                                    <span className="text-sm whitespace-nowrap">
-                                                        {formatTime(employee.schedule.scheduled_time_in)} - {formatTime(employee.schedule.scheduled_time_out)}
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-muted-foreground">-</span>
-                                                )}
-                                            </TableCell>
-                                            <TableCell>
-                                                {employee.on_leave ? (
-                                                    <div className="flex items-center gap-1">
-                                                        <Badge className="bg-blue-600">
-                                                            On {employee.on_leave.leave_type}
-                                                        </Badge>
-                                                        {employee.existing_attendance?.admin_verified && (
-                                                            <span title="Attendance verified"><CheckCircle className="h-3.5 w-3.5 text-green-500" /></span>
-                                                        )}
-                                                    </div>
-                                                ) : employee.existing_attendance ? (
-                                                    getStatusBadges(employee.existing_attendance)
-                                                ) : (
-                                                    <Badge variant="outline" className="text-yellow-600 border-yellow-600">
-                                                        Pending Entry
-                                                    </Badge>
-                                                )}
-                                            </TableCell>
+                                                <div className="text-xs text-muted-foreground mt-0.5">
+                                                    {p.shift_date_formatted} · In: <span className="font-mono">{p.actual_time_in?.split('T')[1]?.slice(0, 5) ?? '—'}</span>
+                                                    {p.schedule && <> · Sched Out: <span className="font-mono">{formatTime(p.schedule.scheduled_time_out)}</span></>}
+                                                </div>
+                                            </div>
                                             {!isTeamLead && (
-                                                <TableCell className="text-right">
-                                                    <div className="flex items-center justify-end gap-1">
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => openPendingTimeOutDialog(p)}
+                                                    className="shrink-0"
+                                                >
+                                                    <Clock className="h-3.5 w-3.5 mr-1" />
+                                                    Add Time-Out
+                                                </Button>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </TabsContent>
+
+                    {/* ── TAB: Record Time-In ── */}
+                    <TabsContent value="time_in" className="mt-4">
+
+                        {/* Desktop Table */}
+                        <div className="hidden md:block border rounded-lg overflow-hidden">
+                            <Table className="table-fixed w-full">
+                                <TableHeader>
+                                    <TableRow className="bg-muted/50">
+                                        <TableHead className="w-[22%]">Employee</TableHead>
+                                        <TableHead className="w-[18%]">Site / Campaign</TableHead>
+                                        <TableHead className="w-[12%]">Shift</TableHead>
+                                        <TableHead className="w-[18%]">Schedule</TableHead>
+                                        <TableHead className="w-[15%]">Status</TableHead>
+                                        {!isTeamLead && <TableHead className="w-[15%] text-right pr-4">Actions</TableHead>}
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {groupedEmployees.map(({ campaignName, employees: groupEmps }) => (
+                                        <React.Fragment key={campaignName}>
+                                            <TableRow className="bg-muted/60 hover:bg-muted/60">
+                                                <TableCell colSpan={isTeamLead ? 5 : 6} className="py-2 px-4">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="font-semibold text-sm">{campaignName}</span>
+                                                        <Badge variant="secondary" className="font-normal text-xs">{groupEmps.length}</Badge>
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                            {groupEmps.map((employee) => (
+                                                <TableRow key={employee.id} className="hover:bg-muted/30">
+                                                    <TableCell>
+                                                        <div>
+                                                            <div className="font-medium truncate">{employee.name}</div>
+                                                            <div className="text-xs text-muted-foreground truncate">{employee.email}</div>
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {employee.schedule ? (
+                                                            <div>
+                                                                <div className="font-medium truncate">{employee.schedule.site_name || 'No site'}</div>
+                                                                {employee.schedule.campaign_name && (
+                                                                    <div className="text-xs text-muted-foreground">
+                                                                        {employee.schedule.campaign_name}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-muted-foreground">-</span>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {employee.schedule ? (
+                                                            getShiftTypeBadge(employee.schedule.shift_type)
+                                                        ) : (
+                                                            <span className="text-muted-foreground">-</span>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {employee.schedule ? (
+                                                            <span className="text-sm whitespace-nowrap">
+                                                                {formatTime(employee.schedule.scheduled_time_in)} - {formatTime(employee.schedule.scheduled_time_out)}
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-muted-foreground">-</span>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {employee.on_leave ? (
+                                                            <div className="flex items-center gap-1">
+                                                                <Badge className="bg-blue-600">
+                                                                    On {employee.on_leave.leave_type}
+                                                                </Badge>
+                                                                {employee.existing_attendance?.admin_verified && (
+                                                                    <span title="Attendance verified"><CheckCircle className="h-3.5 w-3.5 text-green-500" /></span>
+                                                                )}
+                                                            </div>
+                                                        ) : employee.existing_attendance ? (
+                                                            getStatusBadges(employee.existing_attendance)
+                                                        ) : (
+                                                            <Badge variant="outline" className="text-yellow-600 border-yellow-600">
+                                                                Pending Entry
+                                                            </Badge>
+                                                        )}
+                                                    </TableCell>
+                                                    {!isTeamLead && (
+                                                        <TableCell className="text-right">
+                                                            <div className="flex items-center justify-end gap-1">
+                                                                {employee.on_leave && (
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="ghost"
+                                                                        className="h-8 px-2"
+                                                                        onClick={() => window.open(`/attendance/review?date_from=${selectedDate}&date_to=${selectedDate}&user_id=${employee.id}`, '_blank')}
+                                                                    >
+                                                                        <ExternalLink className="h-4 w-4 mr-1" />
+                                                                        Review
+                                                                    </Button>
+                                                                )}
+                                                                {!employee.on_leave && !employee.existing_attendance && employee.schedule && (
+                                                                    <Button
+                                                                        size="sm"
+                                                                        className="h-8"
+                                                                        onClick={() => handleGenerateClick(employee)}
+                                                                    >
+                                                                        Generate
+                                                                    </Button>
+                                                                )}
+                                                                {!employee.on_leave && employee.existing_attendance && employee.schedule && (
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="ghost"
+                                                                        className="h-8 px-2"
+                                                                        onClick={() => handleEditClick(employee)}
+                                                                    >
+                                                                        <Pencil className="h-4 w-4 mr-1" />
+                                                                        Edit
+                                                                    </Button>
+                                                                )}
+                                                            </div>
+                                                        </TableCell>
+                                                    )}
+                                                </TableRow>
+                                            ))}
+                                        </React.Fragment>
+                                    ))}
+                                    {groupedEmployees.length === 0 && (
+                                        <TableRow>
+                                            <TableCell colSpan={isTeamLead ? 5 : 6} className="h-24 text-center text-muted-foreground">
+                                                No employees expected to work today
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
+
+                        {/* Mobile Cards */}
+                        <div className="md:hidden space-y-4">
+                            {groupedEmployees.map(({ campaignName, employees: groupEmps }) => (
+                                <div key={campaignName}>
+                                    <div className="flex items-center gap-2 px-1 py-2">
+                                        <span className="font-semibold text-sm">{campaignName}</span>
+                                        <Badge variant="secondary" className="font-normal text-xs">{groupEmps.length}</Badge>
+                                    </div>
+                                    <div className="space-y-3">
+                                        {groupEmps.map((employee) => (
+                                            <div key={employee.id} className="bg-card border rounded-lg p-4 shadow-sm space-y-3">
+                                                <div className="flex justify-between items-start">
+                                                    <div>
+                                                        <div className="text-lg font-semibold">{employee.name}</div>
+                                                        <div className="text-sm text-muted-foreground">{employee.email}</div>
+                                                    </div>
+                                                    {employee.on_leave ? (
+                                                        <div className="flex flex-col items-end gap-1">
+                                                            <Badge className="bg-blue-600">
+                                                                On {employee.on_leave.leave_type}
+                                                            </Badge>
+                                                            {employee.existing_attendance?.admin_verified && (
+                                                                <span title="Attendance verified"><CheckCircle className="h-4 w-4 text-green-500" /></span>
+                                                            )}
+                                                        </div>
+                                                    ) : employee.existing_attendance ? (
+                                                        <div className="flex flex-wrap items-end justify-end gap-1">
+                                                            {getStatusBadges(employee.existing_attendance)}
+                                                        </div>
+                                                    ) : (
+                                                        <Badge variant="outline" className="text-yellow-600 border-yellow-600">
+                                                            Pending
+                                                        </Badge>
+                                                    )}
+                                                </div>
+
+                                                {employee.schedule && (
+                                                    <div className="space-y-2 text-sm">
+                                                        <div>
+                                                            <span className="font-medium">Site:</span> {employee.schedule.site_name || 'No site'}
+                                                            {employee.schedule.campaign_name && (
+                                                                <span className="text-muted-foreground"> / {employee.schedule.campaign_name}</span>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="font-medium">Shift:</span>
+                                                            {getShiftTypeBadge(employee.schedule.shift_type)}
+                                                        </div>
+                                                        <div>
+                                                            <span className="font-medium">Schedule:</span>{' '}
+                                                            {formatTime(employee.schedule.scheduled_time_in)} - {formatTime(employee.schedule.scheduled_time_out)}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {!isTeamLead && (
+                                                    <div className="pt-2 border-t flex gap-2">
                                                         {employee.on_leave && (
                                                             <Button
                                                                 size="sm"
-                                                                variant="ghost"
-                                                                className="h-8 px-2"
+                                                                variant="outline"
+                                                                className="flex-1"
                                                                 onClick={() => window.open(`/attendance/review?date_from=${selectedDate}&date_to=${selectedDate}&user_id=${employee.id}`, '_blank')}
                                                             >
                                                                 <ExternalLink className="h-4 w-4 mr-1" />
-                                                                Review
+                                                                Review in New Tab
                                                             </Button>
                                                         )}
                                                         {!employee.on_leave && !employee.existing_attendance && employee.schedule && (
                                                             <Button
                                                                 size="sm"
-                                                                className="h-8"
+                                                                className="flex-1"
                                                                 onClick={() => handleGenerateClick(employee)}
                                                             >
-                                                                Generate
+                                                                Generate Attendance
                                                             </Button>
                                                         )}
                                                         {!employee.on_leave && employee.existing_attendance && employee.schedule && (
                                                             <Button
                                                                 size="sm"
-                                                                variant="ghost"
-                                                                className="h-8 px-2"
+                                                                variant="outline"
+                                                                className="flex-1"
                                                                 onClick={() => handleEditClick(employee)}
                                                             >
                                                                 <Pencil className="h-4 w-4 mr-1" />
-                                                                Edit
+                                                                Edit Record
                                                             </Button>
                                                         )}
                                                     </div>
-                                                </TableCell>
-                                            )}
-                                        </TableRow>
-                                    ))}
-                                </React.Fragment>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
                             ))}
                             {groupedEmployees.length === 0 && (
-                                <TableRow>
-                                    <TableCell colSpan={isTeamLead ? 5 : 6} className="h-24 text-center text-muted-foreground">
-                                        No employees expected to work today
-                                    </TableCell>
-                                </TableRow>
+                                <div className="py-12 text-center text-gray-500 border rounded-lg bg-card">
+                                    No employees expected to work today
+                                </div>
                             )}
-                        </TableBody>
-                    </Table>
-                </div>
-
-                {/* Mobile Cards */}
-                <div className="md:hidden space-y-4">
-                    {groupedEmployees.map(({ campaignName, employees: groupEmps }) => (
-                        <div key={campaignName}>
-                            <div className="flex items-center gap-2 px-1 py-2">
-                                <span className="font-semibold text-sm">{campaignName}</span>
-                                <Badge variant="secondary" className="font-normal text-xs">{groupEmps.length}</Badge>
-                            </div>
-                            <div className="space-y-3">
-                                {groupEmps.map((employee) => (
-                                    <div key={employee.id} className="bg-card border rounded-lg p-4 shadow-sm space-y-3">
-                                        <div className="flex justify-between items-start">
-                                            <div>
-                                                <div className="text-lg font-semibold">{employee.name}</div>
-                                                <div className="text-sm text-muted-foreground">{employee.email}</div>
-                                            </div>
-                                            {employee.on_leave ? (
-                                                <div className="flex flex-col items-end gap-1">
-                                                    <Badge className="bg-blue-600">
-                                                        On {employee.on_leave.leave_type}
-                                                    </Badge>
-                                                    {employee.existing_attendance?.admin_verified && (
-                                                        <span title="Attendance verified"><CheckCircle className="h-4 w-4 text-green-500" /></span>
-                                                    )}
-                                                </div>
-                                            ) : employee.existing_attendance ? (
-                                                <div className="flex flex-wrap items-end justify-end gap-1">
-                                                    {getStatusBadges(employee.existing_attendance)}
-                                                </div>
-                                            ) : (
-                                                <Badge variant="outline" className="text-yellow-600 border-yellow-600">
-                                                    Pending
-                                                </Badge>
-                                            )}
-                                        </div>
-
-                                        {employee.schedule && (
-                                            <div className="space-y-2 text-sm">
-                                                <div>
-                                                    <span className="font-medium">Site:</span> {employee.schedule.site_name || 'No site'}
-                                                    {employee.schedule.campaign_name && (
-                                                        <span className="text-muted-foreground"> / {employee.schedule.campaign_name}</span>
-                                                    )}
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="font-medium">Shift:</span>
-                                                    {getShiftTypeBadge(employee.schedule.shift_type)}
-                                                </div>
-                                                <div>
-                                                    <span className="font-medium">Schedule:</span>{' '}
-                                                    {formatTime(employee.schedule.scheduled_time_in)} - {formatTime(employee.schedule.scheduled_time_out)}
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {!isTeamLead && (
-                                            <div className="pt-2 border-t flex gap-2">
-                                                {employee.on_leave && (
-                                                    <Button
-                                                        size="sm"
-                                                        variant="outline"
-                                                        className="flex-1"
-                                                        onClick={() => window.open(`/attendance/review?date_from=${selectedDate}&date_to=${selectedDate}&user_id=${employee.id}`, '_blank')}
-                                                    >
-                                                        <ExternalLink className="h-4 w-4 mr-1" />
-                                                        Review in New Tab
-                                                    </Button>
-                                                )}
-                                                {!employee.on_leave && !employee.existing_attendance && employee.schedule && (
-                                                    <Button
-                                                        size="sm"
-                                                        className="flex-1"
-                                                        onClick={() => handleGenerateClick(employee)}
-                                                    >
-                                                        Generate Attendance
-                                                    </Button>
-                                                )}
-                                                {!employee.on_leave && employee.existing_attendance && employee.schedule && (
-                                                    <Button
-                                                        size="sm"
-                                                        variant="outline"
-                                                        className="flex-1"
-                                                        onClick={() => handleEditClick(employee)}
-                                                    >
-                                                        <Pencil className="h-4 w-4 mr-1" />
-                                                        Edit Record
-                                                    </Button>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
                         </div>
-                    ))}
-                    {groupedEmployees.length === 0 && (
-                        <div className="py-12 text-center text-gray-500 border rounded-lg bg-card">
-                            No employees expected to work today
-                        </div>
-                    )}
-                </div>
+                    </TabsContent>
+                </Tabs>
             </div>
 
             {/* Generate/Edit Attendance Dialog */}
@@ -1084,7 +1334,7 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
                         )}
 
                         {/* Partial Verification Warning */}
-                        {shouldShowPartialVerification && (
+                        {shouldShowPartialVerification && !partialOnly && (
                             <div className="p-3 rounded-lg border bg-orange-50 border-orange-200 dark:bg-orange-950/20 dark:border-orange-800">
                                 <div className="flex items-center gap-2">
                                     <AlertCircle className="h-4 w-4 text-orange-600" />
@@ -1104,7 +1354,7 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
                         )}
 
                         {/* Violations Summary with Points */}
-                        {suggestedStatus && suggestedStatus.violations.length > 0 && suggestedStatus.status !== 'on_time' && (
+                        {!partialOnly && suggestedStatus && suggestedStatus.violations.length > 0 && suggestedStatus.status !== 'on_time' && (
                             <div className="p-3 rounded-lg border bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800">
                                 <div className="flex items-center gap-2 mb-2">
                                     <AlertCircle className="h-4 w-4 text-red-600" />
@@ -1227,30 +1477,63 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
                             )}
                         </div>
 
-                        {/* Time Out */}
-                        <div className="space-y-2">
-                            <Label>Actual Time Out</Label>
-                            <div className="grid grid-cols-2 gap-2">
-                                <DatePicker
-                                    value={data.actual_time_out?.split('T')[0] || ''}
-                                    onChange={(value) => {
-                                        const time = data.actual_time_out?.split('T')[1] || '00:00';
-                                        setData('actual_time_out', `${value}T${time}`);
-                                    }}
-                                    placeholder="Date"
-                                />
-                                <TimeInput
-                                    value={data.actual_time_out?.split('T')[1] || ''}
-                                    onChange={(value) => {
-                                        const date = data.actual_time_out?.split('T')[0] || selectedDate;
-                                        setData('actual_time_out', `${date}T${value}`);
+                        {/* Time-in only toggle (only when creating, not editing) */}
+                        {!isEditMode && (
+                            <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
+                                <div>
+                                    <Label htmlFor="partial_only" className="text-sm font-medium cursor-pointer">
+                                        Time-in only — complete time-out next shift
+                                    </Label>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                        Creates a partially-verified record. The time-out will appear in Step 1 on the next admin shift.
+                                    </p>
+                                </div>
+                                <Switch
+                                    id="partial_only"
+                                    checked={partialOnly}
+                                    onCheckedChange={(checked) => {
+                                        setPartialOnly(checked);
+                                        if (checked) {
+                                            setData('actual_time_out', '');
+                                        } else if (selectedEmployee?.schedule) {
+                                            // Restore default suggested time-out
+                                            const isNight = selectedEmployee.schedule.shift_type === 'night_shift';
+                                            const timeOutDate = isNight
+                                                ? new Date(new Date(selectedDate).getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+                                                : selectedDate;
+                                            setData('actual_time_out', `${timeOutDate}T${selectedEmployee.schedule.scheduled_time_out.slice(0, 5)}`);
+                                        }
                                     }}
                                 />
                             </div>
-                            {errors.actual_time_out && (
-                                <p className="text-sm text-red-500">{errors.actual_time_out}</p>
-                            )}
-                        </div>
+                        )}
+
+                        {/* Time Out */}
+                        {!partialOnly && (
+                            <div className="space-y-2">
+                                <Label>Actual Time Out</Label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <DatePicker
+                                        value={data.actual_time_out?.split('T')[0] || ''}
+                                        onChange={(value) => {
+                                            const time = data.actual_time_out?.split('T')[1] || '00:00';
+                                            setData('actual_time_out', `${value}T${time}`);
+                                        }}
+                                        placeholder="Date"
+                                    />
+                                    <TimeInput
+                                        value={data.actual_time_out?.split('T')[1] || ''}
+                                        onChange={(value) => {
+                                            const date = data.actual_time_out?.split('T')[0] || selectedDate;
+                                            setData('actual_time_out', `${date}T${value}`);
+                                        }}
+                                    />
+                                </div>
+                                {errors.actual_time_out && (
+                                    <p className="text-sm text-red-500">{errors.actual_time_out}</p>
+                                )}
+                            </div>
+                        )}
 
                         {/* Overtime Approval */}
                         {suggestedStatus?.overtimeMinutes && suggestedStatus.overtimeMinutes > 0 && (
@@ -1536,6 +1819,165 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
                                 className="w-full sm:w-auto"
                             >
                                 {processing ? (isEditMode ? 'Updating...' : 'Creating...') : (isEditMode ? 'Update Record' : 'Create & Verify')}
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* Add Time-Out Dialog (Step 1 completion) */}
+            <Dialog open={pendingDialogOpen} onOpenChange={(open) => {
+                setPendingDialogOpen(open);
+                if (!open) {
+                    setActivePending(null);
+                    setTimeOutValue('');
+                    setTimeOutNotes('');
+                    setOvertimeApprovedForPending(false);
+                }
+            }}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Add Time-Out</DialogTitle>
+                        <DialogDescription>
+                            Complete the time-out for {activePending?.name} ({activePending?.shift_date_formatted}).
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <form onSubmit={submitPendingTimeOut} className="space-y-4">
+                        {activePending?.schedule && (
+                            <div className="bg-muted p-3 rounded-md text-sm space-y-1">
+                                <div className="flex items-center gap-2">
+                                    {getShiftTypeBadge(activePending.schedule.shift_type)}
+                                    <span className="text-muted-foreground">
+                                        {formatTime(activePending.schedule.scheduled_time_in)} – {formatTime(activePending.schedule.scheduled_time_out)}
+                                    </span>
+                                </div>
+                                <div>
+                                    <span className="text-muted-foreground">Time In:</span>{' '}
+                                    <span className="font-mono">{activePending.actual_time_in?.replace('T', ' ') ?? '—'}</span>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="space-y-2">
+                            <Label>Actual Time Out</Label>
+                            <div className="grid grid-cols-2 gap-2">
+                                <DatePicker
+                                    value={timeOutValue.split('T')[0] || ''}
+                                    onChange={(value) => {
+                                        const time = timeOutValue.split('T')[1] || '00:00';
+                                        setTimeOutValue(`${value}T${time}`);
+                                    }}
+                                    placeholder="Date"
+                                />
+                                <TimeInput
+                                    value={timeOutValue.split('T')[1] || ''}
+                                    onChange={(value) => {
+                                        const date = timeOutValue.split('T')[0] || activePending?.shift_date || selectedDate;
+                                        setTimeOutValue(`${date}T${value}`);
+                                    }}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Live violations preview */}
+                        {pendingTimeOutSuggestion && timeOutValue && (
+                            <div className={`p-3 rounded-lg border text-sm ${pendingTimeOutSuggestion.violations.length > 0 && pendingTimeOutSuggestion.status !== 'on_time'
+                                    ? 'bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800'
+                                    : 'bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800'
+                                }`}>
+                                {pendingTimeOutSuggestion.violations.length > 0 && pendingTimeOutSuggestion.status !== 'on_time' ? (
+                                    <>
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <AlertCircle className="h-4 w-4 text-red-600" />
+                                            <span className="font-medium text-red-800 dark:text-red-400">Detected Violations</span>
+                                        </div>
+                                        <div className="space-y-1">
+                                            {pendingTimeOutSuggestion.violations.map((violation, index) => (
+                                                <div key={violation} className="flex justify-between items-center">
+                                                    <span className={`${index === 0
+                                                            ? 'font-medium text-red-700 dark:text-red-400'
+                                                            : 'text-red-600 dark:text-red-500'
+                                                        }`}>
+                                                        {index === 0 ? '▶ ' : '  '}
+                                                        {violation.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                                        {index === 0 && ' (Primary)'}
+                                                        {index === 1 && ' (Secondary)'}
+                                                    </span>
+                                                    <Badge variant="outline" className="text-red-600 border-red-400 text-xs h-5">
+                                                        {getPointValue(violation).toFixed(2)} pts
+                                                    </Badge>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <p className="text-xs text-red-600 dark:text-red-500 mt-2 pt-2 border-t border-red-200 dark:border-red-800">
+                                            {pendingTimeOutSuggestion.reason}
+                                        </p>
+                                    </>
+                                ) : (
+                                    <div className="flex items-center gap-2">
+                                        <CheckCircle className="h-4 w-4 text-green-600" />
+                                        <span className="text-green-800 dark:text-green-400 font-medium">On Time — no violations</span>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Overtime approval */}
+                        {pendingTimeOutSuggestion && (pendingTimeOutSuggestion.overtimeMinutes ?? 0) > 0 && (
+                            <div className="p-3 rounded-lg border bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+                                            Overtime Detected: {pendingTimeOutSuggestion.overtimeMinutes} min
+                                        </p>
+                                        <p className="text-xs text-blue-700 dark:text-blue-300 mt-0.5">
+                                            Employee worked beyond scheduled time out
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Input
+                                            type="checkbox"
+                                            id="pending_overtime_approved"
+                                            checked={overtimeApprovedForPending}
+                                            onChange={e => setOvertimeApprovedForPending(e.target.checked)}
+                                            className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                                        />
+                                        <Label htmlFor="pending_overtime_approved" className="text-sm font-medium cursor-pointer">
+                                            Approve Overtime
+                                        </Label>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="space-y-2">
+                            <Label htmlFor="time_out_notes">Verification Notes (Optional)</Label>
+                            <Textarea
+                                id="time_out_notes"
+                                value={timeOutNotes}
+                                onChange={(e) => setTimeOutNotes(e.target.value)}
+                                placeholder="e.g. Time-out from biometric log..."
+                                rows={2}
+                            />
+                        </div>
+
+                        <DialogFooter className="flex-col sm:flex-row gap-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setPendingDialogOpen(false)}
+                                disabled={isSubmittingTimeOut}
+                                className="w-full sm:w-auto"
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                type="submit"
+                                disabled={isSubmittingTimeOut || !timeOutValue}
+                                className="w-full sm:w-auto"
+                            >
+                                {isSubmittingTimeOut ? 'Saving...' : 'Complete Time-Out'}
                             </Button>
                         </DialogFooter>
                     </form>

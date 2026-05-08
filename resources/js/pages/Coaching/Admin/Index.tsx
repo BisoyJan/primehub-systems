@@ -86,6 +86,9 @@ interface AgentRow {
     pending_acknowledgements: number;
     total_sessions: number;
     sessions_this_month: number;
+    is_coaching_excluded?: boolean;
+    coaching_exclusion_reason?: string | null;
+    exclusion_expires_at?: string | null;
 }
 
 interface DashboardData {
@@ -139,6 +142,8 @@ interface CampaignCompletionRow {
     total: number;
     eligible: number;
     excluded: number;
+    excluded_coaching: number;
+    excluded_mid_month: number;
     capped_sessions: number;
     expected_sessions: number;
     total_sessions_this_month: number;
@@ -188,6 +193,7 @@ const getStatusRowClass = (status: string): string => {
         case 'Needs Coaching': return 'bg-yellow-50/50 dark:bg-yellow-950/20';
         case 'Coaching Done': return 'bg-green-50/50 dark:bg-green-950/20';
         case 'Draft': return 'bg-blue-50/50 dark:bg-blue-950/20';
+        case 'Excluded': return 'bg-slate-50/50 dark:bg-slate-950/20 opacity-70';
         default: return '';
     }
 };
@@ -227,10 +233,6 @@ export default function CoachingAdminIndex() {
     const [calendarSelectedDate, setCalendarSelectedDate] = useState<Date | undefined>(undefined);
 
     const allFollowUps = useMemo(() => [...overdueFollowUps, ...upcomingFollowUps], [overdueFollowUps, upcomingFollowUps]);
-
-    const followUpDates = useMemo(() => {
-        return allFollowUps.map((item) => new Date(item.follow_up_date + 'T00:00:00'));
-    }, [allFollowUps]);
 
     const selectedDateFollowUps = useMemo(() => {
         if (!calendarSelectedDate) return allFollowUps;
@@ -308,7 +310,7 @@ export default function CoachingAdminIndex() {
 
     const teamLeadSummary = useMemo<CampaignCompletionRow[]>(() => {
         if (coacheeRole === 'Team Lead') return [];
-        return campaignCompletion?.campaigns ?? [];
+        return (campaignCompletion?.campaigns ?? []).filter((c) => c.eligible > 0);
     }, [campaignCompletion, coacheeRole]);
 
     const totalsRow = campaignCompletion?.totals ?? null;
@@ -565,13 +567,13 @@ export default function CoachingAdminIndex() {
                                                 <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
                                                     <div
                                                         className={`h-full rounded-full transition-all ${totalsRow.health === 'green' ? 'bg-green-500' :
-                                                                totalsRow.health === 'amber' ? 'bg-amber-500' : 'bg-red-500'
+                                                            totalsRow.health === 'amber' ? 'bg-amber-500' : 'bg-red-500'
                                                             }`}
                                                         style={{ width: `${totalsRow.rate}%` }}
                                                     />
                                                 </div>
                                                 <div className="mt-0.5 text-[10px] text-muted-foreground">
-                                                    {totalsRow.fully_coached}/{totalsRow.eligible} fully coached · {totalsRow.total_sessions_this_month}/{totalsRow.expected_sessions} sessions{totalsRow.excluded > 0 ? ` · ${totalsRow.excluded} excluded (mid-month)` : ''}
+                                                    {totalsRow.fully_coached}/{totalsRow.eligible} fully coached · {totalsRow.total_sessions_this_month}/{totalsRow.expected_sessions} sessions{totalsRow.excluded_coaching > 0 ? ` · ${totalsRow.excluded_coaching} coaching excluded` : ''}{totalsRow.excluded_mid_month > 0 ? ` · ${totalsRow.excluded_mid_month} excluded (mid-month)` : ''}
                                                 </div>
                                             </div>
                                             <span className="w-12 text-right text-xs font-bold">{totalsRow.rate}%</span>
@@ -596,13 +598,13 @@ export default function CoachingAdminIndex() {
                                                 <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
                                                     <div
                                                         className={`h-full rounded-full transition-all ${tl.health === 'green' ? 'bg-green-500' :
-                                                                tl.health === 'amber' ? 'bg-amber-500' : 'bg-red-500'
+                                                            tl.health === 'amber' ? 'bg-amber-500' : 'bg-red-500'
                                                             }`}
                                                         style={{ width: `${tl.rate}%` }}
                                                     />
                                                 </div>
                                                 <div className="mt-0.5 text-[10px] text-muted-foreground">
-                                                    {tl.fully_coached}/{tl.eligible} fully coached · {tl.capped_sessions}/{tl.expected_sessions} effective ({tl.total_sessions_this_month} raw){tl.excluded > 0 ? ` · ${tl.excluded} excluded` : ''}
+                                                    {tl.fully_coached}/{tl.eligible} fully coached · {tl.capped_sessions}/{tl.expected_sessions} effective ({tl.total_sessions_this_month} raw){tl.excluded_coaching > 0 ? ` · ${tl.excluded_coaching} coaching excluded` : ''}{tl.excluded_mid_month > 0 ? ` · ${tl.excluded_mid_month} excluded (mid-month)` : ''}
                                                 </div>
                                             </div>
                                             <span className="w-12 text-right text-xs font-medium">{tl.rate}%</span>
@@ -659,7 +661,18 @@ export default function CoachingAdminIndex() {
                                                     </TableRow>
                                                     {agents.map((agent) => (
                                                         <TableRow key={agent.id} className={getStatusRowClass(agent.coaching_status)}>
-                                                            <TableCell className="pl-6 font-medium">{agent.name}</TableCell>
+                                                            <TableCell className="pl-6 font-medium">
+                                                                <div className="flex flex-col">
+                                                                    <span>{agent.name}</span>
+                                                                    {agent.is_coaching_excluded && (
+                                                                        <span className="text-[10px] text-slate-500">
+                                                                            {agent.exclusion_expires_at
+                                                                                ? `Until ${new Date(agent.exclusion_expires_at).toLocaleDateString()}`
+                                                                                : 'Forever'}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </TableCell>
                                                             <TableCell>
                                                                 <CoachingStatusBadge status={agent.coaching_status} />
                                                             </TableCell>
@@ -708,7 +721,16 @@ export default function CoachingAdminIndex() {
                                         {agents.map((agent) => (
                                             <div key={agent.id} className={`rounded-lg border bg-card p-4 shadow-sm space-y-2 ${getStatusRowClass(agent.coaching_status)}`}>
                                                 <div className="flex items-start justify-between">
-                                                    <p className="font-medium">{agent.name}</p>
+                                                    <div>
+                                                        <p className="font-medium">{agent.name}</p>
+                                                        {agent.is_coaching_excluded && (
+                                                            <p className="text-[10px] text-slate-500">
+                                                                Excluded {agent.exclusion_expires_at
+                                                                    ? `until ${new Date(agent.exclusion_expires_at).toLocaleDateString()}`
+                                                                    : '(forever)'}
+                                                            </p>
+                                                        )}
+                                                    </div>
                                                     <CoachingStatusBadge status={agent.coaching_status} />
                                                 </div>
                                                 <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
