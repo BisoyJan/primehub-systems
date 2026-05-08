@@ -279,11 +279,19 @@ class CoachingDashboardService
             ->groupBy('coachee_id')
             ->pluck('cnt', 'coachee_id');
 
-        // Batch query: submitted sessions in the current calendar month per coachee
+        // Batch query: submitted sessions in the period per coachee.
+        // When a date range filter is active use that window; otherwise default to the current calendar month.
         // (used to evaluate weekly cadence — target is monthly_session_target sessions per month).
+        $sessionPeriodFrom = isset($filters['date_from'])
+            ? Carbon::parse($filters['date_from'])->toDateString()
+            : now()->startOfMonth()->toDateString();
+        $sessionPeriodTo = isset($filters['date_to'])
+            ? Carbon::parse($filters['date_to'])->toDateString()
+            : now()->endOfMonth()->toDateString();
+
         $monthlySessionCounts = CoachingSession::submitted()
             ->whereIn('coachee_id', $coacheeIds)
-            ->whereBetween('session_date', [now()->startOfMonth()->toDateString(), now()->endOfMonth()->toDateString()])
+            ->whereBetween('session_date', [$sessionPeriodFrom, $sessionPeriodTo])
             ->selectRaw('coachee_id, COUNT(*) as cnt')
             ->groupBy('coachee_id')
             ->pluck('cnt', 'coachee_id');
@@ -565,10 +573,20 @@ class CoachingDashboardService
      *     totals: array{total: int, eligible: int, excluded: int, capped_sessions: int, expected_sessions: int, total_sessions_this_month: int, fully_coached: int, behind_weekly: int, at_risk: int, rate: int, health: string}
      * }
      */
-    public function buildCampaignCompletion(array $dashboardData): array
+    public function buildCampaignCompletion(array $dashboardData, ?array $filters = null): array
     {
         $monthlyTarget = (int) CoachingStatusSetting::getThreshold('monthly_session_target') ?: 4;
-        $today = Carbon::today();
+
+        // When a date filter is active, anchor the period to the end of the filtered range
+        // so that "weeks elapsed" and the period label reflect the queried month.
+        if (! empty($filters['date_to'])) {
+            $today = Carbon::parse($filters['date_to']);
+        } elseif (! empty($filters['date_from'])) {
+            $today = Carbon::parse($filters['date_from'])->endOfMonth();
+        } else {
+            $today = Carbon::today();
+        }
+
         $weeksElapsed = (int) min((int) ceil($today->day / 7), $monthlyTarget);
         $expectedSoFarPerAgent = $weeksElapsed; // 1 session per elapsed week, capped at monthly target.
         $monthStart = $today->copy()->startOfMonth()->toDateString();
