@@ -257,7 +257,7 @@ class AttendancePointController extends Controller
                 // Reset expiration flags — an excused point cannot also be expired.
                 'is_expired' => false,
                 'expired_at' => null,
-                'expiration_type' => $point->isNcnsOrFtn() ? 'none' : 'sro',
+                'expiration_type' => $point->isNcns() ? 'none' : 'sro',
                 'gbro_applied_at' => null,
                 'gbro_batch_id' => null,
             ]);
@@ -657,6 +657,22 @@ class AttendancePointController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to perform cleanup.',
+            ], 500);
+        }
+    }
+
+    public function fixAnomalies(Request $request)
+    {
+        $this->authorize('manage', AttendancePoint::class);
+
+        try {
+            return response()->json($this->maintenanceService->fixAnomalies());
+        } catch (\Exception $e) {
+            Log::error('AttendancePointController fixAnomalies Error: '.$e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fix anomalies.',
             ], 500);
         }
     }

@@ -52,7 +52,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { AlertCircle, TrendingUp, Users, Eye, Award, RefreshCw, CheckCircle, XCircle, FileText, Download, Check, ChevronsUpDown, Search, Plus, Pencil, Trash2, Loader2, Play, Pause, Settings, RotateCcw, AlertTriangle, ClipboardList, BellOff, ChevronDown, ChevronRight } from "lucide-react";
+import { AlertCircle, TrendingUp, Users, Eye, Award, RefreshCw, CheckCircle, XCircle, FileText, Download, Check, ChevronsUpDown, Search, Plus, Pencil, Trash2, Loader2, Play, Pause, Settings, RotateCcw, AlertTriangle, ClipboardList, BellOff, ChevronDown, ChevronRight, Wrench } from "lucide-react";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import {
     index as attendancePointsIndex,
@@ -316,7 +316,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
     const [isLoadingStats, setIsLoadingStats] = useState(false);
     const [isManagementAction, setIsManagementAction] = useState(false);
     const [expandedStatSections, setExpandedStatSections] = useState<Record<string, boolean>>({});
-    const [confirmAction, setConfirmAction] = useState<'remove-duplicates' | 'expire-all' | 'reset-expired' | 'regenerate' | 'cleanup' | 'initialize-gbro-dates' | 'fix-gbro-dates' | 'recalculate-gbro' | null>(null);
+    const [confirmAction, setConfirmAction] = useState<'remove-duplicates' | 'expire-all' | 'reset-expired' | 'regenerate' | 'cleanup' | 'initialize-gbro-dates' | 'fix-gbro-dates' | 'recalculate-gbro' | 'fix-anomalies' | null>(null);
 
     // Management filters for regenerate and reset-expired
     const [mgmtDateFrom, setMgmtDateFrom] = useState('');
@@ -637,7 +637,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
         fetchManagementStats();
     };
 
-    const handleManagementAction = async (action: 'remove-duplicates' | 'expire-all' | 'reset-expired' | 'regenerate' | 'cleanup' | 'initialize-gbro-dates' | 'fix-gbro-dates' | 'recalculate-gbro') => {
+    const handleManagementAction = async (action: 'remove-duplicates' | 'expire-all' | 'reset-expired' | 'regenerate' | 'cleanup' | 'initialize-gbro-dates' | 'fix-gbro-dates' | 'recalculate-gbro' | 'fix-anomalies') => {
         setIsManagementAction(true);
         try {
             // Special handling for recalculate-gbro (per-user action)
@@ -708,6 +708,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                 'cleanup': managementRoutes.cleanup(),
                 'initialize-gbro-dates': managementRoutes.initializeGbroDates(),
                 'fix-gbro-dates': managementRoutes.fixGbroDates(),
+                'fix-anomalies': managementRoutes.fixAnomalies(),
             };
 
             // Build request body with filters for regenerate and reset-expired
@@ -1173,6 +1174,11 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                             <DropdownMenuItem onClick={() => setConfirmAction('cleanup')}>
                                                 <Settings className="h-4 w-4 mr-2" />
                                                 Full Cleanup
+                                            </DropdownMenuItem>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuItem onClick={() => setConfirmAction('fix-anomalies')}>
+                                                <Wrench className="h-4 w-4 mr-2" />
+                                                Fix Anomalies
                                             </DropdownMenuItem>
                                         </DropdownMenuContent>
                                     </DropdownMenu>
@@ -2995,6 +3001,18 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                         (duplicates + expire)
                                     </span>
                                 </Button>
+                                <Button
+                                    variant="outline"
+                                    className="justify-start"
+                                    disabled={isManagementAction}
+                                    onClick={() => setConfirmAction('fix-anomalies')}
+                                >
+                                    <Wrench className="h-4 w-4 mr-2" />
+                                    Fix Anomalies
+                                    <span className="ml-auto text-xs text-muted-foreground">
+                                        (SRO + GBRO + overflow)
+                                    </span>
+                                </Button>
                             </div>
                         </div>
                     </div>
@@ -3043,6 +3061,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                             {confirmAction === 'initialize-gbro-dates' && 'Initialize GBRO Dates'}
                             {confirmAction === 'fix-gbro-dates' && 'Fix GBRO Dates'}
                             {confirmAction === 'recalculate-gbro' && 'Recalculate GBRO Dates'}
+                            {confirmAction === 'fix-anomalies' && 'Fix Anomalies'}
                         </AlertDialogTitle>
                         <AlertDialogDescription asChild>
                             <div>
@@ -3447,6 +3466,24 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                         </span>
                                     </>
                                 )}
+                                {confirmAction === 'fix-anomalies' && (
+                                    <>
+                                        This will scan and fix all attendance point data anomalies:
+                                        <br /><br />
+                                        <ul className="list-disc list-inside space-y-1 text-sm">
+                                            <li><strong>Overdue SRO:</strong> Expire points past their SRO expiration date</li>
+                                            <li><strong>Stale GBRO Dates:</strong> Clear gbro_expires_at from non-GBRO-eligible records</li>
+                                            <li><strong>Overflow Fix:</strong> Correct expires_at dates affected by month-end overflow</li>
+                                        </ul>
+                                        <br />
+                                        <strong className="text-green-600">Excused points will NOT be expired.</strong>
+                                        <br /><br />
+                                        <span className="flex items-center gap-1 text-amber-600">
+                                            <BellOff className="h-4 w-4 inline" />
+                                            <strong>No notifications will be sent.</strong>
+                                        </span>
+                                    </>
+                                )}
                                 {confirmAction === 'initialize-gbro-dates' && (
                                     <>
                                         <p className="mb-3">
@@ -3812,7 +3849,8 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                                 confirmAction === 'initialize-gbro-dates' ? 'bg-cyan-600 hover:bg-cyan-700' :
                                                     confirmAction === 'fix-gbro-dates' ? 'bg-teal-600 hover:bg-teal-700' :
                                                         confirmAction === 'recalculate-gbro' ? 'bg-indigo-600 hover:bg-indigo-700' :
-                                                            'bg-blue-600 hover:bg-blue-700'
+                                                            confirmAction === 'fix-anomalies' ? 'bg-amber-600 hover:bg-amber-700' :
+                                                                'bg-blue-600 hover:bg-blue-700'
                             }
                         >
                             {isManagementAction ? (
@@ -3830,6 +3868,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                     {confirmAction === 'initialize-gbro-dates' && 'Initialize GBRO Dates'}
                                     {confirmAction === 'fix-gbro-dates' && 'Fix GBRO Dates'}
                                     {confirmAction === 'recalculate-gbro' && 'Recalculate GBRO'}
+                                    {confirmAction === 'fix-anomalies' && 'Fix Anomalies'}
                                 </>
                             )}
                         </AlertDialogAction>

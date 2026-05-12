@@ -59,10 +59,10 @@ class ProcessPointExpirations extends Command
         $this->newLine();
 
         // Process Standard Roll Off (SRO)
-        $sroExpired = $this->processSRO($dryRun, !$noNotify);
+        $sroExpired = $this->processSRO($dryRun, ! $noNotify);
 
         // Process Good Behavior Roll Off (GBRO)
-        $gbroExpired = $this->processGBRO($dryRun, !$noNotify);
+        $gbroExpired = $this->processGBRO($dryRun, ! $noNotify);
 
         $this->newLine();
         $this->info('Summary:');
@@ -103,6 +103,7 @@ class ProcessPointExpirations extends Command
 
         if ($count === 0) {
             $this->comment('  No points ready for SRO expiration.');
+
             return 0;
         }
 
@@ -127,7 +128,7 @@ class ProcessPointExpirations extends Command
                     $point->point_type,
                     $point->shift_date->format('M d, Y'),
                     (float) $point->points,
-                    $point->isNcnsOrFtn() ? 'ncns' : 'sro'
+                    $point->isNcns() ? 'ncns' : 'sro'
                 );
             }
         }
@@ -159,7 +160,7 @@ class ProcessPointExpirations extends Command
         foreach ($usersWithPoints as $user) {
             // Bug #5 fix: per-user same-day guard (was global — caused new
             // users in the afternoon to be silently skipped).
-            if (!$force && !$dryRun) {
+            if (! $force && ! $dryRun) {
                 $userBatchExists = AttendancePoint::where('user_id', $user->id)
                     ->where('expiration_type', 'gbro')
                     ->whereDate('gbro_applied_at', today())
@@ -184,16 +185,17 @@ class ProcessPointExpirations extends Command
             }
 
             // Get the first 2 points (newest) that have gbro_expires_at set and check if expired
-            $pointsWithGbroDate = $activeGbroEligiblePoints->filter(fn($p) => $p->gbro_expires_at !== null)->take(2);
+            $pointsWithGbroDate = $activeGbroEligiblePoints->filter(fn ($p) => $p->gbro_expires_at !== null)->take(2);
 
             if ($pointsWithGbroDate->isEmpty()) {
                 // No GBRO dates set yet, calculate and set them
                 $gbroReferenceDate = $this->calculateGbroReferenceDate($user, $activeGbroEligiblePoints);
                 $gbroPredictionDate = $gbroReferenceDate->copy()->addDays(60);
 
-                if (!$dryRun) {
+                if (! $dryRun) {
                     $this->updateGbroExpiresAt($activeGbroEligiblePoints, $gbroPredictionDate);
                 }
+
                 continue;
             }
 
@@ -206,13 +208,14 @@ class ProcessPointExpirations extends Command
 
                 if ($pointsToExpire->count() > 0) {
                     $daysOverdue = $todayDate->diffInDays($firstPointGbroDate);
-                    $this->comment("  {$user->name}: GBRO date {$firstPointGbroDate->format('Y-m-d')} reached (" . ($daysOverdue > 0 ? "{$daysOverdue} days overdue" : "today") . ")");
+                    $this->comment("  {$user->name}: GBRO date {$firstPointGbroDate->format('Y-m-d')} reached (".($daysOverdue > 0 ? "{$daysOverdue} days overdue" : 'today').')');
 
                     if ($dryRun) {
                         foreach ($pointsToExpire as $point) {
-                            $this->line("    - Expiring: {$point->formatted_type} ({$point->points} pts) - " . Carbon::parse($point->shift_date)->format('Y-m-d'));
+                            $this->line("    - Expiring: {$point->formatted_type} ({$point->points} pts) - ".Carbon::parse($point->shift_date)->format('Y-m-d'));
                             $totalExpired++;
                         }
+
                         continue;
                     }
 
@@ -244,7 +247,7 @@ class ProcessPointExpirations extends Command
                     });
 
                     foreach ($pointsToExpire as $point) {
-                        $this->line("    - Expired: {$point->formatted_type} ({$point->points} pts) - " . Carbon::parse($point->shift_date)->format('Y-m-d'));
+                        $this->line("    - Expired: {$point->formatted_type} ({$point->points} pts) - ".Carbon::parse($point->shift_date)->format('Y-m-d'));
                         $totalExpired++;
 
                         if ($notify) {
@@ -285,9 +288,16 @@ class ProcessPointExpirations extends Command
      */
     protected function calculateGbroReferenceDate(User $user, $activePoints): Carbon
     {
-        // The reference date is simply the newest violation among active GBRO-eligible points
-        // This is because that's when the GBRO clock started for these points
-        return Carbon::parse($activePoints->first()->shift_date);
+        // The reference date is the newest non-expired violation of ANY type.
+        // NCNS/FTN violations cannot be GBRO-expired, but they still reset the
+        // 60-day clean window — the employee must go 60 days without ANY violation.
+        $lastViolation = $user->attendancePoints()
+            ->where('is_expired', false)
+            ->max('shift_date');
+
+        return $lastViolation
+            ? Carbon::parse($lastViolation)
+            : Carbon::parse($activePoints->first()->shift_date);
     }
 
     /**
@@ -300,10 +310,10 @@ class ProcessPointExpirations extends Command
             ->max('gbro_applied_at');
 
         if ($lastGbroDate && Carbon::parse($lastGbroDate)->equalTo($referenceDate)) {
-            return "last GBRO on " . $referenceDate->format('Y-m-d');
+            return 'last GBRO on '.$referenceDate->format('Y-m-d');
         }
 
-        return "last violation on " . $referenceDate->format('Y-m-d');
+        return 'last violation on '.$referenceDate->format('Y-m-d');
     }
 
     /**

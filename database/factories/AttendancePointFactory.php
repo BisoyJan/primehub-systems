@@ -2,14 +2,14 @@
 
 namespace Database\Factories;
 
+use App\Models\Attendance;
 use App\Models\AttendancePoint;
 use App\Models\User;
-use App\Models\Attendance;
-use Illuminate\Database\Eloquent\Factories\Factory;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\AttendancePoint>
+ * @extends Factory<AttendancePoint>
  */
 class AttendancePointFactory extends Factory
 {
@@ -142,6 +142,8 @@ class AttendancePointFactory extends Factory
 
     /**
      * Indicate that the point is for FTN (Failed to Notify).
+     * FTN and NCNS are the same: whole_day_absence, not advised, not GBRO-eligible.
+     * The employee did not show up and did not notify — identical treatment to NCNS.
      */
     public function ftn(): static
     {
@@ -152,11 +154,11 @@ class AttendancePointFactory extends Factory
                 'point_type' => 'whole_day_absence',
                 'points' => 1.00,
                 'status' => 'ncns',
-                'is_advised' => true,
-                'violation_details' => 'Failed to Notify (FTN): Employee did not report for work despite being advised.',
-                'expires_at' => $shiftDate->copy()->addYear(), // 1 year for FTN
+                'is_advised' => false,
+                'violation_details' => 'Failed to Notify / NCNS: Employee did not report for work and did not provide prior notice.',
+                'expires_at' => $shiftDate->copy()->addYear(), // 1 year for FTN/NCNS
                 'expiration_type' => 'none',
-                'eligible_for_gbro' => false, // FTN not eligible for GBRO
+                'eligible_for_gbro' => false, // FTN/NCNS not eligible for GBRO
             ];
         });
     }
@@ -310,4 +312,3 @@ class AttendancePointFactory extends Factory
         ]);
     }
 }
-

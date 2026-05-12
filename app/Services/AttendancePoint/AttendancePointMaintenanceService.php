@@ -373,9 +373,9 @@ class AttendancePointMaintenanceService
             foreach ($expiredPoints as $point) {
                 $shiftDate = Carbon::parse($point->shift_date);
                 // Use the model method which correctly checks is_advised:
-                // NCNS (whole_day_absence + !is_advised) → 1-year expiration
-                // Advised absence (whole_day_absence + is_advised) → 6-month expiration (GBRO eligible)
-                $isNcns = $point->isNcnsOrFtn();
+                // FTN/NCNS (whole_day_absence + !is_advised) → 1-year expiration
+                // Advised absence (whole_day_absence + is_advised) → 6-month expiration
+                $isNcns = $point->isNcns();
                 $newExpiresAt = $isNcns ? $shiftDate->copy()->addYear() : $shiftDate->copy()->addMonths(6);
 
                 $point->update([
@@ -545,6 +545,7 @@ class AttendancePointMaintenanceService
             'duplicates_removed' => 0,
             'sro_expired' => 0,
             'gbro_expired' => 0,
+            'gbro_dates_cleared' => 0,
         ];
 
         // Step 1: Remove duplicates (own transaction + cascade)
@@ -568,18 +569,101 @@ class AttendancePointMaintenanceService
         // Step 3: Expire all pending GBRO (own per-user transactions)
         $results['gbro_expired'] = $this->processGbroExpirations();
 
+        // Step 4: Clear stale gbro_expires_at from non-eligible records.
+        // These can accumulate when an agent updates a schedule and the GBRO
+        // recalculation runs without filtering eligibility properly.
+        $results['gbro_dates_cleared'] = AttendancePoint::where('eligible_for_gbro', false)
+            ->whereNotNull('gbro_expires_at')
+            ->update(['gbro_expires_at' => null]);
+
         $totalExpired = $results['sro_expired'] + $results['gbro_expired'];
-        $totalActions = $results['duplicates_removed'] + $totalExpired;
+        $totalActions = $results['duplicates_removed'] + $totalExpired + $results['gbro_dates_cleared'];
 
         return [
             'success' => true,
             'message' => $totalActions > 0
-                ? "Cleanup complete: removed {$results['duplicates_removed']} duplicates, expired {$totalExpired} points (SRO: {$results['sro_expired']}, GBRO: {$results['gbro_expired']}). Excused points preserved."
+                ? "Cleanup complete: removed {$results['duplicates_removed']} duplicates, expired {$totalExpired} points (SRO: {$results['sro_expired']}, GBRO: {$results['gbro_expired']}), cleared {$results['gbro_dates_cleared']} stale GBRO dates. Excused points preserved."
                 : 'No cleanup actions needed. Database is already clean.',
             'duplicates_removed' => $results['duplicates_removed'],
             'points_expired' => $totalExpired,
             'sro_expired' => $results['sro_expired'],
             'gbro_expired' => $results['gbro_expired'],
+            'gbro_dates_cleared' => $results['gbro_dates_cleared'],
+        ];
+    }
+
+    /**
+     * Fix attendance point data anomalies:
+     *  1. Expire overdue SRO points.
+     *  2. Clear stale gbro_expires_at from non-GBRO-eligible records.
+     *  3. Correct month-end expires_at overflow.
+     */
+    public function fixAnomalies(): array
+    {
+        $results = [
+            'sro_expired' => 0,
+            'gbro_dates_cleared' => 0,
+            'expires_at_fixed' => 0,
+        ];
+
+        // Fix 1: Expire overdue SRO points
+        $sroQuery = AttendancePoint::where('is_expired', false)
+            ->where('is_excused', false)
+            ->whereNotNull('expires_at')
+            ->whereDate('expires_at', '<=', today());
+
+        /** @var AttendancePoint $point */
+        foreach ($sroQuery->cursor() as $point) {
+            DB::transaction(function () use ($point, &$results) {
+                $point->markAsExpired('sro');
+                $results['sro_expired']++;
+            });
+        }
+
+        // Fix 2: Clear stale gbro_expires_at from non-eligible records
+        $results['gbro_dates_cleared'] = AttendancePoint::where('eligible_for_gbro', false)
+            ->whereNotNull('gbro_expires_at')
+            ->update(['gbro_expires_at' => null]);
+
+        // Fix 3: Correct month-end expires_at overflow (NoOverflow recalculation)
+        // FTN records: whole_day_absence, is_advised=0, eligible_for_gbro=0 → +1 year NoOverflow
+        $ftnWrong = AttendancePoint::whereNotNull('expires_at')
+            ->where('point_type', 'whole_day_absence')
+            ->where('is_advised', false)
+            ->where('eligible_for_gbro', false)
+            ->get()
+            ->filter(fn ($p) => $p->expires_at->format('Y-m-d') !== Carbon::parse($p->shift_date)->addYearNoOverflow()->format('Y-m-d'));
+
+        // Non-FTN records → +6 months NoOverflow
+        $nonFtnWrong = AttendancePoint::whereNotNull('expires_at')
+            ->where(function ($q) {
+                $q->where('point_type', '!=', 'whole_day_absence')
+                    ->orWhere('is_advised', true)
+                    ->orWhere('eligible_for_gbro', true);
+            })
+            ->get()
+            ->filter(fn ($p) => $p->expires_at->format('Y-m-d') !== Carbon::parse($p->shift_date)->addMonthsNoOverflow(6)->format('Y-m-d'));
+
+        foreach ($ftnWrong as $point) {
+            $point->update(['expires_at' => Carbon::parse($point->shift_date)->addYearNoOverflow()->format('Y-m-d')]);
+            $results['expires_at_fixed']++;
+        }
+
+        foreach ($nonFtnWrong as $point) {
+            $point->update(['expires_at' => Carbon::parse($point->shift_date)->addMonthsNoOverflow(6)->format('Y-m-d')]);
+            $results['expires_at_fixed']++;
+        }
+
+        $totalActions = $results['sro_expired'] + $results['gbro_dates_cleared'] + $results['expires_at_fixed'];
+
+        return [
+            'success' => true,
+            'message' => $totalActions > 0
+                ? "Anomaly fix complete: expired {$results['sro_expired']} overdue SRO point(s), cleared {$results['gbro_dates_cleared']} stale GBRO date(s), corrected {$results['expires_at_fixed']} expires_at overflow(s)."
+                : 'No anomalies found. Data is clean.',
+            'sro_expired' => $results['sro_expired'],
+            'gbro_dates_cleared' => $results['gbro_dates_cleared'],
+            'expires_at_fixed' => $results['expires_at_fixed'],
         ];
     }
 

@@ -330,6 +330,7 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
                 Route::post('/cleanup', [AttendancePointController::class, 'cleanup'])->name('cleanup');
                 Route::post('/initialize-gbro-dates', [AttendancePointController::class, 'initializeGbroDates'])->name('initialize-gbro-dates');
                 Route::post('/fix-gbro-dates', [AttendancePointController::class, 'fixGbroDates'])->name('fix-gbro-dates');
+                Route::post('/fix-anomalies', [AttendancePointController::class, 'fixAnomalies'])->name('fix-anomalies');
             });
 
         // Bulk manual entry page + submit endpoint — declared BEFORE {user} routes.
