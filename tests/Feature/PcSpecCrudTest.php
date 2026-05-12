@@ -70,7 +70,6 @@ class PcSpecCrudTest extends TestCase
     {
         $data = [
             'manufacturer' => 'ASUS',
-            'model' => 'PRIME B450M-A',
             'memory_type' => 'DDR4',
             'ram_gb' => 32,
             'disk_gb' => 512,
@@ -87,7 +86,6 @@ class PcSpecCrudTest extends TestCase
 
         $this->assertDatabaseHas('pc_specs', [
             'manufacturer' => 'ASUS',
-            'model' => 'PRIME B450M-A',
             'memory_type' => 'DDR4',
             'ram_gb' => 32,
             'disk_gb' => 512,
@@ -103,7 +101,6 @@ class PcSpecCrudTest extends TestCase
     {
         $data = [
             'manufacturer' => 'Gigabyte',
-            'model' => 'B550M DS3H',
             'memory_type' => 'DDR4',
             'ram_gb' => 16,
             'disk_gb' => 256,
@@ -128,7 +125,6 @@ class PcSpecCrudTest extends TestCase
 
         $response->assertSessionHasErrors([
             'manufacturer',
-            'model',
             'memory_type',
         ]);
     }
@@ -155,14 +151,12 @@ class PcSpecCrudTest extends TestCase
     {
         $pcSpec = PcSpec::factory()->create([
             'manufacturer' => 'ASUS',
-            'model' => 'OLD-MODEL',
         ]);
         $pcSpec->processorSpecs()->attach($this->processor->id);
 
         $response = $this->actingAs($this->admin)
             ->put(route('pcspecs.update', $pcSpec), [
                 'manufacturer' => 'ASUS',
-                'model' => 'NEW-MODEL',
                 'memory_type' => $pcSpec->memory_type,
                 'ram_gb' => 16,
                 'disk_gb' => 512,
@@ -174,7 +168,6 @@ class PcSpecCrudTest extends TestCase
 
         $this->assertDatabaseHas('pc_specs', [
             'id' => $pcSpec->id,
-            'model' => 'NEW-MODEL',
             'ram_gb' => 16,
             'disk_gb' => 512,
         ]);
@@ -217,8 +210,8 @@ class PcSpecCrudTest extends TestCase
     #[Test]
     public function it_filters_pc_specs_by_search()
     {
-        PcSpec::factory()->create(['model' => 'PRIME B450M']);
-        PcSpec::factory()->create(['model' => 'ROG STRIX B550']);
+        PcSpec::factory()->create(['pc_number' => 'PC-PRIME-001']);
+        PcSpec::factory()->create(['pc_number' => 'PC-ROG-002']);
         PcSpec::factory()->create(['pc_number' => 'PC-2024-001']);
 
         $response = $this->actingAs($this->admin)
@@ -228,7 +221,7 @@ class PcSpecCrudTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Computer/PcSpecs/Index')
                 ->has('pcspecs.data', 1)
-                ->where('pcspecs.data.0.model', 'PRIME B450M')
+                ->where('pcspecs.data.0.pc_number', 'PC-PRIME-001')
             );
     }
 
@@ -252,7 +245,6 @@ class PcSpecCrudTest extends TestCase
         $response = $this->actingAs($user)
             ->post(route('pcspecs.store'), [
                 'manufacturer' => 'ASUS',
-                'model' => 'TEST',
                 'memory_type' => 'DDR4',
                 'ram_gb' => 16,
                 'disk_gb' => 512,
@@ -260,7 +252,7 @@ class PcSpecCrudTest extends TestCase
             ]);
 
         $response->assertForbidden();
-        $this->assertDatabaseMissing('pc_specs', ['manufacturer' => 'ASUS', 'model' => 'TEST']);
+        $this->assertDatabaseMissing('pc_specs', ['manufacturer' => 'ASUS']);
     }
 
     #[Test]

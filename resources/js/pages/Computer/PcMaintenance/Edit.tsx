@@ -39,14 +39,12 @@ interface CurrentStation {
 interface PcSpec {
     id: number;
     pc_number: string;
-    model: string;
     manufacturer: string;
 }
 
 interface PcSpecItem {
     id: number;
     pc_number: string;
-    model: string;
     manufacturer: string;
     current_station: CurrentStation | null;
 }
@@ -105,7 +103,7 @@ export default function Edit({ maintenance, pcSpecs }: EditProps) {
         const stationInfo = pcSpec.current_station
             ? `${pcSpec.current_station.station_number} (${pcSpec.current_station.site?.name || 'N/A'})`
             : 'Not assigned';
-        return `${pcSpec.pc_number} - ${pcSpec.model} | Station: ${stationInfo}`;
+        return `${pcSpec.pc_number ?? pcSpec.manufacturer} | Station: ${stationInfo}`;
     };
 
     const handleSubmit = (e: FormEvent) => {

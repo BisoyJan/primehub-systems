@@ -22,7 +22,6 @@ class PcSpec extends Model
     protected $fillable = [
         'pc_number',
         'manufacturer',
-        'model',
         'memory_type',
         'issue',
         'ram_gb',
@@ -80,7 +79,6 @@ class PcSpec extends Model
             'id' => $this->id,
             'pc_number' => $this->pc_number,
             'manufacturer' => $this->manufacturer,
-            'model' => $this->model,
             'memory_type' => $this->memory_type,
             'ram_gb' => $this->ram_gb,
             'disk_gb' => $this->disk_gb,
@@ -107,7 +105,6 @@ class PcSpec extends Model
         return [
             'id' => $this->id,
             'pc_number' => $this->pc_number,
-            'model' => $this->model,
             'memory_type' => $this->memory_type,
             'ram_gb' => $this->ram_gb,
             'disk_gb' => $this->disk_gb,

@@ -288,11 +288,13 @@ class ProcessPointExpirations extends Command
      */
     protected function calculateGbroReferenceDate(User $user, $activePoints): Carbon
     {
-        // The reference date is the newest non-expired violation of ANY type.
+        // The reference date is the newest non-expired, non-excused violation of ANY type.
         // NCNS/FTN violations cannot be GBRO-expired, but they still reset the
         // 60-day clean window — the employee must go 60 days without ANY violation.
+        // Excused points must NOT reset the clock — the employee was forgiven for those days.
         $lastViolation = $user->attendancePoints()
             ->where('is_expired', false)
+            ->where('is_excused', false)
             ->max('shift_date');
 
         return $lastViolation

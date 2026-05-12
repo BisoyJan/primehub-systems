@@ -373,9 +373,9 @@ class AttendancePointMaintenanceService
             foreach ($expiredPoints as $point) {
                 $shiftDate = Carbon::parse($point->shift_date);
                 // Use the model method which correctly checks is_advised:
-                // FTN/NCNS (whole_day_absence + !is_advised) → 1-year expiration
-                // Advised absence (whole_day_absence + is_advised) → 6-month expiration
-                $isNcns = $point->isNcns();
+                // NCNS (whole_day_absence + !is_advised) → 1-year expiration
+                // Advised absence (whole_day_absence + is_advised) → 6-month expiration (GBRO eligible)
+                $isNcns = $point->isNcnsOrFtn();
                 $newExpiresAt = $isNcns ? $shiftDate->copy()->addYear() : $shiftDate->copy()->addMonths(6);
 
                 $point->update([
@@ -545,7 +545,6 @@ class AttendancePointMaintenanceService
             'duplicates_removed' => 0,
             'sro_expired' => 0,
             'gbro_expired' => 0,
-            'gbro_dates_cleared' => 0,
         ];
 
         // Step 1: Remove duplicates (own transaction + cascade)
@@ -569,101 +568,18 @@ class AttendancePointMaintenanceService
         // Step 3: Expire all pending GBRO (own per-user transactions)
         $results['gbro_expired'] = $this->processGbroExpirations();
 
-        // Step 4: Clear stale gbro_expires_at from non-eligible records.
-        // These can accumulate when an agent updates a schedule and the GBRO
-        // recalculation runs without filtering eligibility properly.
-        $results['gbro_dates_cleared'] = AttendancePoint::where('eligible_for_gbro', false)
-            ->whereNotNull('gbro_expires_at')
-            ->update(['gbro_expires_at' => null]);
-
         $totalExpired = $results['sro_expired'] + $results['gbro_expired'];
-        $totalActions = $results['duplicates_removed'] + $totalExpired + $results['gbro_dates_cleared'];
+        $totalActions = $results['duplicates_removed'] + $totalExpired;
 
         return [
             'success' => true,
             'message' => $totalActions > 0
-                ? "Cleanup complete: removed {$results['duplicates_removed']} duplicates, expired {$totalExpired} points (SRO: {$results['sro_expired']}, GBRO: {$results['gbro_expired']}), cleared {$results['gbro_dates_cleared']} stale GBRO dates. Excused points preserved."
+                ? "Cleanup complete: removed {$results['duplicates_removed']} duplicates, expired {$totalExpired} points (SRO: {$results['sro_expired']}, GBRO: {$results['gbro_expired']}). Excused points preserved."
                 : 'No cleanup actions needed. Database is already clean.',
             'duplicates_removed' => $results['duplicates_removed'],
             'points_expired' => $totalExpired,
             'sro_expired' => $results['sro_expired'],
             'gbro_expired' => $results['gbro_expired'],
-            'gbro_dates_cleared' => $results['gbro_dates_cleared'],
-        ];
-    }
-
-    /**
-     * Fix attendance point data anomalies:
-     *  1. Expire overdue SRO points.
-     *  2. Clear stale gbro_expires_at from non-GBRO-eligible records.
-     *  3. Correct month-end expires_at overflow.
-     */
-    public function fixAnomalies(): array
-    {
-        $results = [
-            'sro_expired' => 0,
-            'gbro_dates_cleared' => 0,
-            'expires_at_fixed' => 0,
-        ];
-
-        // Fix 1: Expire overdue SRO points
-        $sroQuery = AttendancePoint::where('is_expired', false)
-            ->where('is_excused', false)
-            ->whereNotNull('expires_at')
-            ->whereDate('expires_at', '<=', today());
-
-        /** @var AttendancePoint $point */
-        foreach ($sroQuery->cursor() as $point) {
-            DB::transaction(function () use ($point, &$results) {
-                $point->markAsExpired('sro');
-                $results['sro_expired']++;
-            });
-        }
-
-        // Fix 2: Clear stale gbro_expires_at from non-eligible records
-        $results['gbro_dates_cleared'] = AttendancePoint::where('eligible_for_gbro', false)
-            ->whereNotNull('gbro_expires_at')
-            ->update(['gbro_expires_at' => null]);
-
-        // Fix 3: Correct month-end expires_at overflow (NoOverflow recalculation)
-        // FTN records: whole_day_absence, is_advised=0, eligible_for_gbro=0 → +1 year NoOverflow
-        $ftnWrong = AttendancePoint::whereNotNull('expires_at')
-            ->where('point_type', 'whole_day_absence')
-            ->where('is_advised', false)
-            ->where('eligible_for_gbro', false)
-            ->get()
-            ->filter(fn ($p) => $p->expires_at->format('Y-m-d') !== Carbon::parse($p->shift_date)->addYearNoOverflow()->format('Y-m-d'));
-
-        // Non-FTN records → +6 months NoOverflow
-        $nonFtnWrong = AttendancePoint::whereNotNull('expires_at')
-            ->where(function ($q) {
-                $q->where('point_type', '!=', 'whole_day_absence')
-                    ->orWhere('is_advised', true)
-                    ->orWhere('eligible_for_gbro', true);
-            })
-            ->get()
-            ->filter(fn ($p) => $p->expires_at->format('Y-m-d') !== Carbon::parse($p->shift_date)->addMonthsNoOverflow(6)->format('Y-m-d'));
-
-        foreach ($ftnWrong as $point) {
-            $point->update(['expires_at' => Carbon::parse($point->shift_date)->addYearNoOverflow()->format('Y-m-d')]);
-            $results['expires_at_fixed']++;
-        }
-
-        foreach ($nonFtnWrong as $point) {
-            $point->update(['expires_at' => Carbon::parse($point->shift_date)->addMonthsNoOverflow(6)->format('Y-m-d')]);
-            $results['expires_at_fixed']++;
-        }
-
-        $totalActions = $results['sro_expired'] + $results['gbro_dates_cleared'] + $results['expires_at_fixed'];
-
-        return [
-            'success' => true,
-            'message' => $totalActions > 0
-                ? "Anomaly fix complete: expired {$results['sro_expired']} overdue SRO point(s), cleared {$results['gbro_dates_cleared']} stale GBRO date(s), corrected {$results['expires_at_fixed']} expires_at overflow(s)."
-                : 'No anomalies found. Data is clean.',
-            'sro_expired' => $results['sro_expired'],
-            'gbro_dates_cleared' => $results['gbro_dates_cleared'],
-            'expires_at_fixed' => $results['expires_at_fixed'],
         ];
     }
 
@@ -731,6 +647,136 @@ class AttendancePointMaintenanceService
             'message' => "Regenerated {$regeneratedCount} attendance points from {$attendances->count()} attendance records.",
             'regenerated' => $regeneratedCount,
             'records_processed' => $attendances->count(),
+        ];
+    }
+
+    /**
+     * Fix all known attendance point data anomalies:
+     *   1. Expire overdue SRO points (non-excused, expired date passed).
+     *   2. Clear stale gbro_expires_at from non-GBRO-eligible records.
+     *   3. Correct eligible_for_gbro flag for advised absences wrongly marked as NCNS/FTN.
+     *   4. Recalculate expires_at for month-end overflow (NoOverflow correction).
+     */
+    public function fixAnomalies(): array
+    {
+        $sroExpired = 0;
+        $gbroDatesCleared = 0;
+        $gbroEligibleFixed = 0;
+        $expiresAtFixed = 0;
+
+        // Fix 1: Expire overdue SRO points
+        $sroQuery = AttendancePoint::where('is_expired', false)
+            ->where('is_excused', false)
+            ->whereNotNull('expires_at')
+            ->whereDate('expires_at', '<=', today());
+
+        foreach ($sroQuery->cursor() as $point) {
+            DB::transaction(function () use ($point) {
+                $point->markAsExpired('sro');
+            });
+            $sroExpired++;
+        }
+
+        // Fix 2: Clear stale gbro_expires_at from non-GBRO-eligible records
+        $gbroDatesCleared = AttendancePoint::where('eligible_for_gbro', false)
+            ->whereNotNull('gbro_expires_at')
+            ->count();
+
+        if ($gbroDatesCleared > 0) {
+            AttendancePoint::where('eligible_for_gbro', false)
+                ->whereNotNull('gbro_expires_at')
+                ->update(['gbro_expires_at' => null]);
+        }
+
+        // Fix 3: Correct eligible_for_gbro flag based on business rules:
+        //   3a. whole_day_absence + is_advised=true  → eligible_for_gbro=true  (advised absence, 6-month SRO)
+        //   3b. point_type != whole_day_absence       → eligible_for_gbro=true  (tardy/undertime/half-day always eligible)
+        //   3c. whole_day_absence + is_advised=false  → eligible_for_gbro=false (FTN/NCNS, 1-year SRO)
+        // Must run BEFORE Fix 4 so expires_at is recalculated with the corrected flag.
+        $gbroAffectedUserIds = [];
+
+        // 3a: Advised absences wrongly marked as not eligible
+        $advisedWrongFlag = AttendancePoint::where('point_type', 'whole_day_absence')
+            ->where('is_advised', true)
+            ->where('eligible_for_gbro', false)
+            ->where('is_expired', false)
+            ->get();
+
+        foreach ($advisedWrongFlag as $point) {
+            $point->update(['eligible_for_gbro' => true, 'expiration_type' => 'sro']);
+            $gbroEligibleFixed++;
+            $gbroAffectedUserIds[$point->user_id] = true;
+        }
+
+        // 3b: Non-whole-day types (tardy, undertime, half_day_absence) wrongly marked as not eligible
+        $nonWholeWrongFlag = AttendancePoint::where('point_type', '!=', 'whole_day_absence')
+            ->where('eligible_for_gbro', false)
+            ->where('is_expired', false)
+            ->get();
+
+        foreach ($nonWholeWrongFlag as $point) {
+            $point->update(['eligible_for_gbro' => true, 'expiration_type' => 'sro']);
+            $gbroEligibleFixed++;
+            $gbroAffectedUserIds[$point->user_id] = true;
+        }
+
+        // 3c: FTN/NCNS (whole_day_absence + is_advised=false) wrongly marked as eligible
+        $ftnWrongFlag = AttendancePoint::where('point_type', 'whole_day_absence')
+            ->where('is_advised', false)
+            ->where('eligible_for_gbro', true)
+            ->where('is_expired', false)
+            ->get();
+
+        foreach ($ftnWrongFlag as $point) {
+            $point->update(['eligible_for_gbro' => false, 'expiration_type' => 'none']);
+            $gbroEligibleFixed++;
+            $gbroAffectedUserIds[$point->user_id] = true;
+        }
+
+        // Fix 4: Correct expires_at month-end overflow (NoOverflow recalculation).
+        // Source of truth: isNcnsOrFtn() = whole_day_absence AND eligible_for_gbro=false → 1 year.
+        // Everything else → 6 months. Do NOT use is_advised as a discriminator — FTN records
+        // have is_advised=true but are still 1-year violations (eligible_for_gbro=false).
+        $ftnWrong = AttendancePoint::whereNotNull('expires_at')
+            ->where('point_type', 'whole_day_absence')
+            ->where('eligible_for_gbro', false)
+            ->get()
+            ->filter(fn ($p) => $p->expires_at->format('Y-m-d') !== Carbon::parse($p->shift_date)->addYearNoOverflow()->format('Y-m-d'));
+
+        foreach ($ftnWrong as $point) {
+            $point->update(['expires_at' => Carbon::parse($point->shift_date)->addYearNoOverflow()->format('Y-m-d')]);
+            $expiresAtFixed++;
+        }
+
+        // All others (non-whole-day, or whole-day with eligible_for_gbro=true) → +6 months NoOverflow
+        $nonFtnWrong = AttendancePoint::whereNotNull('expires_at')
+            ->where(function ($q) {
+                $q->where('point_type', '!=', 'whole_day_absence')
+                    ->orWhere('eligible_for_gbro', true);
+            })
+            ->get()
+            ->filter(fn ($p) => $p->expires_at->format('Y-m-d') !== Carbon::parse($p->shift_date)->addMonthsNoOverflow(6)->format('Y-m-d'));
+
+        foreach ($nonFtnWrong as $point) {
+            $point->update(['expires_at' => Carbon::parse($point->shift_date)->addMonthsNoOverflow(6)->format('Y-m-d')]);
+            $expiresAtFixed++;
+        }
+
+        // Cascade recalculate GBRO for all users whose eligible_for_gbro flag was corrected.
+        foreach (array_keys($gbroAffectedUserIds) as $uid) {
+            $this->gbroService->cascadeRecalculateGbro($uid);
+        }
+
+        $totalFixed = $sroExpired + $gbroDatesCleared + $gbroEligibleFixed + $expiresAtFixed;
+
+        return [
+            'success' => true,
+            'message' => "Anomaly fix complete. {$totalFixed} total records corrected (SRO expired: {$sroExpired}, GBRO dates cleared: {$gbroDatesCleared}, eligible_for_gbro fixed: {$gbroEligibleFixed}, expires_at corrected: {$expiresAtFixed}).",
+            'sro_expired' => $sroExpired,
+            'gbro_dates_cleared' => $gbroDatesCleared,
+            'gbro_eligible_fixed' => $gbroEligibleFixed,
+            'expires_at_fixed' => $expiresAtFixed,
+            'total_fixed' => $totalFixed,
         ];
     }
 }

@@ -339,7 +339,7 @@ class PcTransferController extends Controller
                 'id' => $transfer->id,
                 'from_station' => $transfer->fromStation?->station_number,
                 'to_station' => $transfer->toStation?->station_number,
-                'pc_spec' => $transfer->pcSpec?->model,
+                'pc_spec' => $transfer->pcSpec ? ($transfer->pcSpec->pc_number ?? $transfer->pcSpec->manufacturer) : null,
                 'user' => $transfer->user?->name,
                 'transfer_type' => $transfer->transfer_type,
                 'notes' => $transfer->notes,

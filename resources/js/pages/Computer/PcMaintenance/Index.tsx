@@ -54,7 +54,6 @@ import { index as pcSpecsIndexRoute } from '@/routes/pcspecs';
 interface PcSpec {
     id: number;
     pc_number: string;
-    model: string;
 }
 
 interface Site {
@@ -633,7 +632,6 @@ export default function Index({ maintenances, sites, filters = {}, allMatchingId
                                                 </TableHead>
                                             )}
                                             <TableHead>PC Number</TableHead>
-                                            <TableHead>Model</TableHead>
                                             <TableHead>Current Station</TableHead>
                                             <TableHead>Site</TableHead>
                                             <TableHead>Maintenance Type</TableHead>
@@ -647,7 +645,7 @@ export default function Index({ maintenances, sites, filters = {}, allMatchingId
                                     <TableBody>
                                         {!hasData ? (
                                             <TableRow>
-                                                <TableCell colSpan={can('pc_maintenance.edit') ? 11 : 10} className="text-center py-8">
+                                                <TableCell colSpan={can('pc_maintenance.edit') ? 10 : 9} className="text-center py-8">
                                                     <Calendar className="mx-auto h-12 w-12 text-muted-foreground mb-2" />
                                                     <p className="text-muted-foreground">No maintenance records found</p>
                                                 </TableCell>
@@ -666,9 +664,6 @@ export default function Index({ maintenances, sites, filters = {}, allMatchingId
                                                     )}
                                                     <TableCell className="font-medium">
                                                         {maintenance.pc_spec?.pc_number || 'N/A'}
-                                                    </TableCell>
-                                                    <TableCell className="text-muted-foreground">
-                                                        {maintenance.pc_spec?.model || 'N/A'}
                                                     </TableCell>
                                                     <TableCell>
                                                         {maintenance.current_station?.station_number || (
@@ -767,7 +762,6 @@ export default function Index({ maintenances, sites, filters = {}, allMatchingId
                                                 <Monitor className="h-4 w-4 text-muted-foreground" />
                                                 <span className="font-semibold">{maintenance.pc_spec?.pc_number || 'N/A'}</span>
                                             </div>
-                                            <p className="text-sm text-muted-foreground">{maintenance.pc_spec?.model || 'N/A'}</p>
                                         </div>
                                     </div>
                                     {getStatusBadge(maintenance)}

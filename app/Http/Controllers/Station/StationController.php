@@ -285,7 +285,7 @@ class StationController extends Controller
 
         // Filter by station number range
         $stationNumberFrom = $request->input('station_number_from');
-        $stationNumberTo   = $request->input('station_number_to');
+        $stationNumberTo = $request->input('station_number_to');
 
         if (is_numeric($stationNumberFrom) && (int) $stationNumberFrom > 0) {
             $query->whereRaw("CAST(REGEXP_REPLACE(station_number, '[^0-9]', '') AS UNSIGNED) >= ?", [(int) $stationNumberFrom]);
@@ -316,7 +316,7 @@ class StationController extends Controller
                 'campaign_id' => $station->campaign_id,
                 'status' => $station->status,
                 'monitor_type' => $station->monitor_type,
-                'pc_spec' => $station->pcSpec?->model,
+                'pc_spec' => $station->pcSpec?->manufacturer,
                 'pc_spec_details' => $pcSpecDetails,
                 'processor_label' => $firstProcessor
                     ? trim($firstProcessor->manufacturer.' '.$firstProcessor->model)
@@ -441,7 +441,7 @@ class StationController extends Controller
                     'site_id' => $validated['site_id'],
                     'station_number' => $stationNumber,
                     'campaign_id' => $validated['campaign_id'],
-                    'status' => $validated['status'],
+                    'status' => $validated['status'] ?? null,
                     'monitor_type' => $validated['monitor_type'],
                     'pc_spec_id' => $pcSpecId,
                     'created_at' => now(),

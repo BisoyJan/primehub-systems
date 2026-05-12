@@ -890,11 +890,11 @@ class CoachingSessionController extends Controller
                 Storage::disk('local')->delete($filePath);
             }
 
-            return $this->backWithFlash('Coaching session deleted successfully.');
+            return $this->redirectWithFlash('coaching.sessions.index', 'Coaching session deleted successfully.');
         } catch (\Exception $e) {
             Log::error('CoachingSessionController@destroy Error: '.$e->getMessage());
 
-            return $this->backWithFlash('Failed to delete coaching session.', 'error');
+            return $this->redirectWithFlash('coaching.sessions.index', 'Failed to delete coaching session.', 'error');
         }
     }
 

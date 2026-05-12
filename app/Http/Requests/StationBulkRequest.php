@@ -37,12 +37,7 @@ class StationBulkRequest extends FormRequest
             ]);
         }
 
-        // Convert empty status to null
-        if ($this->has('status') && $this->input('status') === '') {
-            $this->merge([
-                'status' => null,
-            ]);
-        }
+        // Convert empty status to null (kept for other nullable fields)
     }
 
     public function rules(): array

@@ -116,7 +116,6 @@ class PcMaintenanceController extends Controller
                 return [
                     'id' => $pcSpec->id,
                     'pc_number' => $pcSpec->pc_number,
-                    'model' => $pcSpec->model,
                     'manufacturer' => $pcSpec->manufacturer,
                     'current_station' => $currentStation ? [
                         'id' => $currentStation->id,
@@ -217,7 +216,6 @@ class PcMaintenanceController extends Controller
                 return [
                     'id' => $pcSpec->id,
                     'pc_number' => $pcSpec->pc_number,
-                    'model' => $pcSpec->model,
                     'manufacturer' => $pcSpec->manufacturer,
                     'current_station' => $currentStation ? [
                         'id' => $currentStation->id,

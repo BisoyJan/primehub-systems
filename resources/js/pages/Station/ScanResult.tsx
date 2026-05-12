@@ -192,7 +192,7 @@ export default function ScanResult({ stationId, station: initialStation, error: 
                             {station.pcSpec ? (
                                 <div className="space-y-3">
                                     <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 rounded-md border px-3 py-2">
-                                        <span className="font-medium">{station.pcSpec.manufacturer ? `${station.pcSpec.manufacturer} ` : ''}{station.pcSpec.model}</span>
+                                        <span className="font-medium">{station.pcSpec.manufacturer || '—'}</span>
                                         {station.pcSpec.pc_number && (
                                             <Badge variant="outline">{station.pcSpec.pc_number}</Badge>
                                         )}

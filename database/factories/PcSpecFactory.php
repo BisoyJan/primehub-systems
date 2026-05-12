@@ -19,7 +19,6 @@ class PcSpecFactory extends Factory
         return [
             'pc_number' => 'PC-'.date('Y').'-'.str_pad($this->faker->unique()->numberBetween(1, 999), 3, '0', STR_PAD_LEFT),
             'manufacturer' => $this->faker->randomElement($manufacturers),
-            'model' => strtoupper($this->faker->bothify('????-####')),
             'memory_type' => $memoryType,
             'ram_gb' => $this->faker->randomElement([4, 8, 16, 32, 64]),
             'disk_gb' => $this->faker->randomElement([256, 512, 1024, 2048]),

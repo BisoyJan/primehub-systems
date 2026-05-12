@@ -171,9 +171,9 @@ class AttendancePoint extends Model
      */
     public function getFormattedTypeAttribute(): string
     {
-        // For whole_day_absence: FTN/NCNS when not advised, Advised Absence when advised
+        // For whole_day_absence, show NCNS only if is_advised is false
         if ($this->point_type === 'whole_day_absence') {
-            return $this->is_advised ? 'Whole Day Absence' : 'Whole Day Absence (FTN/NCNS)';
+            return $this->is_advised ? 'Whole Day Absence' : 'Whole Day Absence (NCNS)';
         }
 
         return match ($this->point_type) {
@@ -228,42 +228,36 @@ class AttendancePoint extends Model
     }
 
     /**
-     * Check if this point is FTN/NCNS (1-year expiration, not GBRO eligible).
+     * Check if this point is NCNS or FTN (both have 1-year expiration, not GBRO eligible).
      *
-     * FTN (Failed to Notify) and NCNS (No Call No Show) are the same violation:
-     * the employee did not show up and did not notify management beforehand.
-     * Both are identified by: whole_day_absence + is_advised=false + eligible_for_gbro=false.
+     * Rules:
+     * - NCNS (is_advised=false): employee did not show up without any notice
+     * - FTN (is_advised=true, ncns status): employee was told to come but didn't show and didn't call
+     * - Both NCNS and FTN are NOT eligible for GBRO and get 1-year expiration
+     * - Advised Absence (is_advised=true, manually entered with checkbox): IS eligible for GBRO
      *
-     * Advised Absence (is_advised=true, whole_day_absence): employee DID notify management;
-     * treated as a standard violation — 6-month SRO, may be GBRO-eligible.
+     * Uses eligible_for_gbro as the source of truth to distinguish FTN from Advised Absence,
+     * since both can have is_advised=true but differ in GBRO eligibility.
      */
-    public function isNcns(): bool
+    public function isNcnsOrFtn(): bool
     {
-        // FTN/NCNS: whole_day_absence that is NOT advised and NOT GBRO-eligible → 1 year.
-        // Advised whole_day_absence has is_advised=true and gets 6-month SRO instead.
-        return $this->point_type === 'whole_day_absence'
-            && ! (bool) $this->eligible_for_gbro
-            && ! (bool) $this->is_advised;
+        return $this->point_type === 'whole_day_absence' && ! (bool) $this->eligible_for_gbro;
     }
 
     /**
      * Calculate expiration date based on point type and rules.
-     *
-     * - FTN/NCNS (whole_day_absence, not advised, not GBRO-eligible): 1 year
-     * - All other violations including advised absence: 6 months
      */
     public function calculateExpirationDate(): Carbon
     {
         $shiftDate = Carbon::parse($this->shift_date);
 
-        if ($this->isNcns()) {
-            // FTN/NCNS: 1 year expiration (no overflow — Jan 31 + 1 year = Jan 31)
-            return $shiftDate->addYearNoOverflow();
+        if ($this->isNcnsOrFtn()) {
+            // NCNS/FTN: 1 year expiration
+            return $shiftDate->addYear();
         }
 
-        // Standard violations and advised absences: 6 months expiration
-        // Use NoOverflow to prevent month-end spill (e.g. Mar 31 + 6mo = Sep 30, not Oct 1)
-        return $shiftDate->addMonthsNoOverflow(6);
+        // Standard violations: 6 months expiration
+        return $shiftDate->addMonths(6);
     }
 
     /**
@@ -272,7 +266,7 @@ class AttendancePoint extends Model
     public function setExpirationDate(): void
     {
         $this->attributes['expires_at'] = $this->calculateExpirationDate()->format('Y-m-d');
-        $this->expiration_type = $this->isNcns() ? 'none' : 'sro';
+        $this->expiration_type = $this->isNcnsOrFtn() ? 'none' : 'sro';
         $this->save();
     }
 
@@ -295,14 +289,14 @@ class AttendancePoint extends Model
     /**
      * Mark point as expired.
      *
-     * FTN/NCNS points are stored with expiration_type='none'
+     * Bug #4 fix: NCNS / FTN points are stored with expiration_type='none'
      * (they roll off after 1 year, separate from SRO's 6-month rule).
      * When the cron expires them via the standard expiry path, we must NOT
      * relabel them as 'sro' — that would corrupt the expiration audit trail.
      */
     public function markAsExpired(string $type = 'sro'): void
     {
-        $resolvedType = $this->isNcns() && $type === 'sro'
+        $resolvedType = $this->isNcnsOrFtn() && $type === 'sro'
             ? 'none'
             : $type;
 
@@ -328,8 +322,8 @@ class AttendancePoint extends Model
         // Generate violation details based on type
         return match ($this->point_type) {
             'whole_day_absence' => $this->is_advised
-                ? 'Advised absence — employee notified management before absence'
-                : 'Failed to Notify / NCNS — employee did not show up or provide prior notice',
+                ? 'Advised absence (Failed to Notify - FTN)'
+                : 'No Call, No Show (NCNS) - Did not report for work without prior notice',
             'half_day_absence' => sprintf('Late arrival exceeding %d minutes grace period from scheduled time', $gracePeriod),
             'tardy' => sprintf('Late arrival by %d minutes', $this->tardy_minutes ?? 0),
             'undertime' => sprintf('Early departure by %d minutes before scheduled end time', $this->undertime_minutes ?? 0),

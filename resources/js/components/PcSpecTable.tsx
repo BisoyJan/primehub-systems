@@ -20,7 +20,6 @@ import {
 export interface PcSpec {
     id: number;
     pc_number?: string;
-    model: string;
     memory_type?: string | null;
     ram_gb?: number;
     disk_gb?: number;
@@ -44,7 +43,6 @@ interface PcSpecTableProps {
 
 const columns: DataTableColumn<PcSpec>[] = [
     { accessor: "pc_number", header: "PC Number" },
-    { accessor: "model", header: "Model" },
     { accessor: "processor", header: "Processor" },
     { accessor: "ram_gb", header: "RAM (GB)" },
     { accessor: "disk_gb", header: "Disk (GB)" },
@@ -74,7 +72,6 @@ export default function PcSpecTable({
 
         const matchesSearch =
             (spec.pc_number?.toLowerCase().includes(search.toLowerCase()) ?? false) ||
-            spec.model.toLowerCase().includes(search.toLowerCase()) ||
             (spec.processor?.toLowerCase().includes(search.toLowerCase()) ?? false);
         const matchesRam = filterRam ? String(spec.ram_gb ?? '').includes(filterRam) : true;
         const matchesDisk = filterDisk ? String(spec.disk_gb ?? '').includes(filterDisk) : true;
@@ -200,7 +197,7 @@ export default function PcSpecTable({
                                             onChange={() => onSelect(String(spec.id))}
                                             className="mt-1 h-4 w-4 rounded border-gray-300"
                                             onClick={(e) => e.stopPropagation()}
-                                            aria-label={`Select ${spec.model}`}
+                                            aria-label={`Select ${spec.pc_number || spec.id}`}
                                         />
                                     ) : (
                                         <input
@@ -209,13 +206,12 @@ export default function PcSpecTable({
                                             onChange={() => onSelect(String(spec.id))}
                                             className="mt-1 h-4 w-4"
                                             onClick={(e) => e.stopPropagation()}
-                                            aria-label={`Select ${spec.model}`}
+                                            aria-label={`Select ${spec.pc_number || spec.id}`}
                                         />
                                     )}
                                     <div className="flex-1">
                                         <div className={`font-semibold text-base mb-1 ${isSelected ? 'text-blue-900 dark:text-blue-100' : ''}`}>
-                                            {spec.pc_number && <span className="text-primary">{spec.pc_number} - </span>}
-                                            {spec.model}
+                                            {spec.pc_number && <span className="text-primary">{spec.pc_number}</span>}
                                         </div>
                                         <div className="space-y-1.5 text-sm">
                                             <div className="flex justify-between">
@@ -266,7 +262,7 @@ export default function PcSpecTable({
                             {dialogRow?.pc_number || (dialogRow ? `PC #${dialogRow.id}` : 'PC Details')}
                         </DialogTitle>
                         <DialogDescription>
-                            {dialogRow ? `${dialogRow.model}` : 'No PC selected'}
+                            {dialogRow ? `${dialogRow.pc_number || `PC #${dialogRow.id}`}` : 'No PC selected'}
                         </DialogDescription>
                     </DialogHeader>
                     {dialogRow && (

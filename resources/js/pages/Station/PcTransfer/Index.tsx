@@ -40,7 +40,6 @@ import { Can } from '@/components/authorization';
 
 type PcSpecDetails = {
     manufacturer: string;
-    model: string;
     pc_number?: string | null;
     processor: string;
     ram_ddr: string;
@@ -474,7 +473,7 @@ export default function Index({ stations: stationsPayload, filters }: PageProps)
                                                 {station.pc_spec_details ? (
                                                     <div>
                                                         <span className="font-medium text-green-600">
-                                                            {station.pc_spec_details.model}
+                                                            {station.pc_spec_details.manufacturer}
                                                         </span>
                                                         {station.pc_spec_details.pc_number && (
                                                             <div className="text-xs text-blue-600 mt-1">
@@ -595,7 +594,7 @@ export default function Index({ stations: stationsPayload, filters }: PageProps)
                                                 <span className="font-medium">
                                                     {station.pc_spec_details ? (
                                                         <span className="text-green-600">
-                                                            {station.pc_spec_details.model}
+                                                            {station.pc_spec_details.manufacturer}
                                                             {station.pc_spec_details.pc_number && (
                                                                 <span className="text-blue-600 ml-1">({station.pc_spec_details.pc_number})</span>
                                                             )}

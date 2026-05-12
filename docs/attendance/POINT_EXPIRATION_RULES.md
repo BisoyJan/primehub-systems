@@ -13,21 +13,19 @@ Attendance points automatically expire based on two different mechanisms: Standa
 #### Rules:
 - **Standard Violations**: 6 months expiration
   - Tardy (0.25 points)
-  - Undertime (0.25 points)
-  - Undertime > 1 Hour (0.50 points)
+  - Undertime (0.25 points)  
   - Half-Day Absence (0.50 points)
-  - **Advised Absence (1.00 point)** — Employee gave prior notice (`is_advised=true`); treated as standard violation with 6-month SRO
+  - **Advised Absence (1.00 point)** — Employee gave prior notice (manually entered with checkbox); treated as standard violation
 
-- **FTN / NCNS**: 1 year expiration (same rule, same treatment)
-  - **FTN (Failed to Notify)** = **NCNS (No Call No Show)** — both mean the employee did not show up and gave no prior notice (`is_advised=false`, `eligible_for_gbro=false`)
-  - Stored with `expiration_type='none'` until the 1-year SRO fires
+- **NCNS and FTN**: 1 year expiration  
+  - No Call, No Show - NCNS (1.00 point) — No prior notice; strictest penalty
+  - Failed to Notify - FTN (1.00 point) — Employee was told to come but didn't show AND didn't call; treated same as NCNS
 
 #### How It Works:
 ```
 Violation Date: Jan 1, 2025
-└─ Standard Violation (Tardy, etc.) → Expires: Jul 1, 2025 (6 months)
-└─ Advised Absence               → Expires: Jul 1, 2025 (6 months)
-└─ FTN / NCNS                    → Expires: Jan 1, 2026 (12 months)
+└─ Standard Violation → Expires: Jul 1, 2025 (6 months)
+└─ NCNS/FTN → Expires: Jan 1, 2026 (12 months) ← both same
 ```
 
 #### Characteristics:
@@ -42,10 +40,9 @@ Violation Date: Jan 1, 2025
 **Reward for sustained good attendance behavior**
 
 #### Rules:
-- **60-day clean window**: Employee must have **no violations of any kind** for 60 consecutive days
+- **Eligibility**: No violations for **60 consecutive days**
 - **Benefit**: Last **2 violation points** are automatically removed
-- **What breaks the clock**: **All** violation types reset the 60-day window — including NCNS, FTN, and even excused violations. The employee must have zero recorded violations (active or excused) in the 60-day period.
-- **What GBRO can remove**: Only non-excused, GBRO-eligible points. **NCNS and FTN** are **NOT eligible** for removal (1-year SRO only); only **Advised Absence** (manually entered with checkbox) **IS eligible**
+- **Exclusions**: **NCNS and FTN** points are **NOT eligible** for GBRO (both have 1-year expiration); only **Advised Absence** (manually entered with checkbox) **IS eligible**
 
 #### Example Scenario:
 ```
@@ -63,23 +60,20 @@ Result: 0.50 points removed, 0.25 remaining
 ```
 
 #### How It Works:
-1. System finds the most recent violation of **any type** (including NCNS/FTN and excused points)
-2. If that date is ≥ 60 days ago, the 60-day window has been clean
-3. Finds the **2 most recent** points that are:
+1. System identifies users with no violations in last 60 days
+2. Finds the **2 most recent** points that are:
    - Active (not expired, not excused)
    - Eligible for GBRO (not NCNS/FTN)
-4. Marks those points as expired with type "GBRO"
-5. Employee gets a fresh start while maintaining some accountability
+3. Marks those points as expired with type "GBRO"
+4. Employee gets fresh start while maintaining some accountability
 
 #### Characteristics:
 - ✅ Rewards consistent good behavior
-- ✅ Automatic after 60 consecutive clean days
-- ⛔ NCNS and FTN reset the 60-day window even though they cannot be GBRO-removed
-- ⛔ Excused violations also reset the 60-day window
-- ⛔ Cannot remove NCNS or FTN points (1-year SRO only, not GBRO eligible)
-- ✅ Advised Absence (manual checkbox) IS eligible for GBRO removal
-- ✅ Removes the 2 most recent eligible points only
-- ✅ Can be applied multiple times (new 60-day window after each application)
+- ✅ Automatic after 60 days clean
+- ⛔ Cannot remove NCNS or FTN points (both have 1-year expiration, not GBRO eligible)
+- ✅ Advised Absence (manual checkbox) IS eligible for GBRO
+- ✅ Removes most recent 2 points only
+- ✅ Can be applied multiple times (60 days each)
 
 ---
 
@@ -88,23 +82,33 @@ Result: 0.50 points removed, 0.25 remaining
 ### Violation Details
 Each point now includes comprehensive details:
 
-#### NCNS / FTN (same violation type)
+#### NCNS (No Call, No Show)
 ```
 Type: Whole Day Absence
 Points: 1.00
-is_advised: false
 Expiration: 1 year from violation date
 GBRO Eligible: No
-Details: "Failed to Notify / NCNS — employee did not show up or provide prior notice"
+Details: "No Call, No Show (NCNS): Employee did not report 
+for work and did not provide prior notice. Scheduled: 07:00 - 
+17:00. No biometric scans recorded."
 ```
 
-> **FTN and NCNS are identical:** Both mean the employee did not show up AND did not
-> notify management. Both are stored as `is_advised=false`, `eligible_for_gbro=false`,
-> `expiration_type='none'`, and expire after 1 year.
-> 
-> **Advised Absence** (`is_advised=true`) is different — the employee notified management
-> before the absence. It is treated as a standard 6-month violation, and may be GBRO-eligible
-> if entered manually with the advised checkbox.
+#### FTN (Failed to Notify)
+```
+Type: Whole Day Absence
+Points: 1.00
+Expiration: 1 year from violation date  ← same as NCNS
+GBRO Eligible: No
+Details: "Failed to Notify (FTN): Employee did not report for 
+work despite being advised. Scheduled: 07:00 - 17:00. No 
+biometric scans recorded."
+```
+
+> **FTN vs Advised Absence**: FTN occurs when the employee was told to come to work
+> (or was expected) but didn't show AND didn't call — detected from biometric records
+> (`ncns` status + `is_advised=true`). Treated identically to NCNS: 1 year, NOT GBRO eligible.
+> Advised Absence (manually entered with the checkbox) means the employee proactively
+> notified management — this IS GBRO eligible with 6-month expiration.
 
 #### Half-Day Absence
 ```
@@ -144,10 +148,10 @@ before scheduled end). Scheduled: 17:00, Actual: 15:30."
 
 ```sql
 -- Expiration tracking
-expires_at           DATE           -- SRO expiration date (null for NCNS after 1yr, standard after 6mo)
-expiration_type      ENUM           -- 'sro', 'gbro', 'none' (NCNS/FTN stay 'none' until 1yr SRO)
+expires_at           DATE           -- Calculated expiration date
+expiration_type      ENUM           -- 'sro', 'gbro', 'none'
 is_expired           BOOLEAN        -- Whether point has expired
-expired_at           DATETIME       -- When it was marked expired (full timestamp)
+expired_at           DATE           -- When it was marked expired
 
 -- Violation details
 violation_details    TEXT           -- Human-readable description
@@ -155,10 +159,9 @@ tardy_minutes        INTEGER        -- Minutes late (for tardy)
 undertime_minutes    INTEGER        -- Minutes left early
 
 -- GBRO tracking
-eligible_for_gbro    BOOLEAN        -- Can this be removed by GBRO? (false for NCNS/FTN)
-gbro_expires_at      DATE           -- Predicted date GBRO will fire for this point
-gbro_applied_at      DATE           -- When GBRO was actually applied
-gbro_batch_id        VARCHAR(255)   -- Groups points expired in the same GBRO cycle
+eligible_for_gbro    BOOLEAN        -- Can this be removed by GBRO?
+gbro_applied_at      DATE           -- When GBRO was applied
+gbro_batch_id        VARCHAR(255)   -- Batch processing ID
 ```
 
 ---
@@ -184,19 +187,27 @@ php artisan points:process-expirations --force
 The command includes a safeguard that prevents multiple GBRO cycles from running on the same day. This prevents cascading expirations where Pair 0 expires, then Pair 1 immediately becomes eligible and expires in the same run. Use `--force` to bypass this check if needed.
 
 ### Scheduled Task (✅ Configured)
-Configured in `routes/console.php` (Laravel 12 convention):
+Automatically configured in `app/Console/Kernel.php`:
 ```php
-Schedule::command('points:process-expirations')
-    ->dailyAt('08:05')
-    ->withoutOverlapping()
-    ->onOneServer();
+protected function schedule(Schedule $schedule)
+{
+    // Process attendance point expirations (SRO and GBRO) - runs daily at 3:00 AM
+    $schedule->command('points:process-expirations')
+        ->dailyAt('03:00')
+        ->withoutOverlapping()
+        ->onOneServer();
+}
 ```
 
 **Schedule Details:**
-- **Frequency:** Daily at 8:05 AM
+- **Frequency:** Daily at 3:00 AM
 - **Prevents:** Overlapping executions with `withoutOverlapping()`
 - **Multi-server:** Only runs on one server with `onOneServer()`
-- **Output:** Console output with per-user GBRO expiration messages and SRO count summary
+- **Output:** Console output with summary table showing:
+  - SRO expirations processed
+  - GBRO expirations processed
+  - Users affected
+  - Processing timestamp
 
 **To enable automatic execution:**
 - Ensure Laravel scheduler is running via cron:
@@ -216,16 +227,14 @@ Schedule::command('points:process-expirations')
 3. Marks matching points as expired with type "sro"
 
 #### GBRO Processing:
-1. Gets all users with active GBRO-eligible points
-2. For each user (skips users who already had GBRO applied today):
-   - Finds most recent violation date across **all** violation types (NCNS, FTN, excused — everything)
-   - Calculates days since that date
-   - If `gbro_expires_at` is not yet set, calculates and stores the predicted date (reference + 60 days)
-   - If `gbro_expires_at` has been reached:
-     - Gets the 2 most recent non-excused, GBRO-eligible points
+1. Gets all users with active points
+2. For each user:
+   - Finds most recent violation date
+   - Calculates days since last violation
+   - If ≥ 60 days:
+     - Gets 2 most recent GBRO-eligible points
      - Marks them expired with type "gbro"
      - Records GBRO batch ID for tracking
-     - Resets the clock for remaining points
 
 ---
 
@@ -337,45 +346,31 @@ Dec 15, 2024 - GBRO Triggered!
 New Total: 0.25 points (was 1.00)
 ```
 
-### Example 3: NCNS Resets the GBRO Clock
+### Example 3: Mixed Scenario
 ```
 Employee: Mike Johnson
 
-Mar 2, 2026 - Tardy
-├─ Points: 0.25
-├─ GBRO Eligible: Yes
-
-Mar 5, 2026 - Undertime
-├─ Points: 0.25
-├─ GBRO Eligible: Yes
-
-Mar 20, 2026 - Whole Day Absence (NCNS, excused)
+May 1, 2025 - NCNS (Not advised)
 ├─ Points: 1.00
-├─ GBRO Eligible: No  ← cannot be removed by GBRO
-├─ Status: Excused    ← but still resets the 60-day clock!
+├─ Expires: May 1, 2026
+├─ GBRO Eligible: No
 
-GBRO clock: Mar 20 + 60 days = May 19, 2026 (future)
+May 15, 2025 - Tardy
+├─ Points: 0.25
+├─ Expires: Nov 15, 2025
+├─ GBRO Eligible: Yes
 
-Result on May 13, 2026:
-├─ Mar 2 Tardy (0.25) → Remains active
-├─ Mar 5 Undertime (0.25) → Remains active
-├─ Mar 20 NCNS (excused) → Remains excused
+June 1, 2025 - Undertime
+├─ Points: 0.25
+├─ Expires: Dec 1, 2025
+├─ GBRO Eligible: Yes
 
-Total Active Points: 0.50
-(GBRO cannot fire until May 19, 2026)
-```
+After 60 days clean (Aug 1, 2025):
+├─ NCNS (1.00) → Remains (not GBRO eligible)
+├─ Undertime (0.25) → Expired via GBRO ✨
+├─ Tardy (0.25) → Expired via GBRO ✨
 
-### Example 4: GBRO After Mixed Violations
-```
-Employee: Mike Johnson (continued)
-
-June 1, 2026 - No violations for 60 days since Mar 20:
-├─ GBRO fires on May 19 (when date is reached daily)
-├─ Mar 5 Undertime (0.25) → Expired via GBRO ✨
-├─ Mar 2 Tardy (0.25) → Expired via GBRO ✨
-├─ Mar 20 NCNS (excused) → Remains (not GBRO eligible)
-
-Final Total: 0.00 active GBRO-eligible points
+Final Total: 1.00 point (NCNS only)
 ```
 
 ---
@@ -434,7 +429,7 @@ Final Total: 0.00 active GBRO-eligible points
 - [x] Updated AttendanceProcessor to auto-generate expiration dates and violation details
 - [x] Updated AttendancePointController with expiration handling
 - [x] Artisan command for processing expirations (SRO and GBRO)
-- [x] Scheduled task configuration (daily at 08:05 AM via `routes/console.php`)
+- [x] Scheduled task configuration (daily at 3:00 AM)
 - [x] Frontend UI updates for expiration display:
   - [x] Desktop table with Violation Details and Expires columns
   - [x] Mobile responsive card layout
@@ -457,6 +452,6 @@ Final Total: 0.00 active GBRO-eligible points
 
 ---
 
-**Last Updated:** May 13, 2026  
+**Last Updated:** November 13, 2025  
 **Status:** ✅ **FULLY IMPLEMENTED** - Backend & Frontend Complete  
 **Production Ready:** Yes ✅

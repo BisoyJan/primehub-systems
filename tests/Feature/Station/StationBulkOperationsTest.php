@@ -17,7 +17,9 @@ class StationBulkOperationsTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private Site $site;
+
     private Campaign $campaign;
 
     protected function setUp(): void
@@ -226,7 +228,7 @@ class StationBulkOperationsTest extends TestCase
     }
 
     #[Test]
-    public function bulk_creation_requires_status(): void
+    public function bulk_creation_allows_missing_status(): void
     {
         $response = $this->actingAs($this->admin)->post(route('stations.bulk'), [
             'site_id' => $this->site->id,
@@ -237,7 +239,7 @@ class StationBulkOperationsTest extends TestCase
             'monitor_type' => 'single',
         ]);
 
-        $response->assertSessionHasErrors('status');
+        $response->assertSessionDoesntHaveErrors('status');
     }
 
     #[Test]

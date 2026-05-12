@@ -113,7 +113,6 @@ class PcSpecControllerTest extends TestCase
         $data = [
             'pc_number' => 'PC-TEST-001',
             'manufacturer' => 'Dell',
-            'model' => 'OptiPlex',
             'memory_type' => 'DDR4',
             'ram_gb' => 16,
             'disk_gb' => 512,
@@ -161,7 +160,6 @@ class PcSpecControllerTest extends TestCase
 
         $data = [
             'manufacturer' => 'Updated Manufacturer',
-            'model' => 'Updated Model',
             'memory_type' => 'DDR5',
             'ram_gb' => 32,
             'disk_gb' => 1024,
@@ -178,7 +176,6 @@ class PcSpecControllerTest extends TestCase
         $this->assertDatabaseHas('pc_specs', [
             'id' => $pcSpec->id,
             'manufacturer' => 'Updated Manufacturer',
-            'model' => 'Updated Model',
             'ram_gb' => 32,
             'disk_gb' => 1024,
         ]);

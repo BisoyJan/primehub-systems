@@ -20,7 +20,6 @@ class PcSpecTest extends TestCase
         $pcSpec = PcSpec::factory()->create([
             'pc_number' => 'PC-001',
             'manufacturer' => 'Dell',
-            'model' => 'OptiPlex 7090',
             'memory_type' => 'DDR4',
             'ram_gb' => 32,
             'disk_gb' => 512,
@@ -30,7 +29,6 @@ class PcSpecTest extends TestCase
 
         $this->assertEquals('PC-001', $pcSpec->pc_number);
         $this->assertEquals('Dell', $pcSpec->manufacturer);
-        $this->assertEquals('OptiPlex 7090', $pcSpec->model);
         $this->assertEquals(32, $pcSpec->ram_gb);
         $this->assertEquals(512, $pcSpec->disk_gb);
         $this->assertEquals('USB 3.0 x4, HDMI x1', $pcSpec->available_ports);
@@ -86,7 +84,6 @@ class PcSpecTest extends TestCase
     {
         $pcSpec = PcSpec::factory()->create([
             'pc_number' => 'PC-001',
-            'model' => 'OptiPlex 7090',
             'ram_gb' => 32,
             'disk_gb' => 512,
             'available_ports' => 'USB 3.0 x4, HDMI x1',
@@ -112,7 +109,6 @@ class PcSpecTest extends TestCase
     {
         $pcSpec = PcSpec::factory()->create([
             'pc_number' => 'PC-001',
-            'model' => 'OptiPlex 7090',
             'ram_gb' => 16,
             'disk_gb' => 256,
         ]);

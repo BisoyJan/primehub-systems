@@ -18,7 +18,6 @@ interface PcSpec {
     id: number;
     pc_number?: string | null;
     manufacturer: string;
-    model: string;
     chipset: string;
     memory_type: string;
     ram_gb: number;
@@ -52,10 +51,6 @@ export default function Show() {
                 <div className="flex flex-col gap-1">
                     <span className="text-xs text-gray-500 dark:text-gray-400">Manufacturer</span>
                     <span className="font-medium">{pcspec.manufacturer}</span>
-                </div>
-                <div className="flex flex-col gap-1">
-                    <span className="text-xs text-gray-500 dark:text-gray-400">Model</span>
-                    <span className="font-medium">{pcspec.model}</span>
                 </div>
                 <div className="flex flex-col gap-1">
                     <span className="text-xs text-gray-500 dark:text-gray-400">Chipset</span>

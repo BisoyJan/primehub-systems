@@ -42,7 +42,6 @@ interface PcSpec {
     label: string;
     details: {
         pc_number?: string | null;
-        model?: string;
         manufacturer?: string;
         processor?: string;
         ram_ddr?: string;
@@ -71,7 +70,6 @@ interface Station {
     pc_spec_id: number | null;
     pc_spec_details: {
         pc_number?: string | null;
-        model?: string;
         processor?: string;
         ram_ddr?: string;
         ram_gb?: number;
@@ -253,7 +251,6 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
         const matchesSearch = (
             (pc.pc_number && pc.pc_number.toLowerCase().includes(search)) ||
             (pc.label ?? '').toLowerCase().includes(search) ||
-            (pc.details.model && pc.details.model.toLowerCase().includes(search)) ||
             (pc.details.processor && pc.details.processor.toLowerCase().includes(search))
         );
 
@@ -792,7 +789,7 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
                                     <TableHeader className="sticky top-0 bg-background z-10">
                                         <TableRow className="bg-muted/50">
                                             <TableHead>PC Number</TableHead>
-                                            <TableHead className="hidden md:table-cell">Model</TableHead>
+                                            <TableHead className="hidden md:table-cell">Manufacturer</TableHead>
                                             <TableHead>Status</TableHead>
                                             <TableHead className="text-right">Action</TableHead>
                                         </TableRow>
@@ -841,7 +838,7 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
                                                         </TableCell>
                                                         <TableCell className="hidden md:table-cell">
                                                             <Colorized style={{ color: darkColor || undefined }}>
-                                                                <div className="font-medium text-sm">{pc.details.model || '-'}</div>
+                                                                <div className="font-medium text-sm">{pc.details.manufacturer || '-'}</div>
                                                                 <div className="text-xs text-muted-foreground">{pc.details.processor || '-'}</div>
                                                             </Colorized>
                                                         </TableCell>

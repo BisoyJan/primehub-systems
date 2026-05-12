@@ -44,7 +44,7 @@ class PcSpecController extends Controller
 
         // Filter by PC number range (pc_number_from / pc_number_to)
         $pcNumberFrom = $request->input('pc_number_from');
-        $pcNumberTo   = $request->input('pc_number_to');
+        $pcNumberTo = $request->input('pc_number_to');
 
         if (is_numeric($pcNumberFrom) && (int) $pcNumberFrom > 0) {
             $query->whereRaw("CAST(REGEXP_REPLACE(pc_number, '[^0-9]', '') AS UNSIGNED) >= ?", [(int) $pcNumberFrom]);
@@ -54,10 +54,15 @@ class PcSpecController extends Controller
             $query->whereRaw("CAST(REGEXP_REPLACE(pc_number, '[^0-9]', '') AS UNSIGNED) <= ?", [(int) $pcNumberTo]);
         }
 
-        // Filter by processors (multi-select)
+        // Filter by processors (multi-select or singular processor_id)
         $processorIds = $request->input('processor_ids', []);
         if (! is_array($processorIds)) {
             $processorIds = [];
+        }
+        // Support singular processor_id filter
+        $singleProcessorId = $request->input('processor_id');
+        if ($singleProcessorId && ! count($processorIds)) {
+            $processorIds = [(int) $singleProcessorId];
         }
         $processorIds = array_values(array_filter(array_map('intval', $processorIds), fn ($id) => $id > 0));
 
@@ -65,6 +70,12 @@ class PcSpecController extends Controller
             $query->whereHas('processorSpecs', function ($q) use ($processorIds) {
                 $q->whereIn('processor_specs.id', $processorIds);
             });
+        }
+
+        // Search by pc_number
+        $search = $request->input('search');
+        if ($search) {
+            $query->where('pc_number', 'like', '%'.$search.'%');
         }
 
         $pcspecs = $query
@@ -156,7 +167,7 @@ class PcSpecController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'pc_number' => ['required', 'string', 'max:100', 'regex:/^(?:PC)?\d+$/i'],
+            'pc_number' => ['nullable', 'string', 'max:100'],
             'manufacturer' => 'required|string|max:255',
             'notes' => 'nullable|string',
             'memory_type' => 'required|string|max:10',
@@ -176,19 +187,26 @@ class PcSpecController extends Controller
         ]);
 
         // Normalize: pure digits → prefix with PC (e.g. "1" → "PC1")
-        $data['pc_number'] = preg_match('/^\d+$/', $data['pc_number'])
-            ? 'PC'.$data['pc_number']
-            : strtoupper($data['pc_number']);
+        $pcNumber = $data['pc_number'] ?? null;
+        if (! empty($pcNumber)) {
+            $pcNumber = preg_match('/^\d+$/', $pcNumber) ? 'PC'.$pcNumber : strtoupper($pcNumber);
+        }
+        $data['pc_number'] = $pcNumber;
 
         $quantity = max(1, (int) ($data['quantity'] ?? 1));
-        $pcNumbers = $this->generateSequentialPcNumbers($data['pc_number'], $quantity);
 
-        // Validate that none of the generated PC numbers are already taken
-        $takenNumbers = PcSpec::whereIn('pc_number', $pcNumbers)->pluck('pc_number')->toArray();
-        if (! empty($takenNumbers)) {
-            return back()->withErrors([
-                'pc_number' => 'The following PC number(s) are already taken: '.implode(', ', $takenNumbers),
-            ])->withInput();
+        if ($pcNumber !== null) {
+            $pcNumbers = $this->generateSequentialPcNumbers($pcNumber, $quantity);
+
+            // Validate that none of the generated PC numbers are already taken
+            $takenNumbers = PcSpec::whereIn('pc_number', $pcNumbers)->pluck('pc_number')->toArray();
+            if (! empty($takenNumbers)) {
+                return back()->withErrors([
+                    'pc_number' => 'The following PC number(s) are already taken: '.implode(', ', $takenNumbers),
+                ])->withInput();
+            }
+        } else {
+            $pcNumbers = array_fill(0, $quantity, null);
         }
 
         $processorFields = [
@@ -263,7 +281,7 @@ class PcSpecController extends Controller
     public function update(Request $request, PcSpec $pcspec)
     {
         $data = $request->validate([
-            'pc_number' => ['required', 'string', 'max:100', 'regex:/^(?:PC)?\d+$/i'],
+            'pc_number' => ['nullable', 'string', 'max:100'],
             'manufacturer' => 'required|string|max:255',
             'notes' => 'nullable|string',
             'memory_type' => 'required|string|max:10',
@@ -281,10 +299,14 @@ class PcSpecController extends Controller
             'bios_release_date' => 'nullable|date',
         ]);
 
-        // Normalize: pure digits → prefix with PC (e.g. "1" → "PC1")
-        $data['pc_number'] = preg_match('/^\d+$/', $data['pc_number'])
-            ? 'PC'.$data['pc_number']
-            : strtoupper($data['pc_number']);
+        // Normalize: keep existing if not provided; pure digits → prefix with PC (e.g. "1" → "PC1")
+        if (empty($data['pc_number'])) {
+            $data['pc_number'] = $pcspec->pc_number;
+        } else {
+            $data['pc_number'] = preg_match('/^\d+$/', $data['pc_number'])
+                ? 'PC'.$data['pc_number']
+                : strtoupper($data['pc_number']);
+        }
 
         // Check uniqueness (excluding current record) after normalization
         $duplicate = PcSpec::where('pc_number', $data['pc_number'])
@@ -421,7 +443,7 @@ class PcSpecController extends Controller
             $pcspec->delete();
         });
 
-        return back()
+        return redirect()->route('pcspecs.index', $this->indexRedirectParams(request()))
             ->with('message', 'PC Spec deleted')
             ->with('type', 'success');
     }
