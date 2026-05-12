@@ -9,6 +9,7 @@ use App\Models\BiometricRecord;
 use App\Models\EmployeeSchedule;
 use App\Models\LeaveRequest;
 use App\Models\User;
+use App\ValueObjects\AttendanceWarning;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -18,9 +19,9 @@ class AttendanceProcessor
 {
     protected AttendanceFileParser $parser;
 
-    protected ?LeaveCreditService $leaveCreditService = null;
+    protected LeaveCreditService $leaveCreditService;
 
-    protected ?NotificationService $notificationService = null;
+    protected NotificationService $notificationService;
 
     /**
      * Cached users collection for performance optimization.
@@ -39,11 +40,14 @@ class AttendanceProcessor
      */
     protected array $usersByLastName = [];
 
-    public function __construct(AttendanceFileParser $parser)
-    {
+    public function __construct(
+        AttendanceFileParser $parser,
+        LeaveCreditService $leaveCreditService,
+        NotificationService $notificationService
+    ) {
         $this->parser = $parser;
-        $this->leaveCreditService = app(LeaveCreditService::class);
-        $this->notificationService = app(NotificationService::class);
+        $this->leaveCreditService = $leaveCreditService;
+        $this->notificationService = $notificationService;
     }
 
     /**
@@ -185,8 +189,6 @@ class AttendanceProcessor
     public function processUpload(AttendanceUpload $upload, string $filePath, bool $filterByDate = true): array
     {
         try {
-            DB::beginTransaction();
-
             $upload->update(['status' => 'processing']);
 
             // Parse the file
@@ -206,7 +208,7 @@ class AttendanceProcessor
                 $skippedRecords = $filterResult['outside_range'];
                 $filterSummary = $filterResult['summary'];
 
-                \Log::info('Date range filtering applied', [
+                Log::info('Date range filtering applied', [
                     'date_from' => $dateFrom->format('Y-m-d'),
                     'date_to' => $dateTo->format('Y-m-d'),
                     'total_records' => $allRecords->count(),
@@ -217,7 +219,7 @@ class AttendanceProcessor
 
             $groupedRecords = $this->parser->groupByEmployee($records);
 
-            \Log::info('Attendance processing started', [
+            Log::info('Attendance processing started', [
                 'total_records' => $allRecords->count(),
                 'filtered_records' => $records->count(),
                 'unique_employees' => $groupedRecords->count(),
@@ -228,8 +230,12 @@ class AttendanceProcessor
             $recordsToSave = $filterByDate ? $records : $allRecords;
             $this->saveBiometricRecords($recordsToSave, $upload);
 
-            // Validate file dates match expected dates for the shift
-            $dateValidation = $this->validateFileDates($records, Carbon::parse($upload->shift_date));
+            // Validate file dates match expected dates for the upload range
+            $dateValidation = $this->validateFileDates(
+                $records,
+                Carbon::parse($upload->date_from),
+                Carbon::parse($upload->date_to)
+            );
 
             $stats = [
                 'total_records' => $allRecords->count(),
@@ -244,22 +250,41 @@ class AttendanceProcessor
                 'date_warnings' => $dateValidation['warnings'],
                 'dates_found' => $dateValidation['dates_found'],
                 'non_work_day_scans' => [], // Track scans on non-scheduled days
+                'unparseable_lines' => $this->parser->getUnparseableLines(),
             ];
 
             // Process each employee's records
             foreach ($groupedRecords as $normalizedName => $employeeRecords) {
-                \Log::debug('Processing employee', [
+                Log::debug('Processing employee', [
                     'normalized_name' => $normalizedName,
                     'original_name' => $employeeRecords->first()['name'],
                     'record_count' => $employeeRecords->count(),
                 ]);
 
-                $result = $this->processEmployeeRecords(
-                    $normalizedName,
-                    $employeeRecords,
-                    Carbon::parse($upload->shift_date),
-                    $upload->biometric_site_id  // Pass the biometric site ID
-                );
+                try {
+                    $result = DB::transaction(function () use ($normalizedName, $employeeRecords, $upload) {
+                        return $this->processEmployeeRecords(
+                            $normalizedName,
+                            $employeeRecords,
+                            Carbon::parse($upload->date_from),
+                            $upload->biometric_site_id
+                        );
+                    });
+                } catch (\Exception $e) {
+                    $stats['errors'][] = sprintf(
+                        'Failed to process employee "%s": %s',
+                        $employeeRecords->first()['name'] ?? $normalizedName,
+                        $e->getMessage()
+                    );
+                    Log::error('Per-employee attendance processing failed', [
+                        'normalized_name' => $normalizedName,
+                        'original_name' => $employeeRecords->first()['name'] ?? $normalizedName,
+                        'error' => $e->getMessage(),
+                        'upload_id' => $upload->id,
+                    ]);
+
+                    continue;
+                }
 
                 if ($result['matched']) {
                     $stats['matched_employees']++;
@@ -273,10 +298,10 @@ class AttendanceProcessor
                         ];
                     }
 
-                    \Log::debug('Employee matched', ['name' => $normalizedName]);
+                    Log::debug('Employee matched', ['name' => $normalizedName]);
                 } else {
                     $stats['unmatched_names'][] = $employeeRecords->first()['name'];
-                    \Log::warning('Employee not matched', [
+                    Log::warning('Employee not matched', [
                         'normalized_name' => $normalizedName,
                         'original_name' => $employeeRecords->first()['name'],
                     ]);
@@ -289,7 +314,7 @@ class AttendanceProcessor
 
             // Log summary of non-work day scans for admin review
             if (! empty($stats['non_work_day_scans'])) {
-                \Log::warning('Biometric scans detected on non-scheduled work days', [
+                Log::warning('Biometric scans detected on non-scheduled work days', [
                     'upload_id' => $upload->id,
                     'count' => count($stats['non_work_day_scans']),
                     'details' => $stats['non_work_day_scans'],
@@ -324,29 +349,35 @@ class AttendanceProcessor
             // Detect and create NCNS records for absent employees
             $this->detectAbsentEmployees($upload, $records);
 
+            // Stamp biometric records as processed for idempotency tracking
+            BiometricRecord::where('attendance_upload_id', $upload->id)
+                ->update(['last_processed_at' => now()]);
+
             // NOTE: Attendance points are NOT auto-generated here
             // Points will be generated only after admin verifies the attendance records
             // Admin can trigger point generation via the review/verification page
 
-            DB::commit();
-
-            \Log::info('Attendance upload processing completed successfully', [
+            Log::info('Attendance upload processing completed successfully', [
                 'upload_id' => $upload->id,
+                'files_processed' => 1,
                 'total_records' => $stats['total_records'],
-                'matched_employees' => $stats['matched_employees'],
+                'filtered_records' => $stats['filtered_records'],
+                'users_matched' => $stats['matched_employees'],
+                'users_unmatched' => count($stats['unmatched_names']),
+                'attendances_processed' => $stats['processed'],
+                'date_warnings' => count($stats['date_warnings']),
+                'points_generated' => 0, // Points are only generated after admin verification
             ]);
 
             return $stats;
 
         } catch (\Exception $e) {
-            DB::rollBack();
-
             $upload->update([
                 'status' => 'failed',
                 'error_message' => $e->getMessage(),
             ]);
 
-            \Log::error('Attendance upload processing failed', [
+            Log::error('Attendance upload processing failed', [
                 'upload_id' => $upload->id,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
@@ -370,7 +401,7 @@ class AttendanceProcessor
 
             if (! $user) {
                 // Skip records for unmatched users, but log them
-                \Log::warning('Skipping biometric record for unmatched user', [
+                Log::warning('Skipping biometric record for unmatched user', [
                     'name' => $record['name'],
                     'normalized_name' => $normalizedName,
                     'datetime' => $record['datetime']->format('Y-m-d H:i:s'),
@@ -392,10 +423,16 @@ class AttendanceProcessor
             ];
         }
 
-        // Bulk insert for performance
+        // Upsert for idempotency: a re-upload of the same TXT file should update
+        // existing raw scan rows rather than creating duplicates.
+        // Unique key: (user_id, datetime, site_id) — one scan per person per second per device.
         if (! empty($biometricRecords)) {
-            BiometricRecord::insert($biometricRecords);
-            \Log::info('Saved biometric records', [
+            BiometricRecord::upsert(
+                $biometricRecords,
+                ['user_id', 'datetime', 'site_id'],        // unique columns
+                ['attendance_upload_id', 'employee_name', 'record_date', 'record_time', 'updated_at']  // columns to update on conflict
+            );
+            Log::info('Saved biometric records', [
                 'count' => count($biometricRecords),
                 'upload_id' => $upload->id,
             ]);
@@ -405,7 +442,7 @@ class AttendanceProcessor
     /**
      * Validate that file dates match expected dates for the shift.
      */
-    protected function validateFileDates(Collection $records, Carbon $shiftDate): array
+    protected function validateFileDates(Collection $records, Carbon $dateFrom, Carbon $dateTo): array
     {
         $warnings = [];
         $datesFound = [];
@@ -418,27 +455,32 @@ class AttendanceProcessor
             }
         }
 
-        // For night shifts, we expect records from shift date and next day
-        $expectedDates = [
-            $shiftDate->format('Y-m-d'),
-            $shiftDate->copy()->addDay()->format('Y-m-d'),
-        ];
+        // Build expected dates: the full date_from..date_to range, plus one extra day
+        // for night/graveyard shifts whose time-out falls on the following calendar day.
+        $expectedDates = [];
+        $cursor = $dateFrom->copy();
+        $upperBound = $dateTo->copy()->addDay();
+        while ($cursor->lte($upperBound)) {
+            $expectedDates[] = $cursor->format('Y-m-d');
+            $cursor->addDay();
+        }
 
         // Check if any dates are outside expected range
         $unexpectedDates = array_diff($datesFound, $expectedDates);
 
         if (! empty($unexpectedDates)) {
             $warnings[] = sprintf(
-                'File contains records from unexpected dates: %s. Expected dates: %s for shift date %s.',
+                'File contains records from unexpected dates: %s. Expected dates: %s to %s.',
                 implode(', ', array_map(fn ($d) => Carbon::parse($d)->format('M d, Y'), $unexpectedDates)),
-                implode(', ', array_map(fn ($d) => Carbon::parse($d)->format('M d, Y'), $expectedDates)),
-                $shiftDate->format('M d, Y')
+                $dateFrom->format('M d, Y'),
+                $upperBound->format('M d, Y')
             );
         }
 
         // Log validation results
-        \Log::info('Date validation completed', [
-            'shift_date' => $shiftDate->format('Y-m-d'),
+        Log::info('Date validation completed', [
+            'date_from' => $dateFrom->format('Y-m-d'),
+            'date_to' => $dateTo->format('Y-m-d'),
             'expected_dates' => $expectedDates,
             'dates_found' => $datesFound,
             'warnings' => $warnings,
@@ -668,7 +710,7 @@ class AttendanceProcessor
 
         // Log non-work day scans for visibility
         if (! empty($skippedNonWorkDays)) {
-            \Log::info('Biometric scans found on non-work days', [
+            Log::info('Biometric scans found on non-work days', [
                 'user' => $user->name,
                 'non_work_days' => $skippedNonWorkDays,
             ]);
@@ -743,7 +785,7 @@ class AttendanceProcessor
         // Special case: Graveyard shift starting at 00:00-04:59 and ending later same morning
         // Example: 00:00-09:00 means midnight to 9 AM on SAME day
         // This is NOT a next-day shift because both times are on the same calendar date
-        if ($schedInHour >= 0 && $schedInHour < 5 && $schedOutHour > $schedInHour) {
+        if ($schedule->isGraveyardShift() && $schedOutHour > $schedInHour) {
             // Both time in and time out are in early morning hours on same day
             return false;
         }
@@ -803,7 +845,7 @@ class AttendanceProcessor
         // Example: Mon-Fri schedule with 00:00-09:00 shift means:
         // - Friday's shift: Clock in Sat 00:00, clock out Sat 09:00 (shift_date = Friday)
         // - Thursday's shift: Clock in Fri 00:00, clock out Fri 09:00 (shift_date = Thursday)
-        $isGraveyardShift = $scheduledHour >= 0 && $scheduledHour < 5;
+        $isGraveyardShift = $schedule->isGraveyardShift();
 
         // Sort records by datetime to process chronologically
         $sortedRecords = $records->sortBy(function ($record) {
@@ -849,6 +891,10 @@ class AttendanceProcessor
                         // This ensures we don't create shifts for days the employee doesn't work
                         if ($schedule->worksOnDay($previousDayName)) {
                             $shiftDate = $previousDay->format('Y-m-d');
+                        } else {
+                            // Previous day is not a work day — fall back to the scan's actual
+                            // calendar date so createNonWorkDayAttendance can handle it correctly.
+                            $shiftDate = $datetime->format('Y-m-d');
                         }
                     }
                 }
@@ -1038,8 +1084,18 @@ class AttendanceProcessor
      */
     protected function hasSufficientWorkScans(Collection $records): bool
     {
-        // Require at least 2 scans (time in and time out) to be considered as working
-        return $records->count() >= 2;
+        // Require at least 3 scans spread over >= 4 hours to guard against accidental
+        // habit-punches on a leave day (e.g. employee briefly visits office while on sick leave)
+        // triggering an automatic leave cancellation without HR/admin review.
+        if ($records->count() < 3) {
+            return false;
+        }
+
+        $sortedRecords = $records->sortBy(fn ($r) => $r['datetime']->timestamp);
+        $firstScan = $sortedRecords->first()['datetime'];
+        $lastScan = $sortedRecords->last()['datetime'];
+
+        return $firstScan->diffInHours($lastScan) >= 4;
     }
 
     /**
@@ -1178,7 +1234,7 @@ class AttendanceProcessor
             ]);
         }
 
-        \Log::info('Created on_leave attendance record', [
+        Log::info('Created on_leave attendance record', [
             'user_id' => $user->id,
             'user_name' => $user->name,
             'shift_date' => $shiftDate->format('Y-m-d'),
@@ -1238,10 +1294,10 @@ class AttendanceProcessor
                            "Employee has {$records->count()} scan(s) on this date. ".
                            'This may represent overtime, special work, or data issue. Requires verification.';
 
-        // Calculate total minutes worked (deduct 60 min lunch if worked > 5 hours)
+        // Calculate total minutes worked (deduct lunch if worked > threshold)
         if ($attendance->actual_time_in && $attendance->actual_time_out) {
             $rawMinutes = $attendance->actual_time_in->diffInMinutes($attendance->actual_time_out);
-            $lunchDeduction = ($rawMinutes / 60) > 5 ? 60 : 0;
+            $lunchDeduction = ($rawMinutes / 60) > config('attendance.lunch_threshold_hours') ? config('attendance.lunch_deduction_minutes') : 0;
             $attendance->total_minutes_worked = $rawMinutes - $lunchDeduction;
         } else {
             $attendance->total_minutes_worked = null;
@@ -1249,7 +1305,7 @@ class AttendanceProcessor
 
         $attendance->save();
 
-        \Log::info('Created non-work day attendance record', [
+        Log::info('Created non-work day attendance record', [
             'user_id' => $user->id,
             'user_name' => $user->name,
             'shift_date' => $shiftDate->format('Y-m-d'),
@@ -1294,10 +1350,10 @@ class AttendanceProcessor
         $attendance->notes = 'No schedule found for this employee. Created from biometric data. '.
                            "Employee has {$records->count()} scan(s) on this date. Requires verification.";
 
-        // Calculate total minutes worked (deduct 60 min lunch if worked > 5 hours)
+        // Calculate total minutes worked (deduct lunch if worked > threshold)
         if ($attendance->actual_time_in && $attendance->actual_time_out) {
             $rawMinutes = $attendance->actual_time_in->diffInMinutes($attendance->actual_time_out);
-            $lunchDeduction = ($rawMinutes / 60) > 5 ? 60 : 0;
+            $lunchDeduction = ($rawMinutes / 60) > config('attendance.lunch_threshold_hours') ? config('attendance.lunch_deduction_minutes') : 0;
             $attendance->total_minutes_worked = $rawMinutes - $lunchDeduction;
         } else {
             $attendance->total_minutes_worked = null;
@@ -1305,7 +1361,7 @@ class AttendanceProcessor
 
         $attendance->save();
 
-        \Log::info('Created attendance record without schedule', [
+        Log::info('Created attendance record without schedule', [
             'user_id' => $user->id,
             'user_name' => $user->name,
             'shift_date' => $shiftDate->format('Y-m-d'),
@@ -1342,7 +1398,7 @@ class AttendanceProcessor
         $isNextDayTimeOut = false;
         $isGraveyardShift = false;
 
-        if ($schedInHour >= 0 && $schedInHour < 5 && $schedOutHour > $schedInHour) {
+        if ($schedule->isGraveyardShift() && $schedOutHour > $schedInHour) {
             // Graveyard shift (00:00-04:59 start time) that ends later in morning
             // Example: 00:00-09:00, 01:00-10:00
             // For graveyard shifts, the shift_date is the PREVIOUS day (work day),
@@ -1413,7 +1469,7 @@ class AttendanceProcessor
         } else {
             // NEXT DAY SHIFT: Use time range based on shift start time
             // This helps distinguish between time in and time out records
-            if ($scheduledHour >= 0 && $scheduledHour < 5) {
+            if ($schedule->isGraveyardShift()) {
                 // Graveyard shift (00:00-04:59) spanning to next day
                 // Time in happens PREVIOUS EVENING (18:00-23:59)
                 // All records are grouped to the shift date, so time in is 18-23 on shift date
@@ -1444,7 +1500,7 @@ class AttendanceProcessor
                 $scheduledOutHour,
                 $schedule->scheduled_time_out
             );
-        } elseif ($isNextDayTimeOut && $scheduledHour >= 0 && $scheduledHour < 5) {
+        } elseif ($isNextDayTimeOut && $schedule->isGraveyardShift()) {
             // Next-day graveyard shift (shouldn't happen with current logic, but kept for safety)
             // Time out is 00:00 to scheduled out hour on expected date
             $timeOutRecord = $this->parser->findTimeOutRecordByTimeRange($records, $expectedTimeOutDate, 0, $scheduledOutHour);
@@ -1497,7 +1553,7 @@ class AttendanceProcessor
             // If scan is significantly after scheduled TIME OUT (more than 2 hours),
             // it's likely a very late TIME IN, not an early TIME OUT
             $hoursAfterScheduledOut = $scheduledTimeOut->diffInHours($scanTime, false);
-            if ($hoursAfterScheduledOut > 2) {
+            if ($hoursAfterScheduledOut > config('attendance.single_scan_post_out_hours')) {
                 // Treat as very late TIME IN
                 $timeOutRecord = null;
             } else {
@@ -1513,6 +1569,24 @@ class AttendanceProcessor
                 } else {
                     $timeInRecord = null;
                 }
+
+                // Warn admin: classification via midpoint heuristic is ambiguous.
+                // A scan right at scheduled time-out could be a missed clock-out from the
+                // previous shift or a very late arrival — needs human verification.
+                $existingWarnings = $attendance->warnings ?? [];
+                $existingWarnings[] = AttendanceWarning::make(
+                    'ambiguous_single_scan',
+                    sprintf(
+                        'AMBIGUOUS SINGLE SCAN: Only one biometric record found at %s. '
+                        .'Classified as %s using midpoint heuristic (midpoint: %s). '
+                        .'Please verify manually.',
+                        $scanTime->format('H:i:s'),
+                        $timeInRecord ? 'TIME IN (missing time-out)' : 'TIME OUT (missing time-in)',
+                        $midpoint->format('H:i:s')
+                    ),
+                    'warning'
+                )->toArray();
+                $attendance->warnings = $existingWarnings;
             }
         }
 
@@ -1521,8 +1595,8 @@ class AttendanceProcessor
         if ($timeInRecord && $timeOutRecord && ! $sameRecord) {
             $duration = $timeInRecord['datetime']->diffInMinutes($timeOutRecord['datetime']);
 
-            if ($duration < 10) {
-                \Log::warning('Double punch detected', [
+            if ($duration < config('attendance.double_punch_threshold_minutes')) {
+                Log::warning('Double punch detected', [
                     'user_id' => $user->id,
                     'user_name' => $user->name,
                     'shift_date' => $shiftDate->format('Y-m-d'),
@@ -1532,12 +1606,15 @@ class AttendanceProcessor
                 ]);
 
                 // Store warning in attendance for admin visibility
-                $doublePunchWarning = sprintf(
-                    'DOUBLE PUNCH DETECTED: %s → %s (%d minutes apart). Time out has been cleared pending verification.',
-                    $timeInRecord['datetime']->format('H:i:s'),
-                    $timeOutRecord['datetime']->format('H:i:s'),
-                    $duration
-                );
+                $doublePunchWarning = AttendanceWarning::make(
+                    'double_punch',
+                    sprintf(
+                        'DOUBLE PUNCH DETECTED: %s → %s (%d minutes apart). Time out has been cleared pending verification.',
+                        $timeInRecord['datetime']->format('H:i:s'),
+                        $timeOutRecord['datetime']->format('H:i:s'),
+                        $duration
+                    )
+                )->toArray();
 
                 // Initialize warnings array if not set
                 $existingWarnings = $attendance->warnings ?? [];
@@ -1549,14 +1626,39 @@ class AttendanceProcessor
             }
         }
 
+        // Short-shift warning (A03): duration is above the double-punch threshold but
+        // suspiciously short (below min_shift_duration_minutes, default 60 min).
+        // We warn but do NOT clear the time-out — the admin decides.
+        if ($timeInRecord && $timeOutRecord) {
+            $duration = $timeInRecord['datetime']->diffInMinutes($timeOutRecord['datetime']);
+            $minShift = config('attendance.min_shift_duration_minutes', 60);
+            $doublePunchThreshold = config('attendance.double_punch_threshold_minutes', 10);
+
+            if ($duration >= $doublePunchThreshold && $duration < $minShift) {
+                $existingWarnings = $attendance->warnings ?? [];
+                $existingWarnings[] = AttendanceWarning::make(
+                    'short_shift',
+                    sprintf(
+                        'SHORT SHIFT: %s → %s (%d min). '
+                        .'Shift is suspiciously short — may be an accidental punch-out. Please verify.',
+                        $timeInRecord['datetime']->format('H:i:s'),
+                        $timeOutRecord['datetime']->format('H:i:s'),
+                        $duration
+                    ),
+                    'warning'
+                )->toArray();
+                $attendance->warnings = $existingWarnings;
+            }
+        }
+
         // Maximum duration check: If duration > 20 hours, it's likely not a real time out
         // (could be next day's time in mismatched, or employee forgot to clock out)
         if ($timeInRecord && $timeOutRecord) {
             $duration = $timeInRecord['datetime']->diffInMinutes($timeOutRecord['datetime']);
 
-            if ($duration > 1200) { // 20 hours = 1200 minutes
+            if ($duration > config('attendance.max_shift_duration_minutes', 1200)) {
                 $hours = round($duration / 60, 1);
-                \Log::warning('Excessive shift duration detected', [
+                Log::warning('Excessive shift duration detected', [
                     'user_id' => $user->id,
                     'user_name' => $user->name,
                     'shift_date' => $shiftDate->format('Y-m-d'),
@@ -1566,12 +1668,15 @@ class AttendanceProcessor
                 ]);
 
                 // Store warning in attendance for admin visibility
-                $excessiveDurationWarning = sprintf(
-                    'EXCESSIVE DURATION: %s → %s (%.1f hours). Time out has been cleared - likely a mismatched scan or forgot to clock out.',
-                    $timeInRecord['datetime']->format('Y-m-d H:i'),
-                    $timeOutRecord['datetime']->format('Y-m-d H:i'),
-                    $hours
-                );
+                $excessiveDurationWarning = AttendanceWarning::make(
+                    'excessive_duration',
+                    sprintf(
+                        'EXCESSIVE DURATION: %s → %s (%.1f hours). Time out has been cleared - likely a mismatched scan or forgot to clock out.',
+                        $timeInRecord['datetime']->format('Y-m-d H:i'),
+                        $timeOutRecord['datetime']->format('Y-m-d H:i'),
+                        $hours
+                    )
+                )->toArray();
 
                 // Initialize warnings array if not set
                 $existingWarnings = $attendance->warnings ?? [];
@@ -1596,12 +1701,39 @@ class AttendanceProcessor
                 $timeInRecord = $firstRecord;
                 $timeOutRecord = $lastRecord;
 
-                \Log::info('24H Utility: Using first/last scans only', [
+                Log::info('24H Utility: Using first/last scans only', [
                     'user_id' => $user->id,
                     'total_scans' => $records->count(),
                     'first_scan' => $firstRecord['datetime']->format('H:i:s'),
                     'last_scan' => $lastRecord['datetime']->format('H:i:s'),
                 ]);
+            }
+        }
+
+        // Midnight scan ambiguity (N04): on next-day shifts a scan at exactly 00:00 is hard to
+        // classify — it might be a break re-entry, a late time-in, or an early time-out from the
+        // previous shift. Store a warning so admins can verify.
+        if ($isNextDayTimeOut) {
+            $isMidnightIn = $timeInRecord
+                && $timeInRecord['datetime']->hour === 0
+                && $timeInRecord['datetime']->minute === 0;
+            $isMidnightOut = $timeOutRecord
+                && $timeOutRecord['datetime']->hour === 0
+                && $timeOutRecord['datetime']->minute === 0;
+
+            if ($isMidnightIn || $isMidnightOut) {
+                $label = $isMidnightIn ? 'TIME IN' : 'TIME OUT';
+                $existingWarnings = $attendance->warnings ?? [];
+                $existingWarnings[] = AttendanceWarning::make(
+                    'midnight_scan',
+                    sprintf(
+                        'MIDNIGHT SCAN: A biometric record at exactly 00:00 was classified as %s '
+                        .'on a next-day shift. Classification may be ambiguous — please verify manually.',
+                        $label
+                    ),
+                    'warning'
+                )->toArray();
+                $attendance->warnings = $existingWarnings;
             }
         }
 
@@ -1612,7 +1744,7 @@ class AttendanceProcessor
 
             // diffInMinutes with false gives positive if actualTimeIn is after scheduledTimeIn
             // We only want to set tardy_minutes if they are actually late (positive value)
-            $gracePeriodMinutes = $schedule->grace_period_minutes ?? 15;
+            $gracePeriodMinutes = $schedule->grace_period_minutes ?? 0;
             $status = $this->determineTimeInStatus($tardyMinutes, $gracePeriodMinutes);
 
             $isCrossSite = $biometricSiteId && $schedule->site_id && ($biometricSiteId != $schedule->site_id);
@@ -1631,23 +1763,25 @@ class AttendanceProcessor
             // Zero out seconds for accurate minute comparison
             $timeDiffMinutes = (int) $scheduledTimeOut->copy()->second(0)->diffInMinutes($actualTimeOut->copy()->second(0), false);
 
-            $bioInSiteId = $attendance->bio_in_site_id;
+            // NOTE: Per-scan site IDs are not yet tracked independently — both IN and OUT
+            // originate from the same upload's $biometricSiteId, so an in-vs-out site
+            // comparison would always be false. The condition is omitted here and kept as
+            // a placeholder for future per-scan site ID support.
             $isCrossSite = $attendance->is_cross_site_bio ||
-                          ($biometricSiteId && $schedule->site_id && ($biometricSiteId != $schedule->site_id)) ||
-                          ($biometricSiteId && $bioInSiteId && ($biometricSiteId != $bioInSiteId));
+                          ($biometricSiteId && $schedule->site_id && ($biometricSiteId != $schedule->site_id));
 
             $attendance->actual_time_out = $actualTimeOut;
             $attendance->bio_out_site_id = $biometricSiteId;
             $attendance->is_cross_site_bio = $isCrossSite;
 
             // Check for undertime (any early departure)
-            // Only count undertime if at least 1 minute early (to avoid 0 values from seconds)
+            // Only count undertime if at least undertime_min_minutes early (to avoid 0 values from seconds)
             // 1-60 minutes early = undertime (0.25 pts)
             // 61+ minutes early = undertime_more_than_hour (0.50 pts)
             $undertimeMinutes = (int) abs($timeDiffMinutes);
-            if ($timeDiffMinutes < 0 && $undertimeMinutes >= 1) {
+            if ($timeDiffMinutes < 0 && $undertimeMinutes >= config('attendance.undertime_min_minutes', 1)) {
                 $attendance->undertime_minutes = $undertimeMinutes;
-                $undertimeStatus = $undertimeMinutes > 60 ? 'undertime_more_than_hour' : 'undertime';
+                $undertimeStatus = $undertimeMinutes > config('attendance.undertime_threshold_minutes') ? 'undertime_more_than_hour' : 'undertime';
                 if ($attendance->status === 'on_time') {
                     $attendance->status = $undertimeStatus;
                 }
@@ -1661,8 +1795,8 @@ class AttendanceProcessor
             }
 
             // Check for overtime (worked beyond scheduled time out)
-            // Only count overtime if worked more than 30 minutes beyond scheduled time out
-            if ($timeDiffMinutes > 30) { // Positive means left late (overtime), threshold 30 minutes
+            // Only count overtime if worked more than overtime_threshold_minutes beyond scheduled time out
+            if ($timeDiffMinutes > config('attendance.overtime_threshold_minutes', 30)) { // Positive means left late (overtime)
                 $attendance->overtime_minutes = $timeDiffMinutes;
             } else {
                 // Not enough overtime (30 min threshold), clear it
@@ -1719,7 +1853,7 @@ class AttendanceProcessor
             $attendance->warnings = $scanAnalysis['warnings'];
             $attendance->status = 'needs_manual_review';
 
-            \Log::warning('Attendance flagged for manual review', [
+            Log::warning('Attendance flagged for manual review', [
                 'user_id' => $user->id,
                 'shift_date' => $shiftDate->format('Y-m-d'),
                 'original_status' => $attendance->status,
@@ -1749,12 +1883,18 @@ class AttendanceProcessor
 
                     // Add informational warning
                     $existingWarnings = $attendance->warnings ?? [];
-                    $existingWarnings[] = sprintf(
-                        '24H UTILITY: Only %.1f hours worked (minimum 8 hours expected).',
-                        $hoursWorked
-                    );
+                    $existingWarnings[] = AttendanceWarning::make(
+                        'utility_undertime',
+                        sprintf('24H UTILITY: Only %.1f hours worked (minimum 8 hours expected).', $hoursWorked),
+                        'info'
+                    )->toArray();
                     $attendance->warnings = $existingWarnings;
                 }
+            } elseif ($attendance->actual_time_in && ! $attendance->actual_time_out) {
+                // Single scan with no time-out: keep whatever status was derived from
+                // time-in (e.g. on_time/tardy) but add failed_bio_out as secondary so
+                // admin knows the record is incomplete.
+                $attendance->secondary_status = 'failed_bio_out';
             }
         }
 
@@ -1789,7 +1929,7 @@ class AttendanceProcessor
             }
 
             $rawMinutes = $effectiveTimeIn->diffInMinutes($effectiveTimeOut);
-            $lunchDeduction = ($rawMinutes / 60) > 5 ? 60 : 0;
+            $lunchDeduction = ($rawMinutes / 60) > config('attendance.lunch_threshold_hours') ? config('attendance.lunch_deduction_minutes') : 0;
             $attendance->total_minutes_worked = $rawMinutes - $lunchDeduction;
         } else {
             $attendance->total_minutes_worked = null;
@@ -1806,216 +1946,29 @@ class AttendanceProcessor
     }
 
     /**
-     * Process Time In phase.
-     */
-    protected function processTimeIn(
-        User $user,
-        EmployeeSchedule $schedule,
-        Collection $records,
-        Carbon $shiftDate,
-        ?int $biometricSiteId = null
-    ): array {
-        // Build scheduled time in datetime
-        $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d').' '.$schedule->scheduled_time_in);
-
-        // Time in is always on the shift date itself
-        // E.g., Nov 5 shift -> time in on Nov 5
-        $expectedTimeInDate = $shiftDate->copy();
-
-        // Find time in record on expected date (earliest record on shift date)
-        $timeInRecord = $this->parser->findTimeInRecord($records, $expectedTimeInDate);
-
-        // Get or create attendance record
-        $attendance = Attendance::firstOrCreate(
-            [
-                'user_id' => $user->id,
-                'shift_date' => $shiftDate,
-            ],
-            [
-                'employee_schedule_id' => $schedule->id,
-                'scheduled_time_in' => $schedule->scheduled_time_in,
-                'scheduled_time_out' => $schedule->scheduled_time_out,
-                'status' => 'ncns', // Default to NCNS
-            ]
-        );
-
-        // Skip updating if this is a verified record (manual entry, approved overtime, etc.)
-        if ($attendance->admin_verified) {
-            return [
-                'matched' => true,
-                'records_processed' => 0, // Skipped
-                'errors' => [],
-            ];
-        }
-
-        if ($timeInRecord) {
-            // Calculate tardiness
-            $actualTimeIn = $timeInRecord['datetime'];
-            $tardyMinutes = (int) $scheduledTimeIn->diffInMinutes($actualTimeIn, false);
-
-            // Determine status based on rules and grace period
-            $gracePeriodMinutes = $schedule->grace_period_minutes ?? 15;
-            $status = $this->determineTimeInStatus($tardyMinutes, $gracePeriodMinutes);
-
-            // Check if employee bio'd at a different site than assigned
-            $isCrossSite = $biometricSiteId && $schedule->site_id && ($biometricSiteId != $schedule->site_id);
-
-            $attendance->update([
-                'actual_time_in' => $actualTimeIn,
-                'bio_in_site_id' => $biometricSiteId,
-                'status' => $status,
-                'tardy_minutes' => $tardyMinutes > 0 ? $tardyMinutes : null,
-                'is_cross_site_bio' => $isCrossSite,
-            ]);
-        } else {
-            // No time in record found
-            if (! $attendance->is_advised) {
-                $attendance->update(['status' => 'ncns']);
-            }
-        }
-
-        return [
-            'matched' => true,
-            'records_processed' => 1,
-            'errors' => [],
-        ];
-    }
-
-    /**
-     * Process Time Out phase.
-     */
-    protected function processTimeOut(
-        User $user,
-        EmployeeSchedule $schedule,
-        Collection $records,
-        Carbon $shiftDate,
-        ?int $biometricSiteId = null
-    ): array {
-        // Get attendance record
-        $attendance = Attendance::where('user_id', $user->id)
-            ->where('shift_date', $shiftDate)
-            ->first();
-
-        if (! $attendance) {
-            // Create attendance if it doesn't exist (shouldn't happen normally)
-            $attendance = Attendance::create([
-                'user_id' => $user->id,
-                'employee_schedule_id' => $schedule->id,
-                'shift_date' => $shiftDate,
-                'scheduled_time_in' => $schedule->scheduled_time_in,
-                'scheduled_time_out' => $schedule->scheduled_time_out,
-                'status' => 'failed_bio_in',
-            ]);
-        }
-
-        // Skip updating if this is a verified record (manual entry, approved overtime, etc.)
-        // But allow time-out updates for partially verified records
-        if ($attendance->admin_verified && ! $attendance->is_partially_verified) {
-            return [
-                'matched' => true,
-                'records_processed' => 0, // Skipped
-                'errors' => [],
-            ];
-        }
-
-        // Build scheduled time out datetime (could be next day for night shift)
-        $scheduledTimeOut = Carbon::parse($shiftDate->format('Y-m-d').' '.$schedule->scheduled_time_out);
-
-        // Determine expected date for time out (usually next day for night shifts)
-        $expectedTimeOutDate = $shiftDate->copy();
-        if ($schedule->isNightShift()) {
-            $expectedTimeOutDate->addDay();
-        }
-
-        // Get the expected time out hour to help distinguish morning vs evening time outs
-        $scheduledOutHour = Carbon::parse($schedule->scheduled_time_out)->hour;
-
-        // Find time out record on expected date
-        // Pass scheduled time out for smart matching when multiple records exist
-        $timeOutRecord = $this->parser->findTimeOutRecord(
-            $records,
-            $expectedTimeOutDate,
-            $scheduledOutHour,
-            $schedule->scheduled_time_out
-        );
-        if ($timeOutRecord) {
-            $actualTimeOut = $timeOutRecord['datetime'];
-            // Calculate time difference: positive = overtime (left late), negative = undertime (left early)
-            // Zero out seconds for accurate minute comparison
-            $timeDiffMinutes = (int) $scheduledTimeOut->copy()->second(0)->diffInMinutes($actualTimeOut->copy()->second(0), false);
-
-            // Check if employee bio'd out at a different site
-            $bioInSiteId = $attendance->bio_in_site_id;
-            $isCrossSite = $attendance->is_cross_site_bio ||
-                          ($biometricSiteId && $schedule->site_id && ($biometricSiteId != $schedule->site_id)) ||
-                          ($biometricSiteId && $bioInSiteId && ($biometricSiteId != $bioInSiteId));
-
-            // Update attendance with time out info
-            $updates = [
-                'actual_time_out' => $actualTimeOut,
-                'bio_out_site_id' => $biometricSiteId,
-                'is_cross_site_bio' => $isCrossSite,
-            ];
-
-            // Check for undertime (> 60 minutes early)
-            // Use (int) cast to truncate, not round - gives exact minutes
-            if ($timeDiffMinutes < -60) { // Negative means left early
-                $updates['undertime_minutes'] = (int) abs($timeDiffMinutes);
-                if ($attendance->status === 'on_time') {
-                    $updates['status'] = 'undertime';
-                }
-            }
-
-            // Check for overtime (worked beyond scheduled time out)
-            // Only count overtime if worked more than 30 minutes beyond scheduled time out
-            if ($timeDiffMinutes > 30) { // Positive means left late (overtime), threshold 30 minutes
-                $updates['overtime_minutes'] = $timeDiffMinutes;
-            }
-
-            $attendance->update($updates);
-        } else {
-            // No time out record found
-            if ($attendance->actual_time_in) {
-                $attendance->update(['status' => 'failed_bio_out']);
-            } else {
-                // Neither time in nor time out - check if they showed up in the time out records
-                $anyRecord = $records->first();
-                if ($anyRecord) {
-                    $attendance->update([
-                        'status' => 'failed_bio_in',
-                        'actual_time_out' => $anyRecord['datetime'],
-                    ]);
-                }
-            }
-        }
-
-        return [
-            'matched' => true,
-            'records_processed' => 1,
-            'errors' => [],
-        ];
-    }
-
-    /**
      * Determine status based on tardiness minutes and grace period.
      *
+     * Semantics: grace period is a forgiveness window.
+     *  - `tardy_minutes <= grace_period_minutes` ⇒ `on_time` (no penalty, no
+     *     points). The raw `tardy_minutes` is still recorded for reporting.
+     *  - `tardy_minutes >  grace_period_minutes` but <= half_day threshold ⇒ `tardy`.
+     *  - `tardy_minutes >  half_day_absence_tardy_minutes` ⇒ `half_day_absence`.
+     *
      * @param  int  $tardyMinutes  Positive if late, negative if early
-     * @param  int  $gracePeriodMinutes  Grace period from employee schedule (default 15)
+     * @param  int  $gracePeriodMinutes  Grace period from employee schedule
      */
-    protected function determineTimeInStatus(int $tardyMinutes, int $gracePeriodMinutes = 15): string
+    protected function determineTimeInStatus(int $tardyMinutes, int $gracePeriodMinutes = 0): string
     {
-        // More than grace period minutes late - half day absence (check this first)
-        if ($tardyMinutes > $gracePeriodMinutes) {
+        if ($tardyMinutes <= $gracePeriodMinutes) {
+            return 'on_time';
+        }
+
+        $halfDayThreshold = config('attendance.half_day_absence_tardy_minutes', 15);
+        if ($tardyMinutes > $halfDayThreshold) {
             return 'half_day_absence';
         }
 
-        // 1 minutes or more late, but within grace period - tardy
-        if ($tardyMinutes >= 1) {
-            return 'tardy';
-        }
-
-        // Less than 1 minute late - considered on time
-        return 'on_time';
+        return 'tardy';
     }
 
     /**
@@ -2173,7 +2126,7 @@ class AttendanceProcessor
      */
     protected function generateAttendancePoints(Carbon $shiftDate): int
     {
-        \Log::info('Generating attendance points', [
+        Log::info('Generating attendance points', [
             'shift_date' => $shiftDate->format('Y-m-d'),
         ]);
 
@@ -2214,7 +2167,7 @@ class AttendanceProcessor
                 $pointValue = $secondaryPointValue;
                 $usedStatus = $attendance->secondary_status;
 
-                \Log::info('Using secondary status for points (higher value)', [
+                Log::info('Using secondary status for points (higher value)', [
                     'user_id' => $attendance->user_id,
                     'shift_date' => $attendance->shift_date->format('Y-m-d'),
                     'primary_status' => $attendance->status,
@@ -2241,8 +2194,10 @@ class AttendanceProcessor
                 continue;
             }
 
-            // Determine if NCNS/FTN (whole day absence without advice)
-            $isNcnsOrFtn = $pointType === 'whole_day_absence' && ! $attendance->is_advised;
+            // NCNS and FTN both use 'ncns' attendance status → 1 year, NOT GBRO eligible.
+            // FTN = employee was advised to come but didn't show AND didn't call (ncns + is_advised=true).
+            // Advised Absence (advised_absence status) → 6 months, GBRO eligible.
+            $isNcnsOrFtn = $pointType === 'whole_day_absence' && $usedStatus === 'ncns';
 
             // Calculate expiration date (6 months for standard, 1 year for NCNS/FTN)
             $expiresAt = $isNcnsOrFtn
@@ -2267,7 +2222,7 @@ class AttendanceProcessor
                 'violation_details' => $violationDetails,
                 'tardy_minutes' => $attendance->tardy_minutes,
                 'undertime_minutes' => $attendance->undertime_minutes,
-                'eligible_for_gbro' => ! $isNcnsOrFtn, // NCNS/FTN not eligible for GBRO
+                'eligible_for_gbro' => ! $isNcnsOrFtn, // NCNS and FTN (ncns status) not GBRO eligible; advised_absence status IS eligible
                 'created_at' => now(),
                 'updated_at' => now(),
             ];
@@ -2277,12 +2232,12 @@ class AttendanceProcessor
         // Bulk insert all points at once for performance
         if (! empty($pointsToInsert)) {
             AttendancePoint::insert($pointsToInsert);
-            \Log::info('Attendance points created', [
+            Log::info('Attendance points created', [
                 'shift_date' => $shiftDate->format('Y-m-d'),
                 'points_created' => $pointsCreated,
             ]);
         } else {
-            \Log::info('No attendance points needed', [
+            Log::info('No attendance points needed', [
                 'shift_date' => $shiftDate->format('Y-m-d'),
             ]);
         }
@@ -2327,8 +2282,8 @@ class AttendanceProcessor
         $actualIn = $attendance->actual_time_in ? $attendance->actual_time_in->format('H:i') : 'No scan';
         $actualOut = $attendance->actual_time_out ? $attendance->actual_time_out->format('H:i') : 'No scan';
 
-        // Get grace period from employee schedule
-        $gracePeriod = $attendance->employeeSchedule?->grace_period_minutes ?? 15;
+        // Get grace period from employee schedule (defaults to 0; admins may raise per-schedule)
+        $gracePeriod = $attendance->employeeSchedule?->grace_period_minutes ?? 0;
 
         $details = match ($status) {
             'ncns' => $attendance->is_advised
@@ -2416,7 +2371,7 @@ class AttendanceProcessor
      */
     public function regeneratePointsForAttendance(Attendance $attendance): void
     {
-        \Log::info('Regenerating attendance points for single record', [
+        Log::info('Regenerating attendance points for single record', [
             'attendance_id' => $attendance->id,
             'user_id' => $attendance->user_id,
             'status' => $attendance->status,
@@ -2436,7 +2391,7 @@ class AttendanceProcessor
         $effectiveSecondaryStatus = $attendance->secondary_status;
 
         if ($attendance->is_set_home) {
-            \Log::info('Set Home enabled - skipping undertime violations', [
+            Log::info('Set Home enabled - skipping undertime violations', [
                 'attendance_id' => $attendance->id,
                 'original_status' => $attendance->status,
                 'original_secondary' => $attendance->secondary_status,
@@ -2450,7 +2405,7 @@ class AttendanceProcessor
                     $effectiveSecondaryStatus = null;
                 } else {
                     // No valid secondary, skip point generation entirely
-                    \Log::info('Set Home: No non-undertime status found, skipping points');
+                    Log::info('Set Home: No non-undertime status found, skipping points');
 
                     return;
                 }
@@ -2462,9 +2417,33 @@ class AttendanceProcessor
             }
         }
 
+        // If undertime was approved without generating points (skip_points / lunch_used),
+        // exclude undertime violations — same logic as is_set_home but driven by approval.
+        if ($attendance->isUndertimeApprovedNoPoints()) {
+            Log::info('Undertime approved (no points) - skipping undertime violations', [
+                'attendance_id' => $attendance->id,
+                'undertime_approval_reason' => $attendance->undertime_approval_reason,
+            ]);
+
+            if (in_array($effectivePrimaryStatus, $undertimeStatuses)) {
+                if ($effectiveSecondaryStatus && ! in_array($effectiveSecondaryStatus, $undertimeStatuses)) {
+                    $effectivePrimaryStatus = $effectiveSecondaryStatus;
+                    $effectiveSecondaryStatus = null;
+                } else {
+                    Log::info('Undertime approved: no other violations, skipping points');
+
+                    return;
+                }
+            }
+
+            if (in_array($effectiveSecondaryStatus, $undertimeStatuses)) {
+                $effectiveSecondaryStatus = null;
+            }
+        }
+
         if (! in_array($effectivePrimaryStatus, $pointableStatuses) &&
             ! in_array($effectiveSecondaryStatus, $pointableStatuses)) {
-            \Log::info('Neither status requires points', [
+            Log::info('Neither status requires points', [
                 'status' => $effectivePrimaryStatus,
                 'secondary_status' => $effectiveSecondaryStatus,
             ]);
@@ -2499,14 +2478,14 @@ class AttendanceProcessor
             $usedStatus = $effectiveSecondaryStatus;
             $pointType = $secondaryPointType;
             $pointValue = $secondaryPointValue;
-            \Log::info('Using secondary status for points (higher value)', [
+            Log::info('Using secondary status for points (higher value)', [
                 'primary_type' => $primaryPointType,
                 'primary_value' => $primaryPointValue,
                 'secondary_type' => $secondaryPointType,
                 'secondary_value' => $secondaryPointValue,
             ]);
         } elseif ($secondaryPointValue > 0) {
-            \Log::info('Using primary status for points (equal or higher value)', [
+            Log::info('Using primary status for points (equal or higher value)', [
                 'primary_type' => $primaryPointType,
                 'primary_value' => $primaryPointValue,
                 'secondary_type' => $secondaryPointType,
@@ -2515,21 +2494,22 @@ class AttendanceProcessor
         }
 
         if ($pointValue <= 0) {
-            \Log::info('No point value for this type', ['point_type' => $pointType]);
+            Log::info('No point value for this type', ['point_type' => $pointType]);
 
             return;
         }
 
         $shiftDate = Carbon::parse($attendance->shift_date);
 
-        // Determine if NCNS (whole day absence without advice)
-        // Advised Absence gets 6-month expiration and is eligible for GBRO
-        $isNcns = $pointType === 'whole_day_absence' && ! $attendance->is_advised;
+        // NCNS and FTN both have 'ncns' attendance status → 1 year, NOT GBRO eligible.
+        // FTN = employee was advised to come but didn't show AND didn't call (ncns + is_advised=true).
+        // Advised Absence (advised_absence status) → 6 months, GBRO eligible.
+        $isNcns = $pointType === 'whole_day_absence' && $attendance->status === 'ncns';
 
         // Calculate expiration date:
-        // - NCNS: 1 year expiration, not eligible for GBRO
-        // - Advised Absence: 6 months expiration, eligible for GBRO
-        // - All others: 6 months expiration, eligible for GBRO
+        // - NCNS/FTN (ncns status): 1 year expiration, not eligible for GBRO
+        // - Advised Absence (advised_absence status): 6 months expiration, eligible for GBRO
+        // - All others (tardy, undertime, half_day): 6 months expiration, eligible for GBRO
         $expiresAt = $isNcns
             ? $shiftDate->copy()->addYear()
             : $shiftDate->copy()->addMonths(6);
@@ -2558,10 +2538,10 @@ class AttendanceProcessor
             'violation_details' => $violationDetails,
             'tardy_minutes' => $attendance->tardy_minutes,
             'undertime_minutes' => $attendance->undertime_minutes,
-            'eligible_for_gbro' => ! $isNcns, // Only NCNS is not eligible for GBRO, Advised Absence is eligible
+            'eligible_for_gbro' => ! $isNcns, // NCNS and FTN (ncns status) not GBRO eligible; others are eligible
         ]);
 
-        \Log::info('Attendance point created (higher value applied)', [
+        Log::info('Attendance point created (higher value applied)', [
             'attendance_id' => $attendance->id,
             'point_type' => $pointType,
             'points' => $pointValue,
@@ -2594,10 +2574,27 @@ class AttendanceProcessor
             ->unique()
             ->values();
 
-        // Get all active employees with schedules
+        // Eager-load active schedules to avoid N+1 on $employee->employeeSchedules()
         $allActiveEmployees = User::whereHas('employeeSchedules', function ($query) {
             $query->where('is_active', true);
-        })->get();
+        })->with(['employeeSchedules' => fn ($q) => $q->where('is_active', true)])->get();
+
+        $userIds = $allActiveEmployees->pluck('id');
+        $datesArray = $datesInFile->toArray();
+
+        // Pre-load all approved leaves for the full date window — eliminates one query per (employee, date)
+        $approvedLeavesMap = LeaveRequest::where('status', 'approved')
+            ->whereIn('user_id', $userIds)
+            ->where('start_date', '<=', $datesInFile->max())
+            ->where('end_date', '>=', $datesInFile->min())
+            ->get()
+            ->groupBy('user_id');
+
+        // Pre-load existing attendances for all employees × the date set — eliminates one query per (employee, date)
+        $existingAttendancesMap = Attendance::whereIn('user_id', $userIds)
+            ->whereIn('shift_date', $datesArray)
+            ->get()
+            ->groupBy(fn ($a) => $a->user_id.'_'.$a->shift_date);
 
         $ncnsCreated = 0;
 
@@ -2609,8 +2606,8 @@ class AttendanceProcessor
                 continue;
             }
 
-            // Get employee's active schedule
-            $schedule = $employee->employeeSchedules()->where('is_active', true)->first();
+            // Use the eager-loaded relationship instead of a lazy query
+            $schedule = $employee->employeeSchedules->first();
             if (! $schedule) {
                 continue;
             }
@@ -2625,8 +2622,12 @@ class AttendanceProcessor
                     continue;
                 }
 
-                // Check if employee has approved leave for this date
-                $approvedLeave = $this->checkApprovedLeave($employee, $date);
+                // Check approved leave using pre-loaded map
+                $userLeaves = $approvedLeavesMap->get($employee->id, collect());
+                $approvedLeave = $userLeaves->first(function ($leave) use ($dateStr) {
+                    return $leave->start_date <= $dateStr && $leave->end_date >= $dateStr;
+                });
+
                 if ($approvedLeave) {
                     // Create on_leave attendance record instead of NCNS
                     $this->createLeaveAttendance($employee, $schedule, $date, $approvedLeave);
@@ -2634,12 +2635,9 @@ class AttendanceProcessor
                     continue;
                 }
 
-                // Check if attendance record already exists
-                $existingAttendance = Attendance::where('user_id', $employee->id)
-                    ->where('shift_date', $date)
-                    ->first();
-
-                if ($existingAttendance) {
+                // Check if attendance record already exists using pre-loaded map
+                $existingKey = $employee->id.'_'.$dateStr;
+                if ($existingAttendancesMap->has($existingKey)) {
                     continue;
                 }
 
@@ -2668,7 +2666,7 @@ class AttendanceProcessor
 
                 $ncnsCreated++;
 
-                \Log::info('Created NCNS record for absent employee', [
+                Log::info('Created NCNS record for absent employee', [
                     'user_id' => $employee->id,
                     'user_name' => $employee->name,
                     'shift_date' => $date->format('Y-m-d'),
@@ -2678,7 +2676,7 @@ class AttendanceProcessor
         }
 
         if ($ncnsCreated > 0) {
-            \Log::warning('Absent employees detected', [
+            Log::warning('Absent employees detected', [
                 'upload_id' => $upload->id,
                 'ncns_created' => $ncnsCreated,
             ]);
@@ -2756,7 +2754,10 @@ class AttendanceProcessor
 
             if ($allScansExtreme && $scanCount > 0) {
                 $scanTimes = $relevantRecords->pluck('datetime')->map(fn ($dt) => $dt->format('Y-m-d H:i'))->join(', ');
-                $warnings[] = "Employee has only {$scanCount} biometric scan(s) on this date ({$scanTimes}), and the scan time(s) don't match the scheduled shift times. This may indicate: wrong shift assignment, scanner testing, or the employee worked a different shift.";
+                $warnings[] = AttendanceWarning::make(
+                    'suspicious_scan_pattern',
+                    "Employee has only {$scanCount} biometric scan(s) on this date ({$scanTimes}), and the scan time(s) don't match the scheduled shift times. This may indicate: wrong shift assignment, scanner testing, or the employee worked a different shift."
+                )->toArray();
                 $needsReview = true;
             }
         }
@@ -2768,7 +2769,10 @@ class AttendanceProcessor
 
             if ($minutesBeforeScheduled < -180) { // More than 3 hours early
                 $hours = abs(round($minutesBeforeScheduled / 60, 1));
-                $warnings[] = "Time IN is {$hours} hours before scheduled time ({$actualTimeIn->format('Y-m-d H:i')} vs {$scheduledTimeInFull->format('Y-m-d H:i')})";
+                $warnings[] = AttendanceWarning::make(
+                    'early_time_in',
+                    "Time IN is {$hours} hours before scheduled time ({$actualTimeIn->format('Y-m-d H:i')} vs {$scheduledTimeInFull->format('Y-m-d H:i')})"
+                )->toArray();
                 $needsReview = true;
             }
         }
@@ -2780,14 +2784,21 @@ class AttendanceProcessor
 
             if ($minutesAfterScheduled < -240) { // More than 4 hours late (beyond overtime threshold)
                 $hours = abs(round($minutesAfterScheduled / 60, 1));
-                $warnings[] = "Time OUT is {$hours} hours after scheduled time ({$actualTimeOut->format('Y-m-d H:i')} vs {$scheduledTimeOutFull->format('Y-m-d H:i')})";
+                $warnings[] = AttendanceWarning::make(
+                    'late_time_out',
+                    "Time OUT is {$hours} hours after scheduled time ({$actualTimeOut->format('Y-m-d H:i')} vs {$scheduledTimeOutFull->format('Y-m-d H:i')})"
+                )->toArray();
                 $needsReview = true;
             }
 
             // Warning 3b: Time OUT is extremely early (>3 hours before scheduled)
             if ($minutesAfterScheduled > 180) { // More than 3 hours early
                 $hours = abs(round($minutesAfterScheduled / 60, 1));
-                $warnings[] = "Time OUT is {$hours} hours before scheduled time ({$actualTimeOut->format('Y-m-d H:i')} vs {$scheduledTimeOutFull->format('Y-m-d H:i')}). This may indicate: emergency, medical issue, or unauthorized early departure.";
+                $warnings[] = AttendanceWarning::make(
+                    'early_time_out',
+                    "Time OUT is {$hours} hours before scheduled time ({$actualTimeOut->format('Y-m-d H:i')} vs {$scheduledTimeOutFull->format('Y-m-d H:i')}). This may indicate: emergency, medical issue, or unauthorized early departure.",
+                    'critical'
+                )->toArray();
                 $needsReview = true;
             }
         }
@@ -2799,7 +2810,10 @@ class AttendanceProcessor
             $hoursBetween = $firstScan->diffInHours($lastScan);
 
             if ($hoursBetween > 12) {
-                $warnings[] = "Only 2 scans found with {$hoursBetween} hours gap ({$firstScan->format('H:i')} and {$lastScan->format('H:i')}), neither matches schedule";
+                $warnings[] = AttendanceWarning::make(
+                    'large_scan_gap',
+                    "Only 2 scans found with {$hoursBetween} hours gap ({$firstScan->format('H:i')} and {$lastScan->format('H:i')}), neither matches schedule"
+                )->toArray();
                 $needsReview = true;
             }
         }
@@ -2807,7 +2821,10 @@ class AttendanceProcessor
         // Warning 5: No valid time IN or OUT detected despite having scans
         if ($scanCount > 0 && ! $timeInRecord && ! $timeOutRecord) {
             $scanTimes = $relevantRecords->pluck('datetime')->map(fn ($dt) => $dt->format('H:i'))->join(', ');
-            $warnings[] = "No valid time IN/OUT detected from {$scanCount} scan(s) at: {$scanTimes}";
+            $warnings[] = AttendanceWarning::make(
+                'no_valid_scan',
+                "No valid time IN/OUT detected from {$scanCount} scan(s) at: {$scanTimes}"
+            )->toArray();
             $needsReview = true;
         }
 
@@ -2824,6 +2841,155 @@ class AttendanceProcessor
      * If overtime exists but is NOT approved, work hours are capped at scheduled time out.
      * If overtime is approved, work hours include the overtime period.
      */
+    /**
+     * Calculate status, tardy/undertime/overtime minutes for a manually entered attendance record.
+     * Used by both AttendanceController::store() and ::bulkStore() to avoid duplication.
+     *
+     * @return array{status: ?string, secondary_status: ?string, tardy_minutes: ?int, undertime_minutes: ?int, overtime_minutes: ?int}
+     */
+    public function calculateManualAttendanceMetrics(
+        ?EmployeeSchedule $schedule,
+        ?Carbon $actualTimeIn,
+        ?Carbon $actualTimeOut,
+        string $shiftDate,
+        ?string $providedStatus,
+        ?string $providedSecondaryStatus,
+        ?LeaveRequest $approvedLeave,
+    ): array {
+        $tardyMinutes = null;
+        $undertimeMinutes = null;
+        $overtimeMinutes = null;
+        $status = $providedStatus;
+        $secondaryStatus = $providedSecondaryStatus;
+
+        if ($approvedLeave && ! $status) {
+            $status = 'on_leave';
+        } elseif (! $status) {
+            $hasBioIn = (bool) $actualTimeIn;
+            $hasBioOut = (bool) $actualTimeOut;
+            $isTardy = false;
+            $hasUndertime = false;
+
+            if ($schedule && $hasBioIn && $hasBioOut) {
+                $shiftDateCarbon = Carbon::parse($shiftDate);
+                $scheduledTimeIn = Carbon::parse($shiftDateCarbon->format('Y-m-d').' '.$schedule->scheduled_time_in);
+                $scheduledTimeOut = Carbon::parse($shiftDateCarbon->format('Y-m-d').' '.$schedule->scheduled_time_out);
+
+                if ($schedule->shift_type === 'night_shift' && $scheduledTimeOut->lt($scheduledTimeIn)) {
+                    $scheduledTimeOut->addDay();
+                }
+
+                $gracePeriod = $schedule->grace_period_minutes ?? 0;
+                if ($actualTimeIn->gt($scheduledTimeIn)) {
+                    $tardyMinutes = $scheduledTimeIn->diffInMinutes($actualTimeIn);
+                    if ($actualTimeIn->gt($scheduledTimeIn->copy()->addMinutes($gracePeriod))) {
+                        $isTardy = true;
+                    }
+                }
+
+                if ($actualTimeOut->lt($scheduledTimeOut)) {
+                    $undertimeMinutes = $actualTimeOut->diffInMinutes($scheduledTimeOut);
+                    $hasUndertime = true;
+                } elseif ($actualTimeOut->gt($scheduledTimeOut)) {
+                    $timeBeyondSchedule = $scheduledTimeOut->diffInMinutes($actualTimeOut);
+                    if ($timeBeyondSchedule > 30) {
+                        $overtimeMinutes = $timeBeyondSchedule;
+                    }
+                }
+            } elseif ($schedule && $hasBioIn) {
+                $shiftDateCarbon = Carbon::parse($shiftDate);
+                $scheduledTimeIn = Carbon::parse($shiftDateCarbon->format('Y-m-d').' '.$schedule->scheduled_time_in);
+                $gracePeriod = $schedule->grace_period_minutes ?? 0;
+                if ($actualTimeIn->gt($scheduledTimeIn)) {
+                    $tardyMinutes = $scheduledTimeIn->diffInMinutes($actualTimeIn);
+                    if ($actualTimeIn->gt($scheduledTimeIn->copy()->addMinutes($gracePeriod))) {
+                        $isTardy = true;
+                    }
+                }
+            }
+
+            if (! $hasBioIn && ! $hasBioOut) {
+                $status = 'present_no_bio';
+            } elseif (! $hasBioIn && $hasBioOut) {
+                $status = 'failed_bio_in';
+            } elseif ($hasBioIn && ! $hasBioOut) {
+                if ($isTardy) {
+                    $status = $this->determineTimeInStatus($tardyMinutes ?? 0, $gracePeriod);
+                    $secondaryStatus = 'failed_bio_out';
+                } else {
+                    $status = 'failed_bio_out';
+                }
+            } elseif ($isTardy && $hasUndertime) {
+                $status = $this->determineTimeInStatus($tardyMinutes ?? 0, $gracePeriod);
+                // Only add undertime as secondary when primary is tardy (not half_day_absence)
+                if ($status === 'tardy') {
+                    $secondaryStatus = 'undertime';
+                }
+            } elseif ($isTardy) {
+                $status = $this->determineTimeInStatus($tardyMinutes ?? 0, $gracePeriod);
+            } elseif ($hasUndertime) {
+                $status = 'undertime';
+            } else {
+                $status = 'on_time';
+            }
+        } elseif ($schedule && $actualTimeIn && $actualTimeOut) {
+            $shiftDateCarbon = Carbon::parse($shiftDate);
+            $scheduledTimeIn = Carbon::parse($shiftDateCarbon->format('Y-m-d').' '.$schedule->scheduled_time_in);
+            $scheduledTimeOut = Carbon::parse($shiftDateCarbon->format('Y-m-d').' '.$schedule->scheduled_time_out);
+
+            if ($schedule->shift_type === 'night_shift' && $scheduledTimeOut->lt($scheduledTimeIn)) {
+                $scheduledTimeOut->addDay();
+            }
+
+            if ($actualTimeIn->gt($scheduledTimeIn)) {
+                $tardyMinutes = $scheduledTimeIn->diffInMinutes($actualTimeIn);
+            }
+
+            if ($actualTimeOut->lt($scheduledTimeOut)) {
+                $undertimeMinutes = $actualTimeOut->diffInMinutes($scheduledTimeOut);
+            } elseif ($actualTimeOut->gt($scheduledTimeOut)) {
+                $timeBeyondSchedule = $scheduledTimeOut->diffInMinutes($actualTimeOut);
+                if ($timeBeyondSchedule > 30) {
+                    $overtimeMinutes = $timeBeyondSchedule;
+                }
+            }
+        } elseif ($schedule && $actualTimeIn) {
+            $shiftDateCarbon = Carbon::parse($shiftDate);
+            $scheduledTimeIn = Carbon::parse($shiftDateCarbon->format('Y-m-d').' '.$schedule->scheduled_time_in);
+
+            if ($actualTimeIn->gt($scheduledTimeIn)) {
+                $tardyMinutes = $scheduledTimeIn->diffInMinutes($actualTimeIn);
+            }
+        } elseif ($schedule && $actualTimeOut) {
+            $shiftDateCarbon = Carbon::parse($shiftDate);
+            $scheduledTimeOut = Carbon::parse($shiftDateCarbon->format('Y-m-d').' '.$schedule->scheduled_time_out);
+
+            if ($schedule->shift_type === 'night_shift' && $schedule->scheduled_time_in) {
+                $scheduledTimeIn = Carbon::parse($shiftDateCarbon->format('Y-m-d').' '.$schedule->scheduled_time_in);
+                if ($scheduledTimeOut->lt($scheduledTimeIn)) {
+                    $scheduledTimeOut->addDay();
+                }
+            }
+
+            if ($actualTimeOut->lt($scheduledTimeOut)) {
+                $undertimeMinutes = $actualTimeOut->diffInMinutes($scheduledTimeOut);
+            } elseif ($actualTimeOut->gt($scheduledTimeOut)) {
+                $timeBeyondSchedule = $scheduledTimeOut->diffInMinutes($actualTimeOut);
+                if ($timeBeyondSchedule > 30) {
+                    $overtimeMinutes = $timeBeyondSchedule;
+                }
+            }
+        }
+
+        return [
+            'status' => $status,
+            'secondary_status' => $secondaryStatus,
+            'tardy_minutes' => $tardyMinutes,
+            'undertime_minutes' => $undertimeMinutes,
+            'overtime_minutes' => $overtimeMinutes,
+        ];
+    }
+
     public function recalculateTotalMinutesWorked(Attendance $attendance): void
     {
         // Can only calculate if both time in and time out exist
@@ -2840,7 +3006,7 @@ class AttendanceProcessor
         if (! $attendance->scheduled_time_in || ! $attendance->scheduled_time_out) {
             // No schedule - calculate raw time worked
             $rawMinutes = $attendance->actual_time_in->diffInMinutes($attendance->actual_time_out);
-            $lunchDeduction = (! $lunchUsed && ($rawMinutes / 60) > 5) ? 60 : 0;
+            $lunchDeduction = (! $lunchUsed && ($rawMinutes / 60) > config('attendance.lunch_threshold_hours')) ? config('attendance.lunch_deduction_minutes') : 0;
             $attendance->update(['total_minutes_worked' => $rawMinutes - $lunchDeduction]);
 
             return;
@@ -2889,7 +3055,7 @@ class AttendanceProcessor
         }
 
         $rawMinutes = $effectiveTimeIn->diffInMinutes($effectiveTimeOut);
-        $lunchDeduction = (! $lunchUsed && ($rawMinutes / 60) > 5) ? 60 : 0;
+        $lunchDeduction = (! $lunchUsed && ($rawMinutes / 60) > config('attendance.lunch_threshold_hours')) ? config('attendance.lunch_deduction_minutes') : 0;
         $attendance->update(['total_minutes_worked' => $rawMinutes - $lunchDeduction]);
     }
 }

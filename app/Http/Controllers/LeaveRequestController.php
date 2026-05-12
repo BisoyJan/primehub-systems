@@ -3516,6 +3516,12 @@ class LeaveRequestController extends Controller
                 'excused_by' => auth()->id(),
                 'excused_at' => now(),
                 'excuse_reason' => $reason,
+                // Clear any existing expiration — an excused point cannot also be expired.
+                'is_expired' => false,
+                'expired_at' => null,
+                'expiration_type' => $point->isNcns() ? 'none' : 'sro',
+                'gbro_applied_at' => null,
+                'gbro_batch_id' => null,
             ]);
             $excusedCount++;
         }
@@ -4000,6 +4006,12 @@ class LeaveRequestController extends Controller
                 'excused_by' => auth()->id(),
                 'excused_at' => now(),
                 'excuse_reason' => $reason,
+                // Clear any existing expiration — an excused point cannot also be expired.
+                'is_expired' => false,
+                'expired_at' => null,
+                'expiration_type' => $point->isNcns() ? 'none' : 'sro',
+                'gbro_applied_at' => null,
+                'gbro_batch_id' => null,
             ]);
             $excusedCount++;
         }
@@ -4198,6 +4210,12 @@ class LeaveRequestController extends Controller
                 'excused_by' => auth()->id(),
                 'excused_at' => now(),
                 'excuse_reason' => $reason,
+                // Clear any existing expiration — an excused point cannot also be expired.
+                'is_expired' => false,
+                'expired_at' => null,
+                'expiration_type' => $point->isNcns() ? 'none' : 'sro',
+                'gbro_applied_at' => null,
+                'gbro_batch_id' => null,
             ]);
             $excusedCount++;
         }

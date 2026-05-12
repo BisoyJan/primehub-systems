@@ -6,8 +6,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 class EmployeeSchedule extends Model
 {
@@ -110,6 +110,15 @@ class EmployeeSchedule extends Model
     {
         return $this->shift_type === 'night_shift' ||
                $this->scheduled_time_in >= '20:00:00';
+    }
+
+    /**
+     * Check if the schedule is a graveyard shift (starts between 00:00–04:59).
+     * Graveyard shifts clock in after midnight; the shift_date is the prior calendar day.
+     */
+    public function isGraveyardShift(): bool
+    {
+        return (int) substr($this->scheduled_time_in ?? '09:00:00', 0, 2) < 5;
     }
 
     /**

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\BreakPolicyRequest;
+use App\Http\Traits\RedirectsWithFlashMessages;
 use App\Models\BreakPolicy;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -10,6 +11,8 @@ use Inertia\Inertia;
 
 class BreakPolicyController extends Controller
 {
+    use RedirectsWithFlashMessages;
+
     public function index()
     {
         $policies = BreakPolicy::query()
@@ -29,17 +32,11 @@ class BreakPolicyController extends Controller
                 BreakPolicy::create($request->validated());
             });
 
-            return redirect()->back()->with('flash', [
-                'message' => 'Break policy created successfully.',
-                'type' => 'success',
-            ]);
+            return $this->backWithFlash('Break policy created successfully.');
         } catch (\Exception $e) {
             Log::error('BreakPolicy Store Error: '.$e->getMessage());
 
-            return redirect()->back()->with('flash', [
-                'message' => 'Failed to create break policy.',
-                'type' => 'error',
-            ]);
+            return $this->backWithFlash('Failed to create break policy.', 'error');
         }
     }
 
@@ -50,43 +47,31 @@ class BreakPolicyController extends Controller
                 $breakPolicy->update($request->validated());
             });
 
-            return redirect()->back()->with('flash', [
-                'message' => 'Break policy updated successfully.',
-                'type' => 'success',
-            ]);
+            return $this->backWithFlash('Break policy updated successfully.');
         } catch (\Exception $e) {
             Log::error('BreakPolicy Update Error: '.$e->getMessage());
 
-            return redirect()->back()->with('flash', [
-                'message' => 'Failed to update break policy.',
-                'type' => 'error',
-            ]);
+            return $this->backWithFlash('Failed to update break policy.', 'error');
         }
     }
 
     public function destroy(BreakPolicy $breakPolicy)
     {
         if ($breakPolicy->breakSessions()->exists()) {
-            return redirect()->back()->with('flash', [
-                'message' => 'Cannot delete a policy that has associated break sessions.',
-                'type' => 'error',
-            ]);
+            return $this->backWithFlash(
+                'Cannot delete a policy that has associated break sessions.',
+                'error'
+            );
         }
 
         try {
             $breakPolicy->delete();
 
-            return redirect()->back()->with('flash', [
-                'message' => 'Break policy deleted successfully.',
-                'type' => 'success',
-            ]);
+            return $this->backWithFlash('Break policy deleted successfully.');
         } catch (\Exception $e) {
             Log::error('BreakPolicy Destroy Error: '.$e->getMessage());
 
-            return redirect()->back()->with('flash', [
-                'message' => 'Failed to delete break policy.',
-                'type' => 'error',
-            ]);
+            return $this->backWithFlash('Failed to delete break policy.', 'error');
         }
     }
 
@@ -97,17 +82,11 @@ class BreakPolicyController extends Controller
 
             $status = $breakPolicy->is_active ? 'activated' : 'deactivated';
 
-            return redirect()->back()->with('flash', [
-                'message' => "Break policy {$status} successfully.",
-                'type' => 'success',
-            ]);
+            return $this->backWithFlash("Break policy {$status} successfully.");
         } catch (\Exception $e) {
             Log::error('BreakPolicy Toggle Error: '.$e->getMessage());
 
-            return redirect()->back()->with('flash', [
-                'message' => 'Failed to toggle break policy.',
-                'type' => 'error',
-            ]);
+            return $this->backWithFlash('Failed to toggle break policy.', 'error');
         }
     }
 }

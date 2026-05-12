@@ -45,7 +45,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Award, AlertCircle, TrendingUp, Calendar, CheckCircle, XCircle, FileText, Download, BarChart3, RotateCcw, Search, Loader2, Settings, AlertTriangle, Play, RefreshCw, BellOff } from "lucide-react";
+import { ArrowLeft, Award, AlertCircle, TrendingUp, Calendar, CheckCircle, XCircle, FileText, Download, BarChart3, RotateCcw, Search, Loader2, Settings, AlertTriangle, Play, RefreshCw, BellOff, Wrench } from "lucide-react";
 import { DatePicker } from "@/components/ui/date-picker";
 import type { SharedData } from "@/types";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
@@ -245,7 +245,7 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
 
     // Management state (user-specific)
     const [isManagementAction, setIsManagementAction] = useState(false);
-    const [confirmAction, setConfirmAction] = useState<'expire-all' | 'reset-expired' | 'initialize-gbro-dates' | 'fix-gbro-dates' | 'recalculate-gbro' | null>(null);
+    const [confirmAction, setConfirmAction] = useState<'expire-all' | 'reset-expired' | 'initialize-gbro-dates' | 'fix-gbro-dates' | 'recalculate-gbro' | 'fix-anomalies' | null>(null);
     const [expirationType, setExpirationType] = useState<'both' | 'sro' | 'gbro'>('both');
 
     // Cleanup polling on unmount
@@ -518,7 +518,7 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
     };
 
     // Management action handler (user-specific)
-    const handleManagementAction = async (action: 'expire-all' | 'reset-expired' | 'initialize-gbro-dates' | 'fix-gbro-dates' | 'recalculate-gbro') => {
+    const handleManagementAction = async (action: 'expire-all' | 'reset-expired' | 'initialize-gbro-dates' | 'fix-gbro-dates' | 'recalculate-gbro' | 'fix-anomalies') => {
         setIsManagementAction(true);
         try {
             // Special handling for recalculate-gbro using Inertia router
@@ -548,12 +548,15 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                 'reset-expired': managementRoutes.resetExpired(),
                 'initialize-gbro-dates': managementRoutes.initializeGbroDates(),
                 'fix-gbro-dates': managementRoutes.fixGbroDates(),
+                'fix-anomalies': managementRoutes.fixAnomalies(),
             };
 
-            // Build request body - always include this user's ID
-            const body: Record<string, string | string[]> = {
-                user_ids: [String(user.id)],
-            };
+            // Build request body - always include this user's ID (except for global actions)
+            const body: Record<string, string | string[]> = {};
+
+            if (action !== 'fix-anomalies') {
+                body.user_ids = [String(user.id)];
+            }
 
             if (action === 'expire-all') {
                 body.expiration_type = expirationType;
@@ -848,6 +851,11 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                                     <DropdownMenuItem onClick={() => setConfirmAction('fix-gbro-dates')}>
                                         <BellOff className="mr-2 h-4 w-4" />
                                         Fix GBRO Dates
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem onClick={() => setConfirmAction('fix-anomalies')}>
+                                        <Wrench className="mr-2 h-4 w-4" />
+                                        Fix Anomalies
                                     </DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>
@@ -1574,6 +1582,7 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                             {confirmAction === 'reset-expired' && 'Reset Expired Points'}
                             {confirmAction === 'initialize-gbro-dates' && 'Initialize GBRO Dates'}
                             {confirmAction === 'fix-gbro-dates' && 'Fix GBRO Dates'}
+                            {confirmAction === 'fix-anomalies' && 'Fix Anomalies'}
                         </AlertDialogTitle>
                         <AlertDialogDescription>
                             {confirmAction === 'recalculate-gbro' && (
@@ -1605,6 +1614,24 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                             )}
                             {confirmAction === 'fix-gbro-dates' && (
                                 <p>This will recalculate GBRO expiration dates for <span className="font-semibold">{user.name}</span>'s points based on current violation history. Use this if dates appear incorrect.</p>
+                            )}
+                            {confirmAction === 'fix-anomalies' && (
+                                <>
+                                    This will scan and fix all attendance point data anomalies (all employees):
+                                    <br /><br />
+                                    <ul className="list-disc list-inside space-y-1 text-sm">
+                                        <li><strong>Overdue SRO:</strong> Expire points past their SRO expiration date</li>
+                                        <li><strong>Stale GBRO Dates:</strong> Clear gbro_expires_at from non-GBRO-eligible records</li>
+                                        <li><strong>Overflow Fix:</strong> Correct expires_at dates affected by month-end overflow</li>
+                                    </ul>
+                                    <br />
+                                    <strong className="text-green-600">Excused points will NOT be expired.</strong>
+                                    <br /><br />
+                                    <span className="flex items-center gap-1 text-amber-600">
+                                        <BellOff className="h-4 w-4 inline" />
+                                        <strong>No notifications will be sent.</strong>
+                                    </span>
+                                </>
                             )}
                         </AlertDialogDescription>
                     </AlertDialogHeader>

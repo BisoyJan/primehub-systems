@@ -8,6 +8,19 @@ use Illuminate\Support\Facades\Log;
 
 class AttendanceFileParser
 {
+    /** Lines that could not be parsed, populated after each parse() / parseContent() call. */
+    protected array $unparseableLines = [];
+
+    /**
+     * Return the raw lines that were rejected during the last parse.
+     *
+     * @return array<string> Up to 10 example lines, each capped at 200 characters.
+     */
+    public function getUnparseableLines(): array
+    {
+        return $this->unparseableLines;
+    }
+
     /**
      * Parse the attendance TXT file.
      *
@@ -16,6 +29,8 @@ class AttendanceFileParser
      */
     public function parse(string $filePath): Collection
     {
+        $this->unparseableLines = [];
+
         $content = file_get_contents($filePath);
 
         // Convert to UTF-8 if not already (handles Windows-1252, Latin-1 from biometric devices)
@@ -67,7 +82,7 @@ class AttendanceFileParser
 
         // Remove null bytes and other non-printable characters
         $content = str_replace("\0", '', $content);
-        $content = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $content);
+        $content = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $content) ?? $content;
 
         // Normalize line endings (handle Windows CRLF, Mac CR, Unix LF)
         $content = str_replace("\r\n", "\n", $content);
@@ -75,17 +90,37 @@ class AttendanceFileParser
 
         $lines = explode("\n", $content);
 
-        return collect($lines)
-            ->skip(1) // Skip header line
-            ->filter(function ($line) {
-                return ! empty(trim($line));
-            })
-            ->map(function ($line) {
-                return $this->parseLine($line);
-            })
-            ->filter(function ($record) {
-                return $record !== null;
-            });
+        // Smart header detection: skip line 1 only when its first whitespace-separated
+        // token is non-numeric (e.g. "No", "ID", column titles). Header-less files from
+        // some biometric devices must NOT have their first real scan dropped.
+        $firstNonEmpty = collect($lines)->first(fn ($l) => ! empty(trim($l)));
+        $firstToken = preg_split('/\s+/', trim((string) $firstNonEmpty))[0] ?? '';
+        $hasHeader = ! is_numeric($firstToken);
+
+        // Reset unparseable tracking for this parse call.
+        $this->unparseableLines = [];
+
+        $linesToProcess = collect($lines)->when($hasHeader, fn ($c) => $c->skip(1))->values();
+        $parsed = [];
+
+        foreach ($linesToProcess as $line) {
+            if (empty(trim($line))) {
+                continue;
+            }
+
+            $record = $this->parseLine($line);
+
+            if ($record === null) {
+                // Cap at 10 examples to avoid unbounded memory usage.
+                if (count($this->unparseableLines) < 10) {
+                    $this->unparseableLines[] = substr(trim($line), 0, 200);
+                }
+            } else {
+                $parsed[] = $record;
+            }
+        }
+
+        return collect($parsed);
     }
 
     /**
@@ -142,10 +177,10 @@ class AttendanceFileParser
         try {
             // Handle double-space format in datetime: "2025-11-05  05:50:25"
             // Collapse multiple spaces into single space
-            $dateTimeStr = preg_replace('/\s{2,}/', ' ', $dateTimeStr);
+            $dateTimeStr = preg_replace('/\s{2,}/', ' ', $dateTimeStr) ?? $dateTimeStr;
 
             // Additional safety: ensure no hidden characters
-            $dateTimeStr = preg_replace('/[^\d\-\s:]/', '', $dateTimeStr);
+            $dateTimeStr = preg_replace('/[^\d\-\s:]/', '', $dateTimeStr) ?? $dateTimeStr;
             $dateTimeStr = trim($dateTimeStr);
 
             // Remove trailing digits that might be line numbers (e.g., "2025-01-13 22:26:181" -> "2025-01-13 22:26:18")
@@ -160,7 +195,31 @@ class AttendanceFileParser
             $datetime = Carbon::createFromFormat('Y-m-d H:i:s', $dateTimeStr);
 
             if (! $datetime) {
-                \Log::warning('Failed to create Carbon instance', [
+                Log::warning('Failed to create Carbon instance', [
+                    'line' => $line,
+                    'datetime_str' => $dateTimeStr,
+                ]);
+
+                return null;
+            }
+
+            // Reject obviously corrupt datetimes: year must be plausible (>= 2000).
+            // Carbon::createFromFormat succeeds for "0000-00-00 00:00:00" but yields
+            // an invalid/epoch date that would corrupt the database.
+            if ($datetime->year < 2000) {
+                Log::warning('Rejecting implausible datetime (year < 2000)', [
+                    'line' => $line,
+                    'datetime_str' => $dateTimeStr,
+                    'parsed_year' => $datetime->year,
+                ]);
+
+                return null;
+            }
+
+            // Strict format enforcement: the cleaned string must exactly match Y-m-d H:i:s.
+            // This catches coerced values from separator-stripped inputs like "2025/11/05".
+            if (! preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $dateTimeStr)) {
+                Log::warning('Rejecting datetime that does not match Y-m-d H:i:s after cleaning', [
                     'line' => $line,
                     'datetime_str' => $dateTimeStr,
                 ]);
@@ -169,7 +228,7 @@ class AttendanceFileParser
             }
         } catch (\Exception $e) {
             // Log the error for debugging
-            \Log::warning('Failed to parse datetime', [
+            Log::warning('Failed to parse datetime', [
                 'line' => $line,
                 'datetime_str' => $dateTimeStr,
                 'columns_count' => count($columns),
@@ -207,7 +266,7 @@ class AttendanceFileParser
         $normalized = str_replace('-', ' ', $normalized);
 
         // Collapse multiple spaces to single space
-        $normalized = preg_replace('/\s+/', ' ', $normalized);
+        $normalized = preg_replace('/\s+/', ' ', $normalized) ?? $normalized;
 
         // Convert to lowercase for case-insensitive matching
         $normalized = strtolower($normalized);

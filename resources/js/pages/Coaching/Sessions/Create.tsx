@@ -1,5 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Head, Link, useForm, usePage, router } from '@inertiajs/react';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
 import { ArrowLeft, CheckCircle2, Circle, Users, UserPlus, X, Save, SaveAll, CloudUpload, Check, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
@@ -7,16 +15,6 @@ import { toast } from 'sonner';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import { PageHeader } from '@/components/PageHeader';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { usePageMeta, useFlashMessage, usePageLoading } from '@/hooks';
@@ -145,9 +143,6 @@ export default function CoachingSessionsCreate() {
     }, [getQueue]);
 
     // ─── Auto-save draft logic ──────────────────────────────────────
-    const [showLeaveDialog, setShowLeaveDialog] = useState(false);
-    const pendingNavigationUrl = useRef<string | null>(null);
-
     const [draftId, setDraftId] = useState<number | null>(existingDraft?.id as number | null ?? null);
     const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>(existingDraft ? 'saved' : 'idle');
     const [autoSaveError, setAutoSaveError] = useState<string | null>(null);
@@ -158,6 +153,8 @@ export default function CoachingSessionsCreate() {
     const isSubmittingRef = useRef(false);
     const isNavigatingRef = useRef(false);
     const formDataRef = useRef(data);
+    const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
+    const pendingNavUrlRef = useRef<string | null>(null);
     const initialDataRef = useRef(JSON.stringify(data));
 
     // Keep formDataRef in sync
@@ -250,14 +247,28 @@ export default function CoachingSessionsCreate() {
         };
     }, [data, performAutoSave, isFormDirty, draftId]);
 
+    // Warn on browser tab close / refresh
+    useEffect(() => {
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (isSubmittingRef.current || isNavigatingRef.current) return;
+            if (isFormDirty() || isSavingRef.current) {
+                e.preventDefault();
+            }
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [isFormDirty]);
+
     // Warn on Inertia in-app navigation
     useEffect(() => {
         const removeListener = router.on('before', (event) => {
             if (isSubmittingRef.current || isNavigatingRef.current) return true;
             if (isFormDirty()) {
+                const url = (event as CustomEvent).detail?.visit?.url;
+                pendingNavUrlRef.current = url instanceof URL ? url.href : (typeof url === 'string' ? url : null);
                 event.preventDefault();
-                pendingNavigationUrl.current = event.detail.visit.url.toString();
-                setShowLeaveDialog(true);
+                setLeaveDialogOpen(true);
                 return false;
             }
             return true;
@@ -265,6 +276,14 @@ export default function CoachingSessionsCreate() {
 
         return removeListener;
     }, [isFormDirty]);
+
+    const handleConfirmLeave = () => {
+        setLeaveDialogOpen(false);
+        isNavigatingRef.current = true;
+        const url = pendingNavUrlRef.current;
+        pendingNavUrlRef.current = null;
+        if (url) router.visit(url);
+    };
     // ─── End auto-save logic ────────────────────────────────────────
 
     const handleModeSwitch = (mode: CoachingMode) => {
@@ -542,208 +561,206 @@ export default function CoachingSessionsCreate() {
     };
 
     return (
-        <>
-            <AppLayout breadcrumbs={breadcrumbs}>
-                <Head title={title} />
+        <AppLayout breadcrumbs={breadcrumbs}>
+            <Head title={title} />
 
-                <div className="relative mx-auto flex w-full max-w-4xl flex-col gap-4 rounded-xl p-3 md:p-6">
-                    <LoadingOverlay isLoading={isPageLoading || processing} message={processing ? 'Saving session...' : undefined} />
+            {/* Unsaved changes confirmation dialog */}
+            <Dialog open={leaveDialogOpen} onOpenChange={(open) => { if (!open) setLeaveDialogOpen(false); }}>
+                <DialogContent className="max-w-[90vw] sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Unsaved Changes</DialogTitle>
+                        <DialogDescription>
+                            You have unsaved changes. Your draft has been auto-saved, but any recent changes may be lost. Leave anyway?
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="flex gap-2 sm:justify-end">
+                        <Button variant="outline" onClick={() => setLeaveDialogOpen(false)}>
+                            Stay
+                        </Button>
+                        <Button variant="destructive" onClick={handleConfirmLeave}>
+                            Leave anyway
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
-                    <PageHeader
-                        title="Create Coaching Session"
-                        description="Fill in the coaching form to log a session with an agent"
-                        actions={
-                            <Link href={sessionsIndex().url}>
-                                <Button variant="outline">
-                                    <ArrowLeft className="mr-2 h-4 w-4" />
-                                    Back to list
-                                </Button>
-                            </Link>
-                        }
+            <div className="relative mx-auto flex w-full max-w-4xl flex-col gap-4 rounded-xl p-3 md:p-6">
+                <LoadingOverlay isLoading={isPageLoading || processing} message={processing ? 'Saving session...' : undefined} />
+
+                <PageHeader
+                    title="Create Coaching Session"
+                    description="Fill in the coaching form to log a session with an agent"
+                    actions={
+                        <Link href={sessionsIndex().url}>
+                            <Button variant="outline">
+                                <ArrowLeft className="mr-2 h-4 w-4" />
+                                Back to list
+                            </Button>
+                        </Link>
+                    }
+                />
+
+                {queueAgents.length > 0 && (
+                    <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                            <span className="flex items-center gap-2 text-sm font-medium">
+                                <Users className="h-4 w-4 text-primary" />
+                                Bulk Coaching Queue ({queueAgents.filter(a => a.done).length}/{queueAgents.length} completed)
+                            </span>
+                            <button
+                                type="button"
+                                className="text-xs text-muted-foreground hover:text-foreground underline"
+                                onClick={() => {
+                                    sessionStorage.removeItem('coaching_queue');
+                                    Object.keys(sessionStorage).forEach(key => {
+                                        if (key.startsWith('coaching_form_')) sessionStorage.removeItem(key);
+                                    });
+                                    setQueueAgents([]);
+                                }}
+                            >
+                                Cancel queue
+                            </button>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            {queueAgents.map((agent) => (
+                                <div key={agent.id} className="flex items-center gap-0">
+                                    <button
+                                        type="button"
+                                        disabled={agent.id === selectedAgentId}
+                                        onClick={() => agent.id !== selectedAgentId && handleSwitchToAgent(agent.id)}
+                                        className={`flex items-center gap-1.5 rounded-l-md border px-2.5 py-1.5 text-xs transition-colors ${agent.id === selectedAgentId
+                                            ? 'border-primary bg-primary/10 font-medium text-primary'
+                                            : agent.done && agent.status === 'draft'
+                                                ? 'border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-400 cursor-pointer hover:border-blue-400 hover:bg-blue-100 dark:hover:bg-blue-950/50'
+                                                : agent.done
+                                                    ? 'border-green-300 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950/30 dark:text-green-400 cursor-pointer hover:border-green-400 hover:bg-green-100 dark:hover:bg-green-950/50'
+                                                    : 'border-muted-foreground/20 hover:border-primary/50 hover:bg-primary/5 cursor-pointer'
+                                            }`}
+                                    >
+                                        {agent.done && agent.status === 'draft' ? (
+                                            <Save className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                                        ) : agent.done ? (
+                                            <CheckCircle2 className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+                                        ) : agent.id === selectedAgentId ? (
+                                            <Circle className="h-3.5 w-3.5 fill-primary text-primary" />
+                                        ) : (
+                                            <Circle className="h-3.5 w-3.5" />
+                                        )}
+                                        <span>{agent.name}</span>
+                                        {agent.coaching_status && !agent.done && (
+                                            <Badge variant={agent.coaching_status === 'Please Coach ASAP' ? 'destructive' : 'secondary'} className="px-1 py-0 text-[9px]">
+                                                {agent.coaching_status}
+                                            </Badge>
+                                        )}
+                                        {agent.done && agent.status === 'draft' && (
+                                            <Badge variant="secondary" className="px-1 py-0 text-[9px] bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400">Draft</Badge>
+                                        )}
+                                        {agent.done && agent.status !== 'draft' && (
+                                            <span className="text-[9px] text-green-600 dark:text-green-400">Done</span>
+                                        )}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleRemoveFromQueue(agent.id);
+                                        }}
+                                        className={`flex items-center rounded-r-md border border-l-0 px-1 py-1.5 text-xs transition-colors hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-950/30 dark:hover:text-red-400 ${agent.id === selectedAgentId
+                                            ? 'border-primary text-primary/50'
+                                            : agent.done && agent.status === 'draft'
+                                                ? 'border-blue-300 text-blue-600/50 dark:border-blue-800 dark:text-blue-400/50'
+                                                : agent.done
+                                                    ? 'border-green-300 text-green-600/50 dark:border-green-800 dark:text-green-400/50'
+                                                    : 'border-muted-foreground/20 text-muted-foreground/50'
+                                            }`}
+                                        title={`Remove ${agent.name} from queue`}
+                                    >
+                                        <X className="h-3 w-3" />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {isAdmin && (
+                    <div className="flex rounded-lg border bg-muted/30 p-1 w-fit">
+                        <button
+                            type="button"
+                            onClick={() => handleModeSwitch('assign')}
+                            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${coachingMode === 'assign'
+                                ? 'bg-background text-foreground shadow-sm'
+                                : 'text-muted-foreground hover:text-foreground'
+                                }`}
+                        >
+                            <Users className="h-4 w-4" />
+                            Assign TL → Agent
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleModeSwitch('direct')}
+                            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${coachingMode === 'direct'
+                                ? 'bg-background text-foreground shadow-sm'
+                                : 'text-muted-foreground hover:text-foreground'
+                                }`}
+                        >
+                            <UserPlus className="h-4 w-4" />
+                            Coach a Team Lead
+                        </button>
+                    </div>
+                )}
+
+                <form onSubmit={handleSubmit} className="space-y-2">
+                    <CoachingFormFields
+                        data={data}
+                        setData={setData}
+                        errors={errors}
+                        agents={agents}
+                        teamLeads={teamLeads}
+                        coachableTeamLeads={coachableTeamLeads}
+                        isAdmin={isAdmin}
+                        coachingMode={coachingMode}
+                        purposes={purposes}
+                        severityFlags={severityFlags}
+                        showAgentSelect={true}
+                        selectedAgentId={selectedAgentId}
+                        onAgentAddToQueue={handleAddAgentToQueue}
+                        queueAgentIds={queueAgents.map(a => a.id)}
+                        coachedThisWeekIds={coachedThisWeekIds ?? []}
+                        draftedThisWeekIds={draftedThisWeekIds ?? []}
                     />
 
-                    {queueAgents.length > 0 && (
-                        <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
-                            <div className="flex items-center justify-between">
-                                <span className="flex items-center gap-2 text-sm font-medium">
-                                    <Users className="h-4 w-4 text-primary" />
-                                    Bulk Coaching Queue ({queueAgents.filter(a => a.done).length}/{queueAgents.length} completed)
-                                </span>
-                                <button
-                                    type="button"
-                                    className="text-xs text-muted-foreground hover:text-foreground underline"
-                                    onClick={() => {
-                                        sessionStorage.removeItem('coaching_queue');
-                                        Object.keys(sessionStorage).forEach(key => {
-                                            if (key.startsWith('coaching_form_')) sessionStorage.removeItem(key);
-                                        });
-                                        setQueueAgents([]);
-                                    }}
-                                >
-                                    Cancel queue
-                                </button>
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                                {queueAgents.map((agent) => (
-                                    <div key={agent.id} className="flex items-center gap-0">
-                                        <button
-                                            type="button"
-                                            disabled={agent.id === selectedAgentId}
-                                            onClick={() => agent.id !== selectedAgentId && handleSwitchToAgent(agent.id)}
-                                            className={`flex items-center gap-1.5 rounded-l-md border px-2.5 py-1.5 text-xs transition-colors ${agent.id === selectedAgentId
-                                                ? 'border-primary bg-primary/10 font-medium text-primary'
-                                                : agent.done && agent.status === 'draft'
-                                                    ? 'border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-400 cursor-pointer hover:border-blue-400 hover:bg-blue-100 dark:hover:bg-blue-950/50'
-                                                    : agent.done
-                                                        ? 'border-green-300 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950/30 dark:text-green-400 cursor-pointer hover:border-green-400 hover:bg-green-100 dark:hover:bg-green-950/50'
-                                                        : 'border-muted-foreground/20 hover:border-primary/50 hover:bg-primary/5 cursor-pointer'
-                                                }`}
-                                        >
-                                            {agent.done && agent.status === 'draft' ? (
-                                                <Save className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
-                                            ) : agent.done ? (
-                                                <CheckCircle2 className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
-                                            ) : agent.id === selectedAgentId ? (
-                                                <Circle className="h-3.5 w-3.5 fill-primary text-primary" />
-                                            ) : (
-                                                <Circle className="h-3.5 w-3.5" />
-                                            )}
-                                            <span>{agent.name}</span>
-                                            {agent.coaching_status && !agent.done && (
-                                                <Badge variant={agent.coaching_status === 'Please Coach ASAP' ? 'destructive' : 'secondary'} className="px-1 py-0 text-[9px]">
-                                                    {agent.coaching_status}
-                                                </Badge>
-                                            )}
-                                            {agent.done && agent.status === 'draft' && (
-                                                <Badge variant="secondary" className="px-1 py-0 text-[9px] bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400">Draft</Badge>
-                                            )}
-                                            {agent.done && agent.status !== 'draft' && (
-                                                <span className="text-[9px] text-green-600 dark:text-green-400">Done</span>
-                                            )}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleRemoveFromQueue(agent.id);
-                                            }}
-                                            className={`flex items-center rounded-r-md border border-l-0 px-1 py-1.5 text-xs transition-colors hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-950/30 dark:hover:text-red-400 ${agent.id === selectedAgentId
-                                                ? 'border-primary text-primary/50'
-                                                : agent.done && agent.status === 'draft'
-                                                    ? 'border-blue-300 text-blue-600/50 dark:border-blue-800 dark:text-blue-400/50'
-                                                    : agent.done
-                                                        ? 'border-green-300 text-green-600/50 dark:border-green-800 dark:text-green-400/50'
-                                                        : 'border-muted-foreground/20 text-muted-foreground/50'
-                                                }`}
-                                            title={`Remove ${agent.name} from queue`}
-                                        >
-                                            <X className="h-3 w-3" />
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-6">
+                        {/* Auto-save status indicator */}
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            {autoSaveStatus === 'saving' && (
+                                <>
+                                    <CloudUpload className="h-3.5 w-3.5 animate-pulse text-blue-500" />
+                                    <span>Auto-saving draft...</span>
+                                </>
+                            )}
+                            {autoSaveStatus === 'saved' && lastSavedAt && (
+                                <>
+                                    <Check className="h-3.5 w-3.5 text-green-500" />
+                                    <span>Draft auto-saved at {lastSavedAt}</span>
+                                </>
+                            )}
+                            {autoSaveStatus === 'error' && (
+                                <>
+                                    <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                                    <span>Auto-save failed{autoSaveError ? `: ${autoSaveError}` : ''}</span>
+                                </>
+                            )}
                         </div>
-                    )}
 
-                    {isAdmin && (
-                        <div className="flex rounded-lg border bg-muted/30 p-1 w-fit">
-                            <button
-                                type="button"
-                                onClick={() => handleModeSwitch('assign')}
-                                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${coachingMode === 'assign'
-                                    ? 'bg-background text-foreground shadow-sm'
-                                    : 'text-muted-foreground hover:text-foreground'
-                                    }`}
-                            >
-                                <Users className="h-4 w-4" />
-                                Assign TL → Agent
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => handleModeSwitch('direct')}
-                                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${coachingMode === 'direct'
-                                    ? 'bg-background text-foreground shadow-sm'
-                                    : 'text-muted-foreground hover:text-foreground'
-                                    }`}
-                            >
-                                <UserPlus className="h-4 w-4" />
-                                Coach a Team Lead
-                            </button>
-                        </div>
-                    )}
-
-                    <form onSubmit={handleSubmit} className="space-y-2">
-                        <CoachingFormFields
-                            data={data}
-                            setData={setData}
-                            errors={errors}
-                            agents={agents}
-                            teamLeads={teamLeads}
-                            coachableTeamLeads={coachableTeamLeads}
-                            isAdmin={isAdmin}
-                            coachingMode={coachingMode}
-                            purposes={purposes}
-                            severityFlags={severityFlags}
-                            showAgentSelect={true}
-                            selectedAgentId={selectedAgentId}
-                            onAgentAddToQueue={handleAddAgentToQueue}
-                            queueAgentIds={queueAgents.map(a => a.id)}
-                            coachedThisWeekIds={coachedThisWeekIds ?? []}
-                            draftedThisWeekIds={draftedThisWeekIds ?? []}
-                        />
-
-                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-6">
-                            {/* Auto-save status indicator */}
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                {autoSaveStatus === 'saving' && (
-                                    <>
-                                        <CloudUpload className="h-3.5 w-3.5 animate-pulse text-blue-500" />
-                                        <span>Auto-saving draft...</span>
-                                    </>
-                                )}
-                                {autoSaveStatus === 'saved' && lastSavedAt && (
-                                    <>
-                                        <Check className="h-3.5 w-3.5 text-green-500" />
-                                        <span>Draft auto-saved at {lastSavedAt}</span>
-                                    </>
-                                )}
-                                {autoSaveStatus === 'error' && (
-                                    <>
-                                        <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
-                                        <span>Auto-save failed{autoSaveError ? `: ${autoSaveError}` : ''}</span>
-                                    </>
-                                )}
-                            </div>
-
-                            <div className="flex gap-3">
-                                <Link href={sessionsIndex().url}>
-                                    <Button type="button" variant="outline">
-                                        Cancel
-                                    </Button>
-                                </Link>
-                                {queueAgents.length > 0 ? (
-                                    <>
-                                        <Button
-                                            type="button"
-                                            variant="secondary"
-                                            disabled={processing || savingDraft || !data.coachee_id}
-                                            onClick={handleSaveDraft}
-                                        >
-                                            <Save className="mr-2 h-4 w-4" />
-                                            {savingDraft ? 'Saving...' : 'Save Draft & Next'}
-                                        </Button>
-                                        <Button
-                                            type="button"
-                                            variant="secondary"
-                                            disabled={processing || savingDraft || !data.coachee_id}
-                                            onClick={handleSaveAllAsDraft}
-                                            className="border-dashed"
-                                        >
-                                            <SaveAll className="mr-2 h-4 w-4" />
-                                            {savingDraft ? 'Saving...' : 'Save All as Draft'}
-                                        </Button>
-                                    </>
-                                ) : (
+                        <div className="flex gap-3">
+                            <Link href={sessionsIndex().url}>
+                                <Button type="button" variant="outline">
+                                    Cancel
+                                </Button>
+                            </Link>
+                            {queueAgents.length > 0 ? (
+                                <>
                                     <Button
                                         type="button"
                                         variant="secondary"
@@ -751,44 +768,37 @@ export default function CoachingSessionsCreate() {
                                         onClick={handleSaveDraft}
                                     >
                                         <Save className="mr-2 h-4 w-4" />
-                                        {savingDraft ? 'Saving Draft...' : 'Save as Draft'}
+                                        {savingDraft ? 'Saving...' : 'Save Draft & Next'}
                                     </Button>
-                                )}
-                                <Button type="submit" disabled={processing || savingDraft} className="bg-blue-600 hover:bg-blue-700 text-white">
-                                    {processing ? 'Saving...' : 'Create Coaching Session'}
+                                    <Button
+                                        type="button"
+                                        variant="secondary"
+                                        disabled={processing || savingDraft || !data.coachee_id}
+                                        onClick={handleSaveAllAsDraft}
+                                        className="border-dashed"
+                                    >
+                                        <SaveAll className="mr-2 h-4 w-4" />
+                                        {savingDraft ? 'Saving...' : 'Save All as Draft'}
+                                    </Button>
+                                </>
+                            ) : (
+                                <Button
+                                    type="button"
+                                    variant="secondary"
+                                    disabled={processing || savingDraft || !data.coachee_id}
+                                    onClick={handleSaveDraft}
+                                >
+                                    <Save className="mr-2 h-4 w-4" />
+                                    {savingDraft ? 'Saving Draft...' : 'Save as Draft'}
                                 </Button>
-                            </div>
+                            )}
+                            <Button type="submit" disabled={processing || savingDraft} className="bg-blue-600 hover:bg-blue-700 text-white">
+                                {processing ? 'Saving...' : 'Create Coaching Session'}
+                            </Button>
                         </div>
-                    </form>
-                </div>
-            </AppLayout>
-
-            <AlertDialog open={showLeaveDialog} onOpenChange={setShowLeaveDialog}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Your draft has been auto-saved, but any recent changes may be lost. Are you sure you want to leave this page?
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Stay on page</AlertDialogCancel>
-                        <AlertDialogAction
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                            onClick={() => {
-                                setShowLeaveDialog(false);
-                                if (pendingNavigationUrl.current) {
-                                    isNavigatingRef.current = true;
-                                    router.visit(pendingNavigationUrl.current);
-                                    pendingNavigationUrl.current = null;
-                                }
-                            }}
-                        >
-                            Leave anyway
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-        </>
+                    </div>
+                </form>
+            </div>
+        </AppLayout>
     );
 }

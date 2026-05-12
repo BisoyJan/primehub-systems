@@ -44,14 +44,19 @@ class GbroCalculationService
         // Step 2: Reset all GBRO-expired points to active
         $this->resetGbroExpiredPoints($allPoints);
 
-        // Step 3: Simulate GBRO expirations chronologically
+        // Step 3: Simulate GBRO expirations chronologically.
+        // ALL non-expired violations (including NCNS/FTN) are included in the clock so
+        // that any violation — even one ineligible for GBRO — resets the 60-day window.
+        // Only non-excused, GBRO-eligible points can actually be expired by GBRO.
         $allActivePoints = AttendancePoint::where('user_id', $userId)
-            ->where('eligible_for_gbro', true)
             ->where('is_expired', false)
             ->orderBy('shift_date', 'asc')
             ->get();
 
-        $activePoints = $allActivePoints->where('is_excused', false)->values();
+        $activePoints = $allActivePoints
+            ->where('is_excused', false)
+            ->where('eligible_for_gbro', true)
+            ->values();
         $lastGbroDate = null;
 
         while ($activePoints->count() >= 1) {
@@ -90,7 +95,16 @@ class GbroCalculationService
         }
 
         // Step 4: Set GBRO dates for remaining active points
-        $this->updateUserGbroExpirationDates($userId, $lastGbroDate);
+        // If the GBRO clock was reset by a new violation (violations exist after lastGbroDate),
+        // pass null so updateUserGbroExpirationDates uses newest violation + 60 instead of
+        // the stale lastGbroDate + 60 which would produce a past date.
+        $gbroReference = $lastGbroDate;
+        if ($lastGbroDate && $allActivePoints->some(
+            fn ($p) => Carbon::parse($p->shift_date)->startOfDay()->greaterThan($lastGbroDate->startOfDay())
+        )) {
+            $gbroReference = null;
+        }
+        $this->updateUserGbroExpirationDates($userId, $gbroReference);
     }
 
     /**
@@ -98,17 +112,21 @@ class GbroCalculationService
      */
     private function resetGbroExpiredPoints(Collection $allPoints): void
     {
-        foreach ($allPoints->where('is_excused', false) as $point) {
+        foreach ($allPoints as $point) {
             if ($point->is_expired && $point->expiration_type === 'gbro') {
+                // Reset any GBRO-expired point, including ones that have since been excused.
+                // An excused point cannot also be expired.
                 $point->update([
                     'is_expired' => false,
-                    'expiration_type' => 'sro',
+                    'expiration_type' => $point->isNcns() ? 'none' : 'sro',
                     'expired_at' => null,
                     'gbro_applied_at' => null,
                     'gbro_batch_id' => null,
                 ]);
             }
-            $point->update(['gbro_expires_at' => null]);
+            if (! $point->is_excused) {
+                $point->update(['gbro_expires_at' => null]);
+            }
         }
     }
 
@@ -222,20 +240,31 @@ class GbroCalculationService
      */
     public function updateUserGbroExpirationDates(int $userId, ?Carbon $referenceDate = null): void
     {
-        $allActivePoints = AttendancePoint::where('user_id', $userId)
+        // Base date uses the newest non-expired violation of ANY type so NCNS/FTN
+        // violations correctly extend the GBRO prediction date.
+        $newestViolation = AttendancePoint::where('user_id', $userId)
+            ->where('is_expired', false)
+            ->orderBy('shift_date', 'desc')
+            ->first();
+
+        $activePoints = AttendancePoint::where('user_id', $userId)
             ->where('is_expired', false)
             ->where('eligible_for_gbro', true)
             ->whereNull('gbro_applied_at')
             ->orderBy('shift_date', 'desc')
-            ->get();
-
-        $activePoints = $allActivePoints->where('is_excused', false)->values();
+            ->get()
+            ->where('is_excused', false)
+            ->values();
 
         if ($activePoints->isEmpty()) {
             return;
         }
 
-        $baseDate = $referenceDate ?? Carbon::parse($allActivePoints->first()->shift_date);
+        $baseDate = $referenceDate ?? (
+            $newestViolation
+                ? Carbon::parse($newestViolation->shift_date)
+                : Carbon::parse($activePoints->first()->shift_date)
+        );
         $gbroExpiresAt = $baseDate->copy()->addDays(60)->format('Y-m-d');
 
         foreach ($activePoints as $index => $point) {
@@ -253,7 +282,14 @@ class GbroCalculationService
      */
     public function calculateGbroReferenceDate(User $user, Collection $activePoints): Carbon
     {
-        $lastViolationDate = Carbon::parse($activePoints->first()->shift_date);
+        // Use ALL non-expired violations — NCNS/FTN still reset the 60-day clean window.
+        $lastViolationRaw = $user->attendancePoints()
+            ->where('is_expired', false)
+            ->max('shift_date');
+
+        $lastViolationDate = $lastViolationRaw
+            ? Carbon::parse($lastViolationRaw)
+            : Carbon::parse($activePoints->first()->shift_date);
 
         $lastGbroDate = $user->attendancePoints()
             ->whereNotNull('gbro_applied_at')

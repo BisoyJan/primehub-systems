@@ -52,7 +52,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { AlertCircle, TrendingUp, Users, Eye, Award, RefreshCw, CheckCircle, XCircle, FileText, Download, Check, ChevronsUpDown, Search, Plus, Pencil, Trash2, Loader2, Play, Pause, Settings, RotateCcw, AlertTriangle, ClipboardList, BellOff, ChevronDown, ChevronRight } from "lucide-react";
+import { AlertCircle, TrendingUp, Users, Eye, Award, RefreshCw, CheckCircle, XCircle, FileText, Download, Check, ChevronsUpDown, Search, Plus, Pencil, Trash2, Loader2, Play, Pause, Settings, RotateCcw, AlertTriangle, ClipboardList, BellOff, ChevronDown, ChevronRight, Wrench } from "lucide-react";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import {
     index as attendancePointsIndex,
@@ -65,6 +65,7 @@ import {
     excuse as attendancePointsExcuse,
     unexcuse as attendancePointsUnexcuse,
     recalculateGbro as attendancePointsRecalculateGbro,
+    bulkCreate as attendancePointsBulkCreate,
 } from "@/routes/attendance-points";
 import exportAllExcelRoutes from "@/routes/attendance-points/export-all-excel";
 import managementRoutes from "@/routes/attendance-points/management";
@@ -299,7 +300,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
     const [, setExportJobId] = useState<string | null>(null);
     const [exportError, setExportError] = useState(false);
     const [exportDownloadUrl, setExportDownloadUrl] = useState<string | null>(null);
-    const exportPollingRef = useRef<NodeJS.Timeout | null>(null);
+    const exportPollingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Management state
     const [isManagementDialogOpen, setIsManagementDialogOpen] = useState(false);
@@ -315,7 +316,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
     const [isLoadingStats, setIsLoadingStats] = useState(false);
     const [isManagementAction, setIsManagementAction] = useState(false);
     const [expandedStatSections, setExpandedStatSections] = useState<Record<string, boolean>>({});
-    const [confirmAction, setConfirmAction] = useState<'remove-duplicates' | 'expire-all' | 'reset-expired' | 'regenerate' | 'cleanup' | 'initialize-gbro-dates' | 'fix-gbro-dates' | 'recalculate-gbro' | null>(null);
+    const [confirmAction, setConfirmAction] = useState<'remove-duplicates' | 'expire-all' | 'reset-expired' | 'regenerate' | 'cleanup' | 'initialize-gbro-dates' | 'fix-gbro-dates' | 'recalculate-gbro' | 'fix-anomalies' | null>(null);
 
     // Management filters for regenerate and reset-expired
     const [mgmtDateFrom, setMgmtDateFrom] = useState('');
@@ -636,7 +637,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
         fetchManagementStats();
     };
 
-    const handleManagementAction = async (action: 'remove-duplicates' | 'expire-all' | 'reset-expired' | 'regenerate' | 'cleanup' | 'initialize-gbro-dates' | 'fix-gbro-dates' | 'recalculate-gbro') => {
+    const handleManagementAction = async (action: 'remove-duplicates' | 'expire-all' | 'reset-expired' | 'regenerate' | 'cleanup' | 'initialize-gbro-dates' | 'fix-gbro-dates' | 'recalculate-gbro' | 'fix-anomalies') => {
         setIsManagementAction(true);
         try {
             // Special handling for recalculate-gbro (per-user action)
@@ -707,6 +708,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                 'cleanup': managementRoutes.cleanup(),
                 'initialize-gbro-dates': managementRoutes.initializeGbroDates(),
                 'fix-gbro-dates': managementRoutes.fixGbroDates(),
+                'fix-anomalies': managementRoutes.fixAnomalies(),
             };
 
             // Build request body with filters for regenerate and reset-expired
@@ -1110,6 +1112,14 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                 </Can>
                                 <Can permission="attendance_points.create">
                                     <Button
+                                        variant="outline"
+                                        onClick={() => router.visit(attendancePointsBulkCreate().url)}
+                                        className="gap-2"
+                                    >
+                                        <Users className="h-4 w-4" />
+                                        Bulk Add
+                                    </Button>
+                                    <Button
                                         onClick={openManualEntryDialog}
                                         className="gap-2"
                                     >
@@ -1164,6 +1174,11 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                             <DropdownMenuItem onClick={() => setConfirmAction('cleanup')}>
                                                 <Settings className="h-4 w-4 mr-2" />
                                                 Full Cleanup
+                                            </DropdownMenuItem>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuItem onClick={() => setConfirmAction('fix-anomalies')}>
+                                                <Wrench className="h-4 w-4 mr-2" />
+                                                Fix Anomalies
                                             </DropdownMenuItem>
                                         </DropdownMenuContent>
                                     </DropdownMenu>
@@ -1672,7 +1687,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                                 setIsViolationDetailsOpen(true);
                                             }}
                                         >
-                                            <FileText className="h-4 w-4 mr-2 flex-shrink-0" />
+                                            <FileText className="h-4 w-4 mr-2 shrink-0" />
                                             <span className="line-clamp-1">{point.violation_details}</span>
                                         </Button>
                                     </div>
@@ -1889,7 +1904,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
 
             {/* Excuse Point Dialog */}
             <Dialog open={isExcuseDialogOpen} onOpenChange={setIsExcuseDialogOpen}>
-                <DialogContent className="sm:max-w-[500px]">
+                <DialogContent className="sm:max-w-125">
                     <DialogHeader>
                         <DialogTitle>
                             {selectedPoint?.is_excused ? 'Point Details' : 'Excuse Attendance Point'}
@@ -2017,7 +2032,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
 
             {/* Violation Details Dialog */}
             <Dialog open={isViolationDetailsOpen} onOpenChange={setIsViolationDetailsOpen}>
-                <DialogContent className="sm:max-w-[600px]">
+                <DialogContent className="sm:max-w-150">
                     <DialogHeader>
                         <DialogTitle>Violation Details</DialogTitle>
                         <DialogDescription>
@@ -2132,7 +2147,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                 <div className="pt-4 border-t">
                                     <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-950 p-4">
                                         <div className="flex items-start gap-3">
-                                            <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+                                            <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5 shrink-0" />
                                             <div>
                                                 <p className="font-semibold text-green-800 dark:text-green-200">
                                                     GBRO Eligible Point
@@ -2152,7 +2167,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                 <div className="pt-4 border-t">
                                     <div className="rounded-lg border border-orange-200 bg-orange-50 dark:bg-orange-950 p-4">
                                         <div className="flex items-start gap-3">
-                                            <AlertCircle className="h-5 w-5 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" />
+                                            <AlertCircle className="h-5 w-5 text-orange-600 dark:text-orange-400 mt-0.5 shrink-0" />
                                             <div>
                                                 <p className="font-semibold text-orange-800 dark:text-orange-200">
                                                     Not Eligible for GBRO
@@ -2201,7 +2216,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                 if (!open) resetManualEntryForm();
                 setIsManualEntryOpen(open);
             }}>
-                <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+                <DialogContent className="sm:max-w-150 max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>
                             {isEditMode ? 'Edit Manual Attendance Point' : 'Add Manual Attendance Point'}
@@ -2584,7 +2599,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                     setSelectedHighPointsEmployee(null);
                 }
             }}>
-                <DialogContent className="sm:max-w-[700px] max-h-[85vh] overflow-hidden flex flex-col">
+                <DialogContent className="sm:max-w-175 max-h-[85vh] overflow-hidden flex flex-col">
                     <DialogHeader>
                         <DialogTitle>
                             {selectedHighPointsEmployee
@@ -2715,7 +2730,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
 
             {/* Management Statistics Dialog */}
             <Dialog open={isManagementDialogOpen} onOpenChange={setIsManagementDialogOpen}>
-                <DialogContent className="sm:max-w-[550px] max-h-[85vh] overflow-y-auto">
+                <DialogContent className="sm:max-w-137.5 max-h-[85vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>Attendance Points Management</DialogTitle>
                         <DialogDescription>
@@ -2986,6 +3001,18 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                         (duplicates + expire)
                                     </span>
                                 </Button>
+                                <Button
+                                    variant="outline"
+                                    className="justify-start"
+                                    disabled={isManagementAction}
+                                    onClick={() => setConfirmAction('fix-anomalies')}
+                                >
+                                    <Wrench className="h-4 w-4 mr-2" />
+                                    Fix Anomalies
+                                    <span className="ml-auto text-xs text-muted-foreground">
+                                        (SRO + GBRO + overflow)
+                                    </span>
+                                </Button>
                             </div>
                         </div>
                     </div>
@@ -3023,7 +3050,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                     setExpirationType('both');
                 }
             }}>
-                <AlertDialogContent className="sm:max-w-[500px]">
+                <AlertDialogContent className="sm:max-w-125">
                     <AlertDialogHeader>
                         <AlertDialogTitle>
                             {confirmAction === 'regenerate' && 'Regenerate Attendance Points'}
@@ -3034,6 +3061,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                             {confirmAction === 'initialize-gbro-dates' && 'Initialize GBRO Dates'}
                             {confirmAction === 'fix-gbro-dates' && 'Fix GBRO Dates'}
                             {confirmAction === 'recalculate-gbro' && 'Recalculate GBRO Dates'}
+                            {confirmAction === 'fix-anomalies' && 'Fix Anomalies'}
                         </AlertDialogTitle>
                         <AlertDialogDescription asChild>
                             <div>
@@ -3438,6 +3466,24 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                         </span>
                                     </>
                                 )}
+                                {confirmAction === 'fix-anomalies' && (
+                                    <>
+                                        This will scan and fix all attendance point data anomalies:
+                                        <br /><br />
+                                        <ul className="list-disc list-inside space-y-1 text-sm">
+                                            <li><strong>Overdue SRO:</strong> Expire points past their SRO expiration date</li>
+                                            <li><strong>Stale GBRO Dates:</strong> Clear gbro_expires_at from non-GBRO-eligible records</li>
+                                            <li><strong>Overflow Fix:</strong> Correct expires_at dates affected by month-end overflow</li>
+                                        </ul>
+                                        <br />
+                                        <strong className="text-green-600">Excused points will NOT be expired.</strong>
+                                        <br /><br />
+                                        <span className="flex items-center gap-1 text-amber-600">
+                                            <BellOff className="h-4 w-4 inline" />
+                                            <strong>No notifications will be sent.</strong>
+                                        </span>
+                                    </>
+                                )}
                                 {confirmAction === 'initialize-gbro-dates' && (
                                     <>
                                         <p className="mb-3">
@@ -3803,7 +3849,8 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                                 confirmAction === 'initialize-gbro-dates' ? 'bg-cyan-600 hover:bg-cyan-700' :
                                                     confirmAction === 'fix-gbro-dates' ? 'bg-teal-600 hover:bg-teal-700' :
                                                         confirmAction === 'recalculate-gbro' ? 'bg-indigo-600 hover:bg-indigo-700' :
-                                                            'bg-blue-600 hover:bg-blue-700'
+                                                            confirmAction === 'fix-anomalies' ? 'bg-amber-600 hover:bg-amber-700' :
+                                                                'bg-blue-600 hover:bg-blue-700'
                             }
                         >
                             {isManagementAction ? (
@@ -3821,6 +3868,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                     {confirmAction === 'initialize-gbro-dates' && 'Initialize GBRO Dates'}
                                     {confirmAction === 'fix-gbro-dates' && 'Fix GBRO Dates'}
                                     {confirmAction === 'recalculate-gbro' && 'Recalculate GBRO'}
+                                    {confirmAction === 'fix-anomalies' && 'Fix Anomalies'}
                                 </>
                             )}
                         </AlertDialogAction>

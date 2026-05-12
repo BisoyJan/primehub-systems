@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\BulkStoreAttendancePointRequest;
 use App\Http\Requests\StoreAttendancePointRequest;
 use App\Http\Requests\UpdateAttendancePointRequest;
 use App\Http\Traits\RedirectsWithFlashMessages;
@@ -14,6 +15,7 @@ use App\Services\AttendancePoint\AttendancePointExportService;
 use App\Services\AttendancePoint\AttendancePointMaintenanceService;
 use App\Services\AttendancePoint\AttendancePointStatsService;
 use App\Services\AttendancePoint\GbroCalculationService;
+use App\Services\AttendancePoint\StreakService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -29,7 +31,8 @@ class AttendancePointController extends Controller
         protected AttendancePointStatsService $statsService,
         protected AttendancePointMaintenanceService $maintenanceService,
         protected AttendancePointExportService $exportService,
-        protected AttendancePointCreationService $creationService
+        protected AttendancePointCreationService $creationService,
+        protected StreakService $streakService
     ) {}
 
     /**
@@ -74,7 +77,7 @@ class AttendancePointController extends Controller
      */
     public function show(User $user, Request $request)
     {
-        $this->authorizeUserView($request->user(), $user);
+        $this->authorize('viewUserPoints', [AttendancePoint::class, $user]);
 
         $showAll = $request->boolean('show_all', false);
 
@@ -112,6 +115,54 @@ class AttendancePointController extends Controller
                 'show_all' => $showAll,
             ],
         ]);
+    }
+
+    /**
+     * Show the bulk create page.
+     */
+    public function bulkCreate(Request $request)
+    {
+        $this->authorize('create', AttendancePoint::class);
+
+        $users = User::where('is_active', true)->orderBy('first_name')->get();
+        $campaigns = Campaign::orderBy('name')->get();
+
+        return Inertia::render('Attendance/Points/BulkCreate', [
+            'users' => $users,
+            'campaigns' => $campaigns,
+        ]);
+    }
+
+    /**
+     * Store bulk manual attendance points.
+     */
+    public function storeBulk(BulkStoreAttendancePointRequest $request)
+    {
+        $entries = $request->validated()['entries'];
+        $createdById = $request->user()->id;
+        $created = 0;
+        $skipped = 0;
+
+        foreach ($entries as $entry) {
+            try {
+                DB::transaction(function () use ($entry, $createdById) {
+                    $this->creationService->createManualPoint($entry, $createdById);
+                });
+                $created++;
+            } catch (\Exception $e) {
+                $skipped++;
+                Log::warning('BulkStore skipped entry for user '.($entry['user_id'] ?? '?').': '.$e->getMessage());
+            }
+        }
+
+        $message = "Successfully created {$created} attendance point(s).";
+        if ($skipped > 0) {
+            $message .= " {$skipped} entr".($skipped === 1 ? 'y was' : 'ies were').' skipped (duplicates or errors).';
+
+            return $this->redirectWithFlash('attendance-points.index', $message, 'warning');
+        }
+
+        return $this->redirectWithFlash('attendance-points.index', $message);
     }
 
     /**
@@ -189,7 +240,7 @@ class AttendancePointController extends Controller
      */
     public function excuse(Request $request, AttendancePoint $point)
     {
-        $this->authorizeAdminHrAction($request->user(), 'excuse points');
+        $this->authorize('excuse', AttendancePoint::class);
 
         $request->validate([
             'excuse_reason' => 'required|string|max:500',
@@ -206,7 +257,7 @@ class AttendancePointController extends Controller
                 // Reset expiration flags — an excused point cannot also be expired.
                 'is_expired' => false,
                 'expired_at' => null,
-                'expiration_type' => $point->isNcnsOrFtn() ? 'none' : 'sro',
+                'expiration_type' => $point->isNcns() ? 'none' : 'sro',
                 'gbro_applied_at' => null,
                 'gbro_batch_id' => null,
             ]);
@@ -222,7 +273,7 @@ class AttendancePointController extends Controller
      */
     public function unexcuse(Request $request, AttendancePoint $point)
     {
-        $this->authorizeAdminHrAction($request->user(), 'unexcuse points');
+        $this->authorize('excuse', AttendancePoint::class);
 
         $point->update([
             'is_excused' => false,
@@ -241,7 +292,7 @@ class AttendancePointController extends Controller
      */
     public function recalculateGbro(Request $request, User $user)
     {
-        $this->authorizeAdminHrAction($request->user(), 'recalculate GBRO');
+        $this->authorize('manage', AttendancePoint::class);
 
         try {
             $this->gbroService->cascadeRecalculateGbro($user->id);
@@ -312,9 +363,40 @@ class AttendancePointController extends Controller
      */
     public function statistics(User $user, Request $request)
     {
-        $this->authorizeUserView($request->user(), $user);
+        $this->authorize('viewUserPoints', [AttendancePoint::class, $user]);
 
         return response()->json($this->statsService->getUserStatistics($user->id));
+    }
+
+    /**
+     * Display the tardy-free streak summary for a user (Audit feature 5.2).
+     */
+    public function streak(User $user)
+    {
+        $this->authorize('viewUserPoints', [AttendancePoint::class, $user]);
+
+        return Inertia::render('Attendance/Points/Streak', [
+            'user' => $user->only(['id', 'first_name', 'middle_name', 'last_name', 'role']),
+            'streak' => $this->streakService->getUserStreak($user),
+            'badges' => StreakService::BADGES,
+        ]);
+    }
+
+    /**
+     * Display the workforce streak leaderboard (Audit feature 5.2).
+     */
+    public function leaderboard(Request $request)
+    {
+        $this->authorize('viewAny', AttendancePoint::class);
+
+        $limit = (int) $request->integer('limit', 10);
+        $limit = max(1, min($limit, 50));
+
+        return Inertia::render('Attendance/Points/Leaderboard', [
+            'leaderboard' => $this->streakService->getLeaderboard($limit),
+            'limit' => $limit,
+            'badges' => StreakService::BADGES,
+        ]);
     }
 
     /**
@@ -322,7 +404,7 @@ class AttendancePointController extends Controller
      */
     public function export(User $user, Request $request)
     {
-        $this->authorizeUserView($request->user(), $user);
+        $this->authorize('viewUserPoints', [AttendancePoint::class, $user]);
 
         $export = $this->exportService->exportCsv($user);
 
@@ -420,7 +502,7 @@ class AttendancePointController extends Controller
      */
     public function managementStats(Request $request)
     {
-        $this->authorizeAdminHrAction($request->user(), 'view management statistics');
+        $this->authorize('manage', AttendancePoint::class);
 
         try {
             return response()->json($this->maintenanceService->getManagementStats());
@@ -439,7 +521,7 @@ class AttendancePointController extends Controller
      */
     public function removeDuplicates(Request $request)
     {
-        $this->authorizeAdminHrAction($request->user(), 'remove duplicate points');
+        $this->authorize('manage', AttendancePoint::class);
 
         try {
             return response()->json($this->maintenanceService->removeDuplicates());
@@ -458,7 +540,7 @@ class AttendancePointController extends Controller
      */
     public function expireAllPending(Request $request)
     {
-        $this->authorizeAdminHrAction($request->user(), 'expire pending points');
+        $this->authorize('manage', AttendancePoint::class);
 
         try {
             $expirationType = $request->input('expiration_type', 'both');
@@ -479,7 +561,7 @@ class AttendancePointController extends Controller
      */
     public function initializeGbroDates(Request $request)
     {
-        $this->authorizeAdminHrAction($request->user(), 'initialize GBRO dates');
+        $this->authorize('manage', AttendancePoint::class);
 
         try {
             return response()->json($this->maintenanceService->initializeGbroDates());
@@ -498,7 +580,7 @@ class AttendancePointController extends Controller
      */
     public function fixGbroDates(Request $request)
     {
-        $this->authorizeAdminHrAction($request->user(), 'fix GBRO dates');
+        $this->authorize('manage', AttendancePoint::class);
 
         try {
             return response()->json($this->maintenanceService->fixGbroDates());
@@ -517,7 +599,7 @@ class AttendancePointController extends Controller
      */
     public function resetExpired(Request $request)
     {
-        $this->authorizeAdminHrAction($request->user(), 'reset expired points');
+        $this->authorize('manage', AttendancePoint::class);
 
         try {
             $userIds = $request->filled('user_ids') && is_array($request->user_ids) ? $request->user_ids : null;
@@ -539,7 +621,7 @@ class AttendancePointController extends Controller
      */
     public function regeneratePoints(Request $request)
     {
-        $this->authorizeAdminHrAction($request->user(), 'regenerate points');
+        $this->authorize('manage', AttendancePoint::class);
 
         try {
             $result = $this->maintenanceService->regeneratePoints(
@@ -565,7 +647,7 @@ class AttendancePointController extends Controller
      */
     public function cleanup(Request $request)
     {
-        $this->authorizeAdminHrAction($request->user(), 'run full cleanup');
+        $this->authorize('manage', AttendancePoint::class);
 
         try {
             return response()->json($this->maintenanceService->cleanup());
@@ -575,6 +657,22 @@ class AttendancePointController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to perform cleanup.',
+            ], 500);
+        }
+    }
+
+    public function fixAnomalies(Request $request)
+    {
+        $this->authorize('manage', AttendancePoint::class);
+
+        try {
+            return response()->json($this->maintenanceService->fixAnomalies());
+        } catch (\Exception $e) {
+            Log::error('AttendancePointController fixAnomalies Error: '.$e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fix anomalies.',
             ], 500);
         }
     }
@@ -674,26 +772,6 @@ class AttendancePointController extends Controller
             'expiring_soon' => $request->boolean('expiring_soon') ? 'true' : null,
             'gbro_eligible' => $request->boolean('gbro_eligible') ? 'true' : null,
         ];
-    }
-
-    /**
-     * Authorize user view (own or admin/HR/Team Lead).
-     */
-    private function authorizeUserView($currentUser, User $targetUser): void
-    {
-        if ($currentUser->id !== $targetUser->id && ! in_array($currentUser->role, ['Admin', 'Super Admin', 'HR', 'Team Lead'])) {
-            abort(403, 'Unauthorized to view other user points');
-        }
-    }
-
-    /**
-     * Authorize admin/HR action.
-     */
-    private function authorizeAdminHrAction($user, string $action): void
-    {
-        if (! in_array($user->role, ['Admin', 'Super Admin', 'HR'])) {
-            abort(403, "Unauthorized to {$action}");
-        }
     }
 
     /**

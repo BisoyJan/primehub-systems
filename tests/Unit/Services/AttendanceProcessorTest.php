@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit\Services;
 
 use App\Models\EmployeeSchedule;
+use App\Models\LeaveRequest;
 use App\Models\User;
 use App\Services\AttendanceFileParser;
 use App\Services\AttendanceProcessor;
@@ -25,7 +26,7 @@ class AttendanceProcessorTest extends TestCase
     {
         parent::setUp();
         $this->parser = new AttendanceFileParser;
-        $this->processor = new AttendanceProcessor($this->parser);
+        $this->processor = app(AttendanceProcessor::class);
     }
 
     /**
@@ -159,7 +160,8 @@ class AttendanceProcessorTest extends TestCase
     #[Test]
     public function it_determines_time_in_status_tardy(): void
     {
-        $tardyMinutes = 15; // Exactly 15 minutes late (at threshold)
+        // Forgiveness window: tardy_minutes > grace ⇒ tardy.
+        $tardyMinutes = 16;
         $gracePeriod = 15;
 
         $status = $this->callProtectedMethod($this->processor, 'determineTimeInStatus', [$tardyMinutes, $gracePeriod]);
@@ -170,12 +172,15 @@ class AttendanceProcessorTest extends TestCase
     #[Test]
     public function it_determines_time_in_status_half_day_absence(): void
     {
-        $tardyMinutes = 45; // 45 minutes late (exceeds grace period)
+        // Forgiveness semantic: half_day_absence is NEVER auto-applied —
+        // any tardiness above the grace window stays `tardy`. Admins promote
+        // to half_day manually if warranted.
+        $tardyMinutes = 45;
         $gracePeriod = 15;
 
         $status = $this->callProtectedMethod($this->processor, 'determineTimeInStatus', [$tardyMinutes, $gracePeriod]);
 
-        $this->assertEquals('half_day_absence', $status);
+        $this->assertEquals('tardy', $status);
     }
 
     #[Test]
@@ -266,7 +271,7 @@ class AttendanceProcessorTest extends TestCase
     public function it_finds_pending_leave_for_date(): void
     {
         $user = User::factory()->create();
-        $leaveRequest = \App\Models\LeaveRequest::factory()->create([
+        $leaveRequest = LeaveRequest::factory()->create([
             'user_id' => $user->id,
             'status' => 'pending',
             'start_date' => now()->subDays(2),
@@ -283,7 +288,7 @@ class AttendanceProcessorTest extends TestCase
     public function it_returns_null_when_no_pending_leave_for_date(): void
     {
         $user = User::factory()->create();
-        \App\Models\LeaveRequest::factory()->create([
+        LeaveRequest::factory()->create([
             'user_id' => $user->id,
             'status' => 'approved',
             'start_date' => now()->subDays(2),
@@ -300,7 +305,7 @@ class AttendanceProcessorTest extends TestCase
     {
         $user = User::factory()->create();
         $today = Carbon::today();
-        $leaveRequest = \App\Models\LeaveRequest::factory()->create([
+        $leaveRequest = LeaveRequest::factory()->create([
             'user_id' => $user->id,
             'status' => 'pending',
             'start_date' => $today,
@@ -327,7 +332,7 @@ class AttendanceProcessorTest extends TestCase
     public function it_does_not_auto_cancel_multi_day_pending_leave(): void
     {
         $user = User::factory()->create();
-        $leaveRequest = \App\Models\LeaveRequest::factory()->create([
+        $leaveRequest = LeaveRequest::factory()->create([
             'user_id' => $user->id,
             'status' => 'pending',
             'start_date' => now()->subDays(1),

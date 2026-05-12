@@ -7,6 +7,7 @@ use App\Models\BiometricRetentionPolicy;
 use App\Models\Site;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Log;
 
 class CleanOldBiometricRecords extends Command
 {
@@ -38,6 +39,7 @@ class CleanOldBiometricRecords extends Command
 
         if ($manualMonths) {
             $this->warn("Using manual override: {$manualMonths} months retention");
+
             return $this->cleanupWithMonths((int) $manualMonths);
         }
 
@@ -67,13 +69,14 @@ class CleanOldBiometricRecords extends Command
 
         if ($totalDeleted === 0) {
             $this->info('No old records found to delete.');
+
             return self::SUCCESS;
         }
 
         $this->info("Successfully deleted {$totalDeleted} biometric records in total.");
 
         // Log the cleanup
-        \Log::info('Biometric records cleanup completed', [
+        Log::info('Biometric records cleanup completed', [
             'total_records_deleted' => $totalDeleted,
             'cleanup_date' => Carbon::now()->format('Y-m-d H:i:s'),
         ]);
@@ -106,17 +109,18 @@ class CleanOldBiometricRecords extends Command
 
         if ($count === 0) {
             $this->line("  No old records found for {$siteName}");
+
             return 0;
         }
 
         $this->warn("  Found {$count} records to delete for {$siteName}");
 
         // Skip confirmation if --force flag is used or running in scheduled context
-        if ($this->option('force') || !$this->input->isInteractive()) {
+        if ($this->option('force') || ! $this->input->isInteractive()) {
             $deleted = $query->delete();
             $this->info("  Deleted {$deleted} records from {$siteName}");
 
-            \Log::info('Biometric records cleanup for site', [
+            Log::info('Biometric records cleanup for site', [
                 'site_id' => $siteId,
                 'site_name' => $siteName,
                 'records_deleted' => $deleted,
@@ -143,6 +147,7 @@ class CleanOldBiometricRecords extends Command
 
         if ($count === 0) {
             $this->info('No old records found to delete.');
+
             return self::SUCCESS;
         }
 
@@ -155,7 +160,7 @@ class CleanOldBiometricRecords extends Command
             $this->info("Successfully deleted {$deleted} biometric records.");
 
             // Log the cleanup
-            \Log::info('Biometric records cleanup completed (manual override)', [
+            Log::info('Biometric records cleanup completed (manual override)', [
                 'records_deleted' => $deleted,
                 'cutoff_date' => $cutoffDate->format('Y-m-d'),
                 'months_retained' => $months,
@@ -165,6 +170,7 @@ class CleanOldBiometricRecords extends Command
         }
 
         $this->info('Deletion cancelled.');
+
         return self::FAILURE;
     }
 }

@@ -2,20 +2,21 @@
 
 namespace Tests\Feature\Attendance;
 
-use App\Models\User;
-use App\Models\Site;
 use App\Models\AttendanceUpload;
+use App\Models\Site;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
-use Tests\TestCase;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\TestCase;
 
 class AttendanceUploadTest extends TestCase
 {
     use RefreshDatabase;
 
     protected User $admin;
+
     protected Site $site;
 
     protected function setUp(): void
@@ -47,8 +48,8 @@ class AttendanceUploadTest extends TestCase
     #[Test]
     public function valid_txt_file_can_be_uploaded(): void
     {
-        $content = "No\tDevNo\tUserId\tName\tMode\tDateTime\n" .
-                   "1\t1\t10\tJohn Doe\tFP\t2025-11-05  08:00:00\n" .
+        $content = "No\tDevNo\tUserId\tName\tMode\tDateTime\n".
+                   "1\t1\t10\tJohn Doe\tFP\t2025-11-05  08:00:00\n".
                    "2\t1\t10\tJohn Doe\tFP\t2025-11-05  17:00:00\n";
 
         $file = UploadedFile::fake()->createWithContent('attendance.txt', $content);
@@ -70,7 +71,7 @@ class AttendanceUploadTest extends TestCase
             'status' => 'completed',
         ]);
 
-        $this->assertTrue(Storage::disk('local')->exists('attendance_uploads/' . AttendanceUpload::first()->stored_filename));
+        $this->assertTrue(Storage::disk('local')->exists('attendance_uploads/'.AttendanceUpload::first()->stored_filename));
     }
 
     #[Test]
@@ -140,9 +141,9 @@ class AttendanceUploadTest extends TestCase
     #[Test]
     public function file_parsing_extracts_records_correctly(): void
     {
-        $content = "No\tDevNo\tUserId\tName\tMode\tDateTime\n" .
-                   "1\t1\t10\tEmployee One\tFP\t2025-11-05  08:00:00\n" .
-                   "2\t1\t11\tEmployee Two\tFP\t2025-11-05  08:30:00\n" .
+        $content = "No\tDevNo\tUserId\tName\tMode\tDateTime\n".
+                   "1\t1\t10\tEmployee One\tFP\t2025-11-05  08:00:00\n".
+                   "2\t1\t11\tEmployee Two\tFP\t2025-11-05  08:30:00\n".
                    "3\t1\t10\tEmployee One\tFP\t2025-11-05  17:00:00\n";
 
         $file = UploadedFile::fake()->createWithContent('attendance.txt', $content);
@@ -169,7 +170,7 @@ class AttendanceUploadTest extends TestCase
     #[Test]
     public function upload_stores_original_and_stored_filename(): void
     {
-        $content = "No\tDevNo\tUserId\tName\tMode\tDateTime\n" .
+        $content = "No\tDevNo\tUserId\tName\tMode\tDateTime\n".
                    "1\t1\t10\tJohn Doe\tFP\t2025-11-05  08:00:00\n";
 
         $file = UploadedFile::fake()->createWithContent('my_attendance_file.txt', $content);
@@ -185,7 +186,8 @@ class AttendanceUploadTest extends TestCase
         $upload = AttendanceUpload::first();
         $this->assertEquals('my_attendance_file.txt', $upload->original_filename);
         $this->assertStringContainsString('my_attendance_file.txt', $upload->stored_filename);
-        $this->assertStringStartsWith(strval(time()), $upload->stored_filename);
+        // Stored filename now uses UUID prefix (not time()) — assert UUID-like prefix pattern
+        $this->assertMatchesRegularExpression('/^[0-9a-f\-]{36}_/', $upload->stored_filename);
     }
 
     #[Test]
@@ -213,7 +215,7 @@ class AttendanceUploadTest extends TestCase
     #[Test]
     public function upload_status_starts_as_pending(): void
     {
-        $content = "No\tDevNo\tUserId\tName\tMode\tDateTime\n" .
+        $content = "No\tDevNo\tUserId\tName\tMode\tDateTime\n".
                    "1\t1\t10\tJohn Doe\tFP\t2025-11-05  08:00:00\n";
 
         $file = UploadedFile::fake()->createWithContent('attendance.txt', $content);
@@ -234,7 +236,7 @@ class AttendanceUploadTest extends TestCase
     #[Test]
     public function upload_records_uploader_information(): void
     {
-        $content = "No\tDevNo\tUserId\tName\tMode\tDateTime\n" .
+        $content = "No\tDevNo\tUserId\tName\tMode\tDateTime\n".
                    "1\t1\t10\tJohn Doe\tFP\t2025-11-05  08:00:00\n";
 
         $file = UploadedFile::fake()->createWithContent('attendance.txt', $content);
@@ -255,7 +257,7 @@ class AttendanceUploadTest extends TestCase
     #[Test]
     public function upload_records_can_include_notes(): void
     {
-        $content = "No\tDevNo\tUserId\tName\tMode\tDateTime\n" .
+        $content = "No\tDevNo\tUserId\tName\tMode\tDateTime\n".
                    "1\t1\t10\tJohn Doe\tFP\t2025-11-05  08:00:00\n";
 
         $file = UploadedFile::fake()->createWithContent('attendance.txt', $content);
@@ -282,7 +284,7 @@ class AttendanceUploadTest extends TestCase
             'is_approved' => true,
         ]);
 
-        $content = "No\tDevNo\tUserId\tName\tMode\tDateTime\n" .
+        $content = "No\tDevNo\tUserId\tName\tMode\tDateTime\n".
                    "1\t1\t10\tJohn Doe\tFP\t2025-11-05  08:00:00\n";
 
         $file = UploadedFile::fake()->createWithContent('attendance.txt', $content);

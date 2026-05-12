@@ -5,8 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 class AttendanceUpload extends Model
 {
@@ -24,7 +24,6 @@ class AttendanceUpload extends Model
         'uploaded_by',
         'original_filename',
         'stored_filename',
-        'shift_date',
         'date_from',
         'date_to',
         'biometric_site_id',
@@ -43,7 +42,6 @@ class AttendanceUpload extends Model
     protected function casts(): array
     {
         return [
-            'shift_date' => 'date:Y-m-d',
             'date_from' => 'date:Y-m-d',
             'date_to' => 'date:Y-m-d',
             'unmatched_names_list' => 'array',
@@ -77,6 +75,6 @@ class AttendanceUpload extends Model
      */
     public function getFilePathAttribute(): string
     {
-        return storage_path('app/attendance_uploads/' . $this->stored_filename);
+        return storage_path('app/attendance_uploads/'.$this->stored_filename);
     }
 }

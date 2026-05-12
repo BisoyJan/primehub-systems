@@ -2,31 +2,31 @@
 
 namespace Tests\Unit;
 
-use Tests\TestCase;
+use App\Models\Attendance;
+use App\Models\AttendanceUpload;
+use App\Models\EmployeeSchedule;
+use App\Models\Site;
+use App\Models\User;
 use App\Services\AttendanceFileParser;
 use App\Services\AttendanceProcessor;
-use App\Models\User;
-use App\Models\EmployeeSchedule;
-use App\Models\Attendance;
-use App\Models\Site;
-use App\Models\AttendanceUpload;
-use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\TestCase;
 
 class AttendanceEdgeCaseTest extends TestCase
 {
     use RefreshDatabase;
 
     private AttendanceFileParser $parser;
+
     private AttendanceProcessor $processor;
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->parser = new AttendanceFileParser();
-        $this->processor = new AttendanceProcessor($this->parser);
+        $this->parser = new AttendanceFileParser;
+        $this->processor = app(AttendanceProcessor::class);
     }
 
     #[Test]
@@ -49,8 +49,8 @@ class AttendanceEdgeCaseTest extends TestCase
         ]);
 
         // Create biometric file content with extreme scans
-        $content = "No\tDevNo\tUserId\tName\tMode\tDateTime\n" .
-                   "1\t1\t5\tWilliams\tFP\t2025-11-10  05:00:15\n" .
+        $content = "No\tDevNo\tUserId\tName\tMode\tDateTime\n".
+                   "1\t1\t5\tWilliams\tFP\t2025-11-10  05:00:15\n".
                    "2\t1\t5\tWilliams\tFP\t2025-11-10  22:25:25\n";
 
         $filePath = storage_path('app/test_extreme_scans.txt');
@@ -106,8 +106,8 @@ class AttendanceEdgeCaseTest extends TestCase
         ]);
 
         // Create biometric file content with normal scans
-        $content = "No\tDevNo\tUserId\tName\tMode\tDateTime\n" .
-                   "1\t1\t5\tDoe\tFP\t2025-11-10  08:05:00\n" .
+        $content = "No\tDevNo\tUserId\tName\tMode\tDateTime\n".
+                   "1\t1\t5\tDoe\tFP\t2025-11-10  08:05:00\n".
                    "2\t1\t5\tDoe\tFP\t2025-11-10  17:02:00\n";
 
         $filePath = storage_path('app/test_normal_scans.txt');

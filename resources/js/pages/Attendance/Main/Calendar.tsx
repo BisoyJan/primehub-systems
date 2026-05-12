@@ -68,7 +68,7 @@ interface AttendanceRecord {
     admin_verified: boolean;
     verification_notes?: string;
     notes?: string;
-    warnings?: string[];
+    warnings?: { type: string; message: string; severity: string; raised_at: string }[];
 }
 
 interface PageProps extends SharedData {
@@ -673,7 +673,7 @@ export default function AttendanceCalendar() {
                                         <div className="text-sm mt-1 space-y-1">
                                             {selectedAttendance.warnings.map((warning, idx) => (
                                                 <div key={idx} className="bg-amber-50 p-2 rounded text-amber-900">
-                                                    {warning}
+                                                    {typeof warning === 'string' ? warning : warning.message}
                                                 </div>
                                             ))}
                                         </div>

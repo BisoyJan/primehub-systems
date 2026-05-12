@@ -38,6 +38,26 @@ class AttendancePointPolicy
     }
 
     /**
+     * Determine whether the user can view another user's points page.
+     * Users can always view their own; otherwise they need the
+     * `attendance_points.view` permission.
+     */
+    public function viewUserPoints(User $user, User $targetUser): bool
+    {
+        if ($user->id === $targetUser->id) {
+            return true;
+        }
+
+        // Restricted roles can only view their own points page.
+        $restrictedRoles = ['Agent', 'IT', 'Utility'];
+        if (in_array($user->role, $restrictedRoles)) {
+            return false;
+        }
+
+        return $this->permissionService->userHasPermission($user, 'attendance_points.view');
+    }
+
+    /**
      * Determine whether the user can create manual attendance points.
      */
     public function create(User $user): bool
@@ -51,7 +71,7 @@ class AttendancePointPolicy
     public function update(User $user, AttendancePoint $attendancePoint): bool
     {
         // Can only edit manual entries
-        if (!$attendancePoint->is_manual) {
+        if (! $attendancePoint->is_manual) {
             return false;
         }
 
@@ -64,7 +84,7 @@ class AttendancePointPolicy
     public function delete(User $user, AttendancePoint $attendancePoint): bool
     {
         // Can only delete manual entries
-        if (!$attendancePoint->is_manual) {
+        if (! $attendancePoint->is_manual) {
             return false;
         }
 
@@ -93,5 +113,14 @@ class AttendancePointPolicy
     public function rescan(User $user): bool
     {
         return $this->permissionService->userHasPermission($user, 'attendance_points.rescan');
+    }
+
+    /**
+     * Determine whether the user can run management actions
+     * (cleanup, regenerate, expire-all, GBRO fixes, recalculate).
+     */
+    public function manage(User $user): bool
+    {
+        return $this->permissionService->userHasPermission($user, 'attendance_points.manage');
     }
 }

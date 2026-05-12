@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Jobs\GenerateAttendanceExportExcel;
 use App\Models\Attendance;
-use App\Models\AttendancePoint;
 use App\Models\Campaign;
 use App\Models\EmployeeSchedule;
 use App\Models\Site;
@@ -23,56 +22,49 @@ class BiometricExportController extends Controller
      */
     public function index()
     {
-        // Get all users who have attendance records with their campaign assignments
+        // Single query to build user→campaign/site and site→campaign mappings from employee_schedules
+        $schedules = EmployeeSchedule::select('user_id', 'site_id', 'campaign_id')
+            ->whereHas('attendances')
+            ->get();
+
+        $userScheduleMap = $schedules->groupBy('user_id');
+        $siteScheduleMap = $schedules->groupBy('site_id');
+        $activeCampaignIds = $schedules->pluck('campaign_id')->unique()->filter();
+
+        // Users with attendance records
         $users = User::whereHas('attendances')
             ->select('id', 'first_name', 'last_name')
-            ->with(['employeeSchedules' => function ($query) {
-                $query->select('id', 'user_id', 'campaign_id', 'site_id')
-                    ->whereHas('attendances');
-            }])
             ->orderBy('first_name')
             ->orderBy('last_name')
             ->get()
-            ->map(function ($user) {
-                // Get unique campaign IDs for this user
-                $campaignIds = $user->employeeSchedules->pluck('campaign_id')->unique()->filter()->values()->toArray();
-                // Get unique site IDs for this user
-                $siteIds = $user->employeeSchedules->pluck('site_id')->unique()->filter()->values()->toArray();
+            ->map(function ($user) use ($userScheduleMap) {
+                $rows = $userScheduleMap->get($user->id, collect());
 
                 return [
                     'id' => $user->id,
-                    'name' => $user->first_name . ' ' . $user->last_name,
+                    'name' => $user->first_name.' '.$user->last_name,
                     'employee_number' => (string) $user->id,
-                    'campaign_ids' => $campaignIds,
-                    'site_ids' => $siteIds,
+                    'campaign_ids' => $rows->pluck('campaign_id')->unique()->filter()->values()->toArray(),
+                    'site_ids' => $rows->pluck('site_id')->unique()->filter()->values()->toArray(),
                 ];
             });
 
-        // Get all sites that have attendance records with their campaign associations
+        // Sites linked to attendance-bearing schedules
         $sites = Site::whereHas('employeeSchedules.attendances')
             ->select('id', 'name')
-            ->with(['employeeSchedules' => function ($query) {
-                $query->select('id', 'site_id', 'campaign_id')
-                    ->whereHas('attendances');
-            }])
             ->orderBy('name')
             ->get()
-            ->map(function ($site) {
-                $campaignIds = $site->employeeSchedules->pluck('campaign_id')->unique()->filter()->values()->toArray();
+            ->map(function ($site) use ($siteScheduleMap) {
+                $rows = $siteScheduleMap->get($site->id, collect());
+
                 return [
                     'id' => $site->id,
                     'name' => $site->name,
-                    'campaign_ids' => $campaignIds,
+                    'campaign_ids' => $rows->pluck('campaign_id')->unique()->filter()->values()->toArray(),
                 ];
             });
 
-        // Get all campaigns that have employee schedules with attendance records
-        $campaignIds = EmployeeSchedule::whereHas('attendances')
-            ->distinct()
-            ->pluck('campaign_id')
-            ->filter();
-
-        $campaigns = Campaign::whereIn('id', $campaignIds)
+        $campaigns = Campaign::whereIn('id', $activeCampaignIds)
             ->select('id', 'name')
             ->orderBy('name')
             ->get();
@@ -86,7 +78,7 @@ class BiometricExportController extends Controller
             ->map(function ($user) {
                 return [
                     'id' => $user->id,
-                    'name' => $user->first_name . ' ' . $user->last_name,
+                    'name' => $user->first_name.' '.$user->last_name,
                 ];
             });
 
@@ -122,19 +114,28 @@ class BiometricExportController extends Controller
     {
         $request->validate([
             'start_date' => 'nullable|date',
-            'end_date' => 'nullable|date|after_or_equal:start_date',
-            'user_ids' => 'nullable|array',
+            'end_date' => [
+                'nullable',
+                'date',
+                'after_or_equal:start_date',
+                function (string $attr, mixed $value, \Closure $fail) use ($request): void {
+                    if ($request->start_date && Carbon::parse($value)->diffInDays(Carbon::parse($request->start_date)) > 365) {
+                        $fail('Export date range cannot exceed 1 year.');
+                    }
+                },
+            ],
+            'user_ids' => 'nullable|array|max:500',
             'user_ids.*' => 'exists:users,id',
-            'site_ids' => 'nullable|array',
+            'site_ids' => 'nullable|array|max:500',
             'site_ids.*' => 'exists:sites,id',
-            'campaign_ids' => 'nullable|array',
+            'campaign_ids' => 'nullable|array|max:500',
             'campaign_ids.*' => 'exists:campaigns,id',
         ]);
 
         // Get filter arrays
-        $userIds = array_filter($request->input('user_ids', []), fn($id) => !empty($id));
-        $siteIds = array_filter($request->input('site_ids', []), fn($id) => !empty($id));
-        $campaignIds = array_filter($request->input('campaign_ids', []), fn($id) => !empty($id));
+        $userIds = array_filter($request->input('user_ids', []), fn ($id) => ! empty($id));
+        $siteIds = array_filter($request->input('site_ids', []), fn ($id) => ! empty($id));
+        $campaignIds = array_filter($request->input('campaign_ids', []), fn ($id) => ! empty($id));
 
         // Check if there are any matching records before starting the export
         $startDate = $request->input('start_date') ? Carbon::parse($request->input('start_date')) : null;
@@ -145,7 +146,7 @@ class BiometricExportController extends Controller
         if ($startDate && $endDate) {
             $query->whereBetween('shift_date', [
                 $startDate->toDateString(),
-                $endDate->toDateString()
+                $endDate->toDateString(),
             ]);
         } elseif ($startDate) {
             $query->where('shift_date', '>=', $startDate->toDateString());
@@ -153,21 +154,21 @@ class BiometricExportController extends Controller
             $query->where('shift_date', '<=', $endDate->toDateString());
         }
 
-        if (!empty($userIds)) {
+        if (! empty($userIds)) {
             $query->whereIn('user_id', $userIds);
         }
 
-        if (!empty($siteIds)) {
+        if (! empty($siteIds)) {
             $query->where(function ($q) use ($siteIds) {
                 $q->whereIn('bio_in_site_id', $siteIds)
-                  ->orWhereIn('bio_out_site_id', $siteIds)
-                  ->orWhereHas('employeeSchedule', function ($subQ) use ($siteIds) {
-                      $subQ->whereIn('site_id', $siteIds);
-                  });
+                    ->orWhereIn('bio_out_site_id', $siteIds)
+                    ->orWhereHas('employeeSchedule', function ($subQ) use ($siteIds) {
+                        $subQ->whereIn('site_id', $siteIds);
+                    });
             });
         }
 
-        if (!empty($campaignIds)) {
+        if (! empty($campaignIds)) {
             $query->whereHas('employeeSchedule', function ($subQ) use ($campaignIds) {
                 $subQ->whereIn('campaign_id', $campaignIds);
             });
@@ -226,10 +227,15 @@ class BiometricExportController extends Controller
     {
         $cacheKey = "attendance_export_job:{$jobId}";
 
-        // Find the file - look for files matching the pattern
+        // Find the file by scanning the temp directory.
+        // We avoid glob() to keep filename pattern matching explicit.
         $tempDir = storage_path('app/temp');
-        $pattern = $tempDir . "/attendance_export_*_{$jobId}.xlsx";
-        $files = glob($pattern);
+        $suffix = "_{$jobId}.xlsx";
+        $files = is_dir($tempDir) ? array_values(array_filter(
+            scandir($tempDir) ?: [],
+            static fn (string $name): bool => str_starts_with($name, 'attendance_export_')
+                && str_ends_with($name, $suffix)
+        )) : [];
 
         if (empty($files)) {
             // Clear cache since file no longer exists
@@ -237,8 +243,8 @@ class BiometricExportController extends Controller
             abort(404, 'Export file not found. Please generate a new export.');
         }
 
-        $filePath = $files[0];
-        $filename = basename($filePath);
+        $filePath = $tempDir.DIRECTORY_SEPARATOR.$files[0];
+        $filename = $files[0];
 
         // Clear cache after download since file will be deleted
         Cache::forget($cacheKey);

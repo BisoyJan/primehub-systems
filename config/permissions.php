@@ -117,6 +117,7 @@ return [
         'attendance_points.excuse' => 'Excuse Attendance Points',
         'attendance_points.export' => 'Export Attendance Points',
         'attendance_points.rescan' => 'Rescan Attendance Points',
+        'attendance_points.manage' => 'Manage Attendance Points (cleanup, regenerate, expire-all, gbro fixes)',
 
         // Leave Requests
         'leave.view' => 'View Leave Requests',
@@ -214,7 +215,7 @@ return [
             'attendance.view', 'attendance.create', 'attendance.import', 'attendance.review', 'attendance.verify', 'attendance.approve', 'attendance.statistics', 'attendance.delete', 'attendance.request_undertime_approval', 'attendance.approve_undertime',
             'schedules.view', 'schedules.create', 'schedules.edit', 'schedules.delete', 'schedules.toggle',
             'biometric.view', 'biometric.reprocess', 'biometric.anomalies', 'biometric.export', 'biometric.retention',
-            'attendance_points.view', 'attendance_points.create', 'attendance_points.edit', 'attendance_points.delete', 'attendance_points.excuse', 'attendance_points.export', 'attendance_points.rescan',
+            'attendance_points.view', 'attendance_points.create', 'attendance_points.edit', 'attendance_points.delete', 'attendance_points.excuse', 'attendance_points.export', 'attendance_points.rescan', 'attendance_points.manage',
             'leave.view', 'leave.create', 'leave.edit', 'leave.approve', 'leave.deny', 'leave.cancel', 'leave.delete', 'leave.view_all',
             'leave_credits.view_all', 'leave_credits.view_own', 'leave_credits.edit',
             'it_concerns.view', 'it_concerns.create', 'it_concerns.assign',
@@ -261,7 +262,7 @@ return [
             'attendance.view', 'attendance.create', 'attendance.import', 'attendance.review', 'attendance.verify', 'attendance.approve', 'attendance.statistics', 'attendance.delete', 'attendance.request_undertime_approval', 'attendance.approve_undertime',
             'schedules.view', 'schedules.create', 'schedules.edit', 'schedules.delete', 'schedules.toggle',
             'biometric.view', 'biometric.reprocess', 'biometric.anomalies', 'biometric.export', 'biometric.retention',
-            'attendance_points.view', 'attendance_points.create', 'attendance_points.edit', 'attendance_points.delete', 'attendance_points.excuse', 'attendance_points.export', 'attendance_points.rescan',
+            'attendance_points.view', 'attendance_points.create', 'attendance_points.edit', 'attendance_points.delete', 'attendance_points.excuse', 'attendance_points.export', 'attendance_points.rescan', 'attendance_points.manage',
             'leave.view', 'leave.create', 'leave.edit', 'leave.approve', 'leave.deny', 'leave.cancel', 'leave.delete', 'leave.view_all',
             'leave_credits.view_all', 'leave_credits.view_own', 'leave_credits.edit',
             'medication_requests.view', 'medication_requests.create', 'medication_requests.update', 'medication_requests.delete',

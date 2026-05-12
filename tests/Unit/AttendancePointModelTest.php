@@ -2,13 +2,13 @@
 
 namespace Tests\Unit;
 
-use Tests\TestCase;
+use App\Models\Attendance;
 use App\Models\AttendancePoint;
 use App\Models\User;
-use App\Models\Attendance;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\TestCase;
 
 class AttendancePointModelTest extends TestCase
 {
@@ -17,7 +17,7 @@ class AttendancePointModelTest extends TestCase
     #[Test]
     public function it_has_fillable_attributes()
     {
-        $point = new AttendancePoint();
+        $point = new AttendancePoint;
 
         $expected = [
             'user_id',
@@ -207,17 +207,16 @@ class AttendancePointModelTest extends TestCase
     }
 
     #[Test]
-    public function it_detects_ncns_or_ftn()
+    public function it_detects_ncns_and_ftn_as_same()
     {
         $ncns = AttendancePoint::factory()->ncns()->create();
         $ftn = AttendancePoint::factory()->ftn()->create();
         $tardy = AttendancePoint::factory()->tardy()->create();
 
-        $this->assertTrue($ncns->isNcnsOrFtn()); // is_advised = false
-        // FTN has is_advised = true, so isNcnsOrFtn() returns false
-        // (advised absences are treated differently than NCNS)
-        $this->assertFalse($ftn->isNcnsOrFtn());
-        $this->assertFalse($tardy->isNcnsOrFtn());
+        // FTN and NCNS are identical: is_advised=false, eligible_for_gbro=false → 1 year
+        $this->assertTrue($ncns->isNcns());
+        $this->assertTrue($ftn->isNcns());
+        $this->assertFalse($tardy->isNcns());
     }
 
     #[Test]
@@ -232,14 +231,18 @@ class AttendancePointModelTest extends TestCase
     }
 
     #[Test]
-    public function it_calculates_expiration_date_for_ncns_ftn()
+    public function it_calculates_expiration_date_for_ftn_ncns_as_1_year()
     {
         $shiftDate = Carbon::parse('2025-11-01');
-        $point = AttendancePoint::factory()->ncns()->create(['shift_date' => $shiftDate]);
 
-        $expectedExpiration = $shiftDate->copy()->addYear();
+        // Both FTN and NCNS are is_advised=false — they get 1 year expiration
+        $ncns = AttendancePoint::factory()->ncns()->create(['shift_date' => $shiftDate]);
+        $ftn = AttendancePoint::factory()->ftn()->create(['shift_date' => $shiftDate]);
 
-        $this->assertEquals($expectedExpiration->format('Y-m-d'), $point->calculateExpirationDate()->format('Y-m-d'));
+        $expected = $shiftDate->copy()->addYear()->format('Y-m-d');
+
+        $this->assertEquals($expected, $ncns->calculateExpirationDate()->format('Y-m-d'));
+        $this->assertEquals($expected, $ftn->calculateExpirationDate()->format('Y-m-d'));
     }
 
     #[Test]
@@ -269,6 +272,7 @@ class AttendancePointModelTest extends TestCase
             'is_expired' => false,
             'expired_at' => null,
             'expiration_type' => 'sro',
+            'point_type' => 'tardy',
         ]);
 
         $point->markAsExpired('sro');
@@ -300,7 +304,7 @@ class AttendancePointModelTest extends TestCase
         $this->assertEquals('Tardy', $tardyPoint->formatted_type);
 
         $ncnsPoint = AttendancePoint::factory()->ncns()->make();
-        $this->assertEquals('Whole Day Absence (NCNS)', $ncnsPoint->formatted_type);
+        $this->assertEquals('Whole Day Absence (FTN/NCNS)', $ncnsPoint->formatted_type);
 
         $halfDayPoint = AttendancePoint::factory()->halfDayAbsence()->make();
         $this->assertEquals('Half-Day Absence', $halfDayPoint->formatted_type);
@@ -434,4 +438,3 @@ class AttendancePointModelTest extends TestCase
         $this->assertEquals($expectedExpiration->format('Y-m-d'), $tardy->calculateExpirationDate()->format('Y-m-d'));
     }
 }
-

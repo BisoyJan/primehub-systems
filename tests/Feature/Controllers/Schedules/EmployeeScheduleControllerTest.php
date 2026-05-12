@@ -142,7 +142,7 @@ class EmployeeScheduleControllerTest extends TestCase
             ->post(route('employee-schedules.store'), $scheduleData);
 
         $response->assertRedirect(route('employee-schedules.index'))
-            ->assertSessionHas('flash.type', 'success');
+            ->assertSessionHas('type', 'success');
 
         $this->assertDatabaseHas('employee_schedules', [
             'user_id' => $this->employee->id,
@@ -227,7 +227,7 @@ class EmployeeScheduleControllerTest extends TestCase
             ->put(route('employee-schedules.update', $schedule), $updateData);
 
         $response->assertRedirect(route('employee-schedules.index'))
-            ->assertSessionHas('flash.type', 'success');
+            ->assertSessionHas('type', 'success');
 
         $this->assertDatabaseHas('employee_schedules', [
             'id' => $schedule->id,
@@ -244,7 +244,7 @@ class EmployeeScheduleControllerTest extends TestCase
             ->delete(route('employee-schedules.destroy', $schedule));
 
         $response->assertRedirect(route('employee-schedules.index'))
-            ->assertSessionHas('flash.type', 'success');
+            ->assertSessionHas('type', 'success');
 
         $this->assertDatabaseMissing('employee_schedules', ['id' => $schedule->id]);
     }
@@ -260,7 +260,7 @@ class EmployeeScheduleControllerTest extends TestCase
             ->post(route('employee-schedules.toggleActive', $schedule));
 
         $response->assertRedirect()
-            ->assertSessionHas('flash.type', 'success');
+            ->assertSessionHas('type', 'success');
 
         $schedule->refresh();
         $this->assertTrue($schedule->is_active);

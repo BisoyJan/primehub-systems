@@ -26,7 +26,7 @@ class GraveyardShiftEarlyArrivalTest extends TestCase
     {
         parent::setUp();
         $this->parser = new AttendanceFileParser;
-        $this->processor = new AttendanceProcessor($this->parser);
+        $this->processor = app(AttendanceProcessor::class);
     }
 
     /**

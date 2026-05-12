@@ -2,11 +2,10 @@
 
 namespace Database\Seeders;
 
-use App\Models\EmployeeSchedule;
-use App\Models\User;
 use App\Models\Campaign;
+use App\Models\EmployeeSchedule;
 use App\Models\Site;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
@@ -96,7 +95,7 @@ class EmployeeScheduleSeeder extends Seeder
                 'scheduled_time_in' => $timeIn,
                 'scheduled_time_out' => $timeOut,
                 'work_days' => ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
-                'grace_period_minutes' => 15,
+                'grace_period_minutes' => 0,
                 'is_active' => true,
                 'effective_date' => '2025-01-01',
             ]

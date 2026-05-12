@@ -2,12 +2,12 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Carbon\Carbon;
-use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 class BiometricRecord extends Model
 {
@@ -29,6 +29,7 @@ class BiometricRecord extends Model
         'datetime',
         'record_date',
         'record_time',
+        'last_processed_at',
     ];
 
     protected function casts(): array
@@ -36,6 +37,7 @@ class BiometricRecord extends Model
         return [
             'datetime' => 'datetime',
             'record_date' => 'date',
+            'last_processed_at' => 'datetime',
         ];
     }
 
@@ -86,7 +88,7 @@ class BiometricRecord extends Model
     {
         return $query->whereBetween('record_date', [
             $startDate->format('Y-m-d'),
-            $endDate->format('Y-m-d')
+            $endDate->format('Y-m-d'),
         ]);
     }
 
@@ -96,6 +98,7 @@ class BiometricRecord extends Model
     public function scopeOlderThan($query, int $months)
     {
         $cutoffDate = Carbon::now()->subMonths($months);
+
         return $query->where('record_date', '<', $cutoffDate->format('Y-m-d'));
     }
 

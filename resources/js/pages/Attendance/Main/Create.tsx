@@ -20,7 +20,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { AlertCircle, Check, CheckCircle, ChevronsUpDown, Clock, Repeat, X } from 'lucide-react';
+import { AlertCircle, Check, CheckCircle, ChevronsUpDown, Clock, Repeat } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFlashMessage, usePageMeta, usePermission } from '@/hooks';
 import { hub as attendanceHub, index as attendanceIndex, store as attendanceStore, bulkStore as attendanceBulkStore } from '@/routes/attendance';
@@ -1230,19 +1230,6 @@ export default function Create({ users, campaigns }: Props) {
                                                     <Button
                                                         type="button"
                                                         size="sm"
-                                                        variant={data.undertime_approval_reason === 'skip_points' ? 'default' : 'outline'}
-                                                        onClick={() => {
-                                                            setData('undertime_approval_reason', 'skip_points');
-                                                            setData('undertime_approval_status', 'approved');
-                                                        }}
-                                                        className="h-7 text-xs"
-                                                    >
-                                                        <X className="h-3 w-3 mr-1" />
-                                                        Skip Points
-                                                    </Button>
-                                                    <Button
-                                                        type="button"
-                                                        size="sm"
                                                         variant={data.undertime_approval_reason === 'lunch_used' ? 'default' : 'outline'}
                                                         onClick={() => {
                                                             setData('undertime_approval_reason', 'lunch_used');
@@ -1269,8 +1256,7 @@ export default function Create({ users, campaigns }: Props) {
                                                     )}
                                                 </div>
                                                 <p className="text-xs text-amber-700 dark:text-amber-300">
-                                                    {data.undertime_approval_reason === 'skip_points' && '✓ No points will be generated'}
-                                                    {data.undertime_approval_reason === 'lunch_used' && '✓ Lunch time credited (+1hr)'}
+                                                    {data.undertime_approval_reason === 'lunch_used' && '✓ No points generated — employee worked through lunch (+1hr credited to total hours)'}
                                                     {data.undertime_approval_reason === 'generate_points' && '• Points will be generated'}
                                                     {!data.undertime_approval_reason && '• Select option or leave blank for default (generate points)'}
                                                 </p>

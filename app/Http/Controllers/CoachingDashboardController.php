@@ -177,7 +177,7 @@ class CoachingDashboardController extends Controller
             $campaignCompletion = Cache::remember(
                 $cacheKey,
                 now()->addMinutes(5),
-                fn () => $this->dashboardService->buildCampaignCompletion($dashboardData),
+                fn () => $this->dashboardService->buildCampaignCompletion($dashboardData, $filters ?: null),
             );
         }
 

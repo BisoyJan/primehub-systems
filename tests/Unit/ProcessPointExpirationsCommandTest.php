@@ -2,19 +2,16 @@
 
 namespace Tests\Unit;
 
-use Tests\TestCase;
-use App\Console\Commands\ProcessPointExpirations;
 use App\Models\AttendancePoint;
 use App\Models\User;
-use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\TestCase;
 
 class ProcessPointExpirationsCommandTest extends TestCase
 {
     use RefreshDatabase;
-
 
     #[Test]
     public function it_processes_sro_expirations_for_standard_violations()
@@ -352,6 +349,73 @@ class ProcessPointExpirationsCommandTest extends TestCase
 
         // User 2's point should remain active
         $this->assertFalse($user2Point->fresh()->is_expired);
+    }
+
+    #[Test]
+    public function it_does_not_apply_gbro_when_ncns_violation_breaks_60_day_window(): void
+    {
+        $user = User::factory()->create();
+
+        // Two GBRO-eligible points created more than 60 days ago
+        $point1 = AttendancePoint::factory()
+            ->tardy()
+            ->forUser($user)
+            ->onDate(now()->subDays(80))
+            ->create(['eligible_for_gbro' => true]);
+
+        $point2 = AttendancePoint::factory()
+            ->undertime()
+            ->forUser($user)
+            ->onDate(now()->subDays(75))
+            ->create(['eligible_for_gbro' => true]);
+
+        // NCNS violation within 60 days — not GBRO-eligible but resets the clean-period clock
+        AttendancePoint::factory()
+            ->ncns()
+            ->forUser($user)
+            ->onDate(now()->subDays(30))
+            ->create(['eligible_for_gbro' => false]);
+
+        Artisan::call('points:process-expirations');
+        Artisan::call('points:process-expirations');
+
+        // GBRO should NOT fire — NCNS 30 days ago breaks the 60-day window
+        $this->assertFalse($point1->fresh()->is_expired);
+        $this->assertFalse($point2->fresh()->is_expired);
+    }
+
+    #[Test]
+    public function it_does_not_apply_gbro_when_excused_ncns_breaks_60_day_window(): void
+    {
+        $user = User::factory()->create();
+
+        // Two GBRO-eligible points created more than 60 days ago
+        $point1 = AttendancePoint::factory()
+            ->tardy()
+            ->forUser($user)
+            ->onDate(now()->subDays(80))
+            ->create(['eligible_for_gbro' => true]);
+
+        $point2 = AttendancePoint::factory()
+            ->undertime()
+            ->forUser($user)
+            ->onDate(now()->subDays(75))
+            ->create(['eligible_for_gbro' => true]);
+
+        // Excused NCNS within 60 days — still resets the clock even though excused
+        AttendancePoint::factory()
+            ->ncns()
+            ->forUser($user)
+            ->onDate(now()->subDays(30))
+            ->excused()
+            ->create(['eligible_for_gbro' => false]);
+
+        Artisan::call('points:process-expirations');
+        Artisan::call('points:process-expirations');
+
+        // GBRO should NOT fire — excused NCNS still breaks the 60-day window
+        $this->assertFalse($point1->fresh()->is_expired);
+        $this->assertFalse($point2->fresh()->is_expired);
     }
 
     #[Test]

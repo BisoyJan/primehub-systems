@@ -4,6 +4,7 @@ namespace Tests\Unit;
 
 use App\Models\Attendance;
 use App\Models\EmployeeSchedule;
+use App\Models\Site;
 use App\Models\User;
 use App\Services\AttendanceFileParser;
 use App\Services\AttendanceProcessor;
@@ -24,43 +25,54 @@ class AttendanceProcessorTest extends TestCase
     {
         parent::setUp();
         $this->parser = new AttendanceFileParser;
-        $this->processor = new AttendanceProcessor($this->parser);
+        $this->processor = app(AttendanceProcessor::class);
     }
 
     #[Test]
     public function it_determines_time_in_status_correctly()
     {
-        // Rule: Less than 15 mins = On Time, 15+ mins = Tardy (if within grace) or Half Day (if beyond grace)
+        // Rule:
+        //   tardy_minutes <= grace_period_minutes         ⇒ on_time
+        //   tardy_minutes >  grace_period_minutes AND
+        //   tardy_minutes <= half_day_absence_threshold    ⇒ tardy
+        //   tardy_minutes >  half_day_absence_threshold   ⇒ half_day_absence
+        // (half_day_absence_tardy_minutes = 15 per config/attendance.php)
 
-        // Test with default grace period of 15 minutes
         $testCases = [
-            [-10, 15, 'on_time'],  // 10 minutes early
-            [0, 15, 'on_time'],    // exactly on time
-            [1, 15, 'tardy'],      // 1 minute late (>= 1 min is tardy)
-            [10, 15, 'tardy'],     // 10 minutes late (>= 1 min, within grace)
-            [14, 15, 'tardy'],     // 14 minutes late (>= 1 min, within grace)
-            [15, 15, 'tardy'],     // 15 minutes late (within grace)
-            [16, 15, 'half_day_absence'], // beyond grace period
-            [120, 15, 'half_day_absence'], // way beyond grace period
+            // Grace period 15 minutes
+            [-10, 15, 'on_time'],        // 10 minutes early
+            [0, 15, 'on_time'],          // exactly on time
+            [1, 15, 'on_time'],          // within grace
+            [10, 15, 'on_time'],         // within grace
+            [14, 15, 'on_time'],         // within grace
+            [15, 15, 'on_time'],         // exactly at grace
+            [16, 15, 'half_day_absence'], // beyond grace AND beyond threshold (16 > 15)
+            [120, 15, 'half_day_absence'], // way beyond both
 
-            // Test with grace period of 10 minutes
-            [5, 10, 'tardy'],      // 5 minutes late (>= 1 min, within grace)
-            [10, 10, 'tardy'],     // 10 minutes late (at grace limit)
-            [15, 10, 'half_day_absence'], // beyond grace
-            [20, 10, 'half_day_absence'], // beyond grace
+            // Grace period 10 minutes
+            [5, 10, 'on_time'],
+            [10, 10, 'on_time'],
+            [15, 10, 'tardy'],           // beyond grace (15 > 10) but NOT beyond threshold (15 == 15)
+            [20, 10, 'half_day_absence'], // beyond grace AND threshold (20 > 15)
 
-            // Test with grace period of 20 minutes
-            [14, 20, 'tardy'],     // 14 minutes late (>= 1 min, within grace)
-            [15, 20, 'tardy'],     // 15 minutes late (within 20 min grace)
-            [18, 20, 'tardy'],     // 18 minutes late (within 20 min grace)
-            [20, 20, 'tardy'],     // 20 minutes late (exactly at grace period)
-            [21, 20, 'half_day_absence'], // beyond grace period
+            // Grace period 20 minutes
+            [14, 20, 'on_time'],
+            [15, 20, 'on_time'],
+            [18, 20, 'on_time'],
+            [20, 20, 'on_time'],
+            [21, 20, 'half_day_absence'], // beyond grace (21 > 20) AND threshold (21 > 15)
 
-            // Test with grace period of 30 minutes
-            [15, 30, 'tardy'],     // 15 mins (within grace)
-            [25, 30, 'tardy'],     // 25 mins (within grace)
-            [30, 30, 'tardy'],     // 30 mins (exactly at grace)
-            [31, 30, 'half_day_absence'], // beyond grace
+            // Grace period 30 minutes
+            [15, 30, 'on_time'],
+            [25, 30, 'on_time'],
+            [30, 30, 'on_time'],
+            [31, 30, 'half_day_absence'], // beyond grace (31 > 30) AND threshold (31 > 15)
+
+            // Grace period 0 (system-wide default)
+            [0, 0, 'on_time'],
+            [1, 0, 'tardy'],             // beyond grace (1 > 0) but within threshold (1 <= 15)
+            [15, 0, 'tardy'],            // exactly at threshold — still tardy
+            [60, 0, 'half_day_absence'], // beyond threshold (60 > 15)
         ];
 
         foreach ($testCases as [$tardyMinutes, $gracePeriod, $expectedStatus]) {
@@ -329,7 +341,7 @@ class AttendanceProcessorTest extends TestCase
             ['datetime' => Carbon::parse('2025-11-06 07:00:00')],
         ]);
 
-        $validation = $this->invokeMethod($this->processor, 'validateFileDates', [$records, $shiftDate]);
+        $validation = $this->invokeMethod($this->processor, 'validateFileDates', [$records, $shiftDate, $shiftDate]);
 
         $this->assertIsArray($validation);
         $this->assertArrayHasKey('warnings', $validation);
@@ -347,7 +359,7 @@ class AttendanceProcessorTest extends TestCase
             ['datetime' => Carbon::parse('2025-11-05 09:00:00')],
         ]);
 
-        $validation = $this->invokeMethod($this->processor, 'validateFileDates', [$records, $shiftDate]);
+        $validation = $this->invokeMethod($this->processor, 'validateFileDates', [$records, $shiftDate, $shiftDate]);
 
         $this->assertNotEmpty($validation['warnings']);
         $this->assertStringContainsString('unexpected dates', $validation['warnings'][0]);
@@ -357,7 +369,7 @@ class AttendanceProcessorTest extends TestCase
     public function it_processes_on_time_attendance()
     {
         $user = User::factory()->create();
-        $site = \App\Models\Site::factory()->create();
+        $site = Site::factory()->create();
         $schedule = EmployeeSchedule::factory()->create([
             'user_id' => $user->id,
             'site_id' => $site->id,
@@ -394,21 +406,22 @@ class AttendanceProcessorTest extends TestCase
     public function it_processes_tardy_attendance()
     {
         $user = User::factory()->create();
-        $site = \App\Models\Site::factory()->create();
+        $site = Site::factory()->create();
         $schedule = EmployeeSchedule::factory()->create([
             'user_id' => $user->id,
             'site_id' => $site->id,
             'scheduled_time_in' => '09:00:00',
             'scheduled_time_out' => '18:00:00',
-            'grace_period_minutes' => 20,
-            'work_days' => ['tuesday'],
+            'grace_period_minutes' => 10,
+            'work_days' => ['wednesday'],
             'is_active' => true,
         ]);
 
-        $shiftDate = Carbon::parse('2025-11-05'); // Tuesday
+        // 12 min late: beyond 10-min grace → tardy, but 12 <= 15 threshold → stays 'tardy' (not half_day_absence)
+        $shiftDate = Carbon::parse('2025-11-12'); // Wednesday — distinct from on_time (Tuesday 2025-11-05)
         $records = collect([
-            ['datetime' => Carbon::parse('2025-11-05 09:15:00')], // 15 min late (tardy threshold)
-            ['datetime' => Carbon::parse('2025-11-05 18:00:00')], // On time out
+            ['datetime' => Carbon::parse('2025-11-12 09:12:00')], // 12 min late (beyond 10-min grace, within 15-min half-day threshold)
+            ['datetime' => Carbon::parse('2025-11-12 18:00:00')], // On time out
         ]);
 
         $this->invokeMethod($this->processor, 'processAttendance', [
@@ -424,14 +437,14 @@ class AttendanceProcessorTest extends TestCase
             ->first();
 
         $this->assertEquals('tardy', $attendance->status);
-        $this->assertEquals(15, $attendance->tardy_minutes);
+        $this->assertEquals(12, $attendance->tardy_minutes);
     }
 
     #[Test]
     public function it_processes_half_day_absence()
     {
         $user = User::factory()->create();
-        $site = \App\Models\Site::factory()->create();
+        $site = Site::factory()->create();
         $schedule = EmployeeSchedule::factory()->create([
             'user_id' => $user->id,
             'site_id' => $site->id,
@@ -444,8 +457,12 @@ class AttendanceProcessorTest extends TestCase
 
         $shiftDate = Carbon::parse('2025-11-05');
         $records = collect([
-            ['datetime' => Carbon::parse('2025-11-05 09:20:00')], // More than 15 min late
+            ['datetime' => Carbon::parse('2025-11-05 09:20:00')], // 20 min late
         ]);
+
+        // With grace=15 and tardy=20: 20 > 15 (grace) → not on_time;
+        // 20 > 15 (half_day_absence_tardy_minutes threshold) → auto-escalates to half_day_absence.
+        $schedule->update(['grace_period_minutes' => 15]);
 
         $this->invokeMethod($this->processor, 'processAttendance', [
             $user,
@@ -467,8 +484,8 @@ class AttendanceProcessorTest extends TestCase
     public function it_detects_cross_site_bio()
     {
         $user = User::factory()->create();
-        $assignedSite = \App\Models\Site::factory()->create(['name' => 'Site A']);
-        $bioSite = \App\Models\Site::factory()->create(['name' => 'Site B']);
+        $assignedSite = Site::factory()->create(['name' => 'Site A']);
+        $bioSite = Site::factory()->create(['name' => 'Site B']);
 
         $schedule = EmployeeSchedule::factory()->create([
             'user_id' => $user->id,
@@ -503,7 +520,7 @@ class AttendanceProcessorTest extends TestCase
     public function it_handles_missing_time_out_record()
     {
         $user = User::factory()->create();
-        $site = \App\Models\Site::factory()->create();
+        $site = Site::factory()->create();
         $schedule = EmployeeSchedule::factory()->create([
             'user_id' => $user->id,
             'site_id' => $site->id,
@@ -543,7 +560,7 @@ class AttendanceProcessorTest extends TestCase
     public function it_handles_missing_time_in_record()
     {
         $user = User::factory()->create();
-        $site = \App\Models\Site::factory()->create();
+        $site = Site::factory()->create();
         $schedule = EmployeeSchedule::factory()->create([
             'user_id' => $user->id,
             'site_id' => $site->id,
@@ -583,7 +600,7 @@ class AttendanceProcessorTest extends TestCase
     public function it_handles_no_biometric_records()
     {
         $user = User::factory()->create();
-        $site = \App\Models\Site::factory()->create();
+        $site = Site::factory()->create();
         $schedule = EmployeeSchedule::factory()->create([
             'user_id' => $user->id,
             'site_id' => $site->id,
@@ -618,7 +635,7 @@ class AttendanceProcessorTest extends TestCase
     public function it_resets_old_values_when_reprocessing()
     {
         $user = User::factory()->create();
-        $site = \App\Models\Site::factory()->create();
+        $site = Site::factory()->create();
         $schedule = EmployeeSchedule::factory()->create([
             'user_id' => $user->id,
             'site_id' => $site->id,
@@ -678,7 +695,7 @@ class AttendanceProcessorTest extends TestCase
     public function it_handles_graveyard_shift_with_only_time_in()
     {
         $user = User::factory()->create();
-        $site = \App\Models\Site::factory()->create();
+        $site = Site::factory()->create();
         $schedule = EmployeeSchedule::factory()->create([
             'user_id' => $user->id,
             'site_id' => $site->id,
@@ -718,7 +735,7 @@ class AttendanceProcessorTest extends TestCase
     public function it_handles_graveyard_shift_with_only_time_out()
     {
         $user = User::factory()->create();
-        $site = \App\Models\Site::factory()->create();
+        $site = Site::factory()->create();
         $schedule = EmployeeSchedule::factory()->create([
             'user_id' => $user->id,
             'site_id' => $site->id,
