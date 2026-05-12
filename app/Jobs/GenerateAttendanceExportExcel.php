@@ -45,6 +45,8 @@ class GenerateAttendanceExportExcel implements ShouldQueue
 
     public function handle(): void
     {
+        ini_set('memory_limit', '512M');
+
         $cacheKey = "attendance_export_job:{$this->jobId}";
 
         try {
