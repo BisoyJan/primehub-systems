@@ -12,6 +12,7 @@ import {
     importMethod as attendanceImport,
     dailyRoster as attendanceDailyRoster,
     review as attendanceReview,
+    spreadsheet as attendanceSpreadsheet,
 } from "@/routes/attendance";
 import {
     CalendarDays,
@@ -23,6 +24,7 @@ import {
     Table2,
     Clock,
     AlertTriangle,
+    Grid3x3,
     type LucideIcon,
 } from "lucide-react";
 
@@ -91,6 +93,14 @@ export default function AttendanceHub() {
                         description="Browse and filter all attendance records in a table view"
                         icon={Table2}
                         href={attendanceIndex().url}
+                    />
+
+                    <ActionCard
+                        title="Spreadsheet View"
+                        description="Per-employee × per-day grid showing hours and leave codes (VL, SL, ABS, ML, ...)"
+                        icon={Grid3x3}
+                        href={attendanceSpreadsheet().url}
+                        variant="primary"
                     />
 
                     <Can permission="attendance.create">

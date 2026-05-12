@@ -8,6 +8,19 @@ use Illuminate\Support\Facades\Log;
 
 class AttendanceFileParser
 {
+    /** Lines that could not be parsed, populated after each parse() / parseContent() call. */
+    protected array $unparseableLines = [];
+
+    /**
+     * Return the raw lines that were rejected during the last parse.
+     *
+     * @return array<string> Up to 10 example lines, each capped at 200 characters.
+     */
+    public function getUnparseableLines(): array
+    {
+        return $this->unparseableLines;
+    }
+
     /**
      * Parse the attendance TXT file.
      *
@@ -16,6 +29,8 @@ class AttendanceFileParser
      */
     public function parse(string $filePath): Collection
     {
+        $this->unparseableLines = [];
+
         $content = file_get_contents($filePath);
 
         // Convert to UTF-8 if not already (handles Windows-1252, Latin-1 from biometric devices)
@@ -75,17 +90,37 @@ class AttendanceFileParser
 
         $lines = explode("\n", $content);
 
-        return collect($lines)
-            ->skip(1) // Skip header line
-            ->filter(function ($line) {
-                return ! empty(trim($line));
-            })
-            ->map(function ($line) {
-                return $this->parseLine($line);
-            })
-            ->filter(function ($record) {
-                return $record !== null;
-            });
+        // Smart header detection: skip line 1 only when its first whitespace-separated
+        // token is non-numeric (e.g. "No", "ID", column titles). Header-less files from
+        // some biometric devices must NOT have their first real scan dropped.
+        $firstNonEmpty = collect($lines)->first(fn ($l) => ! empty(trim($l)));
+        $firstToken = preg_split('/\s+/', trim((string) $firstNonEmpty))[0] ?? '';
+        $hasHeader = ! is_numeric($firstToken);
+
+        // Reset unparseable tracking for this parse call.
+        $this->unparseableLines = [];
+
+        $linesToProcess = collect($lines)->when($hasHeader, fn ($c) => $c->skip(1))->values();
+        $parsed = [];
+
+        foreach ($linesToProcess as $line) {
+            if (empty(trim($line))) {
+                continue;
+            }
+
+            $record = $this->parseLine($line);
+
+            if ($record === null) {
+                // Cap at 10 examples to avoid unbounded memory usage.
+                if (count($this->unparseableLines) < 10) {
+                    $this->unparseableLines[] = substr(trim($line), 0, 200);
+                }
+            } else {
+                $parsed[] = $record;
+            }
+        }
+
+        return collect($parsed);
     }
 
     /**
@@ -161,6 +196,30 @@ class AttendanceFileParser
 
             if (! $datetime) {
                 Log::warning('Failed to create Carbon instance', [
+                    'line' => $line,
+                    'datetime_str' => $dateTimeStr,
+                ]);
+
+                return null;
+            }
+
+            // Reject obviously corrupt datetimes: year must be plausible (>= 2000).
+            // Carbon::createFromFormat succeeds for "0000-00-00 00:00:00" but yields
+            // an invalid/epoch date that would corrupt the database.
+            if ($datetime->year < 2000) {
+                Log::warning('Rejecting implausible datetime (year < 2000)', [
+                    'line' => $line,
+                    'datetime_str' => $dateTimeStr,
+                    'parsed_year' => $datetime->year,
+                ]);
+
+                return null;
+            }
+
+            // Strict format enforcement: the cleaned string must exactly match Y-m-d H:i:s.
+            // This catches coerced values from separator-stripped inputs like "2025/11/05".
+            if (! preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $dateTimeStr)) {
+                Log::warning('Rejecting datetime that does not match Y-m-d H:i:s after cleaning', [
                     'line' => $line,
                     'datetime_str' => $dateTimeStr,
                 ]);

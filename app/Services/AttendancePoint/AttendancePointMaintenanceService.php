@@ -372,13 +372,16 @@ class AttendancePointMaintenanceService
         DB::transaction(function () use ($expiredPoints, &$resetCount, &$affectedUserIds) {
             foreach ($expiredPoints as $point) {
                 $shiftDate = Carbon::parse($point->shift_date);
-                $isNcnsOrFtn = $point->point_type === 'whole_day_absence';
-                $newExpiresAt = $isNcnsOrFtn ? $shiftDate->copy()->addYear() : $shiftDate->copy()->addMonths(6);
+                // Use the model method which correctly checks is_advised:
+                // NCNS (whole_day_absence + !is_advised) → 1-year expiration
+                // Advised absence (whole_day_absence + is_advised) → 6-month expiration (GBRO eligible)
+                $isNcns = $point->isNcnsOrFtn();
+                $newExpiresAt = $isNcns ? $shiftDate->copy()->addYear() : $shiftDate->copy()->addMonths(6);
 
                 $point->update([
                     'is_expired' => false,
                     'expired_at' => null,
-                    'expiration_type' => $isNcnsOrFtn ? 'none' : 'sro',
+                    'expiration_type' => $isNcns ? 'none' : 'sro',
                     'gbro_applied_at' => null,
                     'gbro_batch_id' => null,
                     'expires_at' => $newExpiresAt,

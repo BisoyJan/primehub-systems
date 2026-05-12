@@ -2,18 +2,18 @@
 
 namespace Tests\Feature;
 
-use Tests\TestCase;
-use App\Models\User;
-use App\Models\Site;
-use App\Models\EmployeeSchedule;
 use App\Models\Attendance;
 use App\Models\AttendancePoint;
 use App\Models\AttendanceUpload;
+use App\Models\EmployeeSchedule;
+use App\Models\Site;
+use App\Models\User;
 use App\Services\AttendanceProcessor;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\TestCase;
 
 class AttendancePointGenerationTest extends TestCase
 {
@@ -70,7 +70,7 @@ class AttendancePointGenerationTest extends TestCase
         $this->assertFalse($point->eligible_for_gbro); // NCNS not eligible for GBRO
         // expires_at is cast to 'date' which becomes Carbon
         $expectedDate = $shiftDate->copy()->addYear()->toDateString();
-        $actualDate = $point->expires_at instanceof \Carbon\Carbon ? $point->expires_at->toDateString() : $point->expires_at;
+        $actualDate = $point->expires_at instanceof Carbon ? $point->expires_at->toDateString() : $point->expires_at;
         $this->assertEquals($expectedDate, $actualDate); // 1 year expiration
     }
 
@@ -103,7 +103,7 @@ class AttendancePointGenerationTest extends TestCase
         $this->assertEquals('half_day_absence', $point->point_type);
         $this->assertEquals(0.50, $point->points);
         $this->assertTrue($point->eligible_for_gbro); // Standard violation eligible for GBRO
-        $this->assertEquals($shiftDate->copy()->addMonths(6)->toDateString(), ($point->expires_at instanceof \Carbon\Carbon ? $point->expires_at->toDateString() : $point->expires_at)); // 6 months expiration
+        $this->assertEquals($shiftDate->copy()->addMonths(6)->toDateString(), ($point->expires_at instanceof Carbon ? $point->expires_at->toDateString() : $point->expires_at)); // 6 months expiration
     }
 
     #[Test]
@@ -320,7 +320,7 @@ class AttendancePointGenerationTest extends TestCase
         $point = AttendancePoint::where('user_id', $user->id)->first();
 
         $this->assertEquals('none', $point->expiration_type); // NCNS uses 'none' initially (not SRO eligible for GBRO)
-        $this->assertEquals($shiftDate->copy()->addYear()->toDateString(), ($point->expires_at instanceof \Carbon\Carbon ? $point->expires_at->toDateString() : $point->expires_at));
+        $this->assertEquals($shiftDate->copy()->addYear()->toDateString(), ($point->expires_at instanceof Carbon ? $point->expires_at->toDateString() : $point->expires_at));
     }
 
     #[Test]
@@ -344,7 +344,7 @@ class AttendancePointGenerationTest extends TestCase
         $point = AttendancePoint::where('user_id', $user->id)->first();
 
         $this->assertEquals('sro', $point->expiration_type); // Standard violations use SRO
-        $this->assertEquals($shiftDate->copy()->addMonths(6)->toDateString(), ($point->expires_at instanceof \Carbon\Carbon ? $point->expires_at->toDateString() : $point->expires_at));
+        $this->assertEquals($shiftDate->copy()->addMonths(6)->toDateString(), ($point->expires_at instanceof Carbon ? $point->expires_at->toDateString() : $point->expires_at));
 
     }
 
@@ -373,7 +373,7 @@ class AttendancePointGenerationTest extends TestCase
     }
 
     #[Test]
-    public function it_handles_advised_absence_correctly()
+    public function it_handles_ftn_as_ncns_not_gbro_eligible()
     {
         $user = $this->createUserWithSchedule();
         $shiftDate = Carbon::parse('2025-11-05');
@@ -382,7 +382,7 @@ class AttendancePointGenerationTest extends TestCase
             'user_id' => $user->id,
             'shift_date' => $shiftDate,
             'status' => 'ncns',
-            'is_advised' => true, // Employee notified admin - advised absence
+            'is_advised' => true, // FTN: employee was told to come but didn't show/call
             'admin_verified' => true,
         ]);
 
@@ -395,11 +395,11 @@ class AttendancePointGenerationTest extends TestCase
 
         $this->assertEquals('whole_day_absence', $point->point_type);
         $this->assertEquals(1.00, $point->points);
-        $this->assertTrue($point->is_advised); // Employee DID notify
-        $this->assertTrue($point->eligible_for_gbro); // Advised absence IS eligible for GBRO
-        // Advised absence gets 6 months expiration (not 1 year like NCNS)
-        $expectedDate = $shiftDate->copy()->addMonths(6)->toDateString();
-        $actualDate = $point->expires_at instanceof \Carbon\Carbon ? $point->expires_at->toDateString() : $point->expires_at;
+        $this->assertTrue($point->is_advised); // is_advised=true (was told to come)
+        // FTN has ncns status → same rules as NCNS: NOT GBRO eligible, 1 year expiration
+        $this->assertFalse($point->eligible_for_gbro); // FTN is NOT eligible for GBRO
+        $expectedDate = $shiftDate->copy()->addYear()->toDateString(); // 1 year for FTN
+        $actualDate = $point->expires_at instanceof Carbon ? $point->expires_at->toDateString() : $point->expires_at;
         $this->assertEquals($expectedDate, $actualDate);
     }
 
@@ -419,4 +419,3 @@ class AttendancePointGenerationTest extends TestCase
         return $user;
     }
 }
-

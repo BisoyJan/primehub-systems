@@ -175,7 +175,9 @@ class AttendancePointCreationService
      */
     private function createAbsencePoint(Attendance $attendance, Carbon $shiftDate): int
     {
-        $isNcnsOrFtn = ! $attendance->is_advised;
+        // Both NCNS (is_advised=false) and FTN (ncns status + is_advised=true) → 1 year, NOT GBRO eligible.
+        // Advised Absence (advised_absence status, is_advised=true) → 6 months, GBRO eligible.
+        $isNcnsOrFtn = $attendance->status === 'ncns';
         $expiresAt = $isNcnsOrFtn ? $shiftDate->copy()->addYear() : $shiftDate->copy()->addMonths(6);
         $gbroExpiresAt = $isNcnsOrFtn ? null : $shiftDate->copy()->addDays(60)->format('Y-m-d');
 
@@ -268,7 +270,7 @@ class AttendancePointCreationService
     ): string {
         return match ($pointType) {
             'whole_day_absence' => $isAdvised
-                ? 'Manual Entry: Advised absence (Failed to Notify - FTN)'
+                ? 'Manual Entry: Advised Absence - Employee notified management of their absence'
                 : 'Manual Entry: No Call, No Show (NCNS) - Did not report for work without prior notice',
             'half_day_absence' => 'Manual Entry: Half-day absence recorded',
             'tardy' => sprintf('Manual Entry: Late arrival by %d minutes', $tardyMinutes ?? 0),

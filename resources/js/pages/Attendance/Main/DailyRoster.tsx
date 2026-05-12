@@ -361,7 +361,7 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
     // Undertime approval state
     const [isRequestingUndertimeApproval, setIsRequestingUndertimeApproval] = useState(false);
     const [isApprovingUndertime, setIsApprovingUndertime] = useState(false);
-    const [undertimeApprovalReason, setUndertimeApprovalReason] = useState<'generate_points' | 'skip_points' | 'lunch_used'>('skip_points');
+    const [undertimeApprovalReason, setUndertimeApprovalReason] = useState<'generate_points' | 'skip_points' | 'lunch_used'>('lunch_used');
 
     const { title, breadcrumbs } = usePageMeta({
         title: `Daily Roster - ${dayName}`,
@@ -770,7 +770,7 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
                                     variant="outline"
                                     role="combobox"
                                     aria-expanded={isEmployeePopoverOpen}
-                                    className="w-full justify-between font-normal lg:flex-1 lg:min-w-[200px]"
+                                    className="w-full justify-between font-normal lg:flex-1 lg:min-w-50"
                                 >
                                     <span className="truncate">
                                         {selectedEmployeeName}
@@ -835,11 +835,11 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
                             value={dateFilter}
                             onChange={(value) => setDateFilter(value)}
                             placeholder="Select date"
-                            className="lg:flex-1 lg:min-w-[160px]"
+                            className="lg:flex-1 lg:min-w-40"
                         />
 
                         <Select value={siteFilter} onValueChange={setSiteFilter}>
-                            <SelectTrigger className="lg:flex-1 lg:min-w-[120px]">
+                            <SelectTrigger className="lg:flex-1 lg:min-w-30">
                                 <SelectValue placeholder="All Sites" />
                             </SelectTrigger>
                             <SelectContent>
@@ -853,7 +853,7 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
                         </Select>
 
                         <Select value={campaignFilter} onValueChange={setCampaignFilter}>
-                            <SelectTrigger className="lg:flex-1 lg:min-w-[140px]">
+                            <SelectTrigger className="lg:flex-1 lg:min-w-35">
                                 <SelectValue placeholder="All Campaigns" />
                             </SelectTrigger>
                             <SelectContent>
@@ -867,7 +867,7 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
                         </Select>
 
                         <Select value={statusFilter} onValueChange={setStatusFilter}>
-                            <SelectTrigger className="lg:flex-1 lg:min-w-[130px]">
+                            <SelectTrigger className="lg:flex-1 lg:min-w-32.5">
                                 <SelectValue placeholder="All Statuses" />
                             </SelectTrigger>
                             <SelectContent>
@@ -1595,9 +1595,9 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
                                     selectedEmployee.existing_attendance.undertime_approval_status === 'approved' ? (
                                         <p className="text-xs text-green-700 dark:text-green-400">
                                             ✓ Approved: {selectedEmployee.existing_attendance.undertime_approval_reason === 'skip_points'
-                                                ? 'No points'
+                                                ? 'No points (Set Home)'
                                                 : selectedEmployee.existing_attendance.undertime_approval_reason === 'lunch_used'
-                                                    ? 'Lunch credited'
+                                                    ? 'Worked through lunch (+1hr credited)'
                                                     : 'Points generated'}
                                         </p>
                                     ) : selectedEmployee.existing_attendance.undertime_approval_status === 'rejected' ? (
@@ -1624,16 +1624,6 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
                                                 >
                                                     <Check className="h-3 w-3 mr-1" />
                                                     Generate Points
-                                                </Button>
-                                                <Button
-                                                    type="button"
-                                                    size="sm"
-                                                    variant={undertimeApprovalReason === 'skip_points' ? 'default' : 'outline'}
-                                                    onClick={() => setUndertimeApprovalReason('skip_points')}
-                                                    className="h-7 text-xs"
-                                                >
-                                                    <X className="h-3 w-3 mr-1" />
-                                                    Skip Points
                                                 </Button>
                                                 <Button
                                                     type="button"
@@ -1667,8 +1657,7 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
                                                 </Button>
                                             </div>
                                             <p className="text-xs text-amber-700 dark:text-amber-300">
-                                                {undertimeApprovalReason === 'skip_points' && '✓ No points will be generated'}
-                                                {undertimeApprovalReason === 'lunch_used' && '✓ Lunch time credited (+1hr)'}
+                                                {undertimeApprovalReason === 'lunch_used' && '✓ Will approve — worked through lunch, +1hr credited to total hours'}
                                                 {undertimeApprovalReason === 'generate_points' && '• Points will be generated'}
                                             </p>
                                         </div>
@@ -1685,16 +1674,6 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
                                                 >
                                                     <Check className="h-3 w-3 mr-1" />
                                                     Generate Points
-                                                </Button>
-                                                <Button
-                                                    type="button"
-                                                    size="sm"
-                                                    variant={undertimeApprovalReason === 'skip_points' ? 'default' : 'outline'}
-                                                    onClick={() => setUndertimeApprovalReason('skip_points')}
-                                                    className="h-7 text-xs"
-                                                >
-                                                    <X className="h-3 w-3 mr-1" />
-                                                    Skip Points
                                                 </Button>
                                                 <Button
                                                     type="button"
@@ -1726,8 +1705,7 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
                                                 </Button>
                                             </div>
                                             <p className="text-xs text-amber-700 dark:text-amber-300">
-                                                {undertimeApprovalReason === 'skip_points' && '• Suggesting: No points'}
-                                                {undertimeApprovalReason === 'lunch_used' && '• Suggesting: Lunch time credited (+1hr)'}
+                                                {undertimeApprovalReason === 'lunch_used' && '• Suggesting: Worked through lunch (+1hr credited)'}
                                                 {undertimeApprovalReason === 'generate_points' && '• Suggesting: Generate points'}
                                             </p>
                                         </div>

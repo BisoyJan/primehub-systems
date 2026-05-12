@@ -190,6 +190,34 @@ class Attendance extends Model
     }
 
     /**
+     * Derived boolean: attendance is an absence (NCNS, advised, half-day).
+     * Used by AttendancePointCreationService::createPointsFromAttendance().
+     */
+    public function getIsAbsentAttribute(): bool
+    {
+        return in_array($this->status, ['ncns', 'advised_absence', 'half_day_absence']);
+    }
+
+    /**
+     * Derived boolean: attendance has a tardy violation on primary or secondary status.
+     * Used by AttendancePointCreationService::createPointsFromAttendance().
+     */
+    public function getIsTardyAttribute(): bool
+    {
+        return $this->status === 'tardy' || $this->secondary_status === 'tardy';
+    }
+
+    /**
+     * Derived boolean: attendance has an undertime violation on primary or secondary status.
+     * Used by AttendancePointCreationService::createPointsFromAttendance().
+     */
+    public function getIsUndertimeAttribute(): bool
+    {
+        return in_array($this->status, ['undertime', 'undertime_more_than_hour'])
+            || in_array($this->secondary_status, ['undertime', 'undertime_more_than_hour']);
+    }
+
+    /**
      * Scope to filter by date range.
      */
     public function scopeDateRange($query, $startDate, $endDate)

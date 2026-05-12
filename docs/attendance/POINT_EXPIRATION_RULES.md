@@ -15,16 +15,17 @@ Attendance points automatically expire based on two different mechanisms: Standa
   - Tardy (0.25 points)
   - Undertime (0.25 points)  
   - Half-Day Absence (0.50 points)
+  - **Advised Absence (1.00 point)** — Employee gave prior notice (manually entered with checkbox); treated as standard violation
 
-- **NCNS/FTN**: 1 year expiration  
-  - No Call, No Show - NCNS (1.00 point)
-  - Failed to Notify - FTN (1.00 point)
+- **NCNS and FTN**: 1 year expiration  
+  - No Call, No Show - NCNS (1.00 point) — No prior notice; strictest penalty
+  - Failed to Notify - FTN (1.00 point) — Employee was told to come but didn't show AND didn't call; treated same as NCNS
 
 #### How It Works:
 ```
 Violation Date: Jan 1, 2025
 └─ Standard Violation → Expires: Jul 1, 2025 (6 months)
-└─ NCNS/FTN → Expires: Jan 1, 2026 (12 months)
+└─ NCNS/FTN → Expires: Jan 1, 2026 (12 months) ← both same
 ```
 
 #### Characteristics:
@@ -41,7 +42,7 @@ Violation Date: Jan 1, 2025
 #### Rules:
 - **Eligibility**: No violations for **60 consecutive days**
 - **Benefit**: Last **2 violation points** are automatically removed
-- **Exclusions**: NCNS/FTN points are **NOT eligible** for GBRO
+- **Exclusions**: **NCNS and FTN** points are **NOT eligible** for GBRO (both have 1-year expiration); only **Advised Absence** (manually entered with checkbox) **IS eligible**
 
 #### Example Scenario:
 ```
@@ -69,7 +70,8 @@ Result: 0.50 points removed, 0.25 remaining
 #### Characteristics:
 - ✅ Rewards consistent good behavior
 - ✅ Automatic after 60 days clean
-- ⛔ Cannot remove NCNS/FTN points
+- ⛔ Cannot remove NCNS or FTN points (both have 1-year expiration, not GBRO eligible)
+- ✅ Advised Absence (manual checkbox) IS eligible for GBRO
 - ✅ Removes most recent 2 points only
 - ✅ Can be applied multiple times (60 days each)
 
@@ -95,12 +97,18 @@ for work and did not provide prior notice. Scheduled: 07:00 -
 ```
 Type: Whole Day Absence
 Points: 1.00
-Expiration: 1 year from violation date
+Expiration: 1 year from violation date  ← same as NCNS
 GBRO Eligible: No
 Details: "Failed to Notify (FTN): Employee did not report for 
 work despite being advised. Scheduled: 07:00 - 17:00. No 
 biometric scans recorded."
 ```
+
+> **FTN vs Advised Absence**: FTN occurs when the employee was told to come to work
+> (or was expected) but didn't show AND didn't call — detected from biometric records
+> (`ncns` status + `is_advised=true`). Treated identically to NCNS: 1 year, NOT GBRO eligible.
+> Advised Absence (manually entered with the checkbox) means the employee proactively
+> notified management — this IS GBRO eligible with 6-month expiration.
 
 #### Half-Day Absence
 ```

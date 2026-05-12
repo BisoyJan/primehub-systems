@@ -90,7 +90,16 @@ class GbroCalculationService
         }
 
         // Step 4: Set GBRO dates for remaining active points
-        $this->updateUserGbroExpirationDates($userId, $lastGbroDate);
+        // If the GBRO clock was reset by a new violation (violations exist after lastGbroDate),
+        // pass null so updateUserGbroExpirationDates uses newest violation + 60 instead of
+        // the stale lastGbroDate + 60 which would produce a past date.
+        $gbroReference = $lastGbroDate;
+        if ($lastGbroDate && $allActivePoints->some(
+            fn ($p) => Carbon::parse($p->shift_date)->startOfDay()->greaterThan($lastGbroDate->startOfDay())
+        )) {
+            $gbroReference = null;
+        }
+        $this->updateUserGbroExpirationDates($userId, $gbroReference);
     }
 
     /**

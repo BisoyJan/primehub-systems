@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\AttendanceStatus;
 use App\Http\Requests\BatchVerifyAttendanceRequest;
 use App\Http\Requests\VerifyAttendanceRequest;
+use App\Jobs\ProcessAttendanceUpload;
 use App\Models\Attendance;
 use App\Models\AttendancePoint;
 use App\Models\AttendanceUpload;
@@ -17,12 +19,16 @@ use App\Services\AttendancePoint\GbroCalculationService;
 use App\Services\AttendanceProcessor;
 use App\Services\LeaveCreditService;
 use App\Services\NotificationService;
+use App\Services\PermissionService;
 use Carbon\Carbon;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class AttendanceController extends Controller
 {
@@ -30,7 +36,8 @@ class AttendanceController extends Controller
         protected AttendanceProcessor $processor,
         protected NotificationService $notificationService,
         protected LeaveCreditService $leaveCreditService,
-        protected GbroCalculationService $gbroService
+        protected GbroCalculationService $gbroService,
+        protected PermissionService $permissionService
     ) {}
 
     /**
@@ -105,12 +112,15 @@ class AttendanceController extends Controller
             return true;
         }
 
-        // NEW: Check if points exist for this attendance record
-        // If status requires points but no points exist yet, regeneration is needed
-        // This handles first-time verification where status may not have changed
+        // Check if points exist for this attendance record
         if ($newGeneratesPoints) {
             $existingPoints = AttendancePoint::where('attendance_id', $attendance->id)->exists();
             if (! $existingPoints) {
+                // Status requires points but none exist yet — generate them
+                return true;
+            }
+            // is_set_home acts like skip_points: if enabled and points exist, they must be deleted
+            if ($newIsSetHome) {
                 return true;
             }
         }
@@ -1076,6 +1086,10 @@ class AttendanceController extends Controller
                     'file_name' => $file->getClientOriginalName(),
                     'file_size' => $file->getSize(),
                     'total_records' => $records->count(),
+                    'unparseable_lines' => [
+                        'count' => count($parser->getUnparseableLines()),
+                        'examples' => array_slice($parser->getUnparseableLines(), 0, 5),
+                    ],
                     'within_range' => [
                         'count' => $filtered['within_range']->count(),
                         'unique_employees' => count($employeeNames),
@@ -1119,6 +1133,9 @@ class AttendanceController extends Controller
             return $record['normalized_name'].'_'.$record['datetime']->format('Y-m-d');
         })->unique()->values();
 
+        // Build a set of normalized names present in the file for O(1) lookup
+        $normalizedNamesInFile = $records->pluck('normalized_name')->unique()->values();
+
         // Get unique dates
         $dates = $records->pluck('datetime')
             ->map(fn ($dt) => $dt->format('Y-m-d'))
@@ -1139,18 +1156,31 @@ class AttendanceController extends Controller
 
         $potentialDuplicates = [];
         foreach ($existingAttendances as $attendance) {
-            if ($attendance->user) {
-                $userName = strtolower($attendance->user->first_name.' '.$attendance->user->last_name);
-                $key = $userName.'_'.$attendance->shift_date;
-
-                // Simplified check - mark as potential duplicate if attendance exists for that date
-                $potentialDuplicates[] = [
-                    'employee' => $attendance->user->first_name.' '.$attendance->user->last_name,
-                    'date' => $attendance->shift_date,
-                    'status' => $attendance->status,
-                    'verified' => $attendance->admin_verified,
-                ];
+            if (! $attendance->user) {
+                continue;
             }
+
+            // Only flag if this user actually appears in the uploaded file.
+            // Normalise the user's last name the same way the parser does, then check
+            // whether it is a substring of any file record's normalized_name.
+            $normalizedUserLastName = strtolower(trim(
+                str_replace(['.', '-'], ['', ' '], $attendance->user->last_name)
+            ));
+
+            $isInFile = $normalizedNamesInFile->contains(
+                fn ($name) => str_contains($name, $normalizedUserLastName)
+            );
+
+            if (! $isInFile) {
+                continue;
+            }
+
+            $potentialDuplicates[] = [
+                'employee' => $attendance->user->first_name.' '.$attendance->user->last_name,
+                'date' => $attendance->shift_date,
+                'status' => $attendance->status,
+                'verified' => $attendance->admin_verified,
+            ];
         }
 
         return [
@@ -1181,7 +1211,7 @@ class AttendanceController extends Controller
 
         // Store the file
         $file = $request->file('file');
-        $filename = time().'_'.$file->getClientOriginalName();
+        $filename = Str::uuid().'_'.$file->getClientOriginalName();
         $path = $file->storeAs('attendance_uploads', $filename);
 
         // Create upload record
@@ -1191,11 +1221,37 @@ class AttendanceController extends Controller
             'stored_filename' => $filename,
             'date_from' => $request->date_from,
             'date_to' => $request->date_to ?? $request->date_from, // If null, use date_from (single day)
-            'shift_date' => $request->date_from, // Keep for backward compatibility
             'biometric_site_id' => $request->biometric_site_id,
             'notes' => $request->notes,
             'status' => 'pending',
         ]);
+
+        // Large files are dispatched to the job queue to prevent HTTP timeouts.
+        // Small files are processed inline so the response includes full stats.
+        $queueThreshold = config('attendance.queue_upload_size_bytes', 204800);
+
+        if ($file->getSize() > $queueThreshold) {
+            ProcessAttendanceUpload::dispatch($upload, $filterByDate);
+
+            $queueMessage = sprintf(
+                'File "%s" (%s KB) is queued for processing. Check the Uploads page for status.',
+                $file->getClientOriginalName(),
+                number_format($file->getSize() / 1024, 1)
+            );
+
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'queued' => true,
+                    'message' => $queueMessage,
+                    'upload_id' => $upload->id,
+                ]);
+            }
+
+            return redirect()->route('attendance.import')
+                ->with('message', $queueMessage)
+                ->with('type', 'info');
+        }
 
         try {
             // Process the file with date filtering option
@@ -1231,6 +1287,11 @@ class AttendanceController extends Controller
                     $unmatchedList .= '... and '.(count($stats['unmatched_names']) - 10).' more';
                 }
                 $message .= '. Unmatched: '.$unmatchedList;
+            }
+
+            // Add unparseable lines info if any
+            if (! empty($stats['unparseable_lines'])) {
+                $message .= sprintf('. %d row(s) could not be parsed and were skipped (check server logs for details).', count($stats['unparseable_lines']));
             }
 
             // Return JSON if requested via fetch/API
@@ -1342,10 +1403,13 @@ class AttendanceController extends Controller
         }
 
         // Default date range: yesterday to today if not specified
+        // When verify param is set, skip date range so the record is always found
         $dateFrom = $request->input('date_from', Carbon::yesterday()->toDateString());
         $dateTo = $request->input('date_to', Carbon::today()->toDateString());
-        $query->where('shift_date', '>=', $dateFrom);
-        $query->where('shift_date', '<=', $dateTo);
+        if (! $request->filled('verify')) {
+            $query->where('shift_date', '>=', $dateFrom);
+            $query->where('shift_date', '<=', $dateTo);
+        }
 
         // Filter by site (via employee schedule)
         if ($request->filled('site_id')) {
@@ -1382,6 +1446,13 @@ class AttendanceController extends Controller
         if ($request->filled('verify')) {
             $verifyAttendanceId = (int) $request->verify;
             $query->where('attendances.id', $verifyAttendanceId);
+
+            // Align the date range to the record's shift_date so filters display correctly
+            $verifyRecord = Attendance::find($verifyAttendanceId);
+            if ($verifyRecord) {
+                $dateFrom = $verifyRecord->shift_date;
+                $dateTo = $verifyRecord->shift_date;
+            }
         }
 
         $attendances = $query
@@ -1614,6 +1685,35 @@ class AttendanceController extends Controller
                 $attendance->refresh();
                 $this->processor->recalculateTotalMinutesWorked($attendance);
 
+                // Handle undertime approval action submitted with the verify form
+                $forceUndertimeRegen = false;
+                if ($request->filled('undertime_approval_action')) {
+                    $action = $request->undertime_approval_action;
+                    $reason = $request->undertime_approval_reason ?? 'generate_points';
+                    $authUser = auth()->user();
+
+                    if (in_array($action, ['approve', 'reject'], true) &&
+                        $this->permissionService->userHasPermission($authUser, 'attendance.approve_undertime')) {
+                        $attendance->update([
+                            'undertime_approval_status' => $action === 'approve' ? 'approved' : 'rejected',
+                            'undertime_approval_reason' => $action === 'approve' ? $reason : 'generate_points',
+                            'undertime_approved_by' => $authUser->id,
+                            'undertime_approved_at' => now(),
+                        ]);
+                        // Force regeneration so the processor can apply/remove the approval:
+                        // approve → delete existing undertime points; reject → recreate them.
+                        $forceUndertimeRegen = true;
+                    } elseif ($action === 'request' &&
+                        $this->permissionService->userHasPermission($authUser, 'attendance.request_undertime_approval')) {
+                        $attendance->update([
+                            'undertime_approval_status' => 'pending',
+                            'undertime_approval_reason' => $reason,
+                            'undertime_approval_requested_by' => $authUser->id,
+                            'undertime_approval_requested_at' => now(),
+                        ]);
+                    }
+                }
+
                 // Smart point regeneration - only regenerate if changes affect points
                 $attendance->refresh();
                 $this->regeneratePointsIfNeeded(
@@ -1621,7 +1721,8 @@ class AttendanceController extends Controller
                     $oldStatus,
                     $oldSecondaryStatus,
                     $oldIsSetHome,
-                    $oldIsAdvised
+                    $oldIsAdvised,
+                    $forceUndertimeRegen
                 );
             });
         } catch (\Throwable $e) {
@@ -3043,13 +3144,6 @@ class AttendanceController extends Controller
             'notes' => 'nullable|string|max:1000',
         ]);
 
-        // Validate that attendance is eligible for approval (pending or null - direct approval by Admin/HR)
-        if ($attendance->undertime_approval_status !== null && $attendance->undertime_approval_status !== 'pending') {
-            return redirect()->back()
-                ->with('message', 'This undertime has already been processed.')
-                ->with('type', 'warning');
-        }
-
         try {
             DB::transaction(function () use ($attendance, $validated) {
                 $updates = [
@@ -3095,10 +3189,10 @@ class AttendanceController extends Controller
 
                 // Handle point generation based on reason
                 if ($validated['status'] === 'approved') {
-                    // Delete existing undertime points for this attendance
-                    $existingPoint = AttendancePoint::where('attendance_id', $attendance->id)
+                    // Delete existing undertime points for this attendance (avoid duplicates on re-approval)
+                    AttendancePoint::where('attendance_id', $attendance->id)
                         ->whereIn('point_type', ['undertime', 'undertime_more_than_hour'])
-                        ->first();
+                        ->delete();
 
                     if ($validated['reason'] === 'generate_points') {
                         // Regenerate points normally
@@ -3110,12 +3204,8 @@ class AttendanceController extends Controller
                             $attendance->is_advised ?? false
                         );
                     } elseif ($validated['reason'] === 'skip_points' || $validated['reason'] === 'lunch_used') {
-                        // Delete undertime points if any exist
-                        if ($existingPoint) {
-                            $existingPoint->delete();
-                            // Recalculate GBRO for the user
-                            $this->recalculateGbroForUser($attendance->user_id);
-                        }
+                        // Points already deleted above; recalculate GBRO
+                        $this->recalculateGbroForUser($attendance->user_id);
 
                         // If lunch_used reduced undertime to 0, regenerate to clear any remaining points
                         if ($validated['reason'] === 'lunch_used' && $attendance->undertime_minutes === 0) {
@@ -3153,6 +3243,530 @@ class AttendanceController extends Controller
 
             return redirect()->back()
                 ->with('message', 'Failed to process undertime approval.')
+                ->with('type', 'error');
+        }
+    }
+
+    /**
+     * Spreadsheet view: per-employee × per-day grid, grouped by campaign.
+     * Cells show hours worked OR a status/leave code (VL, SL, ABS, ML, LOA, UPTO, ...).
+     */
+    public function spreadsheet(Request $request)
+    {
+        $this->authorize('viewAny', Attendance::class);
+
+        $authUser = auth()->user();
+        $teamLeadCampaignIds = $authUser->role === 'Team Lead' ? $authUser->getCampaignIds() : [];
+        $restrictedRoles = ['Agent', 'IT', 'Utility'];
+
+        $month = (int) $request->input('month', now()->month);
+        $year = (int) $request->input('year', now()->year);
+        $campaignFilter = $request->input('campaign_id');
+        $search = trim((string) $request->input('search', ''));
+
+        $startDate = Carbon::create($year, $month, 1)->startOfMonth();
+        $endDate = (clone $startDate)->endOfMonth();
+
+        // Resolve which campaigns to include
+        $campaignIds = null;
+        if ($campaignFilter && $campaignFilter !== 'all') {
+            $campaignIds = is_array($campaignFilter)
+                ? array_map('intval', $campaignFilter)
+                : array_filter(array_map('intval', explode(',', (string) $campaignFilter)));
+        }
+        // Team Leads are constrained to their own campaigns
+        if (! empty($teamLeadCampaignIds)) {
+            $campaignIds = $campaignIds
+                ? array_values(array_intersect($campaignIds, $teamLeadCampaignIds))
+                : $teamLeadCampaignIds;
+        }
+
+        // Build employee list
+        $employeesQuery = User::query()
+            ->select('users.id', 'users.first_name', 'users.last_name', 'users.role')
+            ->with(['activeSchedule.campaign:id,name'])
+            ->orderBy('users.last_name')
+            ->orderBy('users.first_name');
+
+        if (in_array($authUser->role, $restrictedRoles)) {
+            $employeesQuery->where('users.id', $authUser->id);
+        } elseif ($campaignIds !== null) {
+            $employeesQuery->whereHas('activeSchedule', function ($q) use ($campaignIds) {
+                $q->whereIn('campaign_id', $campaignIds);
+            });
+        }
+
+        // Exclude resigned employees (hired_date set AND is_active = false)
+        $employeesQuery->where(function ($q) {
+            $q->whereNull('hired_date')->orWhere('is_active', true);
+        });
+
+        if ($search !== '') {
+            $employeesQuery->where(function ($q) use ($search) {
+                $q->where('first_name', 'like', "%{$search}%")
+                    ->orWhere('last_name', 'like', "%{$search}%")
+                    ->orWhere(\DB::raw("CONCAT(first_name, ' ', last_name)"), 'like', "%{$search}%");
+            });
+        }
+
+        $employees = $employeesQuery->get();
+
+        $employeeIds = $employees->pluck('id')->all();
+
+        // Load attendance for those employees within the month
+        $attendanceRows = empty($employeeIds)
+            ? collect()
+            : Attendance::with(['leaveRequest:id,leave_type,status'])
+                ->whereIn('user_id', $employeeIds)
+                ->whereBetween('shift_date', [$startDate->toDateString(), $endDate->toDateString()])
+                ->get([
+                    'id', 'user_id', 'shift_date', 'status', 'secondary_status',
+                    'total_minutes_worked', 'leave_request_id', 'admin_verified', 'is_advised',
+                    'actual_time_in', 'actual_time_out',
+                    'tardy_minutes', 'undertime_minutes', 'overtime_minutes',
+                ]);
+
+        // Build cell map: [user_id][YYYY-MM-DD] => cell
+        // When duplicates exist for the same user/date, prefer the row with biometric data
+        // (imported but unverified attendance) over a placeholder NCNS row.
+        $cellMap = [];
+        /** @var Attendance $row */
+        foreach ($attendanceRows as $row) {
+            $dateKey = Carbon::parse($row->shift_date)->format('Y-m-d');
+            $built = $this->buildSpreadsheetCell($row);
+            $existing = $cellMap[$row->user_id][$dateKey] ?? null;
+
+            if ($existing === null) {
+                $cellMap[$row->user_id][$dateKey] = $built;
+
+                continue;
+            }
+
+            $existingHasBio = (bool) ($existing['has_bio'] ?? false);
+            $newHasBio = (bool) $built['has_bio'];
+            $existingIsNcns = ($existing['status'] ?? null) === 'ncns';
+            $newIsNcns = $built['status'] === 'ncns';
+
+            // Prefer rows with bio data; otherwise prefer non-NCNS over NCNS
+            if (($newHasBio && ! $existingHasBio) || ($existingIsNcns && ! $newIsNcns)) {
+                $cellMap[$row->user_id][$dateKey] = $built;
+            }
+        }
+
+        // Active points per employee within the month (for the "Points" column)
+        $pointsByUser = empty($employeeIds)
+            ? []
+            : AttendancePoint::query()
+                ->whereIn('user_id', $employeeIds)
+                ->whereBetween('shift_date', [$startDate->toDateString(), $endDate->toDateString()])
+                ->where('is_expired', false)
+                ->where('is_excused', false)
+                ->selectRaw('user_id, SUM(points) as total')
+                ->groupBy('user_id')
+                ->pluck('total', 'user_id')
+                ->map(fn ($v) => (float) $v)
+                ->toArray();
+
+        // Group employees by campaign name (fallback "Unassigned")
+        $grouped = [];
+        foreach ($employees as $emp) {
+            $campaignName = $emp->activeSchedule?->campaign?->name ?? 'Unassigned';
+            $sched = $emp->activeSchedule;
+            $grouped[$campaignName][] = [
+                'id' => $emp->id,
+                'name' => trim($emp->last_name.', '.$emp->first_name),
+                'role' => $emp->role,
+                'points' => round((float) ($pointsByUser[$emp->id] ?? 0), 2),
+                'schedule' => $sched ? [
+                    'shift_type' => $sched->shift_type,
+                    'scheduled_time_in' => $sched->scheduled_time_in,
+                    'scheduled_time_out' => $sched->scheduled_time_out,
+                    'work_days' => $sched->work_days,
+                    'campaign' => $sched->campaign?->name,
+                ] : null,
+                'cells' => $cellMap[$emp->id] ?? new \stdClass,
+            ];
+        }
+        ksort($grouped);
+
+        // Build days metadata for header
+        $days = [];
+        for ($d = (clone $startDate); $d->lte($endDate); $d->addDay()) {
+            $days[] = [
+                'date' => $d->format('Y-m-d'),
+                'day' => (int) $d->format('j'),
+                'weekday' => $d->format('D'),
+                'is_weekend' => in_array((int) $d->format('w'), [0, 6]),
+            ];
+        }
+
+        // Campaign options for the filter dropdown
+        $campaignOptions = ! empty($teamLeadCampaignIds)
+            ? Campaign::whereIn('id', $teamLeadCampaignIds)->orderBy('name')->get(['id', 'name'])
+            : Campaign::orderBy('name')->get(['id', 'name']);
+
+        return Inertia::render('Attendance/Main/Spreadsheet', [
+            'groups' => collect($grouped)->map(fn ($emps, $name) => [
+                'campaign' => $name,
+                'employees' => $emps,
+            ])->values(),
+            'days' => $days,
+            'month' => $month,
+            'year' => $year,
+            'campaigns' => $campaignOptions,
+            'teamLeadCampaignIds' => $teamLeadCampaignIds,
+            'filters' => [
+                'campaign_id' => $campaignFilter,
+                'search' => $search,
+            ],
+        ]);
+    }
+
+    /**
+     * Build a single grid cell from an Attendance row.
+     */
+    protected function buildSpreadsheetCell(Attendance $row): array
+    {
+        $hours = $row->total_minutes_worked ? round($row->total_minutes_worked / 60, 2) : null;
+        $code = null;
+        $kind = 'empty';
+        $color = 'default';
+
+        if ($row->status === 'on_leave' && $row->leaveRequest) {
+            $code = strtoupper((string) $row->leaveRequest->leave_type);
+            $kind = 'leave';
+            $color = match ($code) {
+                'VL' => 'leave-vl',
+                'SL' => 'leave-sl',
+                'ML' => 'leave-ml',
+                'LOA' => 'leave-loa',
+                'UPTO' => 'leave-upto',
+                'BL' => 'leave-bl',
+                'SPL' => 'leave-spl',
+                'LDV' => 'leave-ldv',
+                default => 'leave-other',
+            };
+        } elseif (in_array($row->status, ['ncns', 'advised_absence', 'half_day_absence'], true)) {
+            $code = $row->status === 'half_day_absence' ? 'HALF' : 'ABS';
+            $kind = 'absent';
+            $color = 'absent';
+        } elseif ($row->status === 'non_work_day') {
+            $kind = 'off';
+            $color = 'off';
+        } elseif (in_array($row->status, ['failed_bio_in', 'failed_bio_out'], true)) {
+            $code = 'BIO';
+            $kind = 'bio';
+            $color = 'bio';
+        } elseif ($row->is_partially_verified) {
+            $code = 'PART';
+            $kind = 'hours';
+            $color = 'partial';
+        } elseif ($hours !== null) {
+            $kind = 'hours';
+            $color = $row->status === 'tardy' ? 'hours-tardy' : 'hours-ok';
+        } elseif ($row->actual_time_in !== null || $row->actual_time_out !== null) {
+            // Imported biometric data exists but hasn't been verified/processed yet.
+            $code = 'BIO';
+            $kind = 'bio';
+            $color = 'bio';
+        }
+
+        return [
+            'attendance_id' => $row->id,
+            'kind' => $kind,
+            'code' => $code,
+            'hours' => $hours,
+            'status' => $row->status,
+            'secondary_status' => $row->secondary_status,
+            'verified' => (bool) $row->admin_verified,
+            'color' => $color,
+            'actual_time_in' => $row->actual_time_in?->format('H:i'),
+            'actual_time_out' => $row->actual_time_out?->format('H:i'),
+            'has_bio' => $row->actual_time_in !== null || $row->actual_time_out !== null,
+            'unverified_bio' => ($row->actual_time_in !== null || $row->actual_time_out !== null) && ! $row->admin_verified,
+            'tardy_minutes' => $row->tardy_minutes ?? 0,
+            'undertime_minutes' => $row->undertime_minutes ?? 0,
+            'overtime_minutes' => $row->overtime_minutes ?? 0,
+            'overtime_approved' => (bool) $row->overtime_approved,
+            'is_set_home' => (bool) $row->is_set_home,
+            'is_partially_verified' => (bool) $row->is_partially_verified,
+            'undertime_approval_status' => $row->undertime_approval_status,
+            'undertime_approval_reason' => $row->undertime_approval_reason,
+        ];
+    }
+
+    /**
+     * Inline spreadsheet edit. Updates an existing attendance row's hours and/or status.
+     * For full leave creation use the leave request workflow. For new shifts use Daily Roster.
+     */
+    public function updateSpreadsheetCell(Request $request)
+    {
+        $this->authorize('create', Attendance::class);
+
+        $validated = $request->validate([
+            'attendance_id' => ['required', 'integer', 'exists:attendances,id'],
+            'status' => ['nullable', AttendanceStatus::validationIn()],
+            'hours' => ['nullable', 'numeric', 'min:0', 'max:24'],
+            'actual_time_in' => ['nullable', 'date_format:H:i'],
+            'actual_time_out' => ['nullable', 'date_format:H:i'],
+            'verify' => ['nullable', 'boolean'],
+            'overtime_approved' => ['nullable', 'boolean'],
+            'is_set_home' => ['nullable', 'boolean'],
+            'undertime_approval_action' => ['nullable', 'in:approve,reject,request'],
+            'undertime_approval_reason' => ['nullable', 'in:generate_points,skip_points,lunch_used'],
+        ]);
+
+        try {
+            DB::transaction(function () use ($validated) {
+                /** @var Attendance $attendance */
+                $attendance = Attendance::findOrFail($validated['attendance_id']);
+
+                // Authorization gate for Team Leads: only their campaigns
+                $authUser = auth()->user();
+                if ($authUser->role === 'Team Lead') {
+                    $campaignIds = $authUser->getCampaignIds();
+                    $attendance->loadMissing('employeeSchedule:id,campaign_id');
+                    $scheduleCampaign = $attendance->employeeSchedule?->campaign_id;
+                    if (! $scheduleCampaign || ! in_array($scheduleCampaign, $campaignIds, true)) {
+                        abort(403);
+                    }
+                }
+
+                $oldStatus = $attendance->status;
+                $oldSecondary = $attendance->secondary_status;
+                $oldIsSetHome = (bool) $attendance->is_set_home;
+                $oldIsAdvised = (bool) $attendance->is_advised;
+
+                if (array_key_exists('hours', $validated) && $validated['hours'] !== null) {
+                    $attendance->total_minutes_worked = (int) round(((float) $validated['hours']) * 60);
+                }
+
+                if (array_key_exists('actual_time_in', $validated) && $validated['actual_time_in'] !== null) {
+                    $attendance->actual_time_in = Carbon::parse($attendance->shift_date->toDateString().' '.$validated['actual_time_in']);
+                }
+                if (array_key_exists('actual_time_out', $validated) && $validated['actual_time_out'] !== null) {
+                    $timeInStr = $validated['actual_time_in'] ?? null;
+                    $timeOutStr = $validated['actual_time_out'];
+                    // If time_out <= time_in the shift crosses midnight — use next day for time_out
+                    $outDate = ($timeInStr && $timeOutStr <= $timeInStr)
+                        ? $attendance->shift_date->copy()->addDay()->toDateString()
+                        : $attendance->shift_date->toDateString();
+                    $attendance->actual_time_out = Carbon::parse($outDate.' '.$timeOutStr);
+                }
+
+                if (! empty($validated['status'])) {
+                    $attendance->status = $validated['status'];
+                    // Clearing leave linkage if status moves away from on_leave
+                    if ($validated['status'] !== 'on_leave') {
+                        $attendance->leave_request_id = null;
+                    }
+                }
+
+                if (! empty($validated['verify'])) {
+                    $attendance->admin_verified = true;
+                    $attendance->is_partially_verified = false;
+                }
+
+                // Handle overtime approval
+                $overtimeApprovalChanged = false;
+                if (array_key_exists('overtime_approved', $validated) && $validated['overtime_approved'] !== null) {
+                    $overtimeApprovalChanged = (bool) $validated['overtime_approved'] !== (bool) $attendance->overtime_approved;
+                    $attendance->overtime_approved = (bool) $validated['overtime_approved'];
+                    if ($validated['overtime_approved']) {
+                        $attendance->overtime_approved_at = now();
+                        $attendance->overtime_approved_by = auth()->id();
+                    } else {
+                        $attendance->overtime_approved_at = null;
+                        $attendance->overtime_approved_by = null;
+                    }
+                }
+
+                // Handle sent-home toggle
+                if (array_key_exists('is_set_home', $validated) && $validated['is_set_home'] !== null) {
+                    $attendance->is_set_home = (bool) $validated['is_set_home'];
+                }
+
+                // Handle undertime approval action submitted with the cell save
+                $forceUndertimeRegen = false;
+                if (! empty($validated['undertime_approval_action'])) {
+                    $action = $validated['undertime_approval_action'];
+                    $reason = $validated['undertime_approval_reason'] ?? 'generate_points';
+                    $authUser = auth()->user();
+
+                    if (in_array($action, ['approve', 'reject'], true) &&
+                        $this->permissionService->userHasPermission($authUser, 'attendance.approve_undertime')) {
+                        $attendance->undertime_approval_status = $action === 'approve' ? 'approved' : 'rejected';
+                        $attendance->undertime_approval_reason = $action === 'approve' ? $reason : 'generate_points';
+                        $attendance->undertime_approved_by = $authUser->id;
+                        $attendance->undertime_approved_at = now();
+                        // Force regeneration so the processor can apply/remove the approval:
+                        // approve → delete existing undertime points; reject → recreate them.
+                        $forceUndertimeRegen = true;
+                    } elseif ($action === 'request' &&
+                        $this->permissionService->userHasPermission($authUser, 'attendance.request_undertime_approval')) {
+                        $attendance->undertime_approval_status = 'pending';
+                        $attendance->undertime_approval_reason = $reason;
+                        $attendance->undertime_approval_requested_by = $authUser->id;
+                        $attendance->undertime_approval_requested_at = now();
+                    }
+                }
+
+                $attendance->save();
+
+                // Recalculate total hours if OT approval changed and hours weren't manually provided
+                $hoursManuallySet = array_key_exists('hours', $validated) && $validated['hours'] !== null;
+                if ($overtimeApprovalChanged && ! $hoursManuallySet && $attendance->actual_time_in && $attendance->actual_time_out) {
+                    $this->processor->recalculateTotalMinutesWorked($attendance);
+                }
+
+                $this->regeneratePointsIfNeeded(
+                    $attendance,
+                    $oldStatus,
+                    $oldSecondary,
+                    $oldIsSetHome,
+                    $oldIsAdvised,
+                    $forceUndertimeRegen
+                );
+            });
+
+            return redirect()->back()
+                ->with('message', 'Cell updated.')
+                ->with('type', 'success');
+        } catch (\Exception $e) {
+            Log::error('AttendanceController updateSpreadsheetCell Error: '.$e->getMessage());
+
+            return redirect()->back()
+                ->with('message', 'Failed to update cell.')
+                ->with('type', 'error');
+        }
+    }
+
+    /**
+     * Create a new attendance row from an empty spreadsheet cell.
+     */
+    public function createSpreadsheetCell(Request $request)
+    {
+        $this->authorize('create', Attendance::class);
+
+        $validated = $request->validate([
+            'user_id' => ['required', 'integer', 'exists:users,id'],
+            'shift_date' => ['required', 'date'],
+            'actual_time_in' => ['nullable', 'date_format:H:i'],
+            'actual_time_out' => ['nullable', 'date_format:H:i'],
+            'hours' => ['nullable', 'numeric', 'min:0', 'max:24'],
+            'overtime_approved' => ['nullable', 'boolean'],
+            'undertime_approval_reason' => ['nullable', 'in:generate_points,skip_points,lunch_used'],
+            'is_set_home' => ['nullable', 'boolean'],
+        ]);
+
+        try {
+            DB::transaction(function () use ($validated) {
+                $authUser = auth()->user();
+
+                // Resolve active schedule for this user/date
+                $schedule = EmployeeSchedule::where('user_id', $validated['user_id'])
+                    ->where('is_active', true)
+                    ->where('effective_date', '<=', $validated['shift_date'])
+                    ->where(function ($q) use ($validated) {
+                        $q->whereNull('end_date')->orWhere('end_date', '>=', $validated['shift_date']);
+                    })
+                    ->first();
+
+                // Team Lead authorization gate
+                if ($authUser->role === 'Team Lead') {
+                    $campaignIds = $authUser->getCampaignIds();
+                    if (! $schedule || ! in_array($schedule->campaign_id, $campaignIds, true)) {
+                        abort(403);
+                    }
+                }
+
+                // Reject if a row already exists for that user/date
+                $existing = Attendance::where('user_id', $validated['user_id'])
+                    ->where('shift_date', $validated['shift_date'])
+                    ->first();
+                if ($existing) {
+                    abort(422, 'An attendance record already exists for this date.');
+                }
+
+                // Build actual_time_in Carbon — always on shift_date
+                $actualTimeIn = ! empty($validated['actual_time_in'])
+                    ? Carbon::parse($validated['shift_date'].' '.$validated['actual_time_in'])
+                    : null;
+
+                // Build actual_time_out Carbon — next day if crosses midnight (night shift)
+                $actualTimeOut = null;
+                if (! empty($validated['actual_time_out'])) {
+                    $timeInStr = $validated['actual_time_in'] ?? null;
+                    $timeOutStr = $validated['actual_time_out'];
+                    $outDate = ($timeInStr && $timeOutStr <= $timeInStr)
+                        ? Carbon::parse($validated['shift_date'])->addDay()->toDateString()
+                        : $validated['shift_date'];
+                    $actualTimeOut = Carbon::parse($outDate.' '.$timeOutStr);
+                }
+
+                // Auto-determine status, tardy/undertime/overtime using the same logic as Review
+                $metrics = $this->processor->calculateManualAttendanceMetrics(
+                    $schedule,
+                    $actualTimeIn,
+                    $actualTimeOut,
+                    $validated['shift_date'],
+                    null,  // no provided status — let processor decide
+                    null,
+                    null,  // no approved leave context
+                );
+
+                $status = $metrics['status'] ?? 'non_work_day';
+                $secondaryStatus = $metrics['secondary_status'] ?? null;
+                $tardyMinutes = $metrics['tardy_minutes'] ?? null;
+                $undertimeMinutes = $metrics['undertime_minutes'] ?? null;
+                $overtimeMinutes = $metrics['overtime_minutes'] ?? null;
+
+                $attendance = Attendance::create([
+                    'user_id' => $validated['user_id'],
+                    'employee_schedule_id' => $schedule?->id,
+                    'shift_date' => $validated['shift_date'],
+                    'scheduled_time_in' => $schedule?->scheduled_time_in,
+                    'scheduled_time_out' => $schedule?->scheduled_time_out,
+                    'actual_time_in' => $actualTimeIn,
+                    'actual_time_out' => $actualTimeOut,
+                    'status' => $status,
+                    'secondary_status' => $secondaryStatus,
+                    'tardy_minutes' => $tardyMinutes,
+                    'undertime_minutes' => $undertimeMinutes,
+                    'overtime_minutes' => $overtimeMinutes,
+                    'total_minutes_worked' => null, // will be recalculated below
+                    'overtime_approved' => ! empty($validated['overtime_approved']),
+                    'overtime_approved_at' => ! empty($validated['overtime_approved']) ? now() : null,
+                    'overtime_approved_by' => ! empty($validated['overtime_approved']) ? auth()->id() : null,
+                    'undertime_approval_status' => ! empty($validated['undertime_approval_reason']) ? 'approved' : null,
+                    'undertime_approval_reason' => $validated['undertime_approval_reason'] ?? null,
+                    'undertime_approved_by' => ! empty($validated['undertime_approval_reason']) ? auth()->id() : null,
+                    'undertime_approved_at' => ! empty($validated['undertime_approval_reason']) ? now() : null,
+                    'is_set_home' => ! empty($validated['is_set_home']),
+                    'admin_verified' => true,
+                    'verification_notes' => 'Manually created via spreadsheet by '.auth()->user()->name,
+                ]);
+
+                // Recalculate total_minutes_worked with proper lunch deduction,
+                // scheduled-time-in cap, and overtime approval logic
+                $this->processor->recalculateTotalMinutesWorked($attendance);
+
+                // Generate attendance points for pointable violations (tardy, half_day_absence, etc.)
+                $this->regeneratePointsIfNeeded($attendance, null, null, false, false);
+            });
+
+            return redirect()->back()
+                ->with('message', 'Attendance created.')
+                ->with('type', 'success');
+        } catch (HttpResponseException $e) {
+            throw $e;
+        } catch (HttpException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            Log::error('AttendanceController createSpreadsheetCell Error: '.$e->getMessage());
+
+            return redirect()->back()
+                ->with('message', 'Failed to create attendance.')
                 ->with('type', 'error');
         }
     }

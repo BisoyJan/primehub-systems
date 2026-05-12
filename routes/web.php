@@ -211,6 +211,15 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
             Route::get('daily-roster', [AttendanceController::class, 'dailyRoster'])->name('dailyRoster')->middleware('permission:attendance.create');
             Route::post('generate', [AttendanceController::class, 'generateAttendance'])->name('generate')->middleware('permission:attendance.create');
 
+            // Spreadsheet (per-employee × per-day grid view)
+            Route::get('spreadsheet', [AttendanceController::class, 'spreadsheet'])->name('spreadsheet');
+            Route::post('spreadsheet/cell', [AttendanceController::class, 'updateSpreadsheetCell'])
+                ->name('spreadsheet.updateCell')
+                ->middleware(['permission:attendance.create', 'throttle:30,1']);
+            Route::post('spreadsheet/cell/create', [AttendanceController::class, 'createSpreadsheetCell'])
+                ->name('spreadsheet.createCell')
+                ->middleware(['permission:attendance.create', 'throttle:30,1']);
+
             // Partial Approval (Time Out pending)
             Route::post('{attendance}/partial-approve', [AttendanceController::class, 'partialApprove'])->name('partialApprove')->middleware(['permission:attendance.verify', 'throttle:10,1']);
             Route::post('batch-partial-approve', [AttendanceController::class, 'batchPartialApprove'])->name('batchPartialApprove')->middleware(['permission:attendance.verify', 'throttle:10,1']);

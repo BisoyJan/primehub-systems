@@ -228,11 +228,20 @@ class AttendancePoint extends Model
     }
 
     /**
-     * Check if this point is NCNS/FTN (1-year expiration).
+     * Check if this point is NCNS or FTN (both have 1-year expiration, not GBRO eligible).
+     *
+     * Rules:
+     * - NCNS (is_advised=false): employee did not show up without any notice
+     * - FTN (is_advised=true, ncns status): employee was told to come but didn't show and didn't call
+     * - Both NCNS and FTN are NOT eligible for GBRO and get 1-year expiration
+     * - Advised Absence (is_advised=true, manually entered with checkbox): IS eligible for GBRO
+     *
+     * Uses eligible_for_gbro as the source of truth to distinguish FTN from Advised Absence,
+     * since both can have is_advised=true but differ in GBRO eligibility.
      */
     public function isNcnsOrFtn(): bool
     {
-        return $this->point_type === 'whole_day_absence' && ! $this->is_advised;
+        return $this->point_type === 'whole_day_absence' && ! (bool) $this->eligible_for_gbro;
     }
 
     /**

@@ -25,6 +25,8 @@ class VerifyAttendanceRequest extends FormRequest
             'is_set_home' => ['nullable', 'boolean'],
             'notes' => ['nullable', 'string', 'max:500'],
             'adjust_leave' => ['nullable', 'boolean'],
+            'undertime_approval_action' => ['nullable', 'in:approve,reject,request'],
+            'undertime_approval_reason' => ['nullable', 'in:generate_points,skip_points,lunch_used'],
         ];
     }
 }

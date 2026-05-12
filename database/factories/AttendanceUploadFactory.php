@@ -3,12 +3,12 @@
 namespace Database\Factories;
 
 use App\Models\AttendanceUpload;
-use App\Models\User;
 use App\Models\Site;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\AttendanceUpload>
+ * @extends Factory<AttendanceUpload>
  */
 class AttendanceUploadFactory extends Factory
 {
@@ -22,13 +22,13 @@ class AttendanceUploadFactory extends Factory
     public function definition(): array
     {
         $date = fake()->dateTimeBetween('-7 days', 'now');
+
         return [
             'uploaded_by' => User::factory(),
-            'original_filename' => 'attendance_' . $date->format('Y-m-d') . '.txt',
-            'stored_filename' => time() . '_' . fake()->uuid() . '.txt',
+            'original_filename' => 'attendance_'.$date->format('Y-m-d').'.txt',
+            'stored_filename' => fake()->uuid().'_'.fake()->uuid().'.txt',
             'date_from' => $date,
             'date_to' => $date,
-            'shift_date' => $date, // Keep for backward compatibility if needed, or remove if column dropped
             'biometric_site_id' => Site::factory(),
             'notes' => fake()->optional()->sentence(),
             'status' => 'pending',

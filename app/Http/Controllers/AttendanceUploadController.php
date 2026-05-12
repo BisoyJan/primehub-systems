@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\AttendanceUpload;
 use Carbon\Carbon;
-use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 class AttendanceUploadController extends Controller
@@ -34,7 +33,8 @@ class AttendanceUploadController extends Controller
             'upload' => [
                 'id' => $upload->id,
                 'original_filename' => $upload->original_filename,
-                'shift_date' => $upload->shift_date ? Carbon::parse($upload->shift_date)->format('Y-m-d') : null,
+                // shift_date is aliased from date_from for frontend backward-compat
+                'shift_date' => $upload->date_from ? Carbon::parse($upload->date_from)->format('Y-m-d') : null,
                 'date_from' => $upload->date_from ? Carbon::parse($upload->date_from)->format('Y-m-d') : null,
                 'date_to' => $upload->date_to ? Carbon::parse($upload->date_to)->format('Y-m-d') : null,
                 'biometric_site' => $upload->biometricSite ? [
