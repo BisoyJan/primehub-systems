@@ -239,7 +239,7 @@ class AttendancePoint extends Model
      * Uses eligible_for_gbro as the source of truth to distinguish FTN from Advised Absence,
      * since both can have is_advised=true but differ in GBRO eligibility.
      */
-    public function isNcnsOrFtn(): bool
+    public function isNcns(): bool
     {
         return $this->point_type === 'whole_day_absence' && ! (bool) $this->eligible_for_gbro;
     }
@@ -251,7 +251,7 @@ class AttendancePoint extends Model
     {
         $shiftDate = Carbon::parse($this->shift_date);
 
-        if ($this->isNcnsOrFtn()) {
+        if ($this->isNcns()) {
             // NCNS/FTN: 1 year expiration
             return $shiftDate->addYear();
         }
@@ -266,7 +266,7 @@ class AttendancePoint extends Model
     public function setExpirationDate(): void
     {
         $this->attributes['expires_at'] = $this->calculateExpirationDate()->format('Y-m-d');
-        $this->expiration_type = $this->isNcnsOrFtn() ? 'none' : 'sro';
+        $this->expiration_type = $this->isNcns() ? 'none' : 'sro';
         $this->save();
     }
 
@@ -296,7 +296,7 @@ class AttendancePoint extends Model
      */
     public function markAsExpired(string $type = 'sro'): void
     {
-        $resolvedType = $this->isNcnsOrFtn() && $type === 'sro'
+        $resolvedType = $this->isNcns() && $type === 'sro'
             ? 'none'
             : $type;
 

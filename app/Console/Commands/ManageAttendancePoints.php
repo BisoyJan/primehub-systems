@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Attendance;
 use App\Models\AttendancePoint;
+use App\Models\User;
 use App\Services\AttendanceProcessor;
 use App\Services\NotificationService;
 use Carbon\Carbon;
@@ -34,6 +35,7 @@ class ManageAttendancePoints extends Command
     protected $description = 'Manage attendance points: regenerate, remove duplicates, expire, or cleanup';
 
     protected AttendanceProcessor $processor;
+
     protected NotificationService $notificationService;
 
     public function __construct(AttendanceProcessor $processor, NotificationService $notificationService)
@@ -57,7 +59,7 @@ class ManageAttendancePoints extends Command
             $this->newLine();
         }
 
-        if (!$notify) {
+        if (! $notify) {
             $this->comment('📭 Notifications are DISABLED');
             $this->newLine();
         }
@@ -90,14 +92,16 @@ class ManageAttendancePoints extends Command
 
         if ($attendances->isEmpty()) {
             $this->info('No attendance records found.');
+
             return Command::SUCCESS;
         }
 
         $this->info("Found {$attendances->count()} verified attendance records with violations");
 
-        if (!$this->option('force') && !$dryRun) {
-            if (!$this->confirm('Do you want to proceed?')) {
+        if (! $this->option('force') && ! $dryRun) {
+            if (! $this->confirm('Do you want to proceed?')) {
                 $this->info('Operation cancelled.');
+
                 return Command::SUCCESS;
             }
         }
@@ -115,7 +119,7 @@ class ManageAttendancePoints extends Command
 
                 if ($existingPoint) {
                     $skipped++;
-                } elseif (!$dryRun) {
+                } elseif (! $dryRun) {
                     $this->processor->regeneratePointsForAttendance($attendance);
                     $created++;
                 } else {
@@ -159,6 +163,7 @@ class ManageAttendancePoints extends Command
 
         if ($duplicates->isEmpty()) {
             $this->info('✅ No duplicate attendance points found.');
+
             return Command::SUCCESS;
         }
 
@@ -168,12 +173,12 @@ class ManageAttendancePoints extends Command
         $totalRemoved = 0;
 
         foreach ($duplicates as $dup) {
-            $user = \App\Models\User::find($dup->user_id);
+            $user = User::find($dup->user_id);
             $userName = $user ? $user->name : "User #{$dup->user_id}";
 
             $this->line("  {$userName} | {$dup->shift_date} | {$dup->point_type} ({$dup->count} entries, keeping ID: {$dup->keep_id})");
 
-            if (!$dryRun) {
+            if (! $dryRun) {
                 // Delete all except the oldest one (keep_id)
                 $deleted = AttendancePoint::where('user_id', $dup->user_id)
                     ->where('shift_date', $dup->shift_date)
@@ -213,14 +218,16 @@ class ManageAttendancePoints extends Command
 
         if ($pendingPoints->isEmpty()) {
             $this->info('✅ No pending expirations found.');
+
             return Command::SUCCESS;
         }
 
         $this->info("Found {$pendingPoints->count()} points ready for expiration");
 
-        if (!$this->option('force') && !$dryRun) {
-            if (!$this->confirm('Do you want to expire all these points?')) {
+        if (! $this->option('force') && ! $dryRun) {
+            if (! $this->confirm('Do you want to expire all these points?')) {
                 $this->info('Operation cancelled.');
+
                 return Command::SUCCESS;
             }
         }
@@ -231,7 +238,7 @@ class ManageAttendancePoints extends Command
         foreach ($pendingPoints as $point) {
             $this->line("  - {$point->user->name}: {$point->formatted_type} ({$point->points} pts) - {$point->shift_date->format('Y-m-d')}");
 
-            if (!$dryRun) {
+            if (! $dryRun) {
                 $point->markAsExpired('sro');
                 $expired++;
 
@@ -313,6 +320,7 @@ class ManageAttendancePoints extends Command
 
         if ($expiredPoints->isEmpty()) {
             $this->info('✅ No expired attendance points found matching the criteria.');
+
             return Command::SUCCESS;
         }
 
@@ -336,26 +344,27 @@ class ManageAttendancePoints extends Command
 
         $this->newLine();
 
-        if (!$this->option('force') && !$dryRun) {
-            if (!$this->confirm('Do you want to reset these points to active status?')) {
+        if (! $this->option('force') && ! $dryRun) {
+            if (! $this->confirm('Do you want to reset these points to active status?')) {
                 $this->info('Operation cancelled.');
+
                 return Command::SUCCESS;
             }
         }
 
         $reset = 0;
 
-        if (!$dryRun) {
+        if (! $dryRun) {
             foreach ($expiredPoints as $point) {
                 // Recalculate expiration date based on current date
                 $shiftDate = Carbon::parse($point->shift_date);
-                $isNcnsOrFtn = $point->point_type === 'whole_day_absence' && !$point->is_advised;
-                $newExpiresAt = $isNcnsOrFtn ? $shiftDate->copy()->addYear() : $shiftDate->copy()->addMonths(6);
+                $isNcns = $point->point_type === 'whole_day_absence' && ! $point->is_advised;
+                $newExpiresAt = $isNcns ? $shiftDate->copy()->addYear() : $shiftDate->copy()->addMonths(6);
 
                 $point->update([
                     'is_expired' => false,
                     'expired_at' => null,
-                    'expiration_type' => $isNcnsOrFtn ? 'none' : 'sro',
+                    'expiration_type' => $isNcns ? 'none' : 'sro',
                     'gbro_applied_at' => null,
                     'gbro_batch_id' => null,
                     'expires_at' => $newExpiresAt,
@@ -371,7 +380,7 @@ class ManageAttendancePoints extends Command
             ['Points Reset to Active', $reset],
         ]);
 
-        if (!$dryRun) {
+        if (! $dryRun) {
             $this->newLine();
             $this->warn('⚠️  Note: Expiration dates have been recalculated from the original shift dates.');
             $this->line('   Points that have already passed their new expiration date will need to be');

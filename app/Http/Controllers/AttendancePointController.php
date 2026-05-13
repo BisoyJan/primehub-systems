@@ -779,10 +779,10 @@ class AttendancePointController extends Controller
      */
     private function createRescanPoint(Attendance $attendance, array $pointData): void
     {
-        $isNcnsOrFtn = $pointData['type'] === 'whole_day_absence' && ! $attendance->is_advised;
+        $isNcns = $pointData['type'] === 'whole_day_absence' && ! $attendance->is_advised;
         $shiftDate = Carbon::parse($attendance->shift_date);
-        $expiresAt = $isNcnsOrFtn ? $shiftDate->copy()->addYear() : $shiftDate->copy()->addMonths(6);
-        $gbroExpiresAt = $isNcnsOrFtn ? null : $shiftDate->copy()->addDays(60)->format('Y-m-d');
+        $expiresAt = $isNcns ? $shiftDate->copy()->addYear() : $shiftDate->copy()->addMonths(6);
+        $gbroExpiresAt = $isNcns ? null : $shiftDate->copy()->addDays(60)->format('Y-m-d');
 
         $violationDetails = $this->creationService->generateViolationDetails($attendance);
 
@@ -796,14 +796,14 @@ class AttendancePointController extends Controller
             'is_advised' => $attendance->is_advised,
             'expires_at' => $expiresAt,
             'gbro_expires_at' => $gbroExpiresAt,
-            'expiration_type' => $isNcnsOrFtn ? 'none' : 'sro',
+            'expiration_type' => $isNcns ? 'none' : 'sro',
             'violation_details' => $violationDetails,
             'tardy_minutes' => $attendance->tardy_minutes,
             'undertime_minutes' => $attendance->undertime_minutes,
-            'eligible_for_gbro' => ! $isNcnsOrFtn,
+            'eligible_for_gbro' => ! $isNcns,
         ]);
 
-        if (! $isNcnsOrFtn) {
+        if (! $isNcns) {
             $this->gbroService->updateUserGbroExpirationDates($attendance->user_id, $shiftDate);
         }
     }

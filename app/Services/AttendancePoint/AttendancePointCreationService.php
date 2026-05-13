@@ -32,9 +32,9 @@ class AttendancePointCreationService
             ->where('shift_date', $data['shift_date'])
             ->delete();
 
-        $isNcnsOrFtn = $pointType === 'whole_day_absence' && ! $isAdvised;
-        $expiresAt = $isNcnsOrFtn ? $shiftDate->copy()->addYear() : $shiftDate->copy()->addMonths(6);
-        $isGbroEligible = ! $isNcnsOrFtn;
+        $isNcns = $pointType === 'whole_day_absence' && ! $isAdvised;
+        $expiresAt = $isNcns ? $shiftDate->copy()->addYear() : $shiftDate->copy()->addMonths(6);
+        $isGbroEligible = ! $isNcns;
 
         $violationDetails = $data['violation_details'] ?? null;
         if (empty($violationDetails)) {
@@ -61,7 +61,7 @@ class AttendancePointCreationService
             'tardy_minutes' => $data['tardy_minutes'] ?? null,
             'undertime_minutes' => $data['undertime_minutes'] ?? null,
             'expires_at' => $expiresAt,
-            'expiration_type' => $isNcnsOrFtn ? 'none' : 'sro',
+            'expiration_type' => $isNcns ? 'none' : 'sro',
             'eligible_for_gbro' => $isGbroEligible,
             'gbro_expires_at' => null,
         ]);
@@ -90,8 +90,8 @@ class AttendancePointCreationService
         $shiftDate = Carbon::parse($data['shift_date']);
         $userId = $data['user_id'];
 
-        $isNcnsOrFtn = $pointType === 'whole_day_absence' && ! $isAdvised;
-        $expiresAt = $isNcnsOrFtn ? $shiftDate->copy()->addYear() : $shiftDate->copy()->addMonths(6);
+        $isNcns = $pointType === 'whole_day_absence' && ! $isAdvised;
+        $expiresAt = $isNcns ? $shiftDate->copy()->addYear() : $shiftDate->copy()->addMonths(6);
 
         $violationDetails = $data['violation_details'] ?? null;
         if (empty($violationDetails)) {
@@ -114,8 +114,8 @@ class AttendancePointCreationService
             'tardy_minutes' => $data['tardy_minutes'] ?? null,
             'undertime_minutes' => $data['undertime_minutes'] ?? null,
             'expires_at' => $expiresAt,
-            'expiration_type' => $isNcnsOrFtn ? 'none' : 'sro',
-            'eligible_for_gbro' => ! $isNcnsOrFtn,
+            'expiration_type' => $isNcns ? 'none' : 'sro',
+            'eligible_for_gbro' => ! $isNcns,
         ]);
 
         // Send notification
@@ -177,9 +177,9 @@ class AttendancePointCreationService
     {
         // Both NCNS (is_advised=false) and FTN (ncns status + is_advised=true) → 1 year, NOT GBRO eligible.
         // Advised Absence (advised_absence status, is_advised=true) → 6 months, GBRO eligible.
-        $isNcnsOrFtn = $attendance->status === 'ncns';
-        $expiresAt = $isNcnsOrFtn ? $shiftDate->copy()->addYear() : $shiftDate->copy()->addMonths(6);
-        $gbroExpiresAt = $isNcnsOrFtn ? null : $shiftDate->copy()->addDays(60)->format('Y-m-d');
+        $isNcns = $attendance->status === 'ncns';
+        $expiresAt = $isNcns ? $shiftDate->copy()->addYear() : $shiftDate->copy()->addMonths(6);
+        $gbroExpiresAt = $isNcns ? null : $shiftDate->copy()->addDays(60)->format('Y-m-d');
 
         $isHalfDay = $attendance->notes && str_contains(strtolower($attendance->notes), 'half');
         $pointType = $isHalfDay ? 'half_day_absence' : 'whole_day_absence';
@@ -195,11 +195,11 @@ class AttendancePointCreationService
             'is_manual' => false,
             'expires_at' => $expiresAt,
             'gbro_expires_at' => $gbroExpiresAt,
-            'expiration_type' => $isNcnsOrFtn ? 'none' : 'sro',
-            'eligible_for_gbro' => ! $isNcnsOrFtn,
+            'expiration_type' => $isNcns ? 'none' : 'sro',
+            'eligible_for_gbro' => ! $isNcns,
         ]);
 
-        if (! $isNcnsOrFtn) {
+        if (! $isNcns) {
             $this->gbroService->updateUserGbroExpirationDates($attendance->user_id, $shiftDate);
         }
 

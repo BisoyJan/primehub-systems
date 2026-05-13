@@ -256,11 +256,11 @@ class AttendancePointFactory extends Factory
         return $this->state(function (array $attributes) use ($date) {
             $shiftDate = is_string($date) ? Carbon::parse($date) : $date;
             $pointType = $attributes['point_type'] ?? 'tardy';
-            $isNcnsOrFtn = $pointType === 'whole_day_absence';
+            $isNcns = $pointType === 'whole_day_absence';
 
             return [
                 'shift_date' => $shiftDate,
-                'expires_at' => $isNcnsOrFtn
+                'expires_at' => $isNcns
                     ? $shiftDate->copy()->addYear()
                     : $shiftDate->copy()->addMonths(6),
             ];

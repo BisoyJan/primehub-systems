@@ -461,7 +461,7 @@ class AttendancePointMaintenanceService
                 // Use the model method which correctly checks is_advised:
                 // NCNS (whole_day_absence + !is_advised) → 1-year expiration
                 // Advised absence (whole_day_absence + is_advised) → 6-month expiration (GBRO eligible)
-                $isNcns = $point->isNcnsOrFtn();
+                $isNcns = $point->isNcns();
                 $newExpiresAt = $isNcns ? $shiftDate->copy()->addYear() : $shiftDate->copy()->addMonths(6);
 
                 $point->update([
@@ -820,7 +820,7 @@ class AttendancePointMaintenanceService
         }
 
         // Fix 4: Correct expires_at month-end overflow (NoOverflow recalculation).
-        // Source of truth: isNcnsOrFtn() = whole_day_absence AND eligible_for_gbro=false → 1 year.
+        // Source of truth: isNcns() = whole_day_absence AND eligible_for_gbro=false → 1 year.
         // Everything else → 6 months. Do NOT use is_advised as a discriminator — FTN records
         // have is_advised=true but are still 1-year violations (eligible_for_gbro=false).
         $ftnWrong = AttendancePoint::whereNotNull('expires_at')

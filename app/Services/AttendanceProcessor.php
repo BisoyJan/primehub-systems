@@ -2197,10 +2197,10 @@ class AttendanceProcessor
             // NCNS and FTN both use 'ncns' attendance status → 1 year, NOT GBRO eligible.
             // FTN = employee was advised to come but didn't show AND didn't call (ncns + is_advised=true).
             // Advised Absence (advised_absence status) → 6 months, GBRO eligible.
-            $isNcnsOrFtn = $pointType === 'whole_day_absence' && $usedStatus === 'ncns';
+            $isNcns = $pointType === 'whole_day_absence' && $usedStatus === 'ncns';
 
             // Calculate expiration date (6 months for standard, 1 year for NCNS/FTN)
-            $expiresAt = $isNcnsOrFtn
+            $expiresAt = $isNcns
                 ? $shiftDate->copy()->addYear()
                 : $shiftDate->copy()->addMonths(6);
 
@@ -2217,12 +2217,12 @@ class AttendanceProcessor
                 'is_advised' => $attendance->is_advised ?? false,
                 'is_excused' => false,
                 'expires_at' => $expiresAt,
-                'expiration_type' => $isNcnsOrFtn ? 'none' : 'sro',
+                'expiration_type' => $isNcns ? 'none' : 'sro',
                 'is_expired' => false,
                 'violation_details' => $violationDetails,
                 'tardy_minutes' => $attendance->tardy_minutes,
                 'undertime_minutes' => $attendance->undertime_minutes,
-                'eligible_for_gbro' => ! $isNcnsOrFtn, // NCNS and FTN (ncns status) not GBRO eligible; advised_absence status IS eligible
+                'eligible_for_gbro' => ! $isNcns, // NCNS and FTN (ncns status) not GBRO eligible; advised_absence status IS eligible
                 'created_at' => now(),
                 'updated_at' => now(),
             ];

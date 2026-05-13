@@ -213,10 +213,10 @@ class AttendancePointModelTest extends TestCase
         $ftn = AttendancePoint::factory()->ftn()->create();
         $tardy = AttendancePoint::factory()->tardy()->create();
 
-        $this->assertTrue($ncns->isNcnsOrFtn()); // NCNS: is_advised=false, eligible_for_gbro=false
+        $this->assertTrue($ncns->isNcns()); // NCNS: is_advised=false, eligible_for_gbro=false
         // FTN has is_advised=true but eligible_for_gbro=false (ncns status) - treated same as NCNS
-        $this->assertTrue($ftn->isNcnsOrFtn());
-        $this->assertFalse($tardy->isNcnsOrFtn());
+        $this->assertTrue($ftn->isNcns());
+        $this->assertFalse($tardy->isNcns());
     }
 
     #[Test]
