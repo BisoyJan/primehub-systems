@@ -45,7 +45,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Award, AlertCircle, TrendingUp, Calendar, CheckCircle, XCircle, FileText, Download, BarChart3, RotateCcw, Search, Loader2, Settings, AlertTriangle, Play, RefreshCw, BellOff, Wrench } from "lucide-react";
+import { ArrowLeft, Award, AlertCircle, TrendingUp, Calendar, CheckCircle, XCircle, FileText, Download, BarChart3, RotateCcw, Search, Loader2, Settings, AlertTriangle, Play, RefreshCw, BellOff, Wrench, HelpCircle } from "lucide-react";
 import { DatePicker } from "@/components/ui/date-picker";
 import type { SharedData } from "@/types";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
@@ -241,10 +241,11 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
     const [exportError, setExportError] = useState(false);
     const [exportDownloadUrl, setExportDownloadUrl] = useState<string | null>(null);
     const [exportFilename, setExportFilename] = useState<string | null>(null);
-    const exportPollingRef = useRef<NodeJS.Timeout | null>(null);
+    const exportPollingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Management state (user-specific)
     const [isManagementAction, setIsManagementAction] = useState(false);
+    const [isGuideOpen, setIsGuideOpen] = useState(false);
     const [confirmAction, setConfirmAction] = useState<'expire-all' | 'reset-expired' | 'initialize-gbro-dates' | 'fix-gbro-dates' | 'recalculate-gbro' | 'fix-anomalies' | null>(null);
     const [expirationType, setExpirationType] = useState<'both' | 'sro' | 'gbro'>('both');
 
@@ -773,7 +774,7 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                             {gbroStats.is_gbro_ready && gbroStats.eligible_points_count > 0 && (
                                 <div className="rounded-lg border border-green-200 bg-green-100 dark:bg-green-900 dark:border-green-800 p-3">
                                     <div className="flex items-start gap-2">
-                                        <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+                                        <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400 mt-0.5 shrink-0" />
                                         <div>
                                             <p className="font-semibold text-sm text-green-800 dark:text-green-200">
                                                 🎉 GBRO Eligible!
@@ -790,7 +791,7 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                             {!gbroStats.is_gbro_ready && gbroStats.days_until_gbro > 0 && (
                                 <div className="rounded-lg border border-blue-200 bg-blue-100 dark:bg-blue-900 dark:border-blue-800 p-3">
                                     <div className="flex items-start gap-2">
-                                        <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                                        <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
                                         <div>
                                             <p className="font-semibold text-sm text-blue-800 dark:text-blue-200">
                                                 Keep up the good work!
@@ -830,6 +831,11 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => setIsGuideOpen(true)}>
+                                        <HelpCircle className="mr-2 h-4 w-4" />
+                                        How to Use
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
                                     <DropdownMenuItem onClick={() => setConfirmAction('recalculate-gbro')}>
                                         <RotateCcw className="mr-2 h-4 w-4" />
                                         Recalculate GBRO Dates
@@ -1035,7 +1041,7 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
 
             {/* Excuse Point Dialog */}
             <Dialog open={isExcuseDialogOpen} onOpenChange={setIsExcuseDialogOpen}>
-                <DialogContent className="sm:max-w-[500px]">
+                <DialogContent className="sm:max-w-125">
                     <DialogHeader>
                         <DialogTitle>
                             {selectedPoint?.is_excused ? 'View Excuse Details' : 'Excuse Attendance Point'}
@@ -1101,7 +1107,7 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                                     value={excuseReason}
                                     onChange={(e) => setExcuseReason(e.target.value)}
                                     disabled={selectedPoint.is_excused || isSubmitting}
-                                    className="min-h-[100px]"
+                                    className="min-h-25"
                                     required
                                 />
                             </div>
@@ -1114,7 +1120,7 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                                     value={notes}
                                     onChange={(e) => setNotes(e.target.value)}
                                     disabled={selectedPoint.is_excused || isSubmitting}
-                                    className="min-h-[80px]"
+                                    className="min-h-20"
                                 />
                             </div>
                         </div>
@@ -1162,7 +1168,7 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
 
             {/* Violation Details Dialog */}
             <Dialog open={isViolationDetailsOpen} onOpenChange={setIsViolationDetailsOpen}>
-                <DialogContent className="sm:max-w-[600px]">
+                <DialogContent className="sm:max-w-150">
                     <DialogHeader>
                         <DialogTitle>Violation Details</DialogTitle>
                         <DialogDescription>
@@ -1278,7 +1284,7 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                                     {isEligibleForGbroDeduction(selectedViolationPoint.id) ? (
                                         <div className="rounded-lg border-2 border-green-500 bg-green-50 dark:bg-green-950 p-4">
                                             <div className="flex items-start gap-3">
-                                                <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+                                                <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5 shrink-0" />
                                                 <div>
                                                     <p className="font-semibold text-green-800 dark:text-green-200">
                                                         🎯 GBRO Eligible Point
@@ -1298,7 +1304,7 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                                     ) : (
                                         <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950 p-4">
                                             <div className="flex items-start gap-3">
-                                                <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                                                <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
                                                 <div>
                                                     <p className="font-semibold text-blue-800 dark:text-blue-200">
                                                         GBRO Eligible
@@ -1322,7 +1328,7 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                                 <div className="pt-4 border-t">
                                     <div className="rounded-lg border border-orange-200 bg-orange-50 dark:bg-orange-950 p-4">
                                         <div className="flex items-start gap-3">
-                                            <AlertCircle className="h-5 w-5 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" />
+                                            <AlertCircle className="h-5 w-5 text-orange-600 dark:text-orange-400 mt-0.5 shrink-0" />
                                             <div>
                                                 <p className="font-semibold text-orange-800 dark:text-orange-200">
                                                     Not Eligible for GBRO
@@ -1568,6 +1574,81 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                                 Cancel
                             </Button>
                         )}
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Guide Dialog */}
+            <Dialog open={isGuideOpen} onOpenChange={setIsGuideOpen}>
+                <DialogContent className="sm:max-w-xl max-h-[85vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <HelpCircle className="h-5 w-5 text-primary" />
+                            Point History Management Guide
+                        </DialogTitle>
+                        <DialogDescription>
+                            What each action does and when to use it for <strong>{user.name}</strong>.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-3 py-2">
+                        <div className="rounded-lg border bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800 p-3">
+                            <p className="text-sm text-blue-800 dark:text-blue-200">
+                                <strong>Note:</strong> All actions below are scoped to this employee only, except <em>Fix Anomalies</em> which runs across all employees.
+                            </p>
+                        </div>
+
+                        {[
+                            {
+                                icon: <RotateCcw className="h-4 w-4 text-violet-600" />,
+                                name: 'Recalculate GBRO Dates',
+                                what: 'Resets all GBRO states and re-simulates the full violation timeline to recompute accurate GBRO expiration dates.',
+                                when: 'A backdated point entry was added, edited, or deleted — use this to bring GBRO dates back in sync after any timeline change.',
+                            },
+                            {
+                                icon: <AlertTriangle className="h-4 w-4 text-orange-600" />,
+                                name: 'Expire All Pending Points',
+                                what: "Marks all of this employee's points whose expiration date has already passed as expired.",
+                                when: "Their active points still show despite the expiration date passing. Choose SRO-only, GBRO-only, or both depending on which policy applies.",
+                            },
+                            {
+                                icon: <RefreshCw className="h-4 w-4 text-blue-600" />,
+                                name: 'Reset Expired Points',
+                                what: "Reverses the expired status on this employee's points, restoring them to active.",
+                                when: "Points were expired incorrectly or the expiration date needs to be corrected before re-expiring.",
+                            },
+                            {
+                                icon: <Play className="h-4 w-4 text-purple-600" />,
+                                name: 'Initialize GBRO Dates',
+                                what: "Calculates and assigns GBRO expiration predictions to this employee's active points that have no GBRO date set.",
+                                when: 'First-time GBRO setup for this employee, or after the GBRO policy was newly enabled for their campaign.',
+                            },
+                            {
+                                icon: <BellOff className="h-4 w-4 text-indigo-600" />,
+                                name: 'Fix GBRO Dates',
+                                what: "Corrects this employee's GBRO reference dates without a full cascade recalculation.",
+                                when: 'GBRO dates look slightly off but a full recalculation is not needed — lighter and faster than Recalculate GBRO Dates.',
+                            },
+                            {
+                                icon: <Wrench className="h-4 w-4 text-red-600" />,
+                                name: 'Fix Anomalies',
+                                what: 'Scans all employees and corrects SRO overdue expirations, stale GBRO dates on ineligible records, and month-end date overflow bugs.',
+                                when: 'You notice incorrect expiration dates near month boundaries, wrong GBRO-eligible flags, or unexpected point totals across the workforce.',
+                            },
+                        ].map((item) => (
+                            <div key={item.name} className="flex gap-3 p-3 rounded-lg border bg-card">
+                                <div className="mt-0.5 shrink-0">{item.icon}</div>
+                                <div className="space-y-1">
+                                    <p className="text-sm font-semibold">{item.name}</p>
+                                    <p className="text-sm text-muted-foreground">{item.what}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                        <span className="font-medium text-foreground">Use when:</span> {item.when}
+                                    </p>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsGuideOpen(false)}>Close</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

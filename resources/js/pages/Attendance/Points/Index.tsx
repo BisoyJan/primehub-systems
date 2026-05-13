@@ -52,7 +52,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { AlertCircle, TrendingUp, Users, Eye, Award, RefreshCw, CheckCircle, XCircle, FileText, Download, Check, ChevronsUpDown, Search, Plus, Pencil, Trash2, Loader2, Play, Pause, Settings, RotateCcw, AlertTriangle, ClipboardList, BellOff, ChevronDown, ChevronRight, Wrench } from "lucide-react";
+import { AlertCircle, TrendingUp, Users, Eye, Award, RefreshCw, CheckCircle, XCircle, FileText, Download, Check, ChevronsUpDown, Search, Plus, Pencil, Trash2, Loader2, Play, Pause, Settings, RotateCcw, AlertTriangle, ClipboardList, BellOff, ChevronDown, ChevronRight, Wrench, HelpCircle } from "lucide-react";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import {
     index as attendancePointsIndex,
@@ -304,6 +304,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
 
     // Management state
     const [isManagementDialogOpen, setIsManagementDialogOpen] = useState(false);
+    const [isGuideOpen, setIsGuideOpen] = useState(false);
     const [managementStats, setManagementStats] = useState<{
         duplicates_count: number;
         pending_expirations_count: number;
@@ -312,6 +313,8 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
         duplicate_users: { user_id: number; name: string; records: { shift_date: string; point_type: string; count: number }[] }[];
         pending_expiration_users: { user_id: number; name: string; records: { shift_date: string; point_type: string; points: number; expires_at: string }[] }[];
         missing_points_users: { user_id: number; name: string; records: { shift_date: string; status: string }[] }[];
+        gbro_anomaly_count: number;
+        gbro_anomaly_users: { user_id: number; name: string; records: { shift_date: string; point_type: string; anomaly: string }[] }[];
     } | null>(null);
     const [isLoadingStats, setIsLoadingStats] = useState(false);
     const [isManagementAction, setIsManagementAction] = useState(false);
@@ -1136,6 +1139,11 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                             </Button>
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent align="end">
+                                            <DropdownMenuItem onClick={() => setIsGuideOpen(true)}>
+                                                <HelpCircle className="h-4 w-4 mr-2" />
+                                                How to Use
+                                            </DropdownMenuItem>
+                                            <DropdownMenuSeparator />
                                             <DropdownMenuItem onClick={handleOpenManagementDialog}>
                                                 <ClipboardList className="h-4 w-4 mr-2" />
                                                 View Statistics
@@ -2729,6 +2737,99 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
             </Dialog>
 
             {/* Management Statistics Dialog */}
+            {/* Guide Dialog */}
+            <Dialog open={isGuideOpen} onOpenChange={setIsGuideOpen}>
+                <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <HelpCircle className="h-5 w-5 text-primary" />
+                            Attendance Points Management Guide
+                        </DialogTitle>
+                        <DialogDescription>
+                            Reference guide for each management action — what it does and when to use it.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-2">
+                        <div className="rounded-lg border bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800 p-3">
+                            <p className="text-sm text-blue-800 dark:text-blue-200">
+                                <strong>Tip:</strong> Open <em>View Statistics</em> first to see a health snapshot before running any bulk action.
+                            </p>
+                        </div>
+
+                        {[
+                            {
+                                icon: <RefreshCw className="h-4 w-4 text-green-600" />,
+                                name: 'Regenerate Points',
+                                what: 'Creates missing attendance point records for verified attendance rows that currently have no points.',
+                                when: 'Biometric sync ran but points were not generated — e.g. after a system downtime, a failed cron job, or a bulk attendance import.',
+                            },
+                            {
+                                icon: <Trash2 className="h-4 w-4 text-yellow-600" />,
+                                name: 'Remove Duplicates',
+                                what: 'Deletes extra point entries where the same employee has multiple records for the same date and violation type.',
+                                when: "The same violation appears twice in an employee's history, usually caused by a double-import or re-processing run.",
+                            },
+                            {
+                                icon: <AlertTriangle className="h-4 w-4 text-orange-600" />,
+                                name: 'Expire All Pending',
+                                what: 'Marks all points whose expiration date has already passed as expired.',
+                                when: 'Points are still showing as active even though their expiration date is in the past. Run after a missed scheduled expiration job, or manually at end-of-month.',
+                            },
+                            {
+                                icon: <RotateCcw className="h-4 w-4 text-blue-600" />,
+                                name: 'Reset Expired Points',
+                                what: 'Reverses the expired status on points, restoring them to active.',
+                                when: 'Points were expired by mistake or the expiration date was set incorrectly and needs to be corrected before re-expiring.',
+                            },
+                            {
+                                icon: <Play className="h-4 w-4 text-purple-600" />,
+                                name: 'Initialize GBRO Dates',
+                                what: 'Calculates and assigns GBRO expiration predictions to active points that have no GBRO date set.',
+                                when: 'First-time GBRO setup for employees who already have existing point records, or after enabling the GBRO policy for a new campaign.',
+                            },
+                            {
+                                icon: <RefreshCw className="h-4 w-4 text-indigo-600" />,
+                                name: 'Fix GBRO Dates',
+                                what: 'Corrects GBRO reference dates on existing records without performing a full cascade recalculation.',
+                                when: 'GBRO dates look off after a point was added or edited — a lighter fix than full recalculation.',
+                            },
+                            {
+                                icon: <RotateCcw className="h-4 w-4 text-violet-600" />,
+                                name: 'Recalculate GBRO Dates',
+                                what: 'Performs a full cascade recalculation of all GBRO dates for all (or selected) employees by re-simulating the entire violation timeline.',
+                                when: 'Backdated point entries were added, edited, or deleted, causing GBRO dates to be out of sync across the timeline.',
+                            },
+                            {
+                                icon: <Settings className="h-4 w-4 text-slate-600" />,
+                                name: 'Full Cleanup',
+                                what: 'Combines Remove Duplicates + Expire All Pending into a single operation.',
+                                when: 'Quick data-health sweep — run this after a large import or at the start of a new pay period to clean up stale and duplicate records at once.',
+                            },
+                            {
+                                icon: <Wrench className="h-4 w-4 text-red-600" />,
+                                name: 'Fix Anomalies',
+                                what: 'Scans all records and corrects three specific issues: SRO points past their expiration date, stale GBRO dates on ineligible records, and month-end date overflow bugs.',
+                                when: 'You notice unexpected point counts, incorrect expiration dates near month boundaries, or GBRO-eligible flags on points that should not have them.',
+                            },
+                        ].map((item) => (
+                            <div key={item.name} className="flex gap-3 p-3 rounded-lg border bg-card">
+                                <div className="mt-0.5 shrink-0">{item.icon}</div>
+                                <div className="space-y-1">
+                                    <p className="text-sm font-semibold">{item.name}</p>
+                                    <p className="text-sm text-muted-foreground">{item.what}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                        <span className="font-medium text-foreground">Use when:</span> {item.when}
+                                    </p>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsGuideOpen(false)}>Close</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
             <Dialog open={isManagementDialogOpen} onOpenChange={setIsManagementDialogOpen}>
                 <DialogContent className="sm:max-w-137.5 max-h-[85vh] overflow-y-auto">
                     <DialogHeader>
@@ -2891,6 +2992,57 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                         {managementStats.expired_count}
                                     </Badge>
                                 </div>
+
+                                {/* GBRO Date Anomalies */}
+                                <div className="border rounded-lg">
+                                    <button
+                                        type="button"
+                                        className="flex items-center justify-between w-full p-3 hover:bg-muted/50 transition-colors"
+                                        onClick={() => setExpandedStatSections(prev => ({ ...prev, gbroAnomaly: !prev.gbroAnomaly }))}
+                                        disabled={managementStats.gbro_anomaly_count === 0}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <Wrench className="h-5 w-5 text-purple-600" />
+                                            <div className="text-left">
+                                                <p className="font-medium">GBRO Date Anomalies</p>
+                                                <p className="text-sm text-muted-foreground">
+                                                    Wrong eligibility flags or stale GBRO dates
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <Badge variant={managementStats.gbro_anomaly_count > 0 ? "destructive" : "secondary"}>
+                                                {managementStats.gbro_anomaly_count}
+                                            </Badge>
+                                            {managementStats.gbro_anomaly_count > 0 && (
+                                                expandedStatSections.gbroAnomaly ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                            )}
+                                        </div>
+                                    </button>
+                                    {expandedStatSections.gbroAnomaly && managementStats.gbro_anomaly_users.length > 0 && (
+                                        <div className="border-t px-3 pb-3 pt-2 space-y-2 max-h-48 overflow-y-auto">
+                                            {managementStats.gbro_anomaly_users.map((u) => (
+                                                <div key={u.user_id} className="text-sm">
+                                                    <p className="font-medium">{u.name} <span className="text-muted-foreground font-normal">({u.records.length})</span></p>
+                                                    <div className="flex flex-wrap gap-1 mt-1">
+                                                        {u.records.map((r, i) => {
+                                                            const anomalyLabel = r.anomaly === 'stale_gbro_date'
+                                                                ? 'stale GBRO date'
+                                                                : r.anomaly === 'wrong_not_eligible'
+                                                                    ? 'should be GBRO eligible'
+                                                                    : 'should not be GBRO eligible';
+                                                            return (
+                                                                <Badge key={i} variant="outline" className="text-xs capitalize">
+                                                                    {r.shift_date} · {r.point_type.replace(/_/g, ' ')} · {anomalyLabel}
+                                                                </Badge>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         ) : (
                             <p className="text-center text-muted-foreground">
@@ -3009,9 +3161,15 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                 >
                                     <Wrench className="h-4 w-4 mr-2" />
                                     Fix Anomalies
-                                    <span className="ml-auto text-xs text-muted-foreground">
-                                        (SRO + GBRO + overflow)
-                                    </span>
+                                    {managementStats && managementStats.gbro_anomaly_count > 0 ? (
+                                        <Badge variant="destructive" className="ml-auto">
+                                            {managementStats.gbro_anomaly_count}
+                                        </Badge>
+                                    ) : (
+                                        <span className="ml-auto text-xs text-muted-foreground">
+                                            (SRO + GBRO + overflow)
+                                        </span>
+                                    )}
                                 </Button>
                             </div>
                         </div>

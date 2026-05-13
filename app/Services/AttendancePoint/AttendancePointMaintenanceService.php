@@ -116,6 +116,90 @@ class AttendancePointMaintenanceService
             ];
         })->values()->all();
 
+        // GBRO Date Anomalies
+        // 1: Non-eligible records with stale gbro_expires_at
+        $staleGbroDatesCount = AttendancePoint::where('eligible_for_gbro', false)
+            ->whereNotNull('gbro_expires_at')
+            ->count();
+
+        // 2a: Advised absences or non-whole-day wrongly marked as NOT eligible
+        $wrongNotEligibleCount = AttendancePoint::where('is_expired', false)
+            ->where('eligible_for_gbro', false)
+            ->where(function ($q) {
+                $q->where(function ($q2) {
+                    $q2->where('point_type', 'whole_day_absence')->where('is_advised', true);
+                })->orWhere('point_type', '!=', 'whole_day_absence');
+            })
+            ->count();
+
+        // 2b: FTN/NCNS (whole_day_absence + not advised) wrongly marked as eligible
+        $wrongIsEligibleCount = AttendancePoint::where('is_expired', false)
+            ->where('point_type', 'whole_day_absence')
+            ->where('is_advised', false)
+            ->where('eligible_for_gbro', true)
+            ->count();
+
+        $gbroAnomalyCount = $staleGbroDatesCount + $wrongNotEligibleCount + $wrongIsEligibleCount;
+
+        $gbroAnomalyUsers = [];
+        if ($gbroAnomalyCount > 0) {
+            $anomalyPoints = collect();
+
+            if ($staleGbroDatesCount > 0) {
+                $points = AttendancePoint::where('eligible_for_gbro', false)
+                    ->whereNotNull('gbro_expires_at')
+                    ->with('user:id,first_name,last_name')
+                    ->get();
+                foreach ($points as $p) {
+                    $anomalyPoints->push(['point' => $p, 'anomaly' => 'stale_gbro_date']);
+                }
+            }
+
+            if ($wrongNotEligibleCount > 0) {
+                $points = AttendancePoint::where('is_expired', false)
+                    ->where('eligible_for_gbro', false)
+                    ->where(function ($q) {
+                        $q->where(function ($q2) {
+                            $q2->where('point_type', 'whole_day_absence')->where('is_advised', true);
+                        })->orWhere('point_type', '!=', 'whole_day_absence');
+                    })
+                    ->with('user:id,first_name,last_name')
+                    ->get();
+                foreach ($points as $p) {
+                    $anomalyPoints->push(['point' => $p, 'anomaly' => 'wrong_not_eligible']);
+                }
+            }
+
+            if ($wrongIsEligibleCount > 0) {
+                $points = AttendancePoint::where('is_expired', false)
+                    ->where('point_type', 'whole_day_absence')
+                    ->where('is_advised', false)
+                    ->where('eligible_for_gbro', true)
+                    ->with('user:id,first_name,last_name')
+                    ->get();
+                foreach ($points as $p) {
+                    $anomalyPoints->push(['point' => $p, 'anomaly' => 'wrong_is_eligible']);
+                }
+            }
+
+            $gbroAnomalyUsers = $anomalyPoints->groupBy(fn ($item) => $item['point']->user_id)
+                ->map(function ($items, $userId) {
+                    $user = $items->first()['point']->user;
+
+                    return [
+                        'user_id' => $userId,
+                        'name' => $user ? $user->last_name.', '.$user->first_name : 'Unknown',
+                        'records' => $items->map(fn ($item) => [
+                            'shift_date' => $item['point']->shift_date instanceof Carbon
+                                ? $item['point']->shift_date->format('Y-m-d')
+                                : (is_string($item['point']->shift_date) ? substr($item['point']->shift_date, 0, 10) : $item['point']->shift_date),
+                            'point_type' => $item['point']->point_type,
+                            'anomaly' => $item['anomaly'],
+                        ])->values()->all(),
+                    ];
+                })->values()->all();
+        }
+
         return [
             'duplicates_count' => $duplicatesCount,
             'pending_expirations_count' => $pendingExpirationsCount,
@@ -124,6 +208,8 @@ class AttendancePointMaintenanceService
             'duplicate_users' => $duplicateUsers,
             'pending_expiration_users' => $pendingExpirationUsers,
             'missing_points_users' => $missingPointsUsers,
+            'gbro_anomaly_count' => $gbroAnomalyCount,
+            'gbro_anomaly_users' => $gbroAnomalyUsers,
         ];
     }
 

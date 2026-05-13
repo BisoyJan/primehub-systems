@@ -20,6 +20,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Trophy, Flame, Medal, ArrowLeft } from 'lucide-react';
+import { useRole } from '@/hooks/useAuthorization';
 
 interface BadgeTier {
     days: number;
@@ -30,7 +31,7 @@ interface BadgeTier {
 interface LeaderboardRow {
     user_id: number;
     name: string;
-    role: string;
+    campaign: string | null;
     current_streak: number;
     longest_streak: number;
     badge: BadgeTier | null;
@@ -57,6 +58,8 @@ const rankAccent: Record<number, string> = {
 };
 
 export default function LeaderboardPage({ leaderboard, limit }: PageProps) {
+    const { hasRole } = useRole();
+    const canViewDetail = !hasRole('Agent');
     const { title, breadcrumbs } = usePageMeta({
         title: 'Tardy-Free Streak Leaderboard',
         breadcrumbs: [
@@ -124,11 +127,11 @@ export default function LeaderboardPage({ leaderboard, limit }: PageProps) {
                                     <TableRow>
                                         <TableHead className="w-16">Rank</TableHead>
                                         <TableHead>Employee</TableHead>
-                                        <TableHead>Role</TableHead>
+                                        <TableHead>Campaign</TableHead>
                                         <TableHead className="text-right">Current</TableHead>
                                         <TableHead className="text-right">Longest</TableHead>
                                         <TableHead>Badge</TableHead>
-                                        <TableHead className="w-24 text-right"></TableHead>
+                                        {canViewDetail && <TableHead className="w-24 text-right"></TableHead>}
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -149,9 +152,7 @@ export default function LeaderboardPage({ leaderboard, limit }: PageProps) {
                                                     </span>
                                                 </TableCell>
                                                 <TableCell className="font-medium">{row.name}</TableCell>
-                                                <TableCell>
-                                                    <Badge variant="outline">{row.role}</Badge>
-                                                </TableCell>
+                                                <TableCell className="text-muted-foreground text-sm">{row.campaign ?? '—'}</TableCell>
                                                 <TableCell className="text-right font-bold text-orange-600 dark:text-orange-400">
                                                     <Flame className="mr-1 inline h-3.5 w-3.5" />
                                                     {row.current_streak}
@@ -168,15 +169,17 @@ export default function LeaderboardPage({ leaderboard, limit }: PageProps) {
                                                         </Badge>
                                                     )}
                                                 </TableCell>
-                                                <TableCell className="text-right">
-                                                    <Button size="sm" variant="ghost" asChild>
-                                                        <Link
-                                                            href={`/attendance-points/${row.user_id}/streak`}
-                                                        >
-                                                            View
-                                                        </Link>
-                                                    </Button>
-                                                </TableCell>
+                                                {canViewDetail && (
+                                                    <TableCell className="text-right">
+                                                        <Button size="sm" variant="ghost" asChild>
+                                                            <Link
+                                                                href={`/attendance-points/${row.user_id}/streak`}
+                                                            >
+                                                                View
+                                                            </Link>
+                                                        </Button>
+                                                    </TableCell>
+                                                )}
                                             </TableRow>
                                         );
                                     })}
@@ -202,11 +205,11 @@ export default function LeaderboardPage({ leaderboard, limit }: PageProps) {
                                                 ) : null}{' '}
                                                 #{rank}
                                             </span>
-                                            <Badge variant="outline" className="text-xs">
-                                                {row.role}
-                                            </Badge>
                                         </div>
                                         <p className="font-medium">{row.name}</p>
+                                        {row.campaign && (
+                                            <p className="text-muted-foreground text-xs">{row.campaign}</p>
+                                        )}
                                         <div className="mt-2 flex items-center justify-between">
                                             <div className="flex items-center gap-1 text-orange-600 dark:text-orange-400">
                                                 <Flame className="h-4 w-4" />
@@ -225,11 +228,13 @@ export default function LeaderboardPage({ leaderboard, limit }: PageProps) {
                                                 </Badge>
                                             )}
                                         </div>
-                                        <Button size="sm" variant="outline" className="mt-3 w-full" asChild>
-                                            <Link href={`/attendance-points/${row.user_id}/streak`}>
-                                                View detail
-                                            </Link>
-                                        </Button>
+                                        {canViewDetail && (
+                                            <Button size="sm" variant="outline" className="mt-3 w-full" asChild>
+                                                <Link href={`/attendance-points/${row.user_id}/streak`}>
+                                                    View detail
+                                                </Link>
+                                            </Button>
+                                        )}
                                     </div>
                                 );
                             })}
