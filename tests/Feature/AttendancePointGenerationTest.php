@@ -45,7 +45,6 @@ class AttendancePointGenerationTest extends TestCase
 
         // Simulate upload processing
         $upload = AttendanceUpload::factory()->create([
-            'shift_date' => $shiftDate,
             'status' => 'completed',
         ]);
 

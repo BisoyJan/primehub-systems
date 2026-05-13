@@ -160,9 +160,9 @@ class AttendanceProcessorTest extends TestCase
     #[Test]
     public function it_determines_time_in_status_tardy(): void
     {
-        // Forgiveness window: tardy_minutes > grace ⇒ tardy.
-        $tardyMinutes = 16;
-        $gracePeriod = 15;
+        // Beyond grace but within half_day_absence_tardy_minutes (15) ⇒ tardy.
+        $tardyMinutes = 10;
+        $gracePeriod = 5;
 
         $status = $this->callProtectedMethod($this->processor, 'determineTimeInStatus', [$tardyMinutes, $gracePeriod]);
 
@@ -172,15 +172,13 @@ class AttendanceProcessorTest extends TestCase
     #[Test]
     public function it_determines_time_in_status_half_day_absence(): void
     {
-        // Forgiveness semantic: half_day_absence is NEVER auto-applied —
-        // any tardiness above the grace window stays `tardy`. Admins promote
-        // to half_day manually if warranted.
+        // Beyond grace AND beyond half_day_absence_tardy_minutes (15) ⇒ half_day_absence.
         $tardyMinutes = 45;
         $gracePeriod = 15;
 
         $status = $this->callProtectedMethod($this->processor, 'determineTimeInStatus', [$tardyMinutes, $gracePeriod]);
 
-        $this->assertEquals('tardy', $status);
+        $this->assertEquals('half_day_absence', $status);
     }
 
     #[Test]
