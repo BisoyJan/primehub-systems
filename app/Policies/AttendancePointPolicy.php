@@ -117,7 +117,7 @@ class AttendancePointPolicy
 
     /**
      * Determine whether the user can run management actions
-     * (cleanup, regenerate, expire-all, GBRO fixes, recalculate).
+     * (regenerate, remove-duplicates, expire-all, reset-expired, recalculate-gbro).
      */
     public function manage(User $user): bool
     {

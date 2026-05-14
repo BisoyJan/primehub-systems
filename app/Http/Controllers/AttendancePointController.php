@@ -582,44 +582,6 @@ class AttendancePointController extends Controller
     }
 
     /**
-     * Initialize GBRO expiration dates for existing active points.
-     */
-    public function initializeGbroDates(Request $request)
-    {
-        $this->authorize('manage', AttendancePoint::class);
-
-        try {
-            return response()->json($this->maintenanceService->initializeGbroDates());
-        } catch (\Exception $e) {
-            Log::error('AttendancePointController initializeGbroDates Error: '.$e->getMessage());
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to initialize GBRO dates.',
-            ], 500);
-        }
-    }
-
-    /**
-     * Fix GBRO expiration dates for points with wrong reference.
-     */
-    public function fixGbroDates(Request $request)
-    {
-        $this->authorize('manage', AttendancePoint::class);
-
-        try {
-            return response()->json($this->maintenanceService->fixGbroDates());
-        } catch (\Exception $e) {
-            Log::error('AttendancePointController fixGbroDates Error: '.$e->getMessage());
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to fix GBRO dates.',
-            ], 500);
-        }
-    }
-
-    /**
      * Reset expired attendance points back to active.
      */
     public function resetExpired(Request $request)
@@ -663,41 +625,6 @@ class AttendancePointController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to regenerate points.',
-            ], 500);
-        }
-    }
-
-    /**
-     * Full cleanup: remove duplicates + expire all pending.
-     */
-    public function cleanup(Request $request)
-    {
-        $this->authorize('manage', AttendancePoint::class);
-
-        try {
-            return response()->json($this->maintenanceService->cleanup());
-        } catch (\Exception $e) {
-            Log::error('AttendancePointController cleanup Error: '.$e->getMessage());
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to perform cleanup.',
-            ], 500);
-        }
-    }
-
-    public function fixAnomalies(Request $request)
-    {
-        $this->authorize('manage', AttendancePoint::class);
-
-        try {
-            return response()->json($this->maintenanceService->fixAnomalies());
-        } catch (\Exception $e) {
-            Log::error('AttendancePointController fixAnomalies Error: '.$e->getMessage());
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to fix anomalies.',
             ], 500);
         }
     }

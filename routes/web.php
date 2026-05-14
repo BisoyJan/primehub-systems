@@ -328,10 +328,6 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
                 Route::post('/expire-all', [AttendancePointController::class, 'expireAllPending'])->name('expire-all');
                 Route::post('/reset-expired', [AttendancePointController::class, 'resetExpired'])->name('reset-expired');
                 Route::post('/regenerate', [AttendancePointController::class, 'regeneratePoints'])->name('regenerate');
-                Route::post('/cleanup', [AttendancePointController::class, 'cleanup'])->name('cleanup');
-                Route::post('/initialize-gbro-dates', [AttendancePointController::class, 'initializeGbroDates'])->name('initialize-gbro-dates');
-                Route::post('/fix-gbro-dates', [AttendancePointController::class, 'fixGbroDates'])->name('fix-gbro-dates');
-                Route::post('/fix-anomalies', [AttendancePointController::class, 'fixAnomalies'])->name('fix-anomalies');
 
                 // GBRO drift audit dashboard (detect + repair history).
                 Route::get('/anomaly-logs', [GbroAnomalyLogController::class, 'index'])->name('anomaly-logs.index');

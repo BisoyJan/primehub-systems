@@ -319,7 +319,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
     const [isLoadingStats, setIsLoadingStats] = useState(false);
     const [isManagementAction, setIsManagementAction] = useState(false);
     const [expandedStatSections, setExpandedStatSections] = useState<Record<string, boolean>>({});
-    const [confirmAction, setConfirmAction] = useState<'remove-duplicates' | 'expire-all' | 'reset-expired' | 'regenerate' | 'cleanup' | 'initialize-gbro-dates' | 'fix-gbro-dates' | 'recalculate-gbro' | 'fix-anomalies' | null>(null);
+    const [confirmAction, setConfirmAction] = useState<'remove-duplicates' | 'expire-all' | 'regenerate' | 'recalculate-gbro' | null>(null);
 
     // Management filters for regenerate and reset-expired
     const [mgmtDateFrom, setMgmtDateFrom] = useState('');
@@ -640,7 +640,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
         fetchManagementStats();
     };
 
-    const handleManagementAction = async (action: 'remove-duplicates' | 'expire-all' | 'reset-expired' | 'regenerate' | 'cleanup' | 'initialize-gbro-dates' | 'fix-gbro-dates' | 'recalculate-gbro' | 'fix-anomalies') => {
+    const handleManagementAction = async (action: 'remove-duplicates' | 'expire-all' | 'regenerate' | 'recalculate-gbro') => {
         setIsManagementAction(true);
         try {
             // Special handling for recalculate-gbro (per-user action)
@@ -706,26 +706,15 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
             const routeMap: Record<string, { url: string }> = {
                 'remove-duplicates': managementRoutes.removeDuplicates(),
                 'expire-all': managementRoutes.expireAll(),
-                'reset-expired': managementRoutes.resetExpired(),
                 'regenerate': managementRoutes.regenerate(),
-                'cleanup': managementRoutes.cleanup(),
-                'initialize-gbro-dates': managementRoutes.initializeGbroDates(),
-                'fix-gbro-dates': managementRoutes.fixGbroDates(),
-                'fix-anomalies': managementRoutes.fixAnomalies(),
             };
 
-            // Build request body with filters for regenerate and reset-expired
+            // Build request body with filters per action
             const body: Record<string, string | string[]> = {};
             if (action === 'regenerate') {
                 if (mgmtDateFrom) body.date_from = mgmtDateFrom;
                 if (mgmtDateTo) body.date_to = mgmtDateTo;
                 if (mgmtUserId) body.user_id = mgmtUserId;
-            }
-            if (action === 'reset-expired') {
-                if (mgmtUserIds.length > 0) body.user_ids = mgmtUserIds;
-            }
-            if (action === 'initialize-gbro-dates' || action === 'fix-gbro-dates') {
-                if (mgmtUserIds.length > 0) body.user_ids = mgmtUserIds;
             }
             if (action === 'expire-all') {
                 body.expiration_type = expirationType;
@@ -1143,7 +1132,6 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                                 <HelpCircle className="h-4 w-4 mr-2" />
                                                 How to Use
                                             </DropdownMenuItem>
-                                            <DropdownMenuSeparator />
                                             <DropdownMenuItem onClick={handleOpenManagementDialog}>
                                                 <ClipboardList className="h-4 w-4 mr-2" />
                                                 View Statistics
@@ -1161,32 +1149,10 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                                 <AlertTriangle className="h-4 w-4 mr-2" />
                                                 Expire All Pending
                                             </DropdownMenuItem>
-                                            <DropdownMenuItem onClick={() => setConfirmAction('reset-expired')}>
-                                                <RotateCcw className="h-4 w-4 mr-2" />
-                                                Reset Expired Points
-                                            </DropdownMenuItem>
                                             <DropdownMenuSeparator />
-                                            <DropdownMenuItem onClick={() => setConfirmAction('initialize-gbro-dates')}>
-                                                <Play className="h-4 w-4 mr-2" />
-                                                Initialize GBRO Dates
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem onClick={() => setConfirmAction('fix-gbro-dates')}>
-                                                <RefreshCw className="h-4 w-4 mr-2" />
-                                                Fix GBRO Dates
-                                            </DropdownMenuItem>
                                             <DropdownMenuItem onClick={() => setConfirmAction('recalculate-gbro')}>
                                                 <RotateCcw className="h-4 w-4 mr-2" />
                                                 Recalculate GBRO Dates
-                                            </DropdownMenuItem>
-                                            <DropdownMenuSeparator />
-                                            <DropdownMenuItem onClick={() => setConfirmAction('cleanup')}>
-                                                <Settings className="h-4 w-4 mr-2" />
-                                                Full Cleanup
-                                            </DropdownMenuItem>
-                                            <DropdownMenuSeparator />
-                                            <DropdownMenuItem onClick={() => setConfirmAction('fix-anomalies')}>
-                                                <Wrench className="h-4 w-4 mr-2" />
-                                                Fix Anomalies
                                             </DropdownMenuItem>
                                             <DropdownMenuSeparator />
                                             <DropdownMenuItem onClick={() => router.visit('/attendance-points/management/anomaly-logs')}>
@@ -2781,40 +2747,10 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                 when: 'Points are still showing as active even though their expiration date is in the past. Run after a missed scheduled expiration job, or manually at end-of-month.',
                             },
                             {
-                                icon: <RotateCcw className="h-4 w-4 text-blue-600" />,
-                                name: 'Reset Expired Points',
-                                what: 'Reverses the expired status on points, restoring them to active.',
-                                when: 'Points were expired by mistake or the expiration date was set incorrectly and needs to be corrected before re-expiring.',
-                            },
-                            {
-                                icon: <Play className="h-4 w-4 text-purple-600" />,
-                                name: 'Initialize GBRO Dates',
-                                what: 'Calculates and assigns GBRO expiration predictions to active points that have no GBRO date set.',
-                                when: 'First-time GBRO setup for employees who already have existing point records, or after enabling the GBRO policy for a new campaign.',
-                            },
-                            {
-                                icon: <RefreshCw className="h-4 w-4 text-indigo-600" />,
-                                name: 'Fix GBRO Dates',
-                                what: 'Corrects GBRO reference dates on existing records without performing a full cascade recalculation.',
-                                when: 'GBRO dates look off after a point was added or edited — a lighter fix than full recalculation.',
-                            },
-                            {
                                 icon: <RotateCcw className="h-4 w-4 text-violet-600" />,
                                 name: 'Recalculate GBRO Dates',
                                 what: 'Performs a full cascade recalculation of all GBRO dates for all (or selected) employees by re-simulating the entire violation timeline.',
                                 when: 'Backdated point entries were added, edited, or deleted, causing GBRO dates to be out of sync across the timeline.',
-                            },
-                            {
-                                icon: <Settings className="h-4 w-4 text-slate-600" />,
-                                name: 'Full Cleanup',
-                                what: 'Combines Remove Duplicates + Expire All Pending into a single operation.',
-                                when: 'Quick data-health sweep — run this after a large import or at the start of a new pay period to clean up stale and duplicate records at once.',
-                            },
-                            {
-                                icon: <Wrench className="h-4 w-4 text-red-600" />,
-                                name: 'Fix Anomalies',
-                                what: 'Scans all records and corrects three specific issues: SRO points past their expiration date, stale GBRO dates on ineligible records, and month-end date overflow bugs.',
-                                when: 'You notice unexpected point counts, incorrect expiration dates near month boundaries, or GBRO-eligible flags on points that should not have them.',
                             },
                             {
                                 icon: <FileText className="h-4 w-4 text-sky-600" />,
@@ -3114,74 +3050,6 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                         </Badge>
                                     )}
                                 </Button>
-                                <Button
-                                    variant="outline"
-                                    className="justify-start"
-                                    disabled={!managementStats || managementStats.expired_count === 0 || isManagementAction}
-                                    onClick={() => setConfirmAction('reset-expired')}
-                                >
-                                    <RotateCcw className="h-4 w-4 mr-2" />
-                                    Reset Expired Points
-                                    {managementStats && managementStats.expired_count > 0 && (
-                                        <Badge variant="secondary" className="ml-auto">
-                                            {managementStats.expired_count}
-                                        </Badge>
-                                    )}
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    className="justify-start"
-                                    disabled={isManagementAction}
-                                    onClick={() => setConfirmAction('initialize-gbro-dates')}
-                                >
-                                    <Play className="h-4 w-4 mr-2" />
-                                    Initialize GBRO Dates
-                                    <span className="ml-auto text-xs text-muted-foreground">
-                                        (set predictions)
-                                    </span>
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    className="justify-start"
-                                    disabled={isManagementAction}
-                                    onClick={() => setConfirmAction('fix-gbro-dates')}
-                                >
-                                    <RefreshCw className="h-4 w-4 mr-2" />
-                                    Fix GBRO Dates
-                                    <span className="ml-auto text-xs text-muted-foreground">
-                                        (fix references)
-                                    </span>
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    className="justify-start"
-                                    disabled={!managementStats || (managementStats.duplicates_count === 0 && managementStats.pending_expirations_count === 0) || isManagementAction}
-                                    onClick={() => setConfirmAction('cleanup')}
-                                >
-                                    <Settings className="h-4 w-4 mr-2" />
-                                    Full Cleanup
-                                    <span className="ml-auto text-xs text-muted-foreground">
-                                        (duplicates + expire)
-                                    </span>
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    className="justify-start"
-                                    disabled={isManagementAction}
-                                    onClick={() => setConfirmAction('fix-anomalies')}
-                                >
-                                    <Wrench className="h-4 w-4 mr-2" />
-                                    Fix Anomalies
-                                    {managementStats && managementStats.gbro_anomaly_count > 0 ? (
-                                        <Badge variant="destructive" className="ml-auto">
-                                            {managementStats.gbro_anomaly_count}
-                                        </Badge>
-                                    ) : (
-                                        <span className="ml-auto text-xs text-muted-foreground">
-                                            (SRO + GBRO + overflow)
-                                        </span>
-                                    )}
-                                </Button>
                             </div>
                         </div>
                     </div>
@@ -3225,12 +3093,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                             {confirmAction === 'regenerate' && 'Regenerate Attendance Points'}
                             {confirmAction === 'remove-duplicates' && 'Remove Duplicate Points'}
                             {confirmAction === 'expire-all' && 'Expire All Pending Points'}
-                            {confirmAction === 'reset-expired' && 'Reset Expired Points'}
-                            {confirmAction === 'cleanup' && 'Full Cleanup'}
-                            {confirmAction === 'initialize-gbro-dates' && 'Initialize GBRO Dates'}
-                            {confirmAction === 'fix-gbro-dates' && 'Fix GBRO Dates'}
                             {confirmAction === 'recalculate-gbro' && 'Recalculate GBRO Dates'}
-                            {confirmAction === 'fix-anomalies' && 'Fix Anomalies'}
                         </AlertDialogTitle>
                         <AlertDialogDescription asChild>
                             <div>
@@ -3502,383 +3365,6 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                         </span>
                                     </>
                                 )}
-                                {confirmAction === 'reset-expired' && (
-                                    <>
-                                        <p className="mb-3">
-                                            This will reset expired points back to active status.
-                                            Their expiration dates will be recalculated based on the original violation date.
-                                        </p>
-
-                                        {/* Filter for reset-expired - Multi-select */}
-                                        <div className="space-y-3 p-3 border rounded-lg bg-muted/50 mb-3">
-                                            <p className="text-sm font-medium text-foreground">Filter by Employees (optional):</p>
-                                            <div>
-                                                <Label htmlFor="mgmt_user_reset" className="text-xs">Select Employees</Label>
-                                                <Popover open={isMgmtUserPopoverOpen} onOpenChange={setIsMgmtUserPopoverOpen}>
-                                                    <PopoverTrigger asChild>
-                                                        <Button
-                                                            variant="outline"
-                                                            role="combobox"
-                                                            className="w-full justify-between h-auto min-h-8 text-sm font-normal"
-                                                        >
-                                                            <span className="truncate text-left">
-                                                                {mgmtUserIds.length === 0
-                                                                    ? "All Employees"
-                                                                    : mgmtUserIds.length === 1
-                                                                        ? (() => {
-                                                                            const user = users?.find(u => String(u.id) === mgmtUserIds[0]);
-                                                                            return user ? formatUserName(user) : "1 employee selected";
-                                                                        })()
-                                                                        : `${mgmtUserIds.length} employees selected`}
-                                                            </span>
-                                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                                        </Button>
-                                                    </PopoverTrigger>
-                                                    <PopoverContent className="w-full p-0" align="start">
-                                                        <Command shouldFilter={false}>
-                                                            <CommandInput
-                                                                placeholder="Search employee..."
-                                                                value={mgmtUserSearchQuery}
-                                                                onValueChange={setMgmtUserSearchQuery}
-                                                            />
-                                                            <CommandList>
-                                                                <CommandEmpty>No employee found.</CommandEmpty>
-                                                                <CommandGroup>
-                                                                    <CommandItem
-                                                                        value="clear-all"
-                                                                        onSelect={() => {
-                                                                            setMgmtUserIds([]);
-                                                                            setMgmtUserSearchQuery('');
-                                                                        }}
-                                                                        className="cursor-pointer"
-                                                                    >
-                                                                        <Check className={`mr-2 h-4 w-4 ${mgmtUserIds.length === 0 ? "opacity-100" : "opacity-0"}`} />
-                                                                        All Employees (clear selection)
-                                                                    </CommandItem>
-                                                                    {users?.filter(user => {
-                                                                        if (!mgmtUserSearchQuery) return true;
-                                                                        const query = mgmtUserSearchQuery.toLowerCase();
-                                                                        return formatUserName(user).toLowerCase().includes(query) || user.name.toLowerCase().includes(query);
-                                                                    }).slice(0, 50).map((user) => {
-                                                                        const isSelected = mgmtUserIds.includes(String(user.id));
-                                                                        return (
-                                                                            <CommandItem
-                                                                                key={user.id}
-                                                                                value={formatUserName(user)}
-                                                                                onSelect={() => {
-                                                                                    if (isSelected) {
-                                                                                        setMgmtUserIds(mgmtUserIds.filter(id => id !== String(user.id)));
-                                                                                    } else {
-                                                                                        setMgmtUserIds([...mgmtUserIds, String(user.id)]);
-                                                                                    }
-                                                                                }}
-                                                                                className="cursor-pointer"
-                                                                            >
-                                                                                <Check className={`mr-2 h-4 w-4 ${isSelected ? "opacity-100" : "opacity-0"}`} />
-                                                                                {formatUserName(user)}
-                                                                            </CommandItem>
-                                                                        );
-                                                                    })}
-                                                                </CommandGroup>
-                                                            </CommandList>
-                                                        </Command>
-                                                    </PopoverContent>
-                                                </Popover>
-                                                {mgmtUserIds.length > 0 && (
-                                                    <div className="flex flex-wrap gap-1 mt-2">
-                                                        {mgmtUserIds.map(id => {
-                                                            const user = users?.find(u => String(u.id) === id);
-                                                            return user ? (
-                                                                <Badge key={id} variant="secondary" className="text-xs">
-                                                                    {formatUserName(user)}
-                                                                    <button
-                                                                        type="button"
-                                                                        className="ml-1 hover:text-destructive"
-                                                                        onClick={() => setMgmtUserIds(mgmtUserIds.filter(uid => uid !== id))}
-                                                                    >
-                                                                        ×
-                                                                    </button>
-                                                                </Badge>
-                                                            ) : null;
-                                                        })}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        <strong className="text-blue-600">Excused points will NOT be affected.</strong>
-                                        <br /><br />
-                                        <span className="flex items-center gap-1 text-amber-600">
-                                            <BellOff className="h-4 w-4 inline" />
-                                            <strong>No notifications will be sent.</strong>
-                                        </span>
-                                        <br />
-                                        <span className="text-xs text-muted-foreground">
-                                            Use this if you need to reprocess expirations or correct accidental expirations.
-                                        </span>
-                                    </>
-                                )}
-                                {confirmAction === 'cleanup' && (
-                                    <>
-                                        This will perform a full cleanup of attendance points:
-                                        <br /><br />
-                                        <ul className="list-disc list-inside space-y-1 text-sm">
-                                            <li><strong>Remove Duplicates:</strong> Delete duplicate entries (excused points preserved)</li>
-                                            <li><strong>Expire Pending:</strong> Mark all past-due points as expired (excused excluded)</li>
-                                        </ul>
-                                        <br />
-                                        <strong className="text-green-600">Excused points will NOT be affected.</strong>
-                                        <br /><br />
-                                        <span className="flex items-center gap-1 text-amber-600">
-                                            <BellOff className="h-4 w-4 inline" />
-                                            <strong>No notifications will be sent.</strong>
-                                        </span>
-                                    </>
-                                )}
-                                {confirmAction === 'fix-anomalies' && (
-                                    <>
-                                        This will scan and fix all attendance point data anomalies:
-                                        <br /><br />
-                                        <ul className="list-disc list-inside space-y-1 text-sm">
-                                            <li><strong>Overdue SRO:</strong> Expire points past their SRO expiration date</li>
-                                            <li><strong>Stale GBRO Dates:</strong> Clear gbro_expires_at from non-GBRO-eligible records</li>
-                                            <li><strong>Overflow Fix:</strong> Correct expires_at dates affected by month-end overflow</li>
-                                        </ul>
-                                        <br />
-                                        <strong className="text-green-600">Excused points will NOT be expired.</strong>
-                                        <br /><br />
-                                        <span className="flex items-center gap-1 text-amber-600">
-                                            <BellOff className="h-4 w-4 inline" />
-                                            <strong>No notifications will be sent.</strong>
-                                        </span>
-                                    </>
-                                )}
-                                {confirmAction === 'initialize-gbro-dates' && (
-                                    <>
-                                        <p className="mb-3">
-                                            This will initialize GBRO (Good Behavior Roll Off) prediction dates for active GBRO-eligible points.
-                                        </p>
-
-                                        {/* User filter */}
-                                        <div className="space-y-3 p-3 border rounded-lg bg-muted/50 mb-3">
-                                            <p className="text-sm font-medium text-foreground">Filter by Employees (optional):</p>
-                                            <div>
-                                                <Label htmlFor="gbro_init_users" className="text-xs">Select Employees</Label>
-                                                <Popover open={isMgmtUserPopoverOpen} onOpenChange={setIsMgmtUserPopoverOpen}>
-                                                    <PopoverTrigger asChild>
-                                                        <Button
-                                                            variant="outline"
-                                                            role="combobox"
-                                                            className="w-full justify-between h-auto min-h-8 text-sm font-normal"
-                                                        >
-                                                            <span className="truncate text-left">
-                                                                {mgmtUserIds.length === 0
-                                                                    ? "All Employees"
-                                                                    : mgmtUserIds.length === 1
-                                                                        ? (() => {
-                                                                            const user = users?.find(u => String(u.id) === mgmtUserIds[0]);
-                                                                            return user ? formatUserName(user) : "1 employee selected";
-                                                                        })()
-                                                                        : `${mgmtUserIds.length} employees selected`}
-                                                            </span>
-                                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                                        </Button>
-                                                    </PopoverTrigger>
-                                                    <PopoverContent className="w-full p-0" align="start">
-                                                        <Command shouldFilter={false}>
-                                                            <CommandInput
-                                                                placeholder="Search employee..."
-                                                                value={mgmtUserSearchQuery}
-                                                                onValueChange={setMgmtUserSearchQuery}
-                                                            />
-                                                            <CommandList>
-                                                                <CommandEmpty>No employee found.</CommandEmpty>
-                                                                <CommandGroup>
-                                                                    <CommandItem
-                                                                        value="clear-all"
-                                                                        onSelect={() => {
-                                                                            setMgmtUserIds([]);
-                                                                            setMgmtUserSearchQuery('');
-                                                                        }}
-                                                                        className="cursor-pointer"
-                                                                    >
-                                                                        <Check className={`mr-2 h-4 w-4 ${mgmtUserIds.length === 0 ? "opacity-100" : "opacity-0"}`} />
-                                                                        All Employees (clear selection)
-                                                                    </CommandItem>
-                                                                    {users?.filter(user => {
-                                                                        if (!mgmtUserSearchQuery) return true;
-                                                                        const query = mgmtUserSearchQuery.toLowerCase();
-                                                                        return formatUserName(user).toLowerCase().includes(query) || user.name.toLowerCase().includes(query);
-                                                                    }).slice(0, 50).map((user) => {
-                                                                        const isSelected = mgmtUserIds.includes(String(user.id));
-                                                                        return (
-                                                                            <CommandItem
-                                                                                key={user.id}
-                                                                                value={formatUserName(user)}
-                                                                                onSelect={() => {
-                                                                                    if (isSelected) {
-                                                                                        setMgmtUserIds(mgmtUserIds.filter(id => id !== String(user.id)));
-                                                                                    } else {
-                                                                                        setMgmtUserIds([...mgmtUserIds, String(user.id)]);
-                                                                                    }
-                                                                                }}
-                                                                                className="cursor-pointer"
-                                                                            >
-                                                                                <Check className={`mr-2 h-4 w-4 ${isSelected ? "opacity-100" : "opacity-0"}`} />
-                                                                                {formatUserName(user)}
-                                                                            </CommandItem>
-                                                                        );
-                                                                    })}
-                                                                </CommandGroup>
-                                                            </CommandList>
-                                                        </Command>
-                                                    </PopoverContent>
-                                                </Popover>
-                                                {mgmtUserIds.length > 0 && (
-                                                    <div className="flex flex-wrap gap-1 mt-2">
-                                                        {mgmtUserIds.map(id => {
-                                                            const user = users?.find(u => String(u.id) === id);
-                                                            return user ? (
-                                                                <Badge key={id} variant="secondary" className="text-xs">
-                                                                    {formatUserName(user)}
-                                                                    <button
-                                                                        type="button"
-                                                                        className="ml-1 hover:text-destructive"
-                                                                        onClick={() => setMgmtUserIds(mgmtUserIds.filter(uid => uid !== id))}
-                                                                    >
-                                                                        ×
-                                                                    </button>
-                                                                </Badge>
-                                                            ) : null;
-                                                        })}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        <ul className="list-disc list-inside space-y-1 text-sm mb-3">
-                                            <li>Sets <code className="bg-muted px-1 rounded">gbro_expires_at</code> for points that don't have it</li>
-                                            <li>Uses cascading pair logic (every 2 points = 60 days)</li>
-                                            <li>Reference date = most recent of: last violation OR last GBRO application</li>
-                                        </ul>
-                                        <span className="text-blue-600 text-sm">
-                                            <strong>Safe operation:</strong> Only updates prediction dates, does not expire any points.
-                                        </span>
-                                    </>
-                                )}
-                                {confirmAction === 'fix-gbro-dates' && (
-                                    <>
-                                        <p className="mb-3">
-                                            This will fix GBRO prediction dates for points that were updated with incorrect references.
-                                        </p>
-
-                                        {/* User filter */}
-                                        <div className="space-y-3 p-3 border rounded-lg bg-muted/50 mb-3">
-                                            <p className="text-sm font-medium text-foreground">Filter by Employees (optional):</p>
-                                            <div>
-                                                <Label htmlFor="gbro_fix_users" className="text-xs">Select Employees</Label>
-                                                <Popover open={isMgmtUserPopoverOpen} onOpenChange={setIsMgmtUserPopoverOpen}>
-                                                    <PopoverTrigger asChild>
-                                                        <Button
-                                                            variant="outline"
-                                                            role="combobox"
-                                                            className="w-full justify-between h-auto min-h-8 text-sm font-normal"
-                                                        >
-                                                            <span className="truncate text-left">
-                                                                {mgmtUserIds.length === 0
-                                                                    ? "All Employees"
-                                                                    : mgmtUserIds.length === 1
-                                                                        ? (() => {
-                                                                            const user = users?.find(u => String(u.id) === mgmtUserIds[0]);
-                                                                            return user ? formatUserName(user) : "1 employee selected";
-                                                                        })()
-                                                                        : `${mgmtUserIds.length} employees selected`}
-                                                            </span>
-                                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                                        </Button>
-                                                    </PopoverTrigger>
-                                                    <PopoverContent className="w-full p-0" align="start">
-                                                        <Command shouldFilter={false}>
-                                                            <CommandInput
-                                                                placeholder="Search employee..."
-                                                                value={mgmtUserSearchQuery}
-                                                                onValueChange={setMgmtUserSearchQuery}
-                                                            />
-                                                            <CommandList>
-                                                                <CommandEmpty>No employee found.</CommandEmpty>
-                                                                <CommandGroup>
-                                                                    <CommandItem
-                                                                        value="clear-all"
-                                                                        onSelect={() => {
-                                                                            setMgmtUserIds([]);
-                                                                            setMgmtUserSearchQuery('');
-                                                                        }}
-                                                                        className="cursor-pointer"
-                                                                    >
-                                                                        <Check className={`mr-2 h-4 w-4 ${mgmtUserIds.length === 0 ? "opacity-100" : "opacity-0"}`} />
-                                                                        All Employees (clear selection)
-                                                                    </CommandItem>
-                                                                    {users?.filter(user => {
-                                                                        if (!mgmtUserSearchQuery) return true;
-                                                                        const query = mgmtUserSearchQuery.toLowerCase();
-                                                                        return formatUserName(user).toLowerCase().includes(query) || user.name.toLowerCase().includes(query);
-                                                                    }).slice(0, 50).map((user) => {
-                                                                        const isSelected = mgmtUserIds.includes(String(user.id));
-                                                                        return (
-                                                                            <CommandItem
-                                                                                key={user.id}
-                                                                                value={formatUserName(user)}
-                                                                                onSelect={() => {
-                                                                                    if (isSelected) {
-                                                                                        setMgmtUserIds(mgmtUserIds.filter(id => id !== String(user.id)));
-                                                                                    } else {
-                                                                                        setMgmtUserIds([...mgmtUserIds, String(user.id)]);
-                                                                                    }
-                                                                                }}
-                                                                                className="cursor-pointer"
-                                                                            >
-                                                                                <Check className={`mr-2 h-4 w-4 ${isSelected ? "opacity-100" : "opacity-0"}`} />
-                                                                                {formatUserName(user)}
-                                                                            </CommandItem>
-                                                                        );
-                                                                    })}
-                                                                </CommandGroup>
-                                                            </CommandList>
-                                                        </Command>
-                                                    </PopoverContent>
-                                                </Popover>
-                                                {mgmtUserIds.length > 0 && (
-                                                    <div className="flex flex-wrap gap-1 mt-2">
-                                                        {mgmtUserIds.map(id => {
-                                                            const user = users?.find(u => String(u.id) === id);
-                                                            return user ? (
-                                                                <Badge key={id} variant="secondary" className="text-xs">
-                                                                    {formatUserName(user)}
-                                                                    <button
-                                                                        type="button"
-                                                                        className="ml-1 hover:text-destructive"
-                                                                        onClick={() => setMgmtUserIds(mgmtUserIds.filter(uid => uid !== id))}
-                                                                    >
-                                                                        ×
-                                                                    </button>
-                                                                </Badge>
-                                                            ) : null;
-                                                        })}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        <ul className="list-disc list-inside space-y-1 text-sm mb-3">
-                                            <li>Finds users who have had GBRO applied previously</li>
-                                            <li>Recalculates remaining points' prediction dates based on the scheduled GBRO date</li>
-                                            <li>Ensures fairness: new prediction = scheduled_gbro_date + 60 days</li>
-                                        </ul>
-                                        <span className="text-blue-600 text-sm">
-                                            <strong>Safe operation:</strong> Only updates prediction dates, does not expire any points.
-                                        </span>
-                                    </>
-                                )}
                                 {confirmAction === 'recalculate-gbro' && (
                                     <>
                                         <p className="mb-3">
@@ -4014,12 +3500,8 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                 confirmAction === 'regenerate' ? 'bg-green-600 hover:bg-green-700' :
                                     confirmAction === 'remove-duplicates' ? 'bg-yellow-600 hover:bg-yellow-700' :
                                         confirmAction === 'expire-all' ? 'bg-orange-600 hover:bg-orange-700' :
-                                            confirmAction === 'cleanup' ? 'bg-purple-600 hover:bg-purple-700' :
-                                                confirmAction === 'initialize-gbro-dates' ? 'bg-cyan-600 hover:bg-cyan-700' :
-                                                    confirmAction === 'fix-gbro-dates' ? 'bg-teal-600 hover:bg-teal-700' :
-                                                        confirmAction === 'recalculate-gbro' ? 'bg-indigo-600 hover:bg-indigo-700' :
-                                                            confirmAction === 'fix-anomalies' ? 'bg-amber-600 hover:bg-amber-700' :
-                                                                'bg-blue-600 hover:bg-blue-700'
+                                            confirmAction === 'recalculate-gbro' ? 'bg-indigo-600 hover:bg-indigo-700' :
+                                                'bg-blue-600 hover:bg-blue-700'
                             }
                         >
                             {isManagementAction ? (
@@ -4032,12 +3514,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                     {confirmAction === 'regenerate' && 'Regenerate Points'}
                                     {confirmAction === 'remove-duplicates' && 'Remove Duplicates'}
                                     {confirmAction === 'expire-all' && 'Expire All'}
-                                    {confirmAction === 'reset-expired' && 'Reset Points'}
-                                    {confirmAction === 'cleanup' && 'Run Cleanup'}
-                                    {confirmAction === 'initialize-gbro-dates' && 'Initialize GBRO Dates'}
-                                    {confirmAction === 'fix-gbro-dates' && 'Fix GBRO Dates'}
                                     {confirmAction === 'recalculate-gbro' && 'Recalculate GBRO'}
-                                    {confirmAction === 'fix-anomalies' && 'Fix Anomalies'}
                                 </>
                             )}
                         </AlertDialogAction>

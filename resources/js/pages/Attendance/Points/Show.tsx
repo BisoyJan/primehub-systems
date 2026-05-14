@@ -45,7 +45,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Award, AlertCircle, TrendingUp, Calendar, CheckCircle, XCircle, FileText, Download, BarChart3, RotateCcw, Search, Loader2, Settings, AlertTriangle, Play, RefreshCw, BellOff, Wrench, HelpCircle } from "lucide-react";
+import { ArrowLeft, Award, AlertCircle, TrendingUp, Calendar, CheckCircle, XCircle, FileText, Download, BarChart3, RotateCcw, Search, Loader2, Settings, AlertTriangle, RefreshCw, HelpCircle } from "lucide-react";
 import { DatePicker } from "@/components/ui/date-picker";
 import type { SharedData } from "@/types";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
@@ -246,7 +246,7 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
     // Management state (user-specific)
     const [isManagementAction, setIsManagementAction] = useState(false);
     const [isGuideOpen, setIsGuideOpen] = useState(false);
-    const [confirmAction, setConfirmAction] = useState<'expire-all' | 'reset-expired' | 'initialize-gbro-dates' | 'fix-gbro-dates' | 'recalculate-gbro' | 'fix-anomalies' | null>(null);
+    const [confirmAction, setConfirmAction] = useState<'expire-all' | 'reset-expired' | 'recalculate-gbro' | null>(null);
     const [expirationType, setExpirationType] = useState<'both' | 'sro' | 'gbro'>('both');
 
     // Cleanup polling on unmount
@@ -515,7 +515,7 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
     };
 
     // Management action handler (user-specific)
-    const handleManagementAction = async (action: 'expire-all' | 'reset-expired' | 'initialize-gbro-dates' | 'fix-gbro-dates' | 'recalculate-gbro' | 'fix-anomalies') => {
+    const handleManagementAction = async (action: 'expire-all' | 'reset-expired' | 'recalculate-gbro') => {
         setIsManagementAction(true);
         try {
             // Special handling for recalculate-gbro using Inertia router
@@ -543,17 +543,12 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
             const routeMap: Record<string, { url: string }> = {
                 'expire-all': managementRoutes.expireAll(),
                 'reset-expired': managementRoutes.resetExpired(),
-                'initialize-gbro-dates': managementRoutes.initializeGbroDates(),
-                'fix-gbro-dates': managementRoutes.fixGbroDates(),
-                'fix-anomalies': managementRoutes.fixAnomalies(),
             };
 
-            // Build request body - always include this user's ID (except for global actions)
+            // Build request body - always include this user's ID
             const body: Record<string, string | string[]> = {};
 
-            if (action !== 'fix-anomalies') {
-                body.user_ids = [String(user.id)];
-            }
+            body.user_ids = [String(user.id)];
 
             if (action === 'expire-all') {
                 body.expiration_type = expirationType;
@@ -844,20 +839,6 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                                     <DropdownMenuItem onClick={() => setConfirmAction('reset-expired')}>
                                         <RefreshCw className="mr-2 h-4 w-4" />
                                         Reset Expired Points
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem onClick={() => setConfirmAction('initialize-gbro-dates')}>
-                                        <Play className="mr-2 h-4 w-4" />
-                                        Initialize GBRO Dates
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => setConfirmAction('fix-gbro-dates')}>
-                                        <BellOff className="mr-2 h-4 w-4" />
-                                        Fix GBRO Dates
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem onClick={() => setConfirmAction('fix-anomalies')}>
-                                        <Wrench className="mr-2 h-4 w-4" />
-                                        Fix Anomalies
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem onClick={() => router.visit('/attendance-points/management/anomaly-logs')}>
@@ -1594,7 +1575,7 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                     <div className="space-y-3 py-2">
                         <div className="rounded-lg border bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800 p-3">
                             <p className="text-sm text-blue-800 dark:text-blue-200">
-                                <strong>Note:</strong> All actions below are scoped to this employee only, except <em>Fix Anomalies</em> which runs across all employees.
+                                <strong>Note:</strong> All actions below are scoped to this employee only.
                             </p>
                         </div>
 
@@ -1616,24 +1597,6 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                                 name: 'Reset Expired Points',
                                 what: "Reverses the expired status on this employee's points, restoring them to active.",
                                 when: "Points were expired incorrectly or the expiration date needs to be corrected before re-expiring.",
-                            },
-                            {
-                                icon: <Play className="h-4 w-4 text-purple-600" />,
-                                name: 'Initialize GBRO Dates',
-                                what: "Calculates and assigns GBRO expiration predictions to this employee's active points that have no GBRO date set.",
-                                when: 'First-time GBRO setup for this employee, or after the GBRO policy was newly enabled for their campaign.',
-                            },
-                            {
-                                icon: <BellOff className="h-4 w-4 text-indigo-600" />,
-                                name: 'Fix GBRO Dates',
-                                what: "Corrects this employee's GBRO reference dates without a full cascade recalculation.",
-                                when: 'GBRO dates look slightly off but a full recalculation is not needed — lighter and faster than Recalculate GBRO Dates.',
-                            },
-                            {
-                                icon: <Wrench className="h-4 w-4 text-red-600" />,
-                                name: 'Fix Anomalies',
-                                what: 'Scans all employees and corrects SRO overdue expirations, stale GBRO dates on ineligible records, and month-end date overflow bugs.',
-                                when: 'You notice incorrect expiration dates near month boundaries, wrong GBRO-eligible flags, or unexpected point totals across the workforce.',
                             },
                             {
                                 icon: <FileText className="h-4 w-4 text-sky-600" />,
@@ -1668,9 +1631,6 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                             {confirmAction === 'recalculate-gbro' && 'Recalculate GBRO Dates'}
                             {confirmAction === 'expire-all' && 'Expire All Pending Points'}
                             {confirmAction === 'reset-expired' && 'Reset Expired Points'}
-                            {confirmAction === 'initialize-gbro-dates' && 'Initialize GBRO Dates'}
-                            {confirmAction === 'fix-gbro-dates' && 'Fix GBRO Dates'}
-                            {confirmAction === 'fix-anomalies' && 'Fix Anomalies'}
                         </AlertDialogTitle>
                         <AlertDialogDescription>
                             {confirmAction === 'recalculate-gbro' && (
@@ -1696,30 +1656,6 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                             )}
                             {confirmAction === 'reset-expired' && (
                                 <p>This will reset all expired points for <span className="font-semibold">{user.name}</span> back to active status. Only use this if points were expired incorrectly.</p>
-                            )}
-                            {confirmAction === 'initialize-gbro-dates' && (
-                                <p>This will calculate and set GBRO expiration dates for <span className="font-semibold">{user.name}</span>'s active points that don't have dates set yet.</p>
-                            )}
-                            {confirmAction === 'fix-gbro-dates' && (
-                                <p>This will recalculate GBRO expiration dates for <span className="font-semibold">{user.name}</span>'s points based on current violation history. Use this if dates appear incorrect.</p>
-                            )}
-                            {confirmAction === 'fix-anomalies' && (
-                                <>
-                                    This will scan and fix all attendance point data anomalies (all employees):
-                                    <br /><br />
-                                    <ul className="list-disc list-inside space-y-1 text-sm">
-                                        <li><strong>Overdue SRO:</strong> Expire points past their SRO expiration date</li>
-                                        <li><strong>Stale GBRO Dates:</strong> Clear gbro_expires_at from non-GBRO-eligible records</li>
-                                        <li><strong>Overflow Fix:</strong> Correct expires_at dates affected by month-end overflow</li>
-                                    </ul>
-                                    <br />
-                                    <strong className="text-green-600">Excused points will NOT be expired.</strong>
-                                    <br /><br />
-                                    <span className="flex items-center gap-1 text-amber-600">
-                                        <BellOff className="h-4 w-4 inline" />
-                                        <strong>No notifications will be sent.</strong>
-                                    </span>
-                                </>
                             )}
                         </AlertDialogDescription>
                     </AlertDialogHeader>

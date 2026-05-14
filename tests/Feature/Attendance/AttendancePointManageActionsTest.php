@@ -6,6 +6,7 @@ use App\Models\Attendance;
 use App\Models\AttendancePoint;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -28,7 +29,9 @@ class AttendancePointManageActionsTest extends TestCase
     use RefreshDatabase;
 
     protected User $admin;
+
     protected User $hr;
+
     protected User $it;
 
     protected function setUp(): void
@@ -61,18 +64,15 @@ class AttendancePointManageActionsTest extends TestCase
     public static function manageEndpointProvider(): array
     {
         return [
-            'remove-duplicates'      => ['attendance-points.management.remove-duplicates'],
-            'expire-all'             => ['attendance-points.management.expire-all'],
-            'reset-expired'          => ['attendance-points.management.reset-expired'],
-            'regenerate'             => ['attendance-points.management.regenerate'],
-            'cleanup'                => ['attendance-points.management.cleanup'],
-            'initialize-gbro-dates'  => ['attendance-points.management.initialize-gbro-dates'],
-            'fix-gbro-dates'         => ['attendance-points.management.fix-gbro-dates'],
+            'remove-duplicates' => ['attendance-points.management.remove-duplicates'],
+            'expire-all' => ['attendance-points.management.expire-all'],
+            'reset-expired' => ['attendance-points.management.reset-expired'],
+            'regenerate' => ['attendance-points.management.regenerate'],
         ];
     }
 
     #[Test]
-    #[\PHPUnit\Framework\Attributes\DataProvider('manageEndpointProvider')]
+    #[DataProvider('manageEndpointProvider')]
     public function non_admin_hr_user_cannot_call_manage_endpoint(string $routeName): void
     {
         $this->actingAs($this->it)
@@ -160,9 +160,9 @@ class AttendancePointManageActionsTest extends TestCase
             ->ncns()
             ->for($user)
             ->create([
-                'shift_date'   => now()->subDays(400),
-                'expires_at'   => now()->subDay(),
-                'is_expired'   => false,
+                'shift_date' => now()->subDays(400),
+                'expires_at' => now()->subDay(),
+                'is_expired' => false,
             ]);
 
         $this->actingAs($this->admin)
