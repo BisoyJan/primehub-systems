@@ -4,6 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Enums\AttendanceStatus;
 use App\Http\Requests\BatchVerifyAttendanceRequest;
+use App\Http\Requests\BulkStoreAttendanceRequest;
+use App\Http\Requests\CreateSpreadsheetCellAttendanceRequest;
+use App\Http\Requests\GenerateAttendanceRequest;
+use App\Http\Requests\StoreAttendanceRequest;
 use App\Http\Requests\VerifyAttendanceRequest;
 use App\Jobs\ProcessAttendanceUpload;
 use App\Models\Attendance;
@@ -17,6 +21,8 @@ use App\Models\User;
 use App\Services\AttendanceFileParser;
 use App\Services\AttendancePoint\GbroCalculationService;
 use App\Services\AttendanceProcessor;
+use App\Services\AttendanceWriteService;
+use App\Services\LeaveConflictResolver;
 use App\Services\LeaveCreditService;
 use App\Services\NotificationService;
 use App\Services\PermissionService;
@@ -37,7 +43,9 @@ class AttendanceController extends Controller
         protected NotificationService $notificationService,
         protected LeaveCreditService $leaveCreditService,
         protected GbroCalculationService $gbroService,
-        protected PermissionService $permissionService
+        protected PermissionService $permissionService,
+        protected LeaveConflictResolver $leaveConflictResolver,
+        protected AttendanceWriteService $attendanceWriteService,
     ) {}
 
     /**
@@ -555,33 +563,9 @@ class AttendanceController extends Controller
     /**
      * Store a manually created attendance record.
      */
-    public function store(Request $request)
+    public function store(StoreAttendanceRequest $request)
     {
-        // Combine date and time fields on the backend if they exist
-        if ($request->has('actual_time_in_date') && $request->has('actual_time_in_time') && $request->actual_time_in_date && $request->actual_time_in_time) {
-            $request->merge([
-                'actual_time_in' => $request->actual_time_in_date.'T'.$request->actual_time_in_time,
-            ]);
-        }
-
-        if ($request->has('actual_time_out_date') && $request->has('actual_time_out_time') && $request->actual_time_out_date && $request->actual_time_out_time) {
-            $request->merge([
-                'actual_time_out' => $request->actual_time_out_date.'T'.$request->actual_time_out_time,
-            ]);
-        }
-
-        $validated = $request->validate([
-            'user_id' => 'required|exists:users,id',
-            'shift_date' => 'required|date',
-            'status' => 'nullable|in:on_time,tardy,half_day_absence,advised_absence,ncns,undertime,undertime_more_than_hour,failed_bio_in,failed_bio_out,present_no_bio,non_work_day,on_leave',
-            'secondary_status' => 'nullable|in:undertime,undertime_more_than_hour,failed_bio_in,failed_bio_out',
-            'actual_time_in' => 'nullable|date_format:Y-m-d\\TH:i',
-            'actual_time_out' => 'nullable|date_format:Y-m-d\\TH:i',
-            'notes' => 'nullable|string|max:500',
-            'is_set_home' => 'nullable|boolean',
-            'undertime_approval_status' => 'nullable|in:approved',
-            'undertime_approval_reason' => 'nullable|in:generate_points,skip_points,lunch_used',
-        ]);
+        $validated = $request->validated();
 
         // Get employee schedule for the date
         $schedule = EmployeeSchedule::where('user_id', $validated['user_id'])
@@ -597,96 +581,18 @@ class AttendanceController extends Controller
         $actualTimeIn = $validated['actual_time_in'] ? Carbon::parse($validated['actual_time_in']) : null;
         $actualTimeOut = $validated['actual_time_out'] ? Carbon::parse($validated['actual_time_out']) : null;
 
-        // Check for approved leave request on this date
-        $approvedLeave = LeaveRequest::where('user_id', $validated['user_id'])
-            ->where('status', 'approved')
-            ->where('start_date', '<=', $validated['shift_date'])
-            ->where('end_date', '>=', $validated['shift_date'])
-            ->first();
-
-        // Check for pending leave request on this date and auto-cancel if attendance is being created
-        $pendingLeave = LeaveRequest::where('user_id', $validated['user_id'])
-            ->where('status', 'pending')
-            ->where('start_date', '<=', $validated['shift_date'])
-            ->where('end_date', '>=', $validated['shift_date'])
-            ->first();
-
-        if ($pendingLeave && ($validated['actual_time_in'] || $validated['actual_time_out'])) {
-            $employee = User::find($validated['user_id']);
-            $notificationService = app(NotificationService::class);
-            $leaveType = str_replace('_', ' ', ucfirst($pendingLeave->leave_type));
-            $startDate = Carbon::parse($pendingLeave->start_date)->format('M d, Y');
-            $endDate = Carbon::parse($pendingLeave->end_date)->format('M d, Y');
-            $isMultiDayLeave = Carbon::parse($pendingLeave->start_date)->diffInDays(Carbon::parse($pendingLeave->end_date)) > 0;
-
-            if ($isMultiDayLeave) {
-                // Multi-day pending leave: notify HR, Super Admin, and Team Lead for review, don't auto-cancel
-                $conflictTitle = 'Pending Leave Conflict - Review Required';
-                $conflictMessage = "{$employee->name} has manual attendance during pending {$leaveType} leave.\n\n"
-                    ."Leave Period: {$startDate} to {$endDate}\n"
-                    .'Attendance Date: '.Carbon::parse($validated['shift_date'])->format('M d, Y')."\n\n"
-                    ."Please review and decide:\n"
-                    ."• Cancel the pending leave if employee is no longer taking leave\n"
-                    .'• No action needed if employee only worked this one day';
-                $conflictData = [
-                    'employee_id' => $employee->id,
-                    'employee_name' => $employee->name,
-                    'leave_request_id' => $pendingLeave->id,
-                    'leave_type' => $leaveType,
-                    'link' => route('leave-requests.show', $pendingLeave->id),
-                ];
-
-                $notificationService->notifyUsersByRole('HR', 'leave_request', $conflictTitle, $conflictMessage, $conflictData);
-                $notificationService->notifyUsersByRole('Super Admin', 'leave_request', $conflictTitle, $conflictMessage, $conflictData);
-                $notificationService->notifyUsersByRole('Team Lead', 'leave_request', $conflictTitle, $conflictMessage, $conflictData);
-
-                Log::info('Multi-day pending leave conflict flagged for HR review (manual attendance)', [
-                    'leave_request_id' => $pendingLeave->id,
-                    'user_id' => $validated['user_id'],
-                    'shift_date' => $validated['shift_date'],
-                ]);
-            } else {
-                // Single-day pending leave: auto-cancel
-                $pendingLeave->update([
-                    'status' => 'cancelled',
-                    'auto_cancelled' => true,
-                    'auto_cancelled_reason' => 'Manual attendance was created for '.Carbon::parse($validated['shift_date'])->format('M d, Y').'. Pending leave request was automatically cancelled.',
-                    'auto_cancelled_at' => now(),
-                ]);
-
-                $notificationService->notifyLeaveRequestAutoCancelled(
-                    $employee,
-                    $leaveType,
-                    $startDate,
-                    $endDate,
-                    'Manual attendance was created for the leave period',
-                    $pendingLeave->id
-                );
-
-                $autoCancelTitle = 'Pending Leave Auto-Cancelled';
-                $autoCancelMessage = "{$employee->name}'s pending {$leaveType} leave ({$startDate} to {$endDate}) was automatically cancelled because manual attendance was created for ".Carbon::parse($validated['shift_date'])->format('M d, Y').'.';
-                $autoCancelData = [
-                    'employee_id' => $employee->id,
-                    'employee_name' => $employee->name,
-                    'leave_request_id' => $pendingLeave->id,
-                    'leave_type' => $leaveType,
-                    'link' => route('leave-requests.show', $pendingLeave->id),
-                ];
-
-                $notificationService->notifyUsersByRole('HR', 'leave_request', $autoCancelTitle, $autoCancelMessage, $autoCancelData);
-                $notificationService->notifyUsersByRole('Super Admin', 'leave_request', $autoCancelTitle, $autoCancelMessage, $autoCancelData);
-                $notificationService->notifyUsersByRole('Team Lead', 'leave_request', $autoCancelTitle, $autoCancelMessage, $autoCancelData);
-
-                Log::info('Pending leave auto-cancelled due to manual attendance creation', [
-                    'leave_request_id' => $pendingLeave->id,
-                    'user_id' => $validated['user_id'],
-                    'shift_date' => $validated['shift_date'],
-                ]);
-            }
-        }
-
-        // Flag if this is a leave conflict (attendance during approved leave)
-        $hasLeaveConflict = $approvedLeave && ($validated['actual_time_in'] || $validated['actual_time_out']);
+        // Resolve leave conflicts (approved-leave detection + pending-leave
+        // auto-cancel/HR-review notifications). Centralized so Manual,
+        // Daily Roster, and Spreadsheet all apply the exact same rules.
+        $leaveResolution = $this->leaveConflictResolver->resolveOnAttendanceWrite(
+            (int) $validated['user_id'],
+            $validated['shift_date'],
+            $actualTimeIn,
+            $actualTimeOut,
+            'Manual',
+        );
+        $approvedLeave = $leaveResolution['approvedLeave'];
+        $hasLeaveConflict = $leaveResolution['hasApprovedConflict'];
 
         // Calculate status, tardy/undertime/overtime minutes from schedule and actual times
         $metrics = $this->processor->calculateManualAttendanceMetrics(
@@ -740,6 +646,11 @@ class AttendanceController extends Controller
             }
         }
 
+        // Detect partial creation (one of in/out missing) — same rule as
+        // Daily Roster + Spreadsheet so all 3 write surfaces agree on
+        // is_partially_verified.
+        $isPartial = ($actualTimeIn xor $actualTimeOut);
+
         $attendance = Attendance::create([
             'user_id' => $validated['user_id'],
             'employee_schedule_id' => $schedule?->id,
@@ -756,12 +667,15 @@ class AttendanceController extends Controller
             'is_advised' => $status === 'advised_absence', // Set is_advised flag for advised absence
             'is_set_home' => $request->boolean('is_set_home'),
             'admin_verified' => ! $hasLeaveConflict, // Requires approval if leave conflict
+            'is_partially_verified' => $isPartial && ! $hasLeaveConflict,
             'leave_request_id' => $approvedLeave?->id,
             'verification_notes' => $hasLeaveConflict
-                ? 'Manual entry during approved leave - requires HR review. Created by '.auth()->user()->name
-                : 'Manually created by '.auth()->user()->name,
+                ? $leaveResolution['verificationNote']
+                : ($isPartial
+                    ? 'Time-in recorded — time-out pending next shift. Created by '.auth()->user()->name
+                    : 'Manually created by '.auth()->user()->name),
             'notes' => $hasLeaveConflict
-                ? 'Leave conflict: Employee on approved leave but has attendance entry. Pending HR review.'
+                ? $leaveResolution['conflictNote']
                 : ($validated['notes'] ?? null),
             'undertime_approval_status' => $undertimeApprovalStatus,
             'undertime_approval_reason' => $undertimeApprovalReason,
@@ -774,30 +688,11 @@ class AttendanceController extends Controller
             $this->processor->recalculateTotalMinutesWorked($attendance);
         }
 
-        // Generate attendance points if the record is admin_verified and has a violation status
-        if ($attendance->admin_verified) {
-            // For new records, force regeneration (handles deletion of any existing points for same user+date)
-            $this->regeneratePointsIfNeeded($attendance, null, null, false, false, true);
-        }
+        // Run the shared finalize pipeline: recalc totals, regenerate points
+        // (when admin_verified), and notify the employee.
+        $this->attendanceWriteService->finalizeManualWrite($attendance, $validated['shift_date']);
 
-        // Notify HR if there's a leave conflict
-        if ($hasLeaveConflict) {
-            $notificationService = app(NotificationService::class);
-            $employee = User::find($validated['user_id']);
-            $workDuration = $actualTimeIn && $actualTimeOut
-                ? round($actualTimeIn->diffInMinutes($actualTimeOut) / 60, 2)
-                : 0;
-
-            $notificationService->notifyLeaveAttendanceConflict(
-                $employee,
-                $approvedLeave,
-                Carbon::parse($validated['shift_date']),
-                $actualTimeIn && $actualTimeOut ? 2 : 1, // scan count approximation
-                $actualTimeIn ? $actualTimeIn->format('H:i').($actualTimeOut ? ', '.$actualTimeOut->format('H:i') : '') : 'N/A',
-                $workDuration,
-                $approvedLeave->start_date != $approvedLeave->end_date
-            );
-        }
+        // (Leave-conflict notifications are emitted by LeaveConflictResolver above.)
 
         return redirect()->route('attendance.index')
             ->with('message', $hasLeaveConflict
@@ -809,32 +704,9 @@ class AttendanceController extends Controller
     /**
      * Store bulk manually created attendance records.
      */
-    public function bulkStore(Request $request)
+    public function bulkStore(BulkStoreAttendanceRequest $request)
     {
-        // Combine date and time fields on the backend if they exist
-        if ($request->has('actual_time_in_date') && $request->has('actual_time_in_time') && $request->actual_time_in_date && $request->actual_time_in_time) {
-            $request->merge([
-                'actual_time_in' => $request->actual_time_in_date.'T'.$request->actual_time_in_time,
-            ]);
-        }
-
-        if ($request->has('actual_time_out_date') && $request->has('actual_time_out_time') && $request->actual_time_out_date && $request->actual_time_out_time) {
-            $request->merge([
-                'actual_time_out' => $request->actual_time_out_date.'T'.$request->actual_time_out_time,
-            ]);
-        }
-
-        $validated = $request->validate([
-            'user_ids' => 'required|array|min:1',
-            'user_ids.*' => 'required|exists:users,id',
-            'shift_date' => 'required|date',
-            'status' => 'nullable|in:on_time,tardy,half_day_absence,advised_absence,ncns,undertime,undertime_more_than_hour,failed_bio_in,failed_bio_out,present_no_bio,non_work_day,on_leave',
-            'secondary_status' => 'nullable|in:undertime,undertime_more_than_hour,failed_bio_in,failed_bio_out',
-            'actual_time_in' => 'nullable|date_format:Y-m-d\\TH:i',
-            'actual_time_out' => 'nullable|date_format:Y-m-d\\TH:i',
-            'notes' => 'nullable|string|max:500',
-            'is_set_home' => 'nullable|boolean',
-        ]);
+        $validated = $request->validated();
 
         // Convert datetime strings to Carbon instances once
         $actualTimeIn = $validated['actual_time_in'] ? Carbon::parse($validated['actual_time_in']) : null;
@@ -855,93 +727,17 @@ class AttendanceController extends Controller
                     })
                     ->first();
 
-                // Check for approved leave request on this date
-                $approvedLeave = LeaveRequest::where('user_id', $userId)
-                    ->where('status', 'approved')
-                    ->where('start_date', '<=', $validated['shift_date'])
-                    ->where('end_date', '>=', $validated['shift_date'])
-                    ->first();
-
-                // Check for pending leave request on this date and auto-cancel
-                $pendingLeave = LeaveRequest::where('user_id', $userId)
-                    ->where('status', 'pending')
-                    ->where('start_date', '<=', $validated['shift_date'])
-                    ->where('end_date', '>=', $validated['shift_date'])
-                    ->first();
-
-                if ($pendingLeave && ($actualTimeIn || $actualTimeOut)) {
-                    $employee = User::find($userId);
-                    $notificationService = app(NotificationService::class);
-                    $leaveType = str_replace('_', ' ', ucfirst($pendingLeave->leave_type));
-                    $startDate = Carbon::parse($pendingLeave->start_date)->format('M d, Y');
-                    $endDate = Carbon::parse($pendingLeave->end_date)->format('M d, Y');
-                    $isMultiDayLeave = Carbon::parse($pendingLeave->start_date)->diffInDays(Carbon::parse($pendingLeave->end_date)) > 0;
-
-                    if ($isMultiDayLeave) {
-                        // Multi-day pending leave: notify HR, Super Admin, and Team Lead for review, don't auto-cancel
-                        $conflictTitle = 'Pending Leave Conflict - Review Required';
-                        $conflictMessage = "{$employee->name} has bulk attendance during pending {$leaveType} leave.\n\n"
-                            ."Leave Period: {$startDate} to {$endDate}\n"
-                            .'Attendance Date: '.Carbon::parse($validated['shift_date'])->format('M d, Y')."\n\n"
-                            ."Please review and decide:\n"
-                            ."• Cancel the pending leave if employee is no longer taking leave\n"
-                            .'• No action needed if employee only worked this one day';
-                        $conflictData = [
-                            'employee_id' => $employee->id,
-                            'employee_name' => $employee->name,
-                            'leave_request_id' => $pendingLeave->id,
-                            'leave_type' => $leaveType,
-                            'link' => route('leave-requests.show', $pendingLeave->id),
-                        ];
-
-                        $notificationService->notifyUsersByRole('HR', 'leave_request', $conflictTitle, $conflictMessage, $conflictData);
-                        $notificationService->notifyUsersByRole('Super Admin', 'leave_request', $conflictTitle, $conflictMessage, $conflictData);
-                        $notificationService->notifyUsersByRole('Team Lead', 'leave_request', $conflictTitle, $conflictMessage, $conflictData);
-
-                        Log::info('Multi-day pending leave conflict flagged for HR review (bulk attendance)', [
-                            'leave_request_id' => $pendingLeave->id,
-                            'user_id' => $userId,
-                            'shift_date' => $validated['shift_date'],
-                        ]);
-                    } else {
-                        // Single-day pending leave: auto-cancel
-                        $pendingLeave->update([
-                            'status' => 'cancelled',
-                            'auto_cancelled' => true,
-                            'auto_cancelled_reason' => 'Bulk attendance was created for '.Carbon::parse($validated['shift_date'])->format('M d, Y').'. Pending leave request was automatically cancelled.',
-                            'auto_cancelled_at' => now(),
-                        ]);
-
-                        $notificationService->notifyLeaveRequestAutoCancelled(
-                            $employee,
-                            $leaveType,
-                            $startDate,
-                            $endDate,
-                            'Bulk attendance was created for the leave period',
-                            $pendingLeave->id
-                        );
-
-                        $autoCancelTitle = 'Pending Leave Auto-Cancelled';
-                        $autoCancelMessage = "{$employee->name}'s pending {$leaveType} leave ({$startDate} to {$endDate}) was automatically cancelled because bulk attendance was created for ".Carbon::parse($validated['shift_date'])->format('M d, Y').'.';
-                        $autoCancelData = [
-                            'employee_id' => $employee->id,
-                            'employee_name' => $employee->name,
-                            'leave_request_id' => $pendingLeave->id,
-                            'leave_type' => $leaveType,
-                            'link' => route('leave-requests.show', $pendingLeave->id),
-                        ];
-
-                        $notificationService->notifyUsersByRole('HR', 'leave_request', $autoCancelTitle, $autoCancelMessage, $autoCancelData);
-                        $notificationService->notifyUsersByRole('Super Admin', 'leave_request', $autoCancelTitle, $autoCancelMessage, $autoCancelData);
-                        $notificationService->notifyUsersByRole('Team Lead', 'leave_request', $autoCancelTitle, $autoCancelMessage, $autoCancelData);
-
-                        Log::info('Pending leave auto-cancelled due to bulk attendance creation', [
-                            'leave_request_id' => $pendingLeave->id,
-                            'user_id' => $userId,
-                            'shift_date' => $validated['shift_date'],
-                        ]);
-                    }
-                }
+                // Resolve any approved/pending leave conflicts using the shared
+                // service so all 4 write surfaces apply the same rule.
+                $leaveResolution = $this->leaveConflictResolver->resolveOnAttendanceWrite(
+                    (int) $userId,
+                    $validated['shift_date'],
+                    $actualTimeIn,
+                    $actualTimeOut,
+                    'Bulk',
+                );
+                $approvedLeave = $leaveResolution['approvedLeave'];
+                $hasLeaveConflict = $leaveResolution['hasApprovedConflict'];
 
                 // Calculate status, tardy/undertime/overtime minutes from schedule and actual times
                 $metrics = $this->processor->calculateManualAttendanceMetrics(
@@ -959,6 +755,10 @@ class AttendanceController extends Controller
                 $undertimeMinutes = $metrics['undertime_minutes'];
                 $overtimeMinutes = $metrics['overtime_minutes'];
 
+                // Detect partial creation (one of in/out missing) — same rule
+                // as Manual / Roster / Spreadsheet.
+                $isPartial = ($actualTimeIn xor $actualTimeOut);
+
                 $attendance = Attendance::create([
                     'user_id' => $userId,
                     'employee_schedule_id' => $schedule?->id,
@@ -974,13 +774,22 @@ class AttendanceController extends Controller
                     'overtime_minutes' => $overtimeMinutes,
                     'is_advised' => $status === 'advised_absence', // Set is_advised flag for advised absence
                     'is_set_home' => $request->boolean('is_set_home'),
-                    'admin_verified' => true, // Manual entries are pre-verified
-                    'verification_notes' => 'Manually created by '.auth()->user()->name,
-                    'notes' => $validated['notes'],
+                    'admin_verified' => ! $hasLeaveConflict,
+                    'is_partially_verified' => $isPartial && ! $hasLeaveConflict,
+                    'leave_request_id' => $approvedLeave?->id,
+                    'verification_notes' => $hasLeaveConflict
+                        ? $leaveResolution['verificationNote']
+                        : ($isPartial
+                            ? 'Time-in recorded — time-out pending next shift. Created via Bulk by '.auth()->user()->name
+                            : 'Manually created by '.auth()->user()->name),
+                    'notes' => $hasLeaveConflict
+                        ? $leaveResolution['conflictNote']
+                        : ($validated['notes'] ?? null),
                 ]);
 
-                // Generate attendance points for new record - force regeneration
-                $this->regeneratePointsIfNeeded($attendance, null, null, false, false, true);
+                // Run the shared finalize pipeline: recalc totals, regenerate points
+                // (when admin_verified), and notify the employee.
+                $this->attendanceWriteService->finalizeManualWrite($attendance, $validated['shift_date']);
 
                 $createdCount++;
             } catch (\Exception $e) {
@@ -2717,22 +2526,11 @@ class AttendanceController extends Controller
      * Generate attendance record for an employee from expected today list.
      * Creates unverified record that goes to Review page.
      */
-    public function generateAttendance(Request $request)
+    public function generateAttendance(GenerateAttendanceRequest $request)
     {
         $this->authorize('create', Attendance::class);
 
-        $validated = $request->validate([
-            'user_id' => 'required|exists:users,id',
-            'shift_date' => 'required|date',
-            'actual_time_in' => 'nullable|date_format:Y-m-d\\TH:i',
-            'actual_time_out' => 'nullable|date_format:Y-m-d\\TH:i',
-            'notes' => 'nullable|string|max:500',
-            'status' => 'nullable|string|in:on_time,tardy,half_day_absence,advised_absence,ncns,undertime,undertime_more_than_hour,failed_bio_in,failed_bio_out,present_no_bio,non_work_day',
-            'secondary_status' => 'nullable|string|in:undertime,undertime_more_than_hour,failed_bio_out',
-            'verification_notes' => 'nullable|string|max:1000',
-            'overtime_approved' => 'nullable|boolean',
-            'is_set_home' => 'nullable|boolean',
-        ]);
+        $validated = $request->validated();
 
         // Check if attendance already exists for this date
         $existingAttendance = Attendance::where('user_id', $validated['user_id'])
@@ -2771,60 +2569,42 @@ class AttendanceController extends Controller
         $actualTimeOut = ! empty($validated['actual_time_out']) ? Carbon::parse($validated['actual_time_out']) : null;
         $shiftDate = Carbon::parse($validated['shift_date']);
 
-        // Build scheduled times
-        $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d').' '.$schedule->scheduled_time_in);
-        $scheduledTimeOut = Carbon::parse($shiftDate->format('Y-m-d').' '.$schedule->scheduled_time_out);
+        // Resolve leave conflicts via the centralized service so this surface
+        // applies the same rules as Manual create and Spreadsheet.
+        $leaveResolution = $this->leaveConflictResolver->resolveOnAttendanceWrite(
+            (int) $validated['user_id'],
+            $validated['shift_date'],
+            $actualTimeIn,
+            $actualTimeOut,
+            'Daily Roster',
+        );
+        $approvedLeave = $leaveResolution['approvedLeave'];
+        $hasLeaveConflict = $leaveResolution['hasApprovedConflict'];
 
-        // Handle night shift (time out is next day)
-        if ($schedule->shift_type === 'night_shift' && $scheduledTimeOut->lt($scheduledTimeIn)) {
-            $scheduledTimeOut->addDay();
-        }
+        // Calculate status, tardy / undertime / overtime via the single
+        // canonical calculator used by Manual create and Spreadsheet.
+        $metrics = $this->processor->calculateManualAttendanceMetrics(
+            $schedule,
+            $actualTimeIn,
+            $actualTimeOut,
+            $validated['shift_date'],
+            $validated['status'] ?? null,
+            $validated['secondary_status'] ?? null,
+            $approvedLeave,
+        );
 
-        // Calculate violations
-        $tardyMinutes = null;
-        $undertimeMinutes = null;
-        $overtimeMinutes = null;
-        $calculatedStatus = 'on_time';
-        $calculatedSecondaryStatus = null;
-        $gracePeriod = $schedule->grace_period_minutes ?? 0;
-
-        // Calculate tardy (late arrival). Grace period is a forgiveness window:
-        // tardy_minutes is always recorded, but status only flips to `tardy`
-        // when actual lateness exceeds the schedule's grace_period_minutes.
-        if ($actualTimeIn && $actualTimeIn->gt($scheduledTimeIn)) {
-            $tardyMinutes = $scheduledTimeIn->diffInMinutes($actualTimeIn);
-            if ($tardyMinutes > $gracePeriod) {
-                $calculatedStatus = 'tardy';
-            }
-        }
-
-        // Calculate undertime (early leave) or overtime (late leave) — only when time-out is provided.
-        if ($actualTimeOut) {
-            if ($actualTimeOut->lt($scheduledTimeOut)) {
-                $undertimeMinutes = $actualTimeOut->diffInMinutes($scheduledTimeOut);
-                if ($undertimeMinutes > 60) {
-                    if ($calculatedStatus === 'on_time') {
-                        $calculatedStatus = 'undertime_more_than_hour';
-                    } else {
-                        $calculatedSecondaryStatus = 'undertime_more_than_hour';
-                    }
-                } elseif ($undertimeMinutes > 0) {
-                    if ($calculatedStatus === 'on_time') {
-                        $calculatedStatus = 'undertime';
-                    } else {
-                        $calculatedSecondaryStatus = 'undertime';
-                    }
-                }
-            } elseif ($actualTimeOut->gt($scheduledTimeOut)) {
-                $overtimeMinutes = $scheduledTimeOut->diffInMinutes($actualTimeOut);
-            }
-        }
+        $tardyMinutes = $metrics['tardy_minutes'];
+        $undertimeMinutes = $metrics['undertime_minutes'];
+        $overtimeMinutes = $metrics['overtime_minutes'];
+        $calculatedStatus = $metrics['status'] ?? 'on_time';
+        $calculatedSecondaryStatus = $metrics['secondary_status'];
 
         // Use provided status or calculated status
         $status = $validated['status'] ?? $calculatedStatus;
         $secondaryStatus = $validated['secondary_status'] ?? $calculatedSecondaryStatus;
 
         // Create attendance record - VERIFIED immediately (or PARTIALLY VERIFIED if no time-out yet)
+        // EXCEPT when an approved leave conflicts → leave it for HR to review.
         $attendance = Attendance::create([
             'user_id' => $validated['user_id'],
             'employee_schedule_id' => $schedule->id,
@@ -2842,29 +2622,24 @@ class AttendanceController extends Controller
             'overtime_approved_at' => ($validated['overtime_approved'] ?? false) ? now() : null,
             'overtime_approved_by' => ($validated['overtime_approved'] ?? false) ? auth()->id() : null,
             'is_set_home' => $request->boolean('is_set_home'),
-            'admin_verified' => true, // Auto-verified
-            'is_partially_verified' => $isPartial,
-            'verification_notes' => $isPartial
-                ? ($validated['verification_notes'] ?? 'Time-in recorded — time-out pending next shift.')
-                : ($validated['verification_notes'] ?? null),
-            'notes' => $validated['notes'] ?? null,
+            'admin_verified' => ! $hasLeaveConflict, // Skip auto-verify when conflicting with approved leave
+            'is_partially_verified' => $isPartial && ! $hasLeaveConflict,
+            'leave_request_id' => $approvedLeave?->id,
+            'verification_notes' => $hasLeaveConflict
+                ? $leaveResolution['verificationNote']
+                : ($isPartial
+                    ? ($validated['verification_notes'] ?? 'Time-in recorded — time-out pending next shift.')
+                    : ($validated['verification_notes'] ?? null)),
+            'notes' => $hasLeaveConflict
+                ? $leaveResolution['conflictNote']
+                : ($validated['notes'] ?? null),
         ]);
 
-        // Generate attendance points for new record - force regeneration
-        $this->regeneratePointsIfNeeded($attendance->fresh(), null, null, false, false, true);
+        // Run the shared finalize pipeline: recalc totals, regenerate points
+        // (when admin_verified), and notify the employee.
+        $this->attendanceWriteService->finalizeManualWrite($attendance, $validated['shift_date']);
 
-        // Notify user of their attendance status
         $user = User::find($validated['user_id']);
-        if ($status !== 'on_time') {
-            $pointRecord = AttendancePoint::where('attendance_id', $attendance->id)->first();
-            $points = $pointRecord ? $pointRecord->points : null;
-            $this->notificationService->notifyAttendanceStatus(
-                $attendance->user_id,
-                $status,
-                $shiftDate->format('M d, Y'),
-                $points
-            );
-        }
 
         return redirect()->back()
             ->with('message', "Attendance record created and verified for {$user->first_name} {$user->last_name}.")
@@ -3644,20 +3419,11 @@ class AttendanceController extends Controller
     /**
      * Create a new attendance row from an empty spreadsheet cell.
      */
-    public function createSpreadsheetCell(Request $request)
+    public function createSpreadsheetCell(CreateSpreadsheetCellAttendanceRequest $request)
     {
         $this->authorize('create', Attendance::class);
 
-        $validated = $request->validate([
-            'user_id' => ['required', 'integer', 'exists:users,id'],
-            'shift_date' => ['required', 'date'],
-            'actual_time_in' => ['nullable', 'date_format:H:i'],
-            'actual_time_out' => ['nullable', 'date_format:H:i'],
-            'hours' => ['nullable', 'numeric', 'min:0', 'max:24'],
-            'overtime_approved' => ['nullable', 'boolean'],
-            'undertime_approval_reason' => ['nullable', 'in:generate_points,skip_points,lunch_used'],
-            'is_set_home' => ['nullable', 'boolean'],
-        ]);
+        $validated = $request->validated();
 
         try {
             DB::transaction(function () use ($validated) {
@@ -3704,6 +3470,18 @@ class AttendanceController extends Controller
                     $actualTimeOut = Carbon::parse($outDate.' '.$timeOutStr);
                 }
 
+                // Resolve leave conflicts so this surface applies the same rules
+                // as Manual create and Daily Roster.
+                $leaveResolution = $this->leaveConflictResolver->resolveOnAttendanceWrite(
+                    (int) $validated['user_id'],
+                    $validated['shift_date'],
+                    $actualTimeIn,
+                    $actualTimeOut,
+                    'Spreadsheet',
+                );
+                $approvedLeave = $leaveResolution['approvedLeave'];
+                $hasLeaveConflict = $leaveResolution['hasApprovedConflict'];
+
                 // Auto-determine status, tardy/undertime/overtime using the same logic as Review
                 $metrics = $this->processor->calculateManualAttendanceMetrics(
                     $schedule,
@@ -3712,7 +3490,7 @@ class AttendanceController extends Controller
                     $validated['shift_date'],
                     null,  // no provided status — let processor decide
                     null,
-                    null,  // no approved leave context
+                    $approvedLeave,
                 );
 
                 $status = $metrics['status'] ?? 'non_work_day';
@@ -3720,6 +3498,10 @@ class AttendanceController extends Controller
                 $tardyMinutes = $metrics['tardy_minutes'] ?? null;
                 $undertimeMinutes = $metrics['undertime_minutes'] ?? null;
                 $overtimeMinutes = $metrics['overtime_minutes'] ?? null;
+
+                // Detect partial creation (one of in/out missing) — same rule
+                // as Manual create + Daily Roster so all 3 surfaces agree.
+                $isPartial = ($actualTimeIn xor $actualTimeOut);
 
                 $attendance = Attendance::create([
                     'user_id' => $validated['user_id'],
@@ -3743,16 +3525,18 @@ class AttendanceController extends Controller
                     'undertime_approved_by' => ! empty($validated['undertime_approval_reason']) ? auth()->id() : null,
                     'undertime_approved_at' => ! empty($validated['undertime_approval_reason']) ? now() : null,
                     'is_set_home' => ! empty($validated['is_set_home']),
-                    'admin_verified' => true,
-                    'verification_notes' => 'Manually created via spreadsheet by '.auth()->user()->name,
+                    'admin_verified' => ! $hasLeaveConflict,
+                    'is_partially_verified' => $isPartial && ! $hasLeaveConflict,
+                    'leave_request_id' => $approvedLeave?->id,
+                    'verification_notes' => $hasLeaveConflict
+                        ? $leaveResolution['verificationNote']
+                        : 'Manually created via spreadsheet by '.auth()->user()->name,
+                    'notes' => $hasLeaveConflict ? $leaveResolution['conflictNote'] : null,
                 ]);
 
-                // Recalculate total_minutes_worked with proper lunch deduction,
-                // scheduled-time-in cap, and overtime approval logic
-                $this->processor->recalculateTotalMinutesWorked($attendance);
-
-                // Generate attendance points for pointable violations (tardy, half_day_absence, etc.)
-                $this->regeneratePointsIfNeeded($attendance, null, null, false, false);
+                // Run the shared finalize pipeline: recalc totals, regenerate points
+                // (when admin_verified), and notify the employee.
+                $this->attendanceWriteService->finalizeManualWrite($attendance, $validated['shift_date']);
             });
 
             return redirect()->back()

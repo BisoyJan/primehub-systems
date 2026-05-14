@@ -2875,7 +2875,7 @@ class AttendanceProcessor
                 $scheduledTimeIn = Carbon::parse($shiftDateCarbon->format('Y-m-d').' '.$schedule->scheduled_time_in);
                 $scheduledTimeOut = Carbon::parse($shiftDateCarbon->format('Y-m-d').' '.$schedule->scheduled_time_out);
 
-                if ($schedule->shift_type === 'night_shift' && $scheduledTimeOut->lt($scheduledTimeIn)) {
+                if (($schedule->isNightShift() || $schedule->isGraveyardShift()) && $scheduledTimeOut->lt($scheduledTimeIn)) {
                     $scheduledTimeOut->addDay();
                 }
 
@@ -2892,7 +2892,7 @@ class AttendanceProcessor
                     $hasUndertime = true;
                 } elseif ($actualTimeOut->gt($scheduledTimeOut)) {
                     $timeBeyondSchedule = $scheduledTimeOut->diffInMinutes($actualTimeOut);
-                    if ($timeBeyondSchedule > 30) {
+                    if ($timeBeyondSchedule > config('attendance.overtime_threshold_minutes', 30)) {
                         $overtimeMinutes = $timeBeyondSchedule;
                     }
                 }
@@ -2949,7 +2949,7 @@ class AttendanceProcessor
                 $undertimeMinutes = $actualTimeOut->diffInMinutes($scheduledTimeOut);
             } elseif ($actualTimeOut->gt($scheduledTimeOut)) {
                 $timeBeyondSchedule = $scheduledTimeOut->diffInMinutes($actualTimeOut);
-                if ($timeBeyondSchedule > 30) {
+                if ($timeBeyondSchedule > config('attendance.overtime_threshold_minutes', 30)) {
                     $overtimeMinutes = $timeBeyondSchedule;
                 }
             }
@@ -2964,7 +2964,7 @@ class AttendanceProcessor
             $shiftDateCarbon = Carbon::parse($shiftDate);
             $scheduledTimeOut = Carbon::parse($shiftDateCarbon->format('Y-m-d').' '.$schedule->scheduled_time_out);
 
-            if ($schedule->shift_type === 'night_shift' && $schedule->scheduled_time_in) {
+            if (($schedule->isNightShift() || $schedule->isGraveyardShift()) && $schedule->scheduled_time_in) {
                 $scheduledTimeIn = Carbon::parse($shiftDateCarbon->format('Y-m-d').' '.$schedule->scheduled_time_in);
                 if ($scheduledTimeOut->lt($scheduledTimeIn)) {
                     $scheduledTimeOut->addDay();
@@ -2975,7 +2975,7 @@ class AttendanceProcessor
                 $undertimeMinutes = $actualTimeOut->diffInMinutes($scheduledTimeOut);
             } elseif ($actualTimeOut->gt($scheduledTimeOut)) {
                 $timeBeyondSchedule = $scheduledTimeOut->diffInMinutes($actualTimeOut);
-                if ($timeBeyondSchedule > 30) {
+                if ($timeBeyondSchedule > config('attendance.overtime_threshold_minutes', 30)) {
                     $overtimeMinutes = $timeBeyondSchedule;
                 }
             }
