@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Attendance;
 use App\Models\AttendancePoint;
+use App\Services\AttendancePoint\GbroAnomalyService;
 use App\Services\AttendancePoint\GbroCalculationService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -43,6 +44,7 @@ class AttendanceWriteService
         protected AttendanceProcessor $processor,
         protected NotificationService $notifications,
         protected GbroCalculationService $gbroService,
+        protected GbroAnomalyService $anomalyService,
     ) {}
 
     /**
@@ -92,6 +94,17 @@ class AttendanceWriteService
             $this->gbroService->cascadeRecalculateGbro($attendance->user_id);
         } catch (\Exception $e) {
             Log::error('AttendanceWriteService GBRO recalc Error: '.$e->getMessage());
+        }
+
+        // Audit for drift introduced by the new/regenerated points. Failures here
+        // are logged but never propagate — the user-facing write must succeed.
+        try {
+            $this->anomalyService->repair($attendance->user_id, 'manual_write');
+        } catch (\Throwable $e) {
+            Log::error('AttendanceWriteService anomaly audit failed', [
+                'user_id' => $attendance->user_id,
+                'message' => $e->getMessage(),
+            ]);
         }
     }
 }

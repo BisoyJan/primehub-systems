@@ -6,6 +6,7 @@ use App\Models\Attendance;
 use App\Models\AttendancePoint;
 use App\Services\NotificationService;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Service responsible for creating and updating attendance points.
@@ -14,8 +15,26 @@ class AttendancePointCreationService
 {
     public function __construct(
         protected GbroCalculationService $gbroService,
-        protected NotificationService $notificationService
+        protected NotificationService $notificationService,
+        protected GbroAnomalyService $anomalyService,
     ) {}
+
+    /**
+     * Run the GBRO drift audit for a single user. Wrapped in try/catch so any
+     * audit failure is logged but never breaks the user-facing write.
+     */
+    protected function auditUser(int $userId, string $trigger): void
+    {
+        try {
+            $this->anomalyService->repair($userId, $trigger);
+        } catch (\Throwable $e) {
+            Log::error('AttendancePointCreationService anomaly audit failed', [
+                'user_id' => $userId,
+                'trigger' => $trigger,
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
 
     /**
      * Create a manual attendance point.
@@ -76,6 +95,7 @@ class AttendancePointCreationService
 
         // Cascade recalculate GBRO
         $this->gbroService->cascadeRecalculateGbro($userId);
+        $this->auditUser($userId, 'manual_point_create');
 
         return $point;
     }
@@ -128,6 +148,7 @@ class AttendancePointCreationService
 
         // Recalculate GBRO
         $this->gbroService->cascadeRecalculateGbro($userId);
+        $this->auditUser($userId, 'manual_point_update');
 
         return $point->fresh();
     }
@@ -142,6 +163,7 @@ class AttendancePointCreationService
 
         // Cascade recalculate GBRO
         $this->gbroService->cascadeRecalculateGbro($userId);
+        $this->auditUser($userId, 'manual_point_delete');
     }
 
     /**

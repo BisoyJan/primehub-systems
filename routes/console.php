@@ -43,6 +43,13 @@ Schedule::command('points:process-expirations')
     ->withoutOverlapping()
     ->onOneServer();
 
+// GBRO anomaly audit safety net - runs daily at 8:23 AM (after SRO/GBRO processing).
+// Detects + repairs GBRO/SRO drift; persists findings to gbro_anomaly_logs.
+Schedule::command('points:audit-gbro')
+    ->dailyAt('08:23')
+    ->withoutOverlapping()
+    ->onOneServer();
+
 // Clean biometric records based on retention policies - runs daily at 8:08 AM
 // Priority: HIGH - Large volume of biometric attendance records
 Schedule::command('biometric:clean-old-records --force')

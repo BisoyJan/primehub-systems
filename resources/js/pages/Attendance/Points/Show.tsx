@@ -203,9 +203,9 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
     });
     const isPageLoading = usePageLoading();
 
-    // Date filter state
-    const [dateFrom, setDateFrom] = useState(filters?.date_from || dateRange.start);
-    const [dateTo, setDateTo] = useState(filters?.date_to || dateRange.end);
+    // Date filter state — empty by default (shows all records)
+    const [dateFrom, setDateFrom] = useState(filters?.date_from || '');
+    const [dateTo, setDateTo] = useState(filters?.date_to || '');
     const [showAll, setShowAll] = useState(filters?.show_all || false);
 
     const [isExcuseDialogOpen, setIsExcuseDialogOpen] = useState(false);
@@ -275,17 +275,13 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
     };
 
     const handleReset = () => {
-        const now = new Date();
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
-
-        setDateFrom(startOfMonth);
-        setDateTo(endOfMonth);
+        setDateFrom('');
+        setDateTo('');
         setShowAll(false);
 
         router.get(
             attendancePointsShow({ user: user.id }).url,
-            { date_from: startOfMonth, date_to: endOfMonth },
+            {},
             { preserveState: true }
         );
     };
@@ -862,6 +858,11 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                                     <DropdownMenuItem onClick={() => setConfirmAction('fix-anomalies')}>
                                         <Wrench className="mr-2 h-4 w-4" />
                                         Fix Anomalies
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem onClick={() => router.visit('/attendance-points/management/anomaly-logs')}>
+                                        <FileText className="mr-2 h-4 w-4" />
+                                        View Anomaly Logs
                                     </DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>
@@ -1633,6 +1634,12 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                                 name: 'Fix Anomalies',
                                 what: 'Scans all employees and corrects SRO overdue expirations, stale GBRO dates on ineligible records, and month-end date overflow bugs.',
                                 when: 'You notice incorrect expiration dates near month boundaries, wrong GBRO-eligible flags, or unexpected point totals across the workforce.',
+                            },
+                            {
+                                icon: <FileText className="h-4 w-4 text-sky-600" />,
+                                name: 'View Anomaly Logs',
+                                what: 'Opens the GBRO Anomaly Log dashboard listing every detected drift — stale expiry dates, orphan GBRO dates, eligibility mismatches, and overflow — along with whether each was repaired and what triggered the check.',
+                                when: 'You want to review what the system automatically caught and fixed, investigate a dry-run batch, or track down why an anomaly keeps reappearing for a specific employee.',
                             },
                         ].map((item) => (
                             <div key={item.name} className="flex gap-3 p-3 rounded-lg border bg-card">

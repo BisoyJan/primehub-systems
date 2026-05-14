@@ -1188,6 +1188,11 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                                 <Wrench className="h-4 w-4 mr-2" />
                                                 Fix Anomalies
                                             </DropdownMenuItem>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuItem onClick={() => router.visit('/attendance-points/management/anomaly-logs')}>
+                                                <FileText className="h-4 w-4 mr-2" />
+                                                View Anomaly Logs
+                                            </DropdownMenuItem>
                                         </DropdownMenuContent>
                                     </DropdownMenu>
                                 </HasRole>
@@ -2810,6 +2815,12 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                 name: 'Fix Anomalies',
                                 what: 'Scans all records and corrects three specific issues: SRO points past their expiration date, stale GBRO dates on ineligible records, and month-end date overflow bugs.',
                                 when: 'You notice unexpected point counts, incorrect expiration dates near month boundaries, or GBRO-eligible flags on points that should not have them.',
+                            },
+                            {
+                                icon: <FileText className="h-4 w-4 text-sky-600" />,
+                                name: 'View Anomaly Logs',
+                                what: 'Opens the GBRO Anomaly Log dashboard showing every detected drift — stale GBRO/SRO dates, orphan dates, eligibility mismatches, and overflow — along with their repair status and which trigger fired the check.',
+                                when: 'You want to audit what the system automatically detected and repaired, investigate a specific batch run, or review pending anomalies that were detected but not yet repaired (dry-run mode).',
                             },
                         ].map((item) => (
                             <div key={item.name} className="flex gap-3 p-3 rounded-lg border bg-card">

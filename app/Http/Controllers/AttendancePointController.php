@@ -14,6 +14,7 @@ use App\Services\AttendancePoint\AttendancePointCreationService;
 use App\Services\AttendancePoint\AttendancePointExportService;
 use App\Services\AttendancePoint\AttendancePointMaintenanceService;
 use App\Services\AttendancePoint\AttendancePointStatsService;
+use App\Services\AttendancePoint\GbroAnomalyService;
 use App\Services\AttendancePoint\GbroCalculationService;
 use App\Services\AttendancePoint\StreakService;
 use Carbon\Carbon;
@@ -32,7 +33,8 @@ class AttendancePointController extends Controller
         protected AttendancePointMaintenanceService $maintenanceService,
         protected AttendancePointExportService $exportService,
         protected AttendancePointCreationService $creationService,
-        protected StreakService $streakService
+        protected StreakService $streakService,
+        protected GbroAnomalyService $anomalyService,
     ) {}
 
     /**
@@ -80,6 +82,7 @@ class AttendancePointController extends Controller
         $this->authorize('viewUserPoints', [AttendancePoint::class, $user]);
 
         $showAll = $request->boolean('show_all', false);
+        $hasDateFilter = $request->filled('date_from') || $request->filled('date_to');
 
         $startDate = $request->filled('date_from')
             ? Carbon::parse($request->date_from)
@@ -92,7 +95,8 @@ class AttendancePointController extends Controller
         $pointsQuery = AttendancePoint::with(['attendance', 'excusedBy'])
             ->where('user_id', $user->id);
 
-        if (! $showAll) {
+        // Only apply date range when dates are explicitly provided and show_all is not set
+        if (! $showAll && $hasDateFilter) {
             $pointsQuery->dateRange($startDate, $endDate);
         }
 
@@ -265,6 +269,16 @@ class AttendancePointController extends Controller
             $this->gbroService->cascadeRecalculateGbro($point->user_id);
         });
 
+        // Audit drift introduced by clearing expiration flags on the excused row.
+        try {
+            $this->anomalyService->repair($point->user_id, 'excuse');
+        } catch (\Throwable $e) {
+            Log::error('AttendancePointController excuse anomaly audit failed', [
+                'user_id' => $point->user_id,
+                'message' => $e->getMessage(),
+            ]);
+        }
+
         return redirect()->back()->with('success', 'Attendance point excused successfully.');
     }
 
@@ -283,6 +297,17 @@ class AttendancePointController extends Controller
         ]);
 
         $this->gbroService->cascadeRecalculateGbro($point->user_id);
+
+        // Audit drift: an unexcused row may now be eligible for stale-pending
+        // GBRO/SRO expiration that the cascade alone wouldn't apply.
+        try {
+            $this->anomalyService->repair($point->user_id, 'unexcuse');
+        } catch (\Throwable $e) {
+            Log::error('AttendancePointController unexcuse anomaly audit failed', [
+                'user_id' => $point->user_id,
+                'message' => $e->getMessage(),
+            ]);
+        }
 
         return redirect()->back()->with('success', 'Excuse removed successfully.');
     }

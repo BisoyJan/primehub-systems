@@ -21,6 +21,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DatabaseBackupController;
 use App\Http\Controllers\EmployeeScheduleController;
 use App\Http\Controllers\FormRequestRetentionPolicyController;
+use App\Http\Controllers\GbroAnomalyLogController;
 use App\Http\Controllers\ItConcernController;
 use App\Http\Controllers\LeaveCreditController;
 use App\Http\Controllers\LeaveRequestController;
@@ -331,6 +332,11 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
                 Route::post('/initialize-gbro-dates', [AttendancePointController::class, 'initializeGbroDates'])->name('initialize-gbro-dates');
                 Route::post('/fix-gbro-dates', [AttendancePointController::class, 'fixGbroDates'])->name('fix-gbro-dates');
                 Route::post('/fix-anomalies', [AttendancePointController::class, 'fixAnomalies'])->name('fix-anomalies');
+
+                // GBRO drift audit dashboard (detect + repair history).
+                Route::get('/anomaly-logs', [GbroAnomalyLogController::class, 'index'])->name('anomaly-logs.index');
+                Route::post('/anomaly-logs/run-audit', [GbroAnomalyLogController::class, 'runAudit'])->name('anomaly-logs.run');
+                Route::delete('/anomaly-logs/clear', [GbroAnomalyLogController::class, 'clearLogs'])->name('anomaly-logs.clear');
             });
 
         // Bulk manual entry page + submit endpoint — declared BEFORE {user} routes.
