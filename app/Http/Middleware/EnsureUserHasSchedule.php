@@ -37,6 +37,9 @@ class EnsureUserHasSchedule
                 'schedule-setup.store',
                 'pending-approval',
                 'logout',
+                'verification.notice',
+                'verification.verify',
+                'verification.send',
             ];
 
             if (!$hasSchedule && !$request->routeIs($excludedRoutes)) {
