@@ -611,7 +611,7 @@ export default function AttendanceSpreadsheet() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={title} />
             <PresenceContext.Provider value={presenceValue}>
-                <div className="flex h-full min-w-0 max-w-full flex-1 flex-col gap-3 overflow-hidden rounded-xl p-3">
+                <div className="flex h-[calc(100dvh-4rem)] min-w-0 max-w-full flex-col gap-3 overflow-hidden rounded-xl p-3">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                         <PageHeader
                             title="Attendance Spreadsheet"
@@ -763,14 +763,14 @@ export default function AttendanceSpreadsheet() {
                             </div>
                         ) : (
                             <table className="w-max min-w-full border-separate border-spacing-0 text-xs">
-                                <thead className="sticky top-0 z-2 bg-slate-100 dark:bg-slate-800">
+                                <thead className="bg-slate-100 dark:bg-slate-800">
                                     <tr>
                                         <th
-                                            className="sticky left-0 z-3 w-46 min-w-46 border-b border-r bg-slate-200 px-2 py-1 text-left font-semibold dark:bg-slate-700"
+                                            className="sticky top-0 left-0 z-20 w-46 min-w-46 border-b border-r bg-slate-200 px-2 py-1 text-left font-semibold dark:bg-slate-700"
                                         >
                                             Name
                                         </th>
-                                        <th className="sticky left-46 z-3 w-15 min-w-15 border-b border-r bg-slate-200 px-2 py-1 text-center font-semibold dark:bg-slate-700">
+                                        <th className="sticky top-0 left-46 z-20 w-15 min-w-15 border-b border-r bg-slate-200 px-2 py-1 text-center font-semibold dark:bg-slate-700">
                                             <TooltipProvider>
                                                 <Tooltip>
                                                     <TooltipTrigger asChild>
@@ -785,7 +785,7 @@ export default function AttendanceSpreadsheet() {
                                         {days.map((d) => (
                                             <Fragment key={d.date}>
                                                 <th
-                                                    className={`w-11 min-w-11 max-w-11 border-b border-r px-1 py-1 text-center font-semibold ${d.is_saturday ? "bg-emerald-100 dark:bg-emerald-950/40" : d.is_weekend ? "bg-slate-300 dark:bg-slate-700" : ""}`}
+                                                    className={`sticky top-0 z-10 w-11 min-w-11 max-w-11 border-b border-r px-1 py-1 text-center font-semibold ${d.is_saturday ? "bg-emerald-100 dark:bg-emerald-950" : d.is_weekend ? "bg-slate-300 dark:bg-slate-700" : "bg-slate-100 dark:bg-slate-800"}`}
                                                 >
                                                     <div className="leading-tight">{d.day}</div>
                                                     <div className="text-[10px] font-normal text-muted-foreground leading-tight">
@@ -793,7 +793,7 @@ export default function AttendanceSpreadsheet() {
                                                     </div>
                                                 </th>
                                                 {d.is_saturday && (
-                                                    <th className="w-16 min-w-16 max-w-16 border-b border-r bg-emerald-200 px-1 py-1 text-center font-semibold dark:bg-emerald-900/60">
+                                                    <th className="sticky top-0 z-10 w-16 min-w-16 max-w-16 border-b border-r bg-emerald-200 px-1 py-1 text-center font-semibold dark:bg-emerald-900">
                                                         <div className="leading-tight">Wk Hrs</div>
                                                         <div className="text-[10px] font-normal text-muted-foreground leading-tight">
                                                             ending {d.day}
@@ -1463,51 +1463,47 @@ const CellView = memo(function CellView({
 
     return (
         <>
-            <Popover open={open} onOpenChange={(val) => { setOpen(val); if (!val) onSelectEmployee(null); }}>
-                <Tooltip delayDuration={1000}>
-                    <TooltipTrigger asChild>
-                        <PopoverTrigger asChild>
-                            <td
-                                className={`${tdClass} cursor-pointer relative`}
-                                style={editingStyle}
-                                onClick={() => { setOpen(true); onSelectEmployee(employeeId); }}
-                                role="button"
-                            >
-                                {isRowSelected && !open && (
-                                    <span className="absolute inset-0 bg-blue-500/10 pointer-events-none" />
-                                )}
-                                {open && (
-                                    <span className="absolute inset-0 bg-blue-500/25 pointer-events-none" />
-                                )}
-                                {label}
-                                <LiveEditorBadge editors={otherEditors} colorFor={colorFor} />
-                            </td>
-                        </PopoverTrigger>
-                    </TooltipTrigger>
-                    {!open && (
-                        <TooltipContent side="top" className="max-w-55">
-                            {tooltipContent}
-                        </TooltipContent>
-                    )}
-                </Tooltip>
-                <PopoverContent
-                    className="w-80"
-                    align="start"
-                    side="bottom"
-                    collisionPadding={{ top: 120, bottom: 16, left: 16, right: 16 }}
-                >
-                    <CellEditor
-                        cell={cell}
-                        employeeId={employeeId}
-                        employeeName={employeeName}
-                        employeeRole={employeeRole}
-                        avatarUrl={avatarUrl}
-                        schedule={schedule}
-                        date={date.date}
-                        onDone={() => setOpen(false)}
-                    />
-                </PopoverContent>
-            </Popover>
+            <Tooltip delayDuration={1000}>
+                <TooltipTrigger asChild>
+                    <td
+                        className={`${tdClass} cursor-pointer relative`}
+                        style={editingStyle}
+                        onClick={() => { setOpen(true); onSelectEmployee(employeeId); }}
+                        role="button"
+                    >
+                        {isRowSelected && !open && (
+                            <span className="absolute inset-0 bg-blue-500/10 pointer-events-none" />
+                        )}
+                        {open && (
+                            <span className="absolute inset-0 bg-blue-500/25 ring-2 ring-blue-500 ring-inset pointer-events-none" />
+                        )}
+                        {label}
+                        <LiveEditorBadge editors={otherEditors} colorFor={colorFor} />
+                    </td>
+                </TooltipTrigger>
+                {!open && (
+                    <TooltipContent side="top" className="max-w-55">
+                        {tooltipContent}
+                    </TooltipContent>
+                )}
+            </Tooltip>
+            <Dialog open={open} onOpenChange={(val) => { setOpen(val); if (!val) onSelectEmployee(null); }}>
+                <DialogContent className="w-80 max-w-[92vw] p-0 gap-0 overflow-hidden [&>button.absolute]:hidden" aria-describedby={undefined}>
+                    <DialogTitle className="sr-only">{employeeName} — {date.date}</DialogTitle>
+                    <div className="overflow-y-auto p-4" style={{ maxHeight: 'calc(90dvh - 48px)' }}>
+                        <CellEditor
+                            cell={cell}
+                            employeeId={employeeId}
+                            employeeName={employeeName}
+                            employeeRole={employeeRole}
+                            avatarUrl={avatarUrl}
+                            schedule={schedule}
+                            date={date.date}
+                            onDone={() => setOpen(false)}
+                        />
+                    </div>
+                </DialogContent>
+            </Dialog>
         </>
     );
 });
@@ -1580,25 +1576,25 @@ function CellEditor({
     const violations: Array<{ label: string; value: string; cls: string }> = [];
     if (cell) {
         if (cell.tardy_minutes > 0)
-            violations.push({ label: "Tardy", value: fmtMins(cell.tardy_minutes), cls: "text-amber-400" });
+            violations.push({ label: "Tardy", value: fmtMins(cell.tardy_minutes), cls: "text-amber-600 dark:text-amber-400" });
         if (cell.undertime_minutes > 0)
-            violations.push({ label: "Undertime", value: fmtMins(cell.undertime_minutes), cls: "text-orange-400" });
+            violations.push({ label: "Undertime", value: fmtMins(cell.undertime_minutes), cls: "text-orange-600 dark:text-orange-400" });
         if (cell.overtime_minutes > 0)
             violations.push({
                 label: "Overtime",
                 value: `${fmtMins(cell.overtime_minutes)}${cell.overtime_approved ? " ✓" : " (pending)"}`,
-                cls: cell.overtime_approved ? "text-emerald-400" : "text-blue-400",
+                cls: cell.overtime_approved ? "text-emerald-600 dark:text-emerald-400" : "text-blue-600 dark:text-blue-400",
             });
         if (cell.status === "failed_bio_in")
-            violations.push({ label: "Violation", value: "No time-in biometric", cls: "text-purple-400" });
+            violations.push({ label: "Violation", value: "No time-in biometric", cls: "text-purple-600 dark:text-purple-400" });
         if (cell.status === "failed_bio_out")
-            violations.push({ label: "Violation", value: "No time-out biometric", cls: "text-purple-400" });
+            violations.push({ label: "Violation", value: "No time-out biometric", cls: "text-purple-600 dark:text-purple-400" });
         if (cell.status === "ncns")
-            violations.push({ label: "Violation", value: "No call / No show", cls: "text-red-400" });
+            violations.push({ label: "Violation", value: "No call / No show", cls: "text-red-600 dark:text-red-400" });
         if (cell.status === "half_day_absence")
-            violations.push({ label: "Violation", value: "Half day absence", cls: "text-red-400" });
+            violations.push({ label: "Violation", value: "Half day absence", cls: "text-red-600 dark:text-red-400" });
         if (cell.status === "advised_absence")
-            violations.push({ label: "Violation", value: "Advised absence", cls: "text-red-400" });
+            violations.push({ label: "Violation", value: "Advised absence", cls: "text-red-600 dark:text-red-400" });
     }
 
     // Statuses that require a specific actual time in/out
@@ -1736,14 +1732,14 @@ function CellEditor({
     }, [form.data.actual_time_in, form.data.actual_time_out]);
 
     const STATUS_PREVIEW_LABELS: Record<string, { label: string; cls: string }> = {
-        on_time: { label: "On Time", cls: "text-emerald-400" },
-        tardy: { label: "Tardy", cls: "text-amber-400" },
-        undertime: { label: "Undertime", cls: "text-orange-400" },
-        undertime_more_than_hour: { label: "Undertime >1hr", cls: "text-orange-500" },
-        half_day_absence: { label: "Half Day Absence", cls: "text-red-400" },
-        failed_bio_in: { label: "Failed Bio In", cls: "text-purple-400" },
-        failed_bio_out: { label: "Failed Bio Out", cls: "text-purple-400" },
-        ncns: { label: "NCNS (Absent)", cls: "text-red-500" },
+        on_time: { label: "On Time", cls: "text-emerald-600 dark:text-emerald-400" },
+        tardy: { label: "Tardy", cls: "text-amber-600 dark:text-amber-400" },
+        undertime: { label: "Undertime", cls: "text-orange-600 dark:text-orange-400" },
+        undertime_more_than_hour: { label: "Undertime >1hr", cls: "text-orange-600 dark:text-orange-500" },
+        half_day_absence: { label: "Half Day Absence", cls: "text-red-600 dark:text-red-400" },
+        failed_bio_in: { label: "Failed Bio In", cls: "text-purple-600 dark:text-purple-400" },
+        failed_bio_out: { label: "Failed Bio Out", cls: "text-purple-600 dark:text-purple-400" },
+        ncns: { label: "NCNS (Absent)", cls: "text-red-600 dark:text-red-500" },
     };
 
     const submit = (e: React.FormEvent) => {
@@ -1794,12 +1790,22 @@ function CellEditor({
                         {new Date(date + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
                     </div>
                 </div>
-                <Avatar className="h-10 w-10 shrink-0">
-                    <AvatarImage src={avatarUrl ?? undefined} alt={employeeName} />
-                    <AvatarFallback className="text-xs">
-                        {employeeName.split(',').map((p) => p.trim()[0]).reverse().join('')}
-                    </AvatarFallback>
-                </Avatar>
+                <div className="flex items-center gap-2 shrink-0">
+                    <Avatar className="h-10 w-10">
+                        <AvatarImage src={avatarUrl ?? undefined} alt={employeeName} />
+                        <AvatarFallback className="text-xs">
+                            {employeeName.split(',').map((p) => p.trim()[0]).reverse().join('')}
+                        </AvatarFallback>
+                    </Avatar>
+                    <button
+                        type="button"
+                        onClick={onDone}
+                        className="rounded-sm opacity-60 hover:opacity-100 transition-opacity"
+                        aria-label="Close"
+                    >
+                        <X className="h-4 w-4" />
+                    </button>
+                </div>
             </div>
 
             {/* NMR / Suspicious Pattern card */}
@@ -1942,7 +1948,7 @@ function CellEditor({
             )}
 
             {violations.length > 0 && (
-                <div className="rounded border border-red-400/40 bg-red-950/20 p-2 text-[11px]">
+                <div className="rounded border border-red-200 bg-red-50 dark:border-red-400/40 dark:bg-red-950/20 p-2 text-[11px]">
                     <div className="mb-1 font-semibold uppercase text-[10px] text-muted-foreground tracking-wide">
                         Violations / Notes
                     </div>
@@ -1964,7 +1970,7 @@ function CellEditor({
                 const otMins = Math.max(cell?.overtime_minutes ?? 0, hoursOtMins);
                 if (otMins <= 0) return null;
                 return (
-                    <div className="rounded border border-blue-400/40 bg-blue-950/20 p-2 text-[11px]">
+                    <div className="rounded border border-blue-200 bg-blue-50 dark:border-blue-400/40 dark:bg-blue-950/20 p-2 text-[11px]">
                         <div className="mb-1 font-semibold uppercase text-[10px] text-muted-foreground tracking-wide">
                             Overtime Approval
                         </div>
@@ -1981,8 +1987,8 @@ function CellEditor({
                                 </label>
                                 <p className="text-[10px] text-muted-foreground">
                                     {form.data.overtime_approved
-                                        ? <span className="text-emerald-400">OT hours will be included in total hours worked.</span>
-                                        : <span className="text-blue-400/80">OT hours are not counted until approved.</span>
+                                        ? <span className="text-emerald-600 dark:text-emerald-400">OT hours will be included in total hours worked.</span>
+                                        : <span className="text-blue-600/80 dark:text-blue-400/80">OT hours are not counted until approved.</span>
                                     }
                                 </p>
                             </div>
@@ -1998,7 +2004,7 @@ function CellEditor({
                 const otMins = Math.max(previewStatus?.overtimeMins ?? 0, hoursOtMins);
                 if (otMins <= 0) return null;
                 return (
-                    <div className="rounded border border-blue-400/40 bg-blue-950/20 p-2 text-[11px]">
+                    <div className="rounded border border-blue-200 bg-blue-50 dark:border-blue-400/40 dark:bg-blue-950/20 p-2 text-[11px]">
                         <div className="mb-1 font-semibold uppercase text-[10px] text-muted-foreground tracking-wide">
                             Overtime Approval
                         </div>
@@ -2015,8 +2021,8 @@ function CellEditor({
                                 </label>
                                 <p className="text-[10px] text-muted-foreground">
                                     {form.data.overtime_approved
-                                        ? <span className="text-emerald-400">OT hours will be included in total hours worked.</span>
-                                        : <span className="text-blue-400/80">OT hours are not counted until approved.</span>
+                                        ? <span className="text-emerald-600 dark:text-emerald-400">OT hours will be included in total hours worked.</span>
+                                        : <span className="text-blue-600/80 dark:text-blue-400/80">OT hours are not counted until approved.</span>
                                     }
                                 </p>
                             </div>
@@ -2245,16 +2251,16 @@ function CellEditor({
             )}
 
             {isCreate && (
-                <div className="rounded border border-blue-400/40 bg-blue-950/20 p-2 text-[11px] text-blue-300">
+                <div className="rounded border border-blue-200 bg-blue-50 dark:border-blue-400/40 dark:bg-blue-950/20 p-2 text-[11px] text-blue-700 dark:text-blue-300">
                     {previewStatus ? (
                         <div className="flex items-center justify-between gap-2">
                             <span>Expected status:</span>
                             <span>
-                                <span className={`font-semibold ${STATUS_PREVIEW_LABELS[previewStatus.status]?.cls ?? "text-blue-300"}`}>
+                                <span className={`font-semibold ${STATUS_PREVIEW_LABELS[previewStatus.status]?.cls ?? "text-blue-700 dark:text-blue-300"}`}>
                                     {STATUS_PREVIEW_LABELS[previewStatus.status]?.label ?? previewStatus.status}
                                 </span>
                                 {previewStatus.detail && (
-                                    <span className="ml-1.5 text-blue-400/70">({previewStatus.detail})</span>
+                                    <span className="ml-1.5 text-blue-600/70 dark:text-blue-400/70">({previewStatus.detail})</span>
                                 )}
                             </span>
                         </div>
