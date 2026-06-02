@@ -10,6 +10,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
 import { usePageMeta, useFlashMessage, usePageLoading } from '@/hooks';
@@ -19,7 +20,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { DatePicker } from '@/components/ui/date-picker';
 import { dashboard as dashboardRoute } from '@/routes/break-timer';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Users, Activity, CheckCircle, AlertTriangle, Clock, ChevronsUpDown, Check, Pause, Play, PlayCircle, StopCircle, Square, RotateCcw, History, Ban } from 'lucide-react';
+import { Users, Activity, CheckCircle, AlertTriangle, Clock, ChevronsUpDown, Check, Pause, Play, PlayCircle, StopCircle, Square, RotateCcw, History, Ban, PlusCircle } from 'lucide-react';
 import { SessionTimelineDialog } from './components/SessionTimelineDialog';
 import { useState, useMemo, useEffect, useRef } from 'react';
 
@@ -50,6 +51,8 @@ interface SessionData {
     expected_end_at: string | null;
     remaining_seconds: number | null;
     overage_seconds: number;
+    reimbursed_seconds: number;
+    max_reimbursable_seconds: number;
     live_overage_seconds: number;
     is_overbreak_now: boolean;
     total_paused_seconds: number;
@@ -158,7 +161,8 @@ export default function BreakTimerDashboard() {
     const canForceEnd = can('break_timer.force_end');
     const canRestore = can('break_timer.restore');
     const canVoid = can('break_timer.void_session');
-    const canActOnSessions = canForceEnd || canRestore || canVoid;
+    const canReimburse = can('break_timer.reimburse');
+    const canActOnSessions = canForceEnd || canRestore || canVoid || canReimburse;
     const isTLorIT = auth.user.role === 'Team Lead' || auth.user.role === 'it';
     const canRestoreFullMinutes = ['Admin', 'Super Admin', 'Team Lead'].includes(auth.user.role);
 
@@ -176,6 +180,14 @@ export default function BreakTimerDashboard() {
     function canVoidSession(session: SessionData): boolean {
         if (!canVoid) return false;
         if (session.status === 'reset') return false;
+        return true;
+    }
+
+    /** Returns true when the Reimburse button should be shown for a given session. */
+    function canReimburseSession(session: SessionData): boolean {
+        if (!canReimburse) return false;
+        if (session.status === 'reset') return false;
+        if ((session.max_reimbursable_seconds ?? 0) <= 0) return false;
         return true;
     }
 
@@ -213,9 +225,10 @@ export default function BreakTimerDashboard() {
     const [showUserSearch, setShowUserSearch] = useState(false);
     const [userSearchQuery, setUserSearchQuery] = useState('');
 
-    const [actionDialog, setActionDialog] = useState<{ kind: 'force_end' | 'restore' | 'void'; session: SessionData } | null>(null);
+    const [actionDialog, setActionDialog] = useState<{ kind: 'force_end' | 'restore' | 'void' | 'reimburse'; session: SessionData } | null>(null);
     const [actionReason, setActionReason] = useState('');
     const [restoreFull, setRestoreFull] = useState(false);
+    const [reimburseMinutes, setReimburseMinutes] = useState<string>('5');
     const [isSubmittingAction, setIsSubmittingAction] = useState(false);
     const [timelineSessionId, setTimelineSessionId] = useState<number | null>(null);
 
@@ -236,11 +249,20 @@ export default function BreakTimerDashboard() {
         setActionDialog({ kind: 'void', session });
     }
 
+    function openReimburse(session: SessionData) {
+        setActionReason('');
+        setRestoreFull(false);
+        const maxMin = Math.max(1, Math.floor((session.max_reimbursable_seconds ?? 0) / 60));
+        setReimburseMinutes(String(Math.min(5, maxMin)));
+        setActionDialog({ kind: 'reimburse', session });
+    }
+
     function closeActionDialog() {
         if (isSubmittingAction) return;
         setActionDialog(null);
         setActionReason('');
         setRestoreFull(false);
+        setReimburseMinutes('5');
     }
 
     function submitAction() {
@@ -248,15 +270,27 @@ export default function BreakTimerDashboard() {
         const reason = actionReason.trim();
         if (reason.length < 3) return;
 
-        const url = actionDialog.kind === 'force_end'
-            ? `/break-timer/${actionDialog.session.id}/force-end`
-            : actionDialog.kind === 'void'
-                ? `/break-timer/${actionDialog.session.id}/void`
-                : `/break-timer/${actionDialog.session.id}/restore`;
+        let url: string;
+        let payload: Record<string, unknown>;
 
-        const payload = actionDialog.kind === 'restore'
-            ? { reason, restore_full: restoreFull }
-            : { reason };
+        if (actionDialog.kind === 'force_end') {
+            url = `/break-timer/${actionDialog.session.id}/force-end`;
+            payload = { reason };
+        } else if (actionDialog.kind === 'void') {
+            url = `/break-timer/${actionDialog.session.id}/void`;
+            payload = { reason };
+        } else if (actionDialog.kind === 'reimburse') {
+            const minutes = parseInt(reimburseMinutes, 10);
+            if (!Number.isFinite(minutes) || minutes < 1 || minutes > 180) return;
+            const maxMin = Math.floor((actionDialog.session.max_reimbursable_seconds ?? 0) / 60);
+            if (minutes > maxMin) return;
+            url = `/break-timer/${actionDialog.session.id}/reimburse`;
+            payload = { reason, minutes };
+        } else {
+            url = `/break-timer/${actionDialog.session.id}/restore`;
+            payload = { reason, restore_full: restoreFull };
+        }
+
         setIsSubmittingAction(true);
         router.post(url, payload, {
             preserveScroll: true,
@@ -265,6 +299,7 @@ export default function BreakTimerDashboard() {
                 setActionDialog(null);
                 setActionReason('');
                 setRestoreFull(false);
+                setReimburseMinutes('5');
             },
         });
     }
@@ -675,6 +710,18 @@ export default function BreakTimerDashboard() {
                                                             Void
                                                         </Button>
                                                     )}
+                                                    {canReimburseSession(session) && (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() => openReimburse(session)}
+                                                            className="ml-2 gap-1 border-emerald-400 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 dark:border-emerald-500 dark:text-emerald-400 dark:hover:bg-emerald-950"
+                                                            title={session.reimbursed_seconds > 0 ? `Already reimbursed ${formatTime(session.reimbursed_seconds)}` : 'Add minutes back to this session'}
+                                                        >
+                                                            <PlusCircle className="h-3 w-3" />
+                                                            Reimburse
+                                                        </Button>
+                                                    )}
                                                 </TableCell>
                                             ) : (
                                                 <TableCell className="text-right">
@@ -813,6 +860,17 @@ export default function BreakTimerDashboard() {
                                             Void
                                         </Button>
                                     )}
+                                    {canReimburseSession(session) && (
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => openReimburse(session)}
+                                            className="flex-1 gap-1 border-emerald-400 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 dark:border-emerald-500 dark:text-emerald-400 dark:hover:bg-emerald-950"
+                                        >
+                                            <PlusCircle className="h-3 w-3" />
+                                            Reimburse
+                                        </Button>
+                                    )}
                                 </div>
                             </div>
                         ))
@@ -834,14 +892,18 @@ export default function BreakTimerDashboard() {
                                 ? 'Force End Break Session'
                                 : actionDialog?.kind === 'void'
                                     ? 'Void Break Session'
-                                    : 'Restore Break Session'}
+                                    : actionDialog?.kind === 'reimburse'
+                                        ? 'Reimburse Minutes'
+                                        : 'Restore Break Session'}
                         </DialogTitle>
                         <DialogDescription>
                             {actionDialog?.kind === 'force_end'
                                 ? 'End this session on behalf of the agent (e.g., they forgot to end before their shift ended). This action is logged.'
                                 : actionDialog?.kind === 'void'
                                     ? 'Mark this session as voided — it will no longer count toward the agent\'s break quota. Use this when the agent selected the wrong break type. This action is logged.'
-                                    : 'Restore this previously ended session. The agent will get back the remaining time. This action is logged.'}
+                                    : actionDialog?.kind === 'reimburse'
+                                        ? 'Add minutes back to this break session (e.g., the agent forgot to pause and time was unintentionally consumed). For active sessions the timer extends live; for ended/overage sessions the overage is reduced first. This action is logged.'
+                                        : 'Restore this previously ended session. The agent will get back the remaining time. This action is logged.'}
                         </DialogDescription>
                     </DialogHeader>
 
@@ -868,6 +930,30 @@ export default function BreakTimerDashboard() {
                                         {getQuotaFreedLabel(actionDialog.session)}
                                     </div>
                                 )}
+                                {actionDialog.kind === 'reimburse' && (
+                                    <>
+                                        <div>
+                                            <span className="text-muted-foreground">Allotted:</span>{' '}
+                                            {formatTime(actionDialog.session.duration_seconds)}
+                                        </div>
+                                        {actionDialog.session.overage_seconds > 0 && (
+                                            <div className="text-red-600 dark:text-red-400">
+                                                <span className="text-muted-foreground">Current overage:</span>{' '}
+                                                +{formatTime(actionDialog.session.overage_seconds)}
+                                            </div>
+                                        )}
+                                        {actionDialog.session.reimbursed_seconds > 0 && (
+                                            <div className="text-emerald-600 dark:text-emerald-400">
+                                                <span className="text-muted-foreground">Already reimbursed:</span>{' '}
+                                                +{formatTime(actionDialog.session.reimbursed_seconds)}
+                                            </div>
+                                        )}
+                                        <div className="font-semibold text-emerald-700 dark:text-emerald-300">
+                                            <span className="text-muted-foreground font-normal">Max reimbursable:</span>{' '}
+                                            {formatTime(actionDialog.session.max_reimbursable_seconds ?? 0)}
+                                        </div>
+                                    </>
+                                )}
                             </div>
                             {actionDialog.kind === 'void' && ['active', 'paused'].includes(actionDialog.session.status) && (
                                 <div className="flex items-start gap-2 rounded-md border border-orange-300 bg-orange-50 px-3 py-2 text-sm text-orange-700 dark:border-orange-700 dark:bg-orange-950/40 dark:text-orange-400">
@@ -893,6 +979,26 @@ export default function BreakTimerDashboard() {
                                     </div>
                                 </div>
                             )}
+                            {actionDialog.kind === 'reimburse' && (
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="reimburse-minutes">
+                                        Minutes to reimburse <span className="text-red-500">*</span>
+                                    </Label>
+                                    <Input
+                                        id="reimburse-minutes"
+                                        type="number"
+                                        min={1}
+                                        max={Math.max(1, Math.floor((actionDialog.session.max_reimbursable_seconds ?? 0) / 60))}
+                                        step={1}
+                                        value={reimburseMinutes}
+                                        onChange={(e) => setReimburseMinutes(e.target.value)}
+                                        disabled={isSubmittingAction}
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                        Max {Math.floor((actionDialog.session.max_reimbursable_seconds ?? 0) / 60)} minute(s) — cannot exceed consumed time. Session will be paused after reimbursing.
+                                    </p>
+                                </div>
+                            )}
                             <div className="space-y-1.5">
                                 <Label htmlFor="action-reason">
                                     Reason <span className="text-red-500">*</span>
@@ -905,7 +1011,9 @@ export default function BreakTimerDashboard() {
                                         ? 'e.g., Agent logged off without ending break.'
                                         : actionDialog.kind === 'void'
                                             ? 'e.g., Agent accidentally selected combined break; should have been 1st break only.'
-                                            : 'e.g., Break was accidentally ended; agent had ~10 min remaining.'}
+                                            : actionDialog.kind === 'reimburse'
+                                                ? 'e.g., Agent was pulled into a call mid-break and forgot to pause.'
+                                                : 'e.g., Break was accidentally ended; agent had ~10 min remaining.'}
                                     maxLength={500}
                                     rows={3}
                                     disabled={isSubmittingAction}
@@ -922,7 +1030,15 @@ export default function BreakTimerDashboard() {
                         <Button
                             variant={actionDialog?.kind === 'force_end' || actionDialog?.kind === 'void' ? 'destructive' : 'default'}
                             onClick={submitAction}
-                            disabled={isSubmittingAction || actionReason.trim().length < 3}
+                            disabled={
+                                isSubmittingAction
+                                || actionReason.trim().length < 3
+                                || (actionDialog?.kind === 'reimburse' && (() => {
+                                    const m = parseInt(reimburseMinutes, 10);
+                                    const maxMin = Math.floor((actionDialog.session.max_reimbursable_seconds ?? 0) / 60);
+                                    return !Number.isFinite(m) || m < 1 || m > 180 || m > maxMin;
+                                })())
+                            }
                         >
                             {isSubmittingAction
                                 ? 'Submitting...'
@@ -930,7 +1046,9 @@ export default function BreakTimerDashboard() {
                                     ? 'Force End'
                                     : actionDialog?.kind === 'void'
                                         ? 'Void Session'
-                                        : 'Restore'}
+                                        : actionDialog?.kind === 'reimburse'
+                                            ? 'Reimburse'
+                                            : 'Restore'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

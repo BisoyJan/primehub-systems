@@ -795,6 +795,137 @@ class BreakTimerService
         });
     }
 
+    /**
+     * Reimburse minutes to a break session (admin/TL action).
+     *
+     * Adds the given minutes back to the session's allotted duration. Useful when
+     * an agent forgot to pause and time was unintentionally consumed.
+     *
+     * - Active/paused sessions: the on-screen remaining timer immediately extends
+     *   (existing client logic recomputes from duration_seconds).
+     * - Ended sessions (completed/overage/auto_ended): overage_seconds is reduced
+     *   by the reimbursement; remaining_seconds is increased. If a previously
+     *   overage session reaches zero overage, status flips back to 'completed'
+     *   and overbreak_notified_at is cleared.
+     *
+     * The reimbursed amount is accumulated in `reimbursed_seconds` for reporting,
+     * and an immutable `BreakEvent` action='reimburse' is written for audit.
+     */
+    public function reimburseMinutes(
+        BreakSession $session,
+        int $minutes,
+        int $adminId,
+        string $adminName,
+        string $reason,
+    ): BreakSession {
+        if ($minutes < 1) {
+            throw new \RuntimeException('Reimbursement must be at least 1 minute.');
+        }
+
+        $addedSeconds = $minutes * 60;
+
+        return DB::transaction(function () use ($session, $minutes, $addedSeconds, $adminId, $adminName, $reason): BreakSession {
+            $locked = BreakSession::query()->whereKey($session->id)->lockForUpdate()->first();
+
+            if (! $locked) {
+                throw new \RuntimeException('Session not found.');
+            }
+
+            if ($locked->status === 'reset') {
+                throw new \RuntimeException('Voided/reset sessions cannot be reimbursed.');
+            }
+
+            $session = $locked;
+
+            // For live (active) sessions, sync remaining_seconds against live elapsed
+            // so the "consumed" cap reflects what the agent has actually used.
+            if ($session->status === 'active') {
+                $elapsed = (int) now()->diffInSeconds($session->started_at, absolute: true) - (int) $session->total_paused_seconds;
+                $liveRemaining = max(0, (int) $session->duration_seconds - $elapsed);
+                if ($liveRemaining !== (int) $session->remaining_seconds) {
+                    $session->remaining_seconds = $liveRemaining;
+                }
+            }
+
+            $consumed = (int) $session->duration_seconds - (int) $session->remaining_seconds + (int) $session->overage_seconds;
+            $alreadyReimbursed = (int) $session->reimbursed_seconds;
+            $maxReimbursable = max(0, $consumed - $alreadyReimbursed);
+
+            if ($maxReimbursable <= 0) {
+                throw new \RuntimeException('No consumed minutes available to reimburse on this session.');
+            }
+
+            if ($addedSeconds > $maxReimbursable) {
+                $maxMinutes = intdiv($maxReimbursable, 60);
+                $maxLabel = $maxMinutes >= 1
+                    ? "{$maxMinutes} minute".($maxMinutes === 1 ? '' : 's')
+                    : "{$maxReimbursable} second".($maxReimbursable === 1 ? '' : 's');
+                throw new \RuntimeException("Cannot reimburse more than the consumed time. Max reimbursable: {$maxLabel}.");
+            }
+
+            $newDuration = (int) $session->duration_seconds + $addedSeconds;
+            $newReimbursed = (int) $session->reimbursed_seconds + $addedSeconds;
+
+            $updates = [
+                'duration_seconds' => $newDuration,
+                'reimbursed_seconds' => $newReimbursed,
+            ];
+
+            $newRemaining = (int) $session->remaining_seconds;
+            $newOverage = (int) $session->overage_seconds;
+            $newStatus = $session->status;
+
+            if (in_array($session->status, ['completed', 'overage', 'auto_ended'], true)) {
+                // Reduce overage first; spill remainder into remaining_seconds.
+                $consumeFromOverage = min($newOverage, $addedSeconds);
+                $newOverage -= $consumeFromOverage;
+                $spill = $addedSeconds - $consumeFromOverage;
+                $newRemaining += $spill;
+
+                $updates['overage_seconds'] = $newOverage;
+                $updates['remaining_seconds'] = $newRemaining;
+                $updates['overbreak_notified_at'] = null;
+                $updates['ended_at'] = null;
+                $updates['ended_by'] = null;
+            } else {
+                // active or paused — extend the remaining countdown.
+                $newRemaining += $addedSeconds;
+                $updates['remaining_seconds'] = $newRemaining;
+            }
+
+            // Always land in 'paused' so the agent must explicitly resume to use the time.
+            $newStatus = 'paused';
+            $updates['status'] = 'paused';
+            $updates['last_pause_reason'] = "Admin reimbursed {$minutes} min";
+
+            $session->update($updates);
+
+            BreakEvent::create([
+                'break_session_id' => $session->id,
+                'action' => 'reimburse',
+                'remaining_seconds' => $newRemaining,
+                'overage_seconds' => $newOverage,
+                'reason' => "Reimbursed {$minutes} min by {$adminName} (#{$adminId}): {$reason}",
+                'occurred_at' => now(),
+            ]);
+
+            activity()
+                ->causedBy($adminId)
+                ->performedOn($session)
+                ->withProperties([
+                    'reason' => $reason,
+                    'minutes' => $minutes,
+                    'session_id' => $session->session_id,
+                    'agent_user_id' => $session->user_id,
+                    'new_status' => $newStatus,
+                    'total_reimbursed_seconds' => $newReimbursed,
+                ])
+                ->log('Break session minutes reimbursed by admin');
+
+            return $session->refresh();
+        });
+    }
+
     public function resetShift(int $userId, string $date, string $approval): int
     {
         return DB::transaction(function () use ($userId, $date, $approval): int {

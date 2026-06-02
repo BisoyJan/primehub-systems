@@ -145,6 +145,8 @@ class BreakDashboardController extends Controller
                 'expected_end_at' => $timing['expected_end_at']?->toDateTimeString(),
                 'remaining_seconds' => $session->remaining_seconds,
                 'overage_seconds' => $session->overage_seconds,
+                'reimbursed_seconds' => $session->reimbursed_seconds,
+                'max_reimbursable_seconds' => max(0, ((int) $session->duration_seconds - (int) $session->remaining_seconds + (int) $session->overage_seconds) - (int) $session->reimbursed_seconds),
                 'live_overage_seconds' => $timing['overage_seconds'],
                 'is_overbreak_now' => $timing['is_overbreak_now'],
                 'total_paused_seconds' => $session->total_paused_seconds,
@@ -274,6 +276,8 @@ class BreakDashboardController extends Controller
                 'ended_at' => $session->ended_at?->toDateTimeString(),
                 'remaining_seconds' => $session->remaining_seconds,
                 'overage_seconds' => $session->overage_seconds,
+                'reimbursed_seconds' => $session->reimbursed_seconds,
+                'max_reimbursable_seconds' => max(0, ((int) $session->duration_seconds - (int) $session->remaining_seconds + (int) $session->overage_seconds) - (int) $session->reimbursed_seconds),
                 'total_paused_seconds' => $session->total_paused_seconds,
                 'shift_date' => $session->shift_date?->toDateString(),
                 'last_pause_reason' => $session->last_pause_reason,
@@ -546,6 +550,48 @@ class BreakDashboardController extends Controller
             Log::error('BreakTimer Void Error: '.$e->getMessage());
 
             return $this->backWithFlash('Failed to void session.', 'error');
+        }
+    }
+
+    /**
+     * Reimburse minutes to a break session that was unintentionally consumed
+     * (e.g. agent forgot to pause). Works on active, paused, completed,
+     * overage, or auto_ended sessions.
+     */
+    public function reimburse(Request $request, BreakSession $breakSession)
+    {
+        $request->validate([
+            'minutes' => ['required', 'integer', 'min:1', 'max:180'],
+            'reason' => ['required', 'string', 'min:3', 'max:500'],
+        ]);
+
+        $this->ensureSessionInScope($breakSession);
+
+        if ($breakSession->status === 'reset') {
+            return $this->backWithFlash('Voided/reset sessions cannot be reimbursed.', 'error');
+        }
+
+        try {
+            $admin = auth()->user();
+            $adminName = trim("{$admin->first_name} {$admin->last_name}") ?: $admin->email;
+
+            $this->breakTimerService->reimburseMinutes(
+                $breakSession,
+                (int) $request->input('minutes'),
+                (int) $admin->id,
+                $adminName,
+                $request->input('reason'),
+            );
+
+            $minutes = (int) $request->input('minutes');
+
+            return $this->backWithFlash("Reimbursed {$minutes} minute(s) to the session.");
+        } catch (\RuntimeException $e) {
+            return $this->backWithFlash($e->getMessage(), 'error');
+        } catch (\Exception $e) {
+            Log::error('BreakTimer Reimburse Error: '.$e->getMessage());
+
+            return $this->backWithFlash('Failed to reimburse minutes.', 'error');
         }
     }
 

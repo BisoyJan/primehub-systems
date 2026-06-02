@@ -674,6 +674,12 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
         Route::post('/{breakSession}/restore', [BreakDashboardController::class, 'restore'])
             ->middleware('permission:break_timer.restore')
             ->name('restore');
+        Route::post('/{breakSession}/reimburse', [BreakDashboardController::class, 'reimburse'])
+            ->middleware(['permission:break_timer.reimburse', 'throttle:30,1'])
+            ->name('reimburse');
+        Route::post('/{breakSession}/void', [BreakDashboardController::class, 'voidSession'])
+            ->middleware(['permission:break_timer.void_session', 'throttle:30,1'])
+            ->name('void');
 
         // Session timeline (audit trail)
         Route::get('/{breakSession}/timeline', [BreakDashboardController::class, 'timeline'])

@@ -65,6 +65,7 @@ interface BreakSessionData {
     ended_at: string | null;
     remaining_seconds: number | null;
     overage_seconds: number;
+    reimbursed_seconds: number;
     total_paused_seconds: number;
     last_pause_reason: string | null;
     break_events: BreakEvent[];
@@ -917,6 +918,14 @@ export default function BreakTimerIndex() {
                                                 </p>
                                             </div>
                                             <div className="flex shrink-0 items-center gap-2">
+                                                {session.reimbursed_seconds > 0 && (
+                                                    <span
+                                                        className="rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400"
+                                                        title="Minutes reimbursed by admin"
+                                                    >
+                                                        +{formatTime(session.reimbursed_seconds)} reimbursed
+                                                    </span>
+                                                )}
                                                 {session.overage_seconds > 0 && (
                                                     <span className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${session.overage_seconds >= 60
                                                         ? 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400'
@@ -971,6 +980,7 @@ export default function BreakTimerIndex() {
                                                             force_end: { dot: 'border-red-500 bg-red-100 dark:bg-red-500/20', label: 'Force-Ended (Admin)', text: 'text-red-600 dark:text-red-400' },
                                                             restore: { dot: 'border-green-500 bg-green-100 dark:bg-green-500/20', label: 'Restored (Admin)', text: 'text-green-600 dark:text-green-400' },
                                                             auto_end: { dot: 'border-orange-500 bg-orange-100 dark:bg-orange-500/20', label: 'Auto-Ended', text: 'text-orange-600 dark:text-orange-400' },
+                                                            reimburse: { dot: 'border-emerald-500 bg-emerald-100 dark:bg-emerald-500/20', label: 'Reimbursed (Admin)', text: 'text-emerald-600 dark:text-emerald-400' },
                                                         };
                                                         const style = actionStyle[event.action] ?? { dot: 'border-zinc-300 dark:border-zinc-600 bg-background', label: event.action, text: '' };
                                                         return (

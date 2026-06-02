@@ -186,6 +186,7 @@ return [
         'break_timer.force_end' => 'Force End Agent Break Session',
         'break_timer.restore' => 'Restore Ended Break Session',
         'break_timer.void_session' => 'Void/Cancel a Break Session (frees quota)',
+        'break_timer.reimburse' => 'Reimburse Minutes to a Break Session',
 
         // Database Backups
         'database_backups.view' => 'View Database Backups',
@@ -224,7 +225,7 @@ return [
             'form_requests.retention',
             'notifications.send', 'notifications.send_all',
             'coaching.view_all', 'coaching.create', 'coaching.edit', 'coaching.delete', 'coaching.review', 'coaching.export', 'coaching.settings', 'coaching.manage_exclusions',
-            'break_timer.view', 'break_timer.use', 'break_timer.dashboard', 'break_timer.reports', 'break_timer.manage_policy', 'break_timer.reset', 'break_timer.force_end', 'break_timer.restore', 'break_timer.void_session',
+            'break_timer.view', 'break_timer.use', 'break_timer.dashboard', 'break_timer.reports', 'break_timer.manage_policy', 'break_timer.reset', 'break_timer.force_end', 'break_timer.restore', 'break_timer.void_session', 'break_timer.reimburse',
             'settings.view', 'settings.account', 'settings.password',
         ],
 
@@ -239,7 +240,7 @@ return [
             'it_concerns.view', 'it_concerns.create',
             'medication_requests.view', 'medication_requests.create', 'medication_requests.update',
             'coaching.view_own', 'coaching.view_team', 'coaching.create', 'coaching.edit', 'coaching.delete', 'coaching.acknowledge',
-            'break_timer.view', 'break_timer.use', 'break_timer.dashboard', 'break_timer.reports', 'break_timer.reset', 'break_timer.force_end', 'break_timer.restore', 'break_timer.void_session',
+            'break_timer.view', 'break_timer.use', 'break_timer.dashboard', 'break_timer.reports', 'break_timer.reset', 'break_timer.force_end', 'break_timer.restore', 'break_timer.void_session', 'break_timer.reimburse',
             'notifications.send', 'notifications.send_all',
             'settings.account', 'settings.password',
         ],
