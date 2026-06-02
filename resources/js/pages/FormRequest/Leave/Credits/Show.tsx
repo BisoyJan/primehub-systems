@@ -33,13 +33,14 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { ArrowLeft, Calendar, TrendingUp, TrendingDown, CreditCard, FileText, Banknote, AlertCircle, CheckCircle, Pencil, Loader2, AlertTriangle, Info, History, Clock, Undo2 } from 'lucide-react';
+import { ArrowLeft, Calendar, TrendingUp, TrendingDown, CreditCard, FileText, Banknote, AlertCircle, CheckCircle, Pencil, Loader2, AlertTriangle, Info, History, Clock, Undo2, RefreshCw } from 'lucide-react';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { index as creditsIndexRoute } from '@/routes/leave-requests/credits';
 import { show as leaveShowRoute } from '@/routes/leave-requests';
-import { updateCarryover, updateMonthly, revertEdit } from '@/actions/App/Http/Controllers/LeaveCreditController';
+import { updateCarryover, updateMonthly, revertEdit, recalculateCredits as recalculateCreditsAction } from '@/actions/App/Http/Controllers/LeaveCreditController';
 import { format } from 'date-fns';
+import RecalculateCreditsDialog from '@/components/leave/RecalculateCreditsDialog';
 
 interface MonthlyCredit {
     id: number;
@@ -269,6 +270,9 @@ export default function Show({ user, year, summary, carryoverSummary, carryoverR
         });
     };
 
+    // Recalculate credits dialog state
+    const [isRecalculateOpen, setIsRecalculateOpen] = useState(false);
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={title} />
@@ -315,6 +319,17 @@ export default function Show({ user, year, summary, carryoverSummary, carryoverR
                                 ))}
                             </SelectContent>
                         </Select>
+                        {canEdit && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="gap-1.5"
+                                onClick={() => setIsRecalculateOpen(true)}
+                            >
+                                <RefreshCw className="h-3.5 w-3.5" />
+                                Recalculate
+                            </Button>
+                        )}
                     </div>
                 </div>
 
@@ -1116,6 +1131,17 @@ export default function Show({ user, year, summary, carryoverSummary, carryoverR
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Recalculate Credits Dialog */}
+            <RecalculateCreditsDialog
+                open={isRecalculateOpen}
+                onOpenChange={setIsRecalculateOpen}
+                employeeName={user.name}
+                employeeRole={user.role}
+                monthlyRate={summary.monthly_rate}
+                initialHireDate={user.hired_date ? user.hired_date.substring(0, 10) : ''}
+                postUrl={recalculateCreditsAction({ user: user.id }).url}
+            />
         </AppLayout>
     );
 }

@@ -305,14 +305,8 @@ class EmployeeScheduleControllerTest extends TestCase
         $this->assertTrue($inactiveSchedule->is_active);
     }
 
-    /**
-     * @skip Route order issue - 'employee-schedules/get-schedule' conflicts with resource route.
-     * The resource route matches 'get-schedule' as an {employeeSchedule} param before this route.
-     */
     public function test_get_schedule_returns_schedule_for_user_and_date(): void
     {
-        $this->markTestSkipped('Route order issue - get-schedule conflicts with resource route pattern.');
-
         $schedule = EmployeeSchedule::factory()->create([
             'user_id' => $this->employee->id,
             'is_active' => true,
@@ -330,13 +324,8 @@ class EmployeeScheduleControllerTest extends TestCase
             ->assertJson(['id' => $schedule->id]);
     }
 
-    /**
-     * @skip Route order issue - 'employee-schedules/get-schedule' conflicts with resource route.
-     */
     public function test_get_schedule_validates_required_parameters(): void
     {
-        $this->markTestSkipped('Route order issue - get-schedule conflicts with resource route pattern.');
-
         $response = $this->actingAs($this->user)
             ->get(route('employee-schedules.getSchedule'));
 

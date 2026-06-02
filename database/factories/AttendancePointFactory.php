@@ -261,8 +261,8 @@ class AttendancePointFactory extends Factory
             return [
                 'shift_date' => $shiftDate,
                 'expires_at' => $isNcns
-                    ? $shiftDate->copy()->addYear()
-                    : $shiftDate->copy()->addMonths(6),
+                    ? $shiftDate->copy()->addYearNoOverflow()
+                    : $shiftDate->copy()->addMonthsNoOverflow(6),
             ];
         });
     }

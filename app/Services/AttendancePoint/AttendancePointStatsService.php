@@ -3,6 +3,7 @@
 namespace App\Services\AttendancePoint;
 
 use App\Models\AttendancePoint;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 
@@ -90,8 +91,11 @@ class AttendancePointStatsService
      */
     public function getHighPointsEmployees(): array
     {
+        $activeUserIds = User::where('is_active', true)->pluck('id')->toArray();
+
         $highPointsUserIds = AttendancePoint::where('is_excused', false)
             ->where('is_expired', false)
+            ->whereIn('user_id', $activeUserIds)
             ->selectRaw('user_id, SUM(points) as total_points, COUNT(*) as violations_count')
             ->groupBy('user_id')
             ->havingRaw('SUM(points) >= 6')
@@ -117,6 +121,7 @@ class AttendancePointStatsService
             return [
                 'user_id' => $userId,
                 'user_name' => $user ? ($user->last_name.', '.$user->first_name) : 'Unknown',
+                'avatar_url' => $user?->avatar_url,
                 'total_points' => round($userPoints->sum('points'), 2),
                 'violations_count' => $userPoints->count(),
                 'points' => $userPoints->map(function ($point) {

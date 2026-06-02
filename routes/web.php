@@ -45,12 +45,21 @@ Route::get('/', function () {
 Route::middleware(['auth', 'verified'])->group(function () {
     // Pending approval page - accessible to authenticated but unapproved users
     Route::get('/pending-approval', function () {
+        $user = auth()->user();
         // If user is already approved, redirect to dashboard
-        if (auth()->user()->is_approved) {
+        if ($user->is_approved) {
             return redirect()->route('dashboard');
         }
 
-        return Inertia::render('auth/pending-approval');
+        // Pass user status props to Inertia
+        return Inertia::render('auth/pending-approval', [
+            'userStatus' => [
+                'is_approved' => $user->is_approved,
+                'hired_date' => $user->hired_date,
+                'deleted_at' => $user->deleted_at,
+                'deletion_confirmed_at' => $user->deletion_confirmed_at,
+            ],
+        ]);
     })->name('pending-approval');
 });
 
@@ -158,6 +167,12 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
     Route::delete('accounts/{account}/force-delete', [AccountController::class, 'forceDelete'])
         ->middleware('permission:accounts.delete')
         ->name('accounts.forceDelete');
+    Route::get('accounts/stale', [AccountController::class, 'staleAccounts'])
+        ->middleware('permission:accounts.delete')
+        ->name('accounts.staleAccounts');
+    Route::post('accounts/bulk-delete-stale', [AccountController::class, 'bulkDeleteStale'])
+        ->middleware('permission:accounts.delete')
+        ->name('accounts.bulkDeleteStale');
 
     // Activity Logs
     Route::get('activity-logs', [ActivityLogController::class, 'index'])
@@ -220,6 +235,12 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
             Route::post('spreadsheet/cell/create', [AttendanceController::class, 'createSpreadsheetCell'])
                 ->name('spreadsheet.createCell')
                 ->middleware(['permission:attendance.create', 'throttle:30,1']);
+            Route::post('spreadsheet/calculate-week', [AttendanceController::class, 'calculateWeekHours'])
+                ->name('spreadsheet.calculateWeek')
+                ->middleware(['permission:attendance.create', 'throttle:30,1']);
+            Route::post('spreadsheet/remove-week', [AttendanceController::class, 'removeWeekHours'])
+                ->name('spreadsheet.removeWeek')
+                ->middleware(['permission:attendance.create', 'throttle:30,1']);
 
             // Partial Approval (Time Out pending)
             Route::post('{attendance}/partial-approve', [AttendanceController::class, 'partialApprove'])->name('partialApprove')->middleware(['permission:attendance.verify', 'throttle:10,1']);
@@ -237,17 +258,19 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
         ->name('schedule-setup.store');
 
     // Employee Schedules (with permission middleware)
-    Route::resource('employee-schedules', EmployeeScheduleController::class)
-        ->middleware('permission:schedules.view,schedules.create,schedules.edit,schedules.delete');
-    Route::post('employee-schedules/{employeeSchedule}/toggle-active', [EmployeeScheduleController::class, 'toggleActive'])
-        ->middleware('permission:schedules.toggle')
-        ->name('employee-schedules.toggleActive');
+    // Custom GET routes must be declared BEFORE Route::resource to prevent
+    // the resource show route ({employeeSchedule}) from catching them first.
     Route::get('employee-schedules/get-schedule', [EmployeeScheduleController::class, 'getSchedule'])
         ->middleware('permission:schedules.view')
         ->name('employee-schedules.getSchedule');
     Route::get('employee-schedules/user/{userId}/schedules', [EmployeeScheduleController::class, 'getUserSchedules'])
         ->middleware('permission:schedules.view')
         ->name('employee-schedules.getUserSchedules');
+    Route::resource('employee-schedules', EmployeeScheduleController::class)
+        ->middleware('permission:schedules.view,schedules.create,schedules.edit,schedules.delete');
+    Route::post('employee-schedules/{employeeSchedule}/toggle-active', [EmployeeScheduleController::class, 'toggleActive'])
+        ->middleware('permission:schedules.toggle')
+        ->name('employee-schedules.toggleActive');
 
     // Attendance Tools Hub
     Route::get('attendance-tools', [AttendanceToolsController::class, 'index'])
@@ -429,6 +452,9 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
                 ->middleware('permission:leave_credits.edit');
             Route::post('/{user}/cash-conversion', [LeaveCreditController::class, 'convertUserCarryover'])
                 ->name('cash-conversion')
+                ->middleware('permission:leave_credits.edit');
+            Route::post('/{user}/recalculate', [LeaveCreditController::class, 'recalculateCredits'])
+                ->name('recalculate')
                 ->middleware('permission:leave_credits.edit');
 
             Route::get('/{user}', [LeaveCreditController::class, 'show'])->name('show');

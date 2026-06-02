@@ -162,6 +162,7 @@ const getStatusBadges = (attendance: ExistingAttendance) => {
 /**
  * Point values for each violation type (matching backend AttendancePoint::POINT_VALUES)
  */
+// failed_bio_in / failed_bio_out are flag-only statuses — no points generated.
 const POINT_VALUES: Record<string, number> = {
     whole_day_absence: 1.00,
     half_day_absence: 0.50,
@@ -169,8 +170,6 @@ const POINT_VALUES: Record<string, number> = {
     undertime_more_than_hour: 0.50,
     tardy: 0.25,
     ncns: 1.00, // No Call No Show = whole day
-    failed_bio_in: 0.25, // Same as tardy
-    failed_bio_out: 0.25, // Same as undertime
 };
 
 /**
@@ -212,13 +211,13 @@ const calculateSuggestedStatus = (
         };
     }
 
-    // Has time out but no time in
+    // Has time out but no time in (flag only — no points)
     if (!hasBioIn && hasBioOut) {
         return {
             status: 'failed_bio_in',
             reason: 'Missing time in record',
             isPartial: true,
-            violations: ['failed_bio_in'],
+            violations: [],
         };
     }
 
@@ -281,13 +280,12 @@ const calculateSuggestedStatus = (
         }
     }
 
-    // Collect all violations
+    // Collect all violations that generate points (failed_bio_* are flag-only)
     const violations: string[] = [];
     if (isHalfDay) violations.push('half_day_absence');
     if (isTardy) violations.push('tardy');
     if (hasUndertimeMoreThanHour) violations.push('undertime_more_than_hour');
     else if (hasUndertime) violations.push('undertime');
-    if (!hasBioOut) violations.push('failed_bio_out');
 
     // Determine status based on violations, selecting higher point as primary
     let status: string;

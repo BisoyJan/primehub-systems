@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit\Services;
 
 use App\Models\LeaveCredit;
+use App\Models\LeaveCreditManualAdjustment;
 use App\Models\LeaveRequest;
 use App\Models\User;
 use App\Services\LeaveCreditService;
@@ -1174,5 +1175,528 @@ class LeaveCreditServiceTest extends TestCase
 
         $this->assertTrue($result['valid']);
         $this->assertTrue($result['insufficient_vl_credits']);
+    }
+
+    // =====================================================================
+    // Manual Adjustments Persistence (leave_credit_manual_adjustments table)
+    // =====================================================================
+
+    #[Test]
+    public function update_monthly_credit_persists_adjustment_to_dedicated_table(): void
+    {
+        $admin = User::factory()->create(['role' => 'Super Admin']);
+        $user = User::factory()->create(['role' => 'Agent', 'hired_date' => Carbon::parse('2025-01-01')]);
+
+        $credit = LeaveCredit::factory()->create([
+            'user_id' => $user->id,
+            'year' => 2026,
+            'month' => 1,
+            'credits_earned' => 1.25,
+            'credits_used' => 0,
+            'credits_balance' => 1.25,
+        ]);
+
+        $this->service->updateMonthlyCredit($credit, 2.00, 'Correction for overtime', $admin->id);
+
+        $this->assertDatabaseHas('leave_credit_manual_adjustments', [
+            'user_id' => $user->id,
+            'year' => 2026,
+            'month' => 1,
+            'adjusted_earned' => 2.00,
+            'adjusted_by' => $admin->id,
+        ]);
+    }
+
+    #[Test]
+    public function update_monthly_credit_upserts_when_same_month_edited_twice(): void
+    {
+        $admin = User::factory()->create(['role' => 'Super Admin']);
+        $user = User::factory()->create(['role' => 'Agent', 'hired_date' => Carbon::parse('2025-01-01')]);
+
+        $credit = LeaveCredit::factory()->create([
+            'user_id' => $user->id,
+            'year' => 2026,
+            'month' => 1,
+            'credits_earned' => 1.25,
+            'credits_used' => 0,
+            'credits_balance' => 1.25,
+        ]);
+
+        // First edit
+        $this->service->updateMonthlyCredit($credit, 1.50, 'First correction', $admin->id);
+        // Second edit — should update, not insert a second row
+        $credit->refresh();
+        $this->service->updateMonthlyCredit($credit, 2.00, 'Second correction', $admin->id);
+
+        $this->assertDatabaseCount('leave_credit_manual_adjustments', 1);
+        $this->assertDatabaseHas('leave_credit_manual_adjustments', [
+            'user_id' => $user->id,
+            'year' => 2026,
+            'month' => 1,
+            'adjusted_earned' => 2.00,
+        ]);
+    }
+
+    #[Test]
+    public function recalculate_reapplies_manual_adjustments_from_dedicated_table_not_activity_log(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-05-29'));
+
+        // User hired 2024-01-01 → regularized Jul 2024 → Jan 2026 IS backfilled
+        $user = User::factory()->create([
+            'role' => 'Agent',
+            'hired_date' => Carbon::parse('2024-01-01'),
+        ]);
+
+        // Seed a manual adjustment record directly — simulating a past admin edit
+        // whose activity log entry has already been purged after 60 days
+        LeaveCreditManualAdjustment::create([
+            'user_id' => $user->id,
+            'year' => 2026,
+            'month' => 1,
+            'adjusted_earned' => 2.50,
+            'reason' => 'Retroactive correction',
+            'adjusted_by' => null,
+            'adjusted_at' => now()->subDays(90), // 90 days ago — activity log already purged
+        ]);
+
+        // Run recalculate (deleteExisting=true wipes leave_credits but NOT the adjustments table)
+        $result = $this->service->recalculateCreditsForUser($user, deleteExisting: true);
+
+        $this->assertTrue($result['success']);
+        $this->assertEquals(1, $result['details']['manual_adjustments_reapplied']);
+
+        // Verify the Jan 2026 credit was set to the overridden earned value
+        $this->assertDatabaseHas('leave_credits', [
+            'user_id' => $user->id,
+            'year' => 2026,
+            'month' => 1,
+            'credits_earned' => 2.50,
+        ]);
+    }
+
+    #[Test]
+    public function recalculate_does_not_fail_when_manual_adjustments_table_is_empty(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-05-29'));
+
+        $user = User::factory()->create([
+            'role' => 'Agent',
+            'hired_date' => Carbon::parse('2026-01-01'),
+        ]);
+
+        // No entries in leave_credit_manual_adjustments
+        $result = $this->service->recalculateCreditsForUser($user, deleteExisting: true);
+
+        $this->assertTrue($result['success']);
+        $this->assertEquals(0, $result['details']['manual_adjustments_reapplied']);
+    }
+
+    // =====================================================================
+    // reapplyLeaveDeductions — month-matching deduction order (via reflection)
+    // =====================================================================
+
+    /**
+     * Helper: call the private reapplyLeaveDeductions method via reflection.
+     */
+    private function invokeReapplyLeaveDeductions(User $user): int
+    {
+        $method = new \ReflectionMethod($this->service, 'reapplyLeaveDeductions');
+        $method->setAccessible(true);
+
+        return $method->invoke($this->service, $user);
+    }
+
+    #[Test]
+    public function reapply_deductions_uses_previous_month_credit_for_early_month_leave(): void
+    {
+        // SL on Feb 9 → Feb credit not yet accrued → should deduct from January (L-1)
+        $user = User::factory()->create([
+            'role' => 'Agent',
+            'hired_date' => Carbon::parse('2024-01-01'),
+        ]);
+
+        LeaveCredit::factory()->create([
+            'user_id' => $user->id, 'year' => 2026, 'month' => 1,
+            'credits_earned' => 1.25, 'credits_used' => 0, 'credits_balance' => 1.25,
+        ]);
+        LeaveCredit::factory()->create([
+            'user_id' => $user->id, 'year' => 2026, 'month' => 2,
+            'credits_earned' => 1.25, 'credits_used' => 0, 'credits_balance' => 1.25,
+        ]);
+
+        LeaveRequest::factory()->create([
+            'user_id' => $user->id,
+            'leave_type' => 'SL', 'status' => 'approved',
+            'days_requested' => 1, 'credits_year' => 2026, 'credits_deducted' => 1.00,
+            'start_date' => '2026-02-09', 'end_date' => '2026-02-09',
+        ]);
+
+        $applied = $this->invokeReapplyLeaveDeductions($user);
+
+        $this->assertEquals(1, $applied);
+        // Jan (L-1) absorbs the Feb leave
+        $this->assertDatabaseHas('leave_credits', [
+            'user_id' => $user->id, 'year' => 2026, 'month' => 1,
+            'credits_used' => 1.00, 'credits_balance' => 0.25,
+        ]);
+        // Feb untouched
+        $this->assertDatabaseHas('leave_credits', [
+            'user_id' => $user->id, 'year' => 2026, 'month' => 2,
+            'credits_used' => 0.00, 'credits_balance' => 1.25,
+        ]);
+    }
+
+    #[Test]
+    public function reapply_deductions_falls_back_to_own_month_when_no_prior_month_exists(): void
+    {
+        // Leave in Jan (L=1) — no carryover, no L-1; falls to Jan itself
+        $user = User::factory()->create([
+            'role' => 'Agent',
+            'hired_date' => Carbon::parse('2024-01-01'),
+        ]);
+
+        // Only Jan exists — no month=0, no prior monthly credits
+        LeaveCredit::factory()->create([
+            'user_id' => $user->id, 'year' => 2026, 'month' => 1,
+            'credits_earned' => 1.25, 'credits_used' => 0, 'credits_balance' => 1.25,
+        ]);
+
+        LeaveRequest::factory()->create([
+            'user_id' => $user->id,
+            'leave_type' => 'VL', 'status' => 'approved',
+            'days_requested' => 1, 'credits_year' => 2026, 'credits_deducted' => 1.00,
+            'start_date' => '2026-01-15', 'end_date' => '2026-01-15',
+        ]);
+
+        $applied = $this->invokeReapplyLeaveDeductions($user);
+
+        $this->assertEquals(1, $applied);
+        // Jan leave with no carryover and no L-1 → falls back to Jan itself
+        $this->assertDatabaseHas('leave_credits', [
+            'user_id' => $user->id, 'year' => 2026, 'month' => 1,
+            'credits_used' => 1.00, 'credits_balance' => 0.25,
+        ]);
+    }
+
+    #[Test]
+    public function reapply_deductions_does_not_use_carryover_for_april_or_later_leaves(): void
+    {
+        // Carryover (month=0) expires Mar 31. An Apr leave must NOT touch it.
+        $user = User::factory()->create([
+            'role' => 'Agent',
+            'hired_date' => Carbon::parse('2024-01-01'),
+        ]);
+
+        // Carryover (month=0) — still in the DB but should be ignored for Apr+
+        LeaveCredit::factory()->create([
+            'user_id' => $user->id, 'year' => 2026, 'month' => 0,
+            'credits_earned' => 2.00, 'credits_used' => 0, 'credits_balance' => 2.00,
+        ]);
+        // Mar accrual — L-1 bucket for an Apr leave
+        LeaveCredit::factory()->create([
+            'user_id' => $user->id, 'year' => 2026, 'month' => 3,
+            'credits_earned' => 1.25, 'credits_used' => 0, 'credits_balance' => 1.25,
+        ]);
+        // Apr accrual
+        LeaveCredit::factory()->create([
+            'user_id' => $user->id, 'year' => 2026, 'month' => 4,
+            'credits_earned' => 1.25, 'credits_used' => 0, 'credits_balance' => 1.25,
+        ]);
+
+        LeaveRequest::factory()->create([
+            'user_id' => $user->id,
+            'leave_type' => 'SL', 'status' => 'approved',
+            'days_requested' => 1, 'credits_year' => 2026, 'credits_deducted' => 1.00,
+            'start_date' => '2026-04-22', 'end_date' => '2026-04-22',
+        ]);
+
+        $this->invokeReapplyLeaveDeductions($user);
+
+        // Carryover must remain untouched — Apr leave cannot use expired carryover
+        $this->assertDatabaseHas('leave_credits', [
+            'user_id' => $user->id, 'year' => 2026, 'month' => 0,
+            'credits_used' => 0.00,
+        ]);
+        // Mar (L-1) absorbs the deduction
+        $this->assertDatabaseHas('leave_credits', [
+            'user_id' => $user->id, 'year' => 2026, 'month' => 3,
+            'credits_used' => 1.00, 'credits_balance' => 0.25,
+        ]);
+        // Apr untouched
+        $this->assertDatabaseHas('leave_credits', [
+            'user_id' => $user->id, 'year' => 2026, 'month' => 4,
+            'credits_used' => 0.00,
+        ]);
+    }
+
+    #[Test]
+    public function reapply_deductions_uses_carryover_for_january_leave(): void
+    {
+        // Carryover (month=0) has not yet expired for a Jan leave.
+        // Priority: carryover → then L-1 (none for Jan) → then Jan itself.
+        $user = User::factory()->create([
+            'role' => 'Agent',
+            'hired_date' => Carbon::parse('2024-01-01'),
+        ]);
+
+        LeaveCredit::factory()->create([
+            'user_id' => $user->id, 'year' => 2026, 'month' => 0,
+            'credits_earned' => 2.00, 'credits_used' => 0, 'credits_balance' => 2.00,
+        ]);
+        LeaveCredit::factory()->create([
+            'user_id' => $user->id, 'year' => 2026, 'month' => 1,
+            'credits_earned' => 1.25, 'credits_used' => 0, 'credits_balance' => 1.25,
+        ]);
+
+        LeaveRequest::factory()->create([
+            'user_id' => $user->id,
+            'leave_type' => 'VL', 'status' => 'approved',
+            'days_requested' => 1, 'credits_year' => 2026, 'credits_deducted' => 1.00,
+            'start_date' => '2026-01-20', 'end_date' => '2026-01-20',
+        ]);
+
+        $this->invokeReapplyLeaveDeductions($user);
+
+        // Carryover consumed first for Jan leave
+        $this->assertDatabaseHas('leave_credits', [
+            'user_id' => $user->id, 'year' => 2026, 'month' => 0,
+            'credits_used' => 1.00, 'credits_balance' => 1.00,
+        ]);
+        // Jan untouched (carryover was sufficient)
+        $this->assertDatabaseHas('leave_credits', [
+            'user_id' => $user->id, 'year' => 2026, 'month' => 1,
+            'credits_used' => 0.00,
+        ]);
+    }
+
+    #[Test]
+    public function recalculate_distributes_three_leaves_into_correct_months(): void
+    {
+        // Full integration: SL Feb 9 → Jan, VL Mar 13 → Feb, SL Apr 22 → Mar
+        // User hired 2024-01-01 → regularized Jul 2024 → Jan–Apr 2026 backfilled (1.25 each)
+        Carbon::setTestNow(Carbon::parse('2026-05-29'));
+
+        $user = User::factory()->create([
+            'role' => 'Agent',
+            'hired_date' => Carbon::parse('2024-01-01'),
+        ]);
+
+        foreach ([
+            ['2026-02-09', 'SL'],  // deducts Jan (L-1=1)
+            ['2026-03-13', 'VL'],  // deducts Feb (L-1=2)
+            ['2026-04-22', 'SL'],  // deducts Mar (L-1=3)
+        ] as [$date, $type]) {
+            LeaveRequest::factory()->create([
+                'user_id' => $user->id,
+                'leave_type' => $type,
+                'status' => 'approved',
+                'days_requested' => 1,
+                'credits_year' => 2026,
+                'credits_deducted' => 1.00,
+                'start_date' => $date,
+                'end_date' => $date,
+            ]);
+        }
+
+        $result = $this->service->recalculateCreditsForUser($user, deleteExisting: true);
+
+        $this->assertTrue($result['success']);
+        $this->assertEquals(3, $result['details']['leave_deductions_reapplied']);
+
+        $expected = [
+            1 => ['used' => 1.00, 'balance' => 0.25], // absorbed Feb 9 SL
+            2 => ['used' => 1.00, 'balance' => 0.25], // absorbed Mar 13 VL
+            3 => ['used' => 1.00, 'balance' => 0.25], // absorbed Apr 22 SL
+            4 => ['used' => 0.00, 'balance' => 1.25], // untouched
+        ];
+
+        foreach ($expected as $month => ['used' => $used, 'balance' => $balance]) {
+            $this->assertDatabaseHas('leave_credits', [
+                'user_id' => $user->id, 'year' => 2026, 'month' => $month,
+                'credits_used' => $used, 'credits_balance' => $balance,
+            ]);
+        }
+    }
+
+    // ============================================
+    // LeaveCreditManualAdjustment tests
+    // ============================================
+
+    #[Test]
+    public function update_monthly_credit_persists_manual_adjustment_record(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-05-01'));
+
+        $admin = User::factory()->create(['role' => 'Admin']);
+        $user = User::factory()->create([
+            'role' => 'Agent',
+            'hired_date' => Carbon::parse('2025-01-01'),
+        ]);
+
+        $credit = LeaveCredit::factory()->create([
+            'user_id' => $user->id,
+            'year' => 2026,
+            'month' => 3,
+            'credits_earned' => 1.25,
+            'credits_used' => 0,
+            'credits_balance' => 1.25,
+        ]);
+
+        $this->service->updateMonthlyCredit($credit, 2.50, 'Correction for March', $admin->id);
+
+        $this->assertDatabaseHas('leave_credit_manual_adjustments', [
+            'user_id' => $user->id,
+            'year' => 2026,
+            'month' => 3,
+            'adjusted_earned' => 2.50,
+            'adjusted_by' => $admin->id,
+        ]);
+
+        $this->assertDatabaseCount('leave_credit_manual_adjustments', 1);
+    }
+
+    #[Test]
+    public function update_monthly_credit_upserts_on_second_adjustment(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-05-01'));
+
+        $admin = User::factory()->create(['role' => 'Admin']);
+        $user = User::factory()->create([
+            'role' => 'Agent',
+            'hired_date' => Carbon::parse('2025-01-01'),
+        ]);
+
+        $credit = LeaveCredit::factory()->create([
+            'user_id' => $user->id,
+            'year' => 2026,
+            'month' => 3,
+            'credits_earned' => 1.25,
+            'credits_used' => 0,
+            'credits_balance' => 1.25,
+        ]);
+
+        $this->service->updateMonthlyCredit($credit, 2.00, 'First correction', $admin->id);
+        $credit->refresh();
+        $this->service->updateMonthlyCredit($credit, 1.75, 'Second correction', $admin->id);
+
+        // Should still be exactly one record (upserted, not duplicated)
+        $this->assertDatabaseCount('leave_credit_manual_adjustments', 1);
+        $this->assertDatabaseHas('leave_credit_manual_adjustments', [
+            'user_id' => $user->id,
+            'year' => 2026,
+            'month' => 3,
+            'adjusted_earned' => 1.75,
+        ]);
+    }
+
+    #[Test]
+    public function update_monthly_credit_stores_reason_text(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-05-01'));
+
+        $user = User::factory()->create([
+            'role' => 'Agent',
+            'hired_date' => Carbon::parse('2025-01-01'),
+        ]);
+
+        $credit = LeaveCredit::factory()->create([
+            'user_id' => $user->id,
+            'year' => 2026,
+            'month' => 4,
+            'credits_earned' => 1.25,
+            'credits_used' => 0,
+            'credits_balance' => 1.25,
+        ]);
+
+        $this->service->updateMonthlyCredit($credit, 1.50, 'System correction for April accrual', null);
+
+        $adjustment = LeaveCreditManualAdjustment::where('user_id', $user->id)
+            ->where('year', 2026)
+            ->where('month', 4)
+            ->first();
+
+        $this->assertNotNull($adjustment);
+        $this->assertEquals('System correction for April accrual', $adjustment->reason);
+        $this->assertNull($adjustment->adjusted_by);
+    }
+
+    #[Test]
+    public function recalculate_credits_reapplies_manual_adjustments_after_reset(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-05-29'));
+
+        $admin = User::factory()->create(['role' => 'Admin']);
+        $user = User::factory()->create([
+            'role' => 'Agent',
+            'hired_date' => Carbon::parse('2026-01-01'),
+        ]);
+
+        // Accrue January–April credits normally
+        foreach ([1, 2, 3, 4] as $month) {
+            LeaveCredit::factory()->create([
+                'user_id' => $user->id,
+                'year' => 2026,
+                'month' => $month,
+                'credits_earned' => 1.25,
+                'credits_used' => 0,
+                'credits_balance' => 1.25,
+            ]);
+        }
+
+        // Admin manually adjusts March to 2.50
+        $marchCredit = LeaveCredit::where('user_id', $user->id)
+            ->where('year', 2026)
+            ->where('month', 3)
+            ->first();
+        $this->service->updateMonthlyCredit($marchCredit, 2.50, 'Special allowance for March', $admin->id);
+
+        // Recalculate from scratch (deleteExisting = true)
+        $result = $this->service->recalculateCreditsForUser($user, deleteExisting: true);
+
+        $this->assertTrue($result['success']);
+
+        // March should still have adjusted_earned = 2.50 after recalculation
+        $this->assertDatabaseHas('leave_credits', [
+            'user_id' => $user->id,
+            'year' => 2026,
+            'month' => 3,
+            'credits_earned' => 2.50,
+        ]);
+    }
+
+    #[Test]
+    public function manual_adjustment_record_survives_credit_reset(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-05-29'));
+
+        $admin = User::factory()->create(['role' => 'Admin']);
+        $user = User::factory()->create([
+            'role' => 'Agent',
+            'hired_date' => Carbon::parse('2026-01-01'),
+        ]);
+
+        LeaveCredit::factory()->create([
+            'user_id' => $user->id,
+            'year' => 2026,
+            'month' => 2,
+            'credits_earned' => 1.25,
+            'credits_used' => 0,
+            'credits_balance' => 1.25,
+        ]);
+
+        $credit = LeaveCredit::where('user_id', $user->id)->where('month', 2)->first();
+        $this->service->updateMonthlyCredit($credit, 1.50, 'February override', $admin->id);
+
+        // Delete all leave_credits (simulating a reset)
+        LeaveCredit::where('user_id', $user->id)->delete();
+
+        // The adjustment record should still exist
+        $this->assertDatabaseHas('leave_credit_manual_adjustments', [
+            'user_id' => $user->id,
+            'year' => 2026,
+            'month' => 2,
+            'adjusted_earned' => 1.50,
+        ]);
     }
 }

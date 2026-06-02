@@ -6,6 +6,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { Switch } from "@/components/ui/switch";
 import AppLayout from "@/layouts/app-layout";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useInitials } from "@/hooks/use-initials";
@@ -25,9 +26,12 @@ import {
     forceDelete as accountsForceDelete,
     bulkApprove as accountsBulkApprove,
     bulkUnapprove as accountsBulkUnapprove,
+    staleAccounts as accountsStaleAccounts,
+    bulkDeleteStale as accountsBulkDeleteStale,
 } from "@/routes/accounts";
+import { getUserSchedules, toggleActive as employeeScheduleToggleActive, create as employeeSchedulesCreate, edit as employeeSchedulesEdit } from "@/routes/employee-schedules";
 import { toast } from "sonner";
-import { Plus, RefreshCw, Search, RotateCcw, CheckCircle, XCircle, CheckSquare, XSquare, X, UserX, Play, Pause, Check, ChevronsUpDown, UserCheck, Mail, AlertTriangle, Pencil, Trash2, UserCheck2, UserMinus } from "lucide-react";
+import { Plus, RefreshCw, Search, RotateCcw, CheckCircle, XCircle, CheckSquare, XSquare, X, UserX, Play, Pause, Check, ChevronsUpDown, UserCheck, Mail, AlertTriangle, Pencil, Trash2, UserCheck2, UserMinus, Clock } from "lucide-react";
 
 // New reusable hooks and components
 import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
@@ -74,6 +78,30 @@ interface UserOption {
     email: string;
 }
 
+interface EmployeeSchedule {
+    id: number;
+    user_id: number;
+    shift_type: string;
+    scheduled_time_in: string;
+    scheduled_time_out: string;
+    work_days: string[];
+    grace_period_minutes: number;
+    is_active: boolean;
+    effective_date: string | null;
+    end_date: string | null;
+    campaign: { id: number; name: string } | null;
+    site: { id: number; name: string } | null;
+}
+
+interface StaleAccount {
+    id: number;
+    name: string;
+    email: string;
+    role: string;
+    hired_date: string | null;
+    resigned_at: string | null;
+}
+
 interface Meta {
     current_page: number;
     last_page: number;
@@ -95,7 +123,14 @@ interface Filters {
 }
 
 export default function AccountIndex() {
-    const { users, allUsers = [], filters } = usePage<{ users: UsersPayload; allUsers: UserOption[]; filters: Filters }>().props;
+    const { users, allUsers = [], filters, staleCount = 0 } = usePage<{ users: UsersPayload; allUsers: UserOption[]; filters: Filters; staleCount: number }>().props;
+
+    const to12Hour = (time: string) => {
+        const [h, m] = time.split(':').map(Number);
+        const period = h >= 12 ? 'PM' : 'AM';
+        const hour = h % 12 || 12;
+        return `${hour}:${String(m).padStart(2, '0')} ${period}`;
+    };
     const [loading, setLoading] = useState(false);
     const getInitials = useInitials();
     const [search, setSearch] = useState(filters.search || "");
@@ -111,6 +146,25 @@ export default function AccountIndex() {
     const [selectedRevokeIds, setSelectedRevokeIds] = useState<number[]>([]);
     const [toggleActiveDialogOpen, setToggleActiveDialogOpen] = useState(false);
     const [userToToggle, setUserToToggle] = useState<User | null>(null);
+    // Re-hire dialog state
+    const [rehireDialogOpen, setRehireDialogOpen] = useState(false);
+    const [userToRehire, setUserToRehire] = useState<User | null>(null);
+    const [rehireDate, setRehireDate] = useState("");
+    // Schedule assignment dialog (shown after re-hire)
+    const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
+    const [scheduleDialogUser, setScheduleDialogUser] = useState<User | null>(null);
+    const [scheduleDialogHiredDate, setScheduleDialogHiredDate] = useState("");
+    const [userSchedules, setUserSchedules] = useState<EmployeeSchedule[]>([]);
+    const [loadingSchedules, setLoadingSchedules] = useState(false);
+    const [activatingScheduleId, setActivatingScheduleId] = useState<number | null>(null);
+
+    // Stale accounts state
+    const [staleDialogOpen, setStaleDialogOpen] = useState(false);
+    const [staleAccounts, setStaleAccounts] = useState<StaleAccount[]>([]);
+    const [loadingStale, setLoadingStale] = useState(false);
+    const [selectedStaleIds, setSelectedStaleIds] = useState<number[]>([]);
+    const [deletingStale, setDeletingStale] = useState(false);
+
     // Revoke dialog state
     const [revokeDialogOpen, setRevokeDialogOpen] = useState(false);
     const [userToRevoke, setUserToRevoke] = useState<User | null>(null);
@@ -273,13 +327,15 @@ export default function AccountIndex() {
     };
 
     const handleToggleActive = (user: User) => {
-        // If deactivating, show confirmation dialog
         if (user.is_active) {
+            // Deactivating (resigning) — show confirmation dialog
             setUserToToggle(user);
             setToggleActiveDialogOpen(true);
         } else {
-            // Activating - no confirmation needed
-            confirmToggleActive(user.id);
+            // Re-hiring — show re-hire dialog, pre-fill today's date
+            setUserToRehire(user);
+            setRehireDate(new Date().toISOString().split('T')[0]);
+            setRehireDialogOpen(true);
         }
     };
 
@@ -291,6 +347,46 @@ export default function AccountIndex() {
                 setLoading(false);
                 setToggleActiveDialogOpen(false);
                 setUserToToggle(null);
+            },
+        });
+    };
+
+    const fetchUserSchedules = (userId: number) => {
+        setLoadingSchedules(true);
+        fetch(getUserSchedules(userId).url, { headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' } })
+            .then((res) => res.json())
+            .then((data: EmployeeSchedule[]) => setUserSchedules(data))
+            .catch(() => setUserSchedules([]))
+            .finally(() => setLoadingSchedules(false));
+    };
+
+    const handleActivateSchedule = (schedule: EmployeeSchedule) => {
+        setActivatingScheduleId(schedule.id);
+        router.post(employeeScheduleToggleActive(schedule.id).url, {}, {
+            preserveScroll: true,
+            onFinish: () => setActivatingScheduleId(null),
+            onSuccess: () => scheduleDialogUser && fetchUserSchedules(scheduleDialogUser.id),
+        });
+    };
+
+    const confirmRehire = () => {
+        if (!userToRehire || !rehireDate) return;
+        const rehiredUser = userToRehire;
+        const capturedDate = rehireDate;
+        setLoading(true);
+        router.post(accountsToggleActive(rehiredUser.id).url, { hired_date: capturedDate }, {
+            onFinish: () => {
+                setLoading(false);
+                setRehireDialogOpen(false);
+                setUserToRehire(null);
+                setRehireDate("");
+            },
+            onSuccess: () => {
+                setScheduleDialogUser(rehiredUser);
+                setScheduleDialogHiredDate(capturedDate);
+                setUserSchedules([]);
+                setScheduleDialogOpen(true);
+                fetchUserSchedules(rehiredUser.id);
             },
         });
     };
@@ -439,6 +535,55 @@ export default function AccountIndex() {
             onFinish: () => setLoading(false),
         });
     };
+
+    const openStaleDialog = async () => {
+        setStaleDialogOpen(true);
+        setLoadingStale(true);
+        setSelectedStaleIds([]);
+        try {
+            const res = await fetch(accountsStaleAccounts().url, {
+                headers: { Accept: "application/json" },
+            });
+            if (!res.ok) throw new Error("Failed to load stale accounts");
+            const data: StaleAccount[] = await res.json();
+            setStaleAccounts(data);
+        } catch {
+            toast.error("Failed to load stale accounts");
+            setStaleDialogOpen(false);
+        } finally {
+            setLoadingStale(false);
+        }
+    };
+
+    const handleStaleToggle = (id: number) => {
+        setSelectedStaleIds(prev =>
+            prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+        );
+    };
+
+    const handleStaleSelectAll = () => {
+        setSelectedStaleIds(
+            selectedStaleIds.length === staleAccounts.length
+                ? []
+                : staleAccounts.map(a => a.id)
+        );
+    };
+
+    const handleDeleteStale = (ids: number[]) => {
+        setDeletingStale(true);
+        router.post(
+            accountsBulkDeleteStale().url,
+            { ids },
+            {
+                onSuccess: () => {
+                    setStaleDialogOpen(false);
+                    setSelectedStaleIds([]);
+                },
+                onFinish: () => setDeletingStale(false),
+            }
+        );
+    };
+
 
     const handlePageChange = (page: number) => {
         setLoading(true);
@@ -699,6 +844,17 @@ export default function AccountIndex() {
                             )}
 
                             <div className="flex gap-2">
+                                <Can permission="accounts.delete">
+                                    <Button variant="outline" onClick={openStaleDialog} size="sm" className="text-destructive border-destructive/40 hover:bg-destructive/10 relative" title="View and delete stale resigned accounts">
+                                        <Clock className="mr-2 h-4 w-4" />
+                                        Stale Accounts
+                                        {staleCount > 0 && (
+                                            <span className="ml-2 inline-flex items-center justify-center rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-semibold text-destructive-foreground leading-none min-w-4.5">
+                                                {staleCount > 99 ? '99+' : staleCount}
+                                            </span>
+                                        )}
+                                    </Button>
+                                </Can>
                                 <Button variant="ghost" onClick={handleManualRefresh} disabled={loading} size="icon" title="Refresh">
                                     <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
                                 </Button>
@@ -1208,10 +1364,10 @@ export default function AccountIndex() {
                             <AlertDialogDescription>
                                 {userToToggle && (
                                     <>
-                                        Are you sure you want to deactivate <strong>{userToToggle.first_name} {userToToggle.last_name}</strong>?
+                                        Are you sure you want to mark <strong>{userToToggle.first_name} {userToToggle.last_name}</strong> as resigned?
                                         <br /><br />
                                         <span className="text-amber-600 dark:text-amber-400">
-                                            ⚠️ This will also deactivate all schedules assigned to this employee.
+                                            ⚠️ This will <strong>revoke their account access</strong> and <strong>delete all assigned schedules</strong>. You can re-hire them later to restore access.
                                         </span>
                                     </>
                                 )}
@@ -1223,8 +1379,160 @@ export default function AccountIndex() {
                                 onClick={() => userToToggle && confirmToggleActive(userToToggle.id)}
                                 className="bg-amber-600 hover:bg-amber-700"
                             >
-                                Deactivate
+                                Mark as Resigned
                             </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+
+                {/* Re-hire Employee Dialog */}
+                <AlertDialog open={rehireDialogOpen} onOpenChange={(open) => {
+                    setRehireDialogOpen(open);
+                    if (!open) { setUserToRehire(null); setRehireDate(""); }
+                }}>
+                    <AlertDialogContent className="max-w-md">
+                        <AlertDialogHeader>
+                            <AlertDialogTitle className="flex items-center gap-2">
+                                <UserCheck className="h-5 w-5 text-green-500" />
+                                Re-hire Employee
+                            </AlertDialogTitle>
+                            <AlertDialogDescription asChild>
+                                <div className="space-y-3">
+                                    {userToRehire && (
+                                        <>
+                                            <p>
+                                                You are re-hiring <strong>{userToRehire.first_name} {userToRehire.middle_name ? userToRehire.middle_name + '. ' : ''}{userToRehire.last_name}</strong>.
+                                            </p>
+                                            <p className="text-sm text-muted-foreground">
+                                                Previous hire date: <strong>{userToRehire.hired_date ? new Date(userToRehire.hired_date).toLocaleDateString() : 'N/A'}</strong>
+                                            </p>
+                                            <div className="space-y-2">
+                                                <Label htmlFor="rehire-date" className="text-sm font-medium">
+                                                    New Hired Date <span className="text-red-500">*</span>
+                                                </Label>
+                                                <Input
+                                                    id="rehire-date"
+                                                    type="date"
+                                                    value={rehireDate}
+                                                    onChange={(e) => setRehireDate(e.target.value)}
+                                                    className="w-full"
+                                                />
+                                            </div>
+                                            <div className="bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                                                <p className="text-sm text-blue-800 dark:text-blue-300">
+                                                    ℹ️ Account access will be restored automatically. A schedule assignment dialog will appear next so you can assign a schedule without leaving this page.
+                                                </p>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                                onClick={confirmRehire}
+                                disabled={!rehireDate || loading}
+                                className="bg-green-600 hover:bg-green-700"
+                            >
+                                Confirm Re-hire
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+
+                {/* Schedule Assignment Dialog (opens after re-hire) */}
+                <AlertDialog open={scheduleDialogOpen} onOpenChange={(open) => {
+                    setScheduleDialogOpen(open);
+                    if (!open) { setScheduleDialogUser(null); setUserSchedules([]); }
+                }}>
+                    <AlertDialogContent className="max-w-lg">
+                        <AlertDialogHeader>
+                            <AlertDialogTitle className="flex items-center gap-2">
+                                <UserCheck className="h-5 w-5 text-green-500" />
+                                Assign Schedule
+                                {scheduleDialogUser && (
+                                    <span className="text-sm font-normal text-muted-foreground">
+                                        — {scheduleDialogUser.first_name} {scheduleDialogUser.last_name}
+                                    </span>
+                                )}
+                            </AlertDialogTitle>
+                            <AlertDialogDescription asChild>
+                                <div className="space-y-3">
+                                    {loadingSchedules ? (
+                                        <div className="flex items-center justify-center py-6 text-sm text-muted-foreground gap-2">
+                                            <RefreshCw className="h-4 w-4 animate-spin" />
+                                            Loading schedules…
+                                        </div>
+                                    ) : userSchedules.length === 0 ? (
+                                        <div className="rounded-lg border border-dashed p-6 text-center space-y-2">
+                                            <p className="text-sm text-muted-foreground">No existing schedules found for this employee.</p>
+                                            <p className="text-xs text-muted-foreground">Create a new schedule using the button below.</p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                                            {userSchedules.map((schedule) => (
+                                                <div
+                                                    key={schedule.id}
+                                                    className={`flex items-center justify-between rounded-lg border p-3 text-sm gap-3 ${schedule.is_active ? 'border-green-300 bg-green-50 dark:border-green-700 dark:bg-green-950/30' : 'border-border bg-card'}`}
+                                                >
+                                                    <div className="flex-1 min-w-0 space-y-0.5">
+                                                        <div className="font-medium truncate">
+                                                            {schedule.campaign?.name ?? 'No Campaign'} · {schedule.site?.name ?? 'No Site'}
+                                                        </div>
+                                                        <div className="text-xs text-muted-foreground">
+                                                            {schedule.shift_type} · {to12Hour(schedule.scheduled_time_in)} – {to12Hour(schedule.scheduled_time_out)}
+                                                        </div>
+                                                        <div className="text-xs text-muted-foreground">
+                                                            {schedule.work_days?.join(', ')}
+                                                        </div>
+                                                    </div>
+                                                    <div className="shrink-0 flex items-center gap-2">
+                                                        <Link
+                                                            href={employeeSchedulesEdit(schedule.id).url}
+                                                            className="inline-flex items-center gap-1 h-7 px-2 rounded-md border border-border text-xs hover:bg-muted transition-colors"
+                                                        >
+                                                            <Pencil className="h-3 w-3" /> Edit
+                                                        </Link>
+                                                        {schedule.is_active ? (
+                                                            <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 dark:text-green-400">
+                                                                <Check className="h-3 w-3" /> Active
+                                                            </span>
+                                                        ) : (
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                className="h-7 text-xs"
+                                                                disabled={activatingScheduleId === schedule.id}
+                                                                onClick={() => handleActivateSchedule(schedule)}
+                                                            >
+                                                                {activatingScheduleId === schedule.id ? (
+                                                                    <RefreshCw className="h-3 w-3 animate-spin mr-1" />
+                                                                ) : (
+                                                                    <Play className="h-3 w-3 mr-1" />
+                                                                )}
+                                                                Activate
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                    <div className="pt-1">
+                                        <Link
+                                            href={scheduleDialogUser ? employeeSchedulesCreate({ query: { user_id: scheduleDialogUser.id, effective_date: scheduleDialogHiredDate } }).url : '#'}
+                                            className="inline-flex items-center gap-1.5 text-sm text-primary underline-offset-4 hover:underline"
+                                        >
+                                            <Plus className="h-4 w-4" />
+                                            Create new schedule for this employee
+                                        </Link>
+                                    </div>
+                                </div>
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Done</AlertDialogCancel>
                         </AlertDialogFooter>
                     </AlertDialogContent>
                 </AlertDialog>
@@ -1352,6 +1660,95 @@ export default function AccountIndex() {
                                 <Mail className="mr-2 h-4 w-4" />
                                 Revoke & Send Emails
                             </Button>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+
+                {/* Stale Accounts Dialog */}
+                <AlertDialog open={staleDialogOpen} onOpenChange={open => { if (!open) { setStaleDialogOpen(false); setSelectedStaleIds([]); } }}>
+                    <AlertDialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
+                        <AlertDialogHeader>
+                            <AlertDialogTitle className="flex items-center gap-2">
+                                <Clock className="h-5 w-5 text-destructive" />
+                                Stale Resigned Accounts
+                            </AlertDialogTitle>
+                            <AlertDialogDescription>
+                                These accounts have been resigned for 2+ years. They can be permanently deleted.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+
+                        <div className="flex-1 overflow-y-auto min-h-0">
+                            {loadingStale ? (
+                                <div className="flex items-center justify-center py-12 text-muted-foreground">
+                                    <RefreshCw className="h-5 w-5 animate-spin mr-2" />
+                                    Loading stale accounts...
+                                </div>
+                            ) : staleAccounts.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-2">
+                                    <Clock className="h-8 w-8 opacity-40" />
+                                    <p className="text-sm">No stale accounts found.</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between px-1 mb-1">
+                                        <span className="text-xs text-muted-foreground">{staleAccounts.length} account{staleAccounts.length !== 1 ? 's' : ''} found</span>
+                                        <Button variant="ghost" size="sm" onClick={handleStaleSelectAll} className="text-xs h-7 px-2">
+                                            {selectedStaleIds.length === staleAccounts.length ? "Deselect All" : "Select All"}
+                                        </Button>
+                                    </div>
+                                    {staleAccounts.map(account => (
+                                        <div
+                                            key={account.id}
+                                            className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${selectedStaleIds.includes(account.id) ? 'border-destructive/50 bg-destructive/5' : 'border-border hover:bg-muted/40'}`}
+                                            onClick={() => handleStaleToggle(account.id)}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                aria-label={`Select ${account.name}`}
+                                                checked={selectedStaleIds.includes(account.id)}
+                                                onChange={() => handleStaleToggle(account.id)}
+                                                onClick={e => e.stopPropagation()}
+                                                className="mt-0.5 h-4 w-4 accent-destructive cursor-pointer"
+                                            />
+                                            <div className="flex-1 min-w-0">
+                                                <div className="font-medium text-sm truncate">{account.name}</div>
+                                                <div className="text-xs text-muted-foreground truncate">{account.email}</div>
+                                            </div>
+                                            <div className="flex flex-col items-end gap-1 text-xs text-muted-foreground whitespace-nowrap">
+                                                <span className="capitalize">{account.role}</span>
+                                                {account.resigned_at && (
+                                                    <span className="text-destructive/70">Resigned {account.resigned_at}</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        <AlertDialogFooter className="flex-col sm:flex-row gap-2 pt-2 border-t">
+                            <AlertDialogCancel className="mt-0">Close</AlertDialogCancel>
+                            {!loadingStale && staleAccounts.length > 0 && (
+                                <>
+                                    <Button
+                                        variant="destructive"
+                                        disabled={selectedStaleIds.length === 0 || deletingStale}
+                                        onClick={() => handleDeleteStale(selectedStaleIds)}
+                                    >
+                                        {deletingStale ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
+                                        Delete Selected ({selectedStaleIds.length})
+                                    </Button>
+                                    <Button
+                                        variant="destructive"
+                                        disabled={deletingStale}
+                                        onClick={() => handleDeleteStale(staleAccounts.map(a => a.id))}
+                                        className="bg-red-700 hover:bg-red-800"
+                                    >
+                                        {deletingStale ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
+                                        Delete All ({staleAccounts.length})
+                                    </Button>
+                                </>
+                            )}
                         </AlertDialogFooter>
                     </AlertDialogContent>
                 </AlertDialog>

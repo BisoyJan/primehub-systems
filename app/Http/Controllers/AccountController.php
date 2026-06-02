@@ -7,6 +7,8 @@ use App\Models\EmployeeSchedule;
 use App\Models\User;
 use App\Services\NotificationService;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -89,6 +91,13 @@ class AccountController extends Controller
                 'email' => $user->email,
             ]);
 
+        $staleCount = User::where('is_active', false)
+            ->where('is_approved', false)
+            ->whereNotNull('hired_date')
+            ->where('resigned_at', '<=', now()->subYears(2))
+            ->whereNull('deleted_at')
+            ->count();
+
         return Inertia::render('Account/Index', [
             'users' => [
                 'data' => $users->items(),
@@ -108,6 +117,7 @@ class AccountController extends Controller
                 'employee_status' => $employeeStatus ?? '',
                 'user_id' => $userId ?? '',
             ],
+            'staleCount' => $staleCount,
         ]);
     }
 
@@ -560,9 +570,10 @@ class AccountController extends Controller
 
     /**
      * Toggle the active status of a user account.
-     * When deactivating (resigned), deletes all employee schedules.
+     * Deactivating (resigned): also revokes account access and deletes all schedules.
+     * Reactivating (re-hired): also re-approves account access; admin manages schedules separately.
      */
-    public function toggleActive(User $account)
+    public function toggleActive(Request $request, User $account)
     {
         $this->authorize('update', $account);
 
@@ -576,22 +587,115 @@ class AccountController extends Controller
 
         $newStatus = ! $account->is_active;
 
-        // If deactivating (resigned), delete all employee schedules
-        if (! $newStatus) {
+        if ($newStatus) {
+            // Re-hiring: a new hired_date is required
+            $validated = $request->validate([
+                'hired_date' => 'required|date',
+            ]);
+
+            DB::transaction(function () use ($account, $validated) {
+                $account->update([
+                    'is_active' => true,
+                    'is_approved' => true,
+                    'approved_at' => now(),
+                    'resigned_at' => null,
+                    'hired_date' => $validated['hired_date'],
+                ]);
+            });
+
+            return back()->with('flash', [
+                'message' => 'Employee re-hired and account access restored.',
+                'type' => 'success',
+            ]);
+        }
+
+        // Deactivating (resigned): revoke access and delete all employee schedules
+        DB::transaction(function () use ($account) {
             $account->employeeSchedules()->delete();
-        }
-
-        $account->update(['is_active' => $newStatus]);
-
-        $statusText = $newStatus ? 'activated' : 'deactivated';
-        $message = "Employee {$statusText} successfully";
-
-        if (! $newStatus) {
-            $message .= '. All employee schedules have been deleted.';
-        }
+            $account->update([
+                'is_active' => false,
+                'is_approved' => false,
+                'approved_at' => null,
+                'resigned_at' => now(),
+            ]);
+        });
 
         return back()->with('flash', [
-            'message' => $message,
+            'message' => 'Employee deactivated and account access revoked. All schedules have been deleted.',
+            'type' => 'success',
+        ]);
+    }
+
+    /**
+     * Return accounts that have been resigned for 2+ years (stale resigned accounts).
+     */
+    public function staleAccounts(): JsonResponse
+    {
+        $this->authorize('viewAny', User::class);
+
+        $threshold = now()->subYears(2);
+
+        $accounts = User::where('is_active', false)
+            ->where('is_approved', false)
+            ->whereNotNull('hired_date')
+            ->where('resigned_at', '<=', $threshold)
+            ->whereNull('deleted_at')
+            ->select('id', 'first_name', 'middle_name', 'last_name', 'email', 'role', 'hired_date', 'resigned_at')
+            ->orderBy('resigned_at')
+            ->get()
+            ->map(fn ($u) => [
+                'id' => $u->id,
+                'name' => trim("{$u->first_name} ".($u->middle_name ? "{$u->middle_name} " : '').$u->last_name),
+                'email' => $u->email,
+                'role' => $u->role,
+                'hired_date' => $u->hired_date?->format('Y-m-d'),
+                'resigned_at' => $u->resigned_at?->format('Y-m-d'),
+            ]);
+
+        return response()->json($accounts);
+    }
+
+    /**
+     * Permanently delete stale resigned accounts and all their schedules.
+     */
+    public function bulkDeleteStale(Request $request): RedirectResponse
+    {
+        $this->authorize('viewAny', User::class);
+
+        $validated = $request->validate([
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'required|integer|exists:users,id',
+        ]);
+
+        $threshold = now()->subYears(2);
+
+        $accounts = User::whereIn('id', $validated['ids'])
+            ->where('is_active', false)
+            ->where('is_approved', false)
+            ->whereNotNull('hired_date')
+            ->where('resigned_at', '<=', $threshold)
+            ->whereNull('deleted_at')
+            ->where('id', '!=', auth()->id())
+            ->get();
+
+        if ($accounts->isEmpty()) {
+            return back()->with('flash', [
+                'message' => 'No eligible stale accounts found to delete.',
+                'type' => 'error',
+            ]);
+        }
+
+        $count = $accounts->count();
+
+        DB::transaction(function () use ($accounts) {
+            foreach ($accounts as $account) {
+                $account->employeeSchedules()->delete();
+                $account->forceDelete();
+            }
+        });
+
+        return back()->with('flash', [
+            'message' => "{$count} stale ".str('account')->plural($count).' permanently deleted.',
             'type' => 'success',
         ]);
     }

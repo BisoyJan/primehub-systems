@@ -10,6 +10,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
 import { usePageMeta, useFlashMessage, usePageLoading } from '@/hooks';
 import { usePermission } from '@/hooks/use-permission';
@@ -18,7 +19,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { DatePicker } from '@/components/ui/date-picker';
 import { dashboard as dashboardRoute } from '@/routes/break-timer';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Users, Activity, CheckCircle, AlertTriangle, Clock, ChevronsUpDown, Check, Pause, Play, PlayCircle, StopCircle, Square, RotateCcw, History } from 'lucide-react';
+import { Users, Activity, CheckCircle, AlertTriangle, Clock, ChevronsUpDown, Check, Pause, Play, PlayCircle, StopCircle, Square, RotateCcw, History, Ban } from 'lucide-react';
 import { SessionTimelineDialog } from './components/SessionTimelineDialog';
 import { useState, useMemo, useEffect, useRef } from 'react';
 
@@ -43,6 +44,7 @@ interface SessionData {
     type: string;
     status: string;
     duration_seconds: number;
+    combined_break_count: number | null;
     started_at: string;
     ended_at: string | null;
     expected_end_at: string | null;
@@ -102,6 +104,7 @@ interface PageProps extends Record<string, unknown> {
     filters: Filters;
     users: UserOption[];
     campaigns: CampaignOption[];
+    auth: { user: { id: number; role: string } };
 }
 
 function formatTime(totalSeconds: number): string {
@@ -150,11 +153,46 @@ function statusBadgeVariant(status: string, overageSeconds = 0): { variant: 'def
 }
 
 export default function BreakTimerDashboard() {
-    const { sessions, stats, filters, users, campaigns } = usePage<PageProps>().props;
+    const { sessions, stats, filters, users, campaigns, auth } = usePage<PageProps>().props;
     const { can } = usePermission();
     const canForceEnd = can('break_timer.force_end');
     const canRestore = can('break_timer.restore');
-    const canActOnSessions = canForceEnd || canRestore;
+    const canVoid = can('break_timer.void_session');
+    const canActOnSessions = canForceEnd || canRestore || canVoid;
+    const isTLorIT = auth.user.role === 'Team Lead' || auth.user.role === 'it';
+    const canRestoreFullMinutes = ['Admin', 'Super Admin', 'Team Lead'].includes(auth.user.role);
+
+    /** Returns true when the Restore button should be shown for a given session. */
+    function canRestoreSession(session: SessionData): boolean {
+        if (!canRestore) return false;
+        if (!['completed', 'overage', 'reset', 'auto_ended'].includes(session.status)) return false;
+        if ((session.remaining_seconds ?? 0) < 30) return false;
+        // TLs and IT cannot restore their own sessions — only Super Admins can.
+        if (isTLorIT && session.user?.id === auth.user.id) return false;
+        return true;
+    }
+
+    /** Returns true when the Void button should be shown for a given session. */
+    function canVoidSession(session: SessionData): boolean {
+        if (!canVoid) return false;
+        if (session.status === 'reset') return false;
+        return true;
+    }
+
+    /** Describes the quota that will be freed when a session is voided. */
+    function getQuotaFreedLabel(session: SessionData): string {
+        const { type } = session;
+        if (type === 'combined') {
+            const n = session.combined_break_count ?? 1;
+            return `${n} break slot${n > 1 ? 's' : ''} + 1 lunch slot`;
+        }
+        if (type === 'combined_break') {
+            const n = session.combined_break_count ?? 2;
+            return `${n} break slot${n > 1 ? 's' : ''}`;
+        }
+        if (type === 'lunch') return '1 lunch slot';
+        return '1 break slot';
+    }
 
     const { title, breadcrumbs } = usePageMeta({
         title: 'Break Dashboard',
@@ -175,8 +213,9 @@ export default function BreakTimerDashboard() {
     const [showUserSearch, setShowUserSearch] = useState(false);
     const [userSearchQuery, setUserSearchQuery] = useState('');
 
-    const [actionDialog, setActionDialog] = useState<{ kind: 'force_end' | 'restore'; session: SessionData } | null>(null);
+    const [actionDialog, setActionDialog] = useState<{ kind: 'force_end' | 'restore' | 'void'; session: SessionData } | null>(null);
     const [actionReason, setActionReason] = useState('');
+    const [restoreFull, setRestoreFull] = useState(false);
     const [isSubmittingAction, setIsSubmittingAction] = useState(false);
     const [timelineSessionId, setTimelineSessionId] = useState<number | null>(null);
 
@@ -187,13 +226,21 @@ export default function BreakTimerDashboard() {
 
     function openRestore(session: SessionData) {
         setActionReason('');
+        setRestoreFull(false);
         setActionDialog({ kind: 'restore', session });
+    }
+
+    function openVoid(session: SessionData) {
+        setActionReason('');
+        setRestoreFull(false);
+        setActionDialog({ kind: 'void', session });
     }
 
     function closeActionDialog() {
         if (isSubmittingAction) return;
         setActionDialog(null);
         setActionReason('');
+        setRestoreFull(false);
     }
 
     function submitAction() {
@@ -203,15 +250,21 @@ export default function BreakTimerDashboard() {
 
         const url = actionDialog.kind === 'force_end'
             ? `/break-timer/${actionDialog.session.id}/force-end`
-            : `/break-timer/${actionDialog.session.id}/restore`;
+            : actionDialog.kind === 'void'
+                ? `/break-timer/${actionDialog.session.id}/void`
+                : `/break-timer/${actionDialog.session.id}/restore`;
 
+        const payload = actionDialog.kind === 'restore'
+            ? { reason, restore_full: restoreFull }
+            : { reason };
         setIsSubmittingAction(true);
-        router.post(url, { reason }, {
+        router.post(url, payload, {
             preserveScroll: true,
             onFinish: () => {
                 setIsSubmittingAction(false);
                 setActionDialog(null);
                 setActionReason('');
+                setRestoreFull(false);
             },
         });
     }
@@ -600,19 +653,28 @@ export default function BreakTimerDashboard() {
                                                             Force End
                                                         </Button>
                                                     )}
-                                                    {canRestore
-                                                        && ['completed', 'overage', 'reset', 'auto_ended'].includes(session.status)
-                                                        && (session.remaining_seconds ?? 0) >= 30 && (
-                                                            <Button
-                                                                size="sm"
-                                                                variant="outline"
-                                                                onClick={() => openRestore(session)}
-                                                                className="gap-1"
-                                                            >
-                                                                <RotateCcw className="h-3 w-3" />
-                                                                Restore
-                                                            </Button>
-                                                        )}
+                                                    {canRestoreSession(session) && (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() => openRestore(session)}
+                                                            className="gap-1"
+                                                        >
+                                                            <RotateCcw className="h-3 w-3" />
+                                                            Restore
+                                                        </Button>
+                                                    )}
+                                                    {canVoidSession(session) && (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() => openVoid(session)}
+                                                            className="gap-1 border-orange-400 text-orange-600 hover:bg-orange-50 hover:text-orange-700 dark:border-orange-500 dark:text-orange-400 dark:hover:bg-orange-950"
+                                                        >
+                                                            <Ban className="h-3 w-3" />
+                                                            Void
+                                                        </Button>
+                                                    )}
                                                 </TableCell>
                                             ) : (
                                                 <TableCell className="text-right">
@@ -729,19 +791,28 @@ export default function BreakTimerDashboard() {
                                             Force End
                                         </Button>
                                     )}
-                                    {canRestore
-                                        && ['completed', 'overage', 'reset', 'auto_ended'].includes(session.status)
-                                        && (session.remaining_seconds ?? 0) >= 30 && (
-                                            <Button
-                                                size="sm"
-                                                variant="outline"
-                                                onClick={() => openRestore(session)}
-                                                className="flex-1 gap-1"
-                                            >
-                                                <RotateCcw className="h-3 w-3" />
-                                                Restore
-                                            </Button>
-                                        )}
+                                    {canRestoreSession(session) && (
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => openRestore(session)}
+                                            className="flex-1 gap-1"
+                                        >
+                                            <RotateCcw className="h-3 w-3" />
+                                            Restore
+                                        </Button>
+                                    )}
+                                    {canVoidSession(session) && (
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => openVoid(session)}
+                                            className="flex-1 gap-1 border-orange-400 text-orange-600 hover:bg-orange-50 hover:text-orange-700 dark:border-orange-500 dark:text-orange-400 dark:hover:bg-orange-950"
+                                        >
+                                            <Ban className="h-3 w-3" />
+                                            Void
+                                        </Button>
+                                    )}
                                 </div>
                             </div>
                         ))
@@ -759,12 +830,18 @@ export default function BreakTimerDashboard() {
                 <DialogContent className="max-w-[90vw] sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle>
-                            {actionDialog?.kind === 'force_end' ? 'Force End Break Session' : 'Restore Break Session'}
+                            {actionDialog?.kind === 'force_end'
+                                ? 'Force End Break Session'
+                                : actionDialog?.kind === 'void'
+                                    ? 'Void Break Session'
+                                    : 'Restore Break Session'}
                         </DialogTitle>
                         <DialogDescription>
                             {actionDialog?.kind === 'force_end'
                                 ? 'End this session on behalf of the agent (e.g., they forgot to end before their shift ended). This action is logged.'
-                                : 'Restore this previously ended session. The agent will get back the remaining time. This action is logged.'}
+                                : actionDialog?.kind === 'void'
+                                    ? 'Mark this session as voided — it will no longer count toward the agent\'s break quota. Use this when the agent selected the wrong break type. This action is logged.'
+                                    : 'Restore this previously ended session. The agent will get back the remaining time. This action is logged.'}
                         </DialogDescription>
                     </DialogHeader>
 
@@ -775,9 +852,47 @@ export default function BreakTimerDashboard() {
                                 <div><span className="text-muted-foreground">Type:</span> {formatBreakType(actionDialog.session.type)}</div>
                                 <div><span className="text-muted-foreground">Status:</span> {actionDialog.session.status}</div>
                                 {actionDialog.kind === 'restore' && (
-                                    <div><span className="text-muted-foreground">Remaining to restore:</span> {formatTime(actionDialog.session.remaining_seconds ?? 0)}</div>
+                                    <div>
+                                        <span className="text-muted-foreground">Remaining to restore:</span>{' '}
+                                        {restoreFull
+                                            ? formatTime(actionDialog.session.duration_seconds)
+                                            : formatTime(actionDialog.session.remaining_seconds ?? 0)}
+                                        {restoreFull && (
+                                            <span className="ml-1 text-xs text-emerald-600 dark:text-emerald-400">(full duration)</span>
+                                        )}
+                                    </div>
+                                )}
+                                {actionDialog.kind === 'void' && (
+                                    <div className="text-orange-600 dark:text-orange-400">
+                                        <span className="text-muted-foreground">Quota freed:</span>{' '}
+                                        {getQuotaFreedLabel(actionDialog.session)}
+                                    </div>
                                 )}
                             </div>
+                            {actionDialog.kind === 'void' && ['active', 'paused'].includes(actionDialog.session.status) && (
+                                <div className="flex items-start gap-2 rounded-md border border-orange-300 bg-orange-50 px-3 py-2 text-sm text-orange-700 dark:border-orange-700 dark:bg-orange-950/40 dark:text-orange-400">
+                                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                                    <span>Session is currently <strong>{actionDialog.session.status}</strong> — it will be ended before voiding.</span>
+                                </div>
+                            )}
+                            {actionDialog.kind === 'restore' && canRestoreFullMinutes && (
+                                <div className="flex items-center gap-2 rounded-md border px-3 py-2">
+                                    <Checkbox
+                                        id="restore-full"
+                                        checked={restoreFull}
+                                        onCheckedChange={(checked) => setRestoreFull(checked === true)}
+                                        disabled={isSubmittingAction}
+                                    />
+                                    <div className="flex flex-col gap-0.5">
+                                        <Label htmlFor="restore-full" className="cursor-pointer text-sm font-medium">
+                                            Restore full break minutes
+                                        </Label>
+                                        <p className="text-xs text-muted-foreground">
+                                            Agent gets the full {formatTime(actionDialog.session.duration_seconds)} instead of only the remaining time.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
                             <div className="space-y-1.5">
                                 <Label htmlFor="action-reason">
                                     Reason <span className="text-red-500">*</span>
@@ -788,7 +903,9 @@ export default function BreakTimerDashboard() {
                                     onChange={(e) => setActionReason(e.target.value)}
                                     placeholder={actionDialog.kind === 'force_end'
                                         ? 'e.g., Agent logged off without ending break.'
-                                        : 'e.g., Break was accidentally ended; agent had ~10 min remaining.'}
+                                        : actionDialog.kind === 'void'
+                                            ? 'e.g., Agent accidentally selected combined break; should have been 1st break only.'
+                                            : 'e.g., Break was accidentally ended; agent had ~10 min remaining.'}
                                     maxLength={500}
                                     rows={3}
                                     disabled={isSubmittingAction}
@@ -803,13 +920,17 @@ export default function BreakTimerDashboard() {
                             Cancel
                         </Button>
                         <Button
-                            variant={actionDialog?.kind === 'force_end' ? 'destructive' : 'default'}
+                            variant={actionDialog?.kind === 'force_end' || actionDialog?.kind === 'void' ? 'destructive' : 'default'}
                             onClick={submitAction}
                             disabled={isSubmittingAction || actionReason.trim().length < 3}
                         >
                             {isSubmittingAction
                                 ? 'Submitting...'
-                                : actionDialog?.kind === 'force_end' ? 'Force End' : 'Restore'}
+                                : actionDialog?.kind === 'force_end'
+                                    ? 'Force End'
+                                    : actionDialog?.kind === 'void'
+                                        ? 'Void Session'
+                                        : 'Restore'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

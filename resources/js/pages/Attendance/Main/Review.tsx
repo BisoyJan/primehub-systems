@@ -172,6 +172,21 @@ const DEFAULT_META: Meta = {
 // formatDateTime, formatDate are now imported from @/lib/utils
 
 /**
+ * Point values for each violation type (matching backend AttendancePoint::POINT_VALUES)
+ */
+// failed_bio_in / failed_bio_out are flag-only statuses — no points generated.
+const POINT_VALUES: Record<string, number> = {
+    whole_day_absence: 1.00,
+    half_day_absence: 0.50,
+    undertime: 0.25,
+    undertime_more_than_hour: 0.50,
+    tardy: 0.25,
+    ncns: 1.00,
+};
+
+const getPointValue = (status: string): number => POINT_VALUES[status] ?? 0;
+
+/**
  * Calculate the suggested attendance status based on actual times and employee schedule.
  *
  * Status Rules:
@@ -198,26 +213,27 @@ const calculateSuggestedStatus = (
     undertimeMinutes?: number;
     overtimeMinutes?: number;
     reason: string;
+    violations: string[];
 } => {
     const hasBioIn = !!actualTimeIn;
     const hasBioOut = !!actualTimeOut;
 
     // No bio at all
     if (!hasBioIn && !hasBioOut) {
-        return { status: 'ncns', reason: 'No time in or time out recorded' };
+        return { status: 'ncns', reason: 'No time in or time out recorded', violations: ['ncns'] };
     }
 
-    // Has time out but no time in
+    // Has time out but no time in (flag only — no points)
     if (!hasBioIn && hasBioOut) {
-        return { status: 'failed_bio_in', reason: 'Missing time in record' };
+        return { status: 'failed_bio_in', reason: 'Missing time in record', violations: [] };
     }
 
     // No schedule - can't calculate status accurately
     if (!schedule) {
         if (hasBioIn && !hasBioOut) {
-            return { status: 'failed_bio_out', reason: 'No schedule found, missing time out' };
+            return { status: 'failed_bio_out', reason: 'No schedule found, missing time out', violations: [] };
         }
-        return { status: 'on_time', reason: 'No schedule found, defaulting to on time' };
+        return { status: 'on_time', reason: 'No schedule found, defaulting to on time', violations: [] };
     }
 
     // Parse dates and times
@@ -292,6 +308,15 @@ const calculateSuggestedStatus = (
     let secondaryStatus: string | undefined;
     let reason: string;
 
+    // Build the violations list (matches DailyRoster logic)
+    const hasUndertimeMoreThanHour = hasUndertime && !!undertimeMinutes && undertimeMinutes > 60;
+    const violations: string[] = [];
+    // failed_bio_* are flag-only statuses — excluded from violations (no points)
+    if (isHalfDay) violations.push('half_day_absence');
+    if (isTardy) violations.push('tardy');
+    if (hasUndertimeMoreThanHour) violations.push('undertime_more_than_hour');
+    else if (hasUndertime) violations.push('undertime');
+
     if (!hasBioOut) {
         // Has time in but no time out
         if (isHalfDay) {
@@ -331,7 +356,7 @@ const calculateSuggestedStatus = (
         reason = 'Arrived on time';
     }
 
-    return { status, secondaryStatus, tardyMinutes, undertimeMinutes, overtimeMinutes, reason };
+    return { status, secondaryStatus, tardyMinutes, undertimeMinutes, overtimeMinutes, reason, violations };
 };
 
 export default function AttendanceReview() {
@@ -425,6 +450,7 @@ export default function AttendanceReview() {
         undertimeMinutes?: number;
         overtimeMinutes?: number;
         tardyMinutes?: number;
+        violations: string[];
     } | null>(null);
     const [isStatusManuallyOverridden, setIsStatusManuallyOverridden] = useState(false);
 
@@ -629,6 +655,33 @@ export default function AttendanceReview() {
             is_set_home: record.is_set_home || false,
         });
         setIsDialogOpen(true);
+    };
+
+    const fillFromSchedule = () => {
+        if (!selectedRecord) return;
+        const schedule = selectedRecord.employee_schedule || selectedRecord.user?.active_schedule;
+        if (!schedule?.scheduled_time_in || !schedule?.scheduled_time_out) return;
+
+        // Detect night shift by shift_type OR by time comparison (same logic as calculateSuggestedStatus)
+        const [schedInHour, schedInMin] = schedule.scheduled_time_in.slice(0, 5).split(':').map(Number);
+        const [schedOutHour, schedOutMin] = schedule.scheduled_time_out.slice(0, 5).split(':').map(Number);
+        const isNightShift =
+            schedule.shift_type === 'night_shift' ||
+            schedule.shift_type === 'graveyard_shift' ||
+            schedOutHour < schedInHour ||
+            (schedOutHour === schedInHour && schedOutMin <= schedInMin);
+
+        const timeIn = `${selectedRecord.shift_date}T${schedule.scheduled_time_in.slice(0, 5)}`;
+
+        // Use local date arithmetic to avoid UTC timezone offset issues
+        const [y, m, d] = selectedRecord.shift_date.split('-').map(Number);
+        const nextDay = new Date(y, m - 1, d + 1);
+        const nextDayStr = `${nextDay.getFullYear()}-${String(nextDay.getMonth() + 1).padStart(2, '0')}-${String(nextDay.getDate()).padStart(2, '0')}`;
+        const outDate = isNightShift ? nextDayStr : selectedRecord.shift_date;
+        const timeOut = `${outDate}T${schedule.scheduled_time_out.slice(0, 5)}`;
+
+        setData((prev) => ({ ...prev, actual_time_in: timeIn, actual_time_out: timeOut }));
+        recalculateSuggestedStatus(timeIn, timeOut);
     };
 
     // Recalculate suggested status when times change
@@ -1797,6 +1850,35 @@ export default function AttendanceReview() {
                             );
                         })()}
 
+                        {/* Detected Violations */}
+                        {suggestedStatus && suggestedStatus.violations.length > 0 && suggestedStatus.status !== 'on_time' && (
+                            <div className="p-3 rounded-lg border bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <AlertCircle className="h-4 w-4 text-red-600" />
+                                    <span className="text-sm font-medium text-red-800 dark:text-red-400">
+                                        Detected Violations
+                                    </span>
+                                </div>
+                                <div className="space-y-1">
+                                    {suggestedStatus.violations.map((violation, index) => (
+                                        <div key={violation} className="flex justify-between items-center text-xs">
+                                            <span className={`${index === 0 ? 'font-medium text-red-700 dark:text-red-400' : 'text-red-600 dark:text-red-500'}`}>
+                                                {index === 0 ? '▶ ' : '  '}{violation.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                                {index === 0 && ' (Primary)'}
+                                                {index === 1 && ' (Secondary)'}
+                                            </span>
+                                            <Badge variant="outline" className="text-red-600 border-red-400 text-xs h-5">
+                                                {getPointValue(violation).toFixed(2)} pts
+                                            </Badge>
+                                        </div>
+                                    ))}
+                                </div>
+                                <p className="text-xs text-red-600 dark:text-red-500 mt-2 pt-2 border-t border-red-200 dark:border-red-800">
+                                    Higher point violation is selected as primary status. Points will be generated for both violations.
+                                </p>
+                            </div>
+                        )}
+
                         {/* Status */}
                         <div className="space-y-2">
                             <Label htmlFor="status">
@@ -1866,6 +1948,19 @@ export default function AttendanceReview() {
                             </Select>
                             {errors.status && <p className="text-sm text-red-500">{errors.status}</p>}
                         </div>
+
+                        {/* Fill from Schedule button */}
+                        {(selectedRecord?.employee_schedule || selectedRecord?.user?.active_schedule) && (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="w-full text-xs"
+                                onClick={fillFromSchedule}
+                            >
+                                Fill Time In &amp; Out from Schedule
+                            </Button>
+                        )}
 
                         {/* Time In */}
                         <div className="space-y-2">

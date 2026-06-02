@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\AttendanceStatus;
+use App\Events\AttendanceSpreadsheetUpdated;
 use App\Http\Requests\BatchVerifyAttendanceRequest;
 use App\Http\Requests\BulkStoreAttendanceRequest;
 use App\Http\Requests\CreateSpreadsheetCellAttendanceRequest;
@@ -13,6 +14,7 @@ use App\Jobs\ProcessAttendanceUpload;
 use App\Models\Attendance;
 use App\Models\AttendancePoint;
 use App\Models\AttendanceUpload;
+use App\Models\AttendanceWeekTotal;
 use App\Models\Campaign;
 use App\Models\EmployeeSchedule;
 use App\Models\LeaveRequest;
@@ -33,6 +35,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -3039,6 +3042,7 @@ class AttendanceController extends Controller
         $campaignFilter = $request->input('campaign_id');
         $search = trim((string) $request->input('search', ''));
 
+        // Whole-month calendar view (Sunday → Saturday weeks).
         $startDate = Carbon::create($year, $month, 1)->startOfMonth();
         $endDate = (clone $startDate)->endOfMonth();
 
@@ -3056,113 +3060,49 @@ class AttendanceController extends Controller
                 : $teamLeadCampaignIds;
         }
 
-        // Build employee list
-        $employeesQuery = User::query()
-            ->select('users.id', 'users.first_name', 'users.last_name', 'users.role')
-            ->with(['activeSchedule.campaign:id,name'])
-            ->orderBy('users.last_name')
-            ->orderBy('users.first_name');
+        // Partial-reload short-circuit: when the client only asks for weekTotals
+        // (e.g. after Calc/Recalc/Remove), skip the expensive employee/cell build.
+        $partialHeader = $request->header('X-Inertia-Partial-Data');
+        $partials = $partialHeader ? array_filter(array_map('trim', explode(',', $partialHeader))) : [];
+        $isPartial = ! empty($partials);
+        $needsGroups = ! $isPartial || in_array('groups', $partials, true);
+        $needsWeekTotals = ! $isPartial || in_array('weekTotals', $partials, true);
 
+        // Cheap employee-id scope query — needed by both groups and weekTotals.
+        $scopedIdsQuery = User::query()->select('users.id');
         if (in_array($authUser->role, $restrictedRoles)) {
-            $employeesQuery->where('users.id', $authUser->id);
+            $scopedIdsQuery->where('users.id', $authUser->id);
         } elseif ($campaignIds !== null) {
-            $employeesQuery->whereHas('activeSchedule', function ($q) use ($campaignIds) {
+            $scopedIdsQuery->whereHas('activeSchedule', function ($q) use ($campaignIds) {
                 $q->whereIn('campaign_id', $campaignIds);
             });
         }
-
-        // Exclude resigned employees (hired_date set AND is_active = false)
-        $employeesQuery->where(function ($q) {
+        $scopedIdsQuery->where(function ($q) {
             $q->whereNull('hired_date')->orWhere('is_active', true);
         });
-
         if ($search !== '') {
-            $employeesQuery->where(function ($q) use ($search) {
+            $scopedIdsQuery->where(function ($q) use ($search) {
                 $q->where('first_name', 'like', "%{$search}%")
                     ->orWhere('last_name', 'like', "%{$search}%")
                     ->orWhere(\DB::raw("CONCAT(first_name, ' ', last_name)"), 'like', "%{$search}%");
             });
         }
+        $scopedEmployeeIds = $scopedIdsQuery->pluck('users.id')->all();
 
-        $employees = $employeesQuery->get();
+        // Always-cheap props (filters, campaigns, days) get built unconditionally
+        // — Inertia only serializes what `only` requests anyway.
+        $weekTotalsByUser = $needsWeekTotals
+            ? $this->buildWeekTotals($scopedEmployeeIds, $startDate, $endDate)
+            : [];
 
-        $employeeIds = $employees->pluck('id')->all();
-
-        // Load attendance for those employees within the month
-        $attendanceRows = empty($employeeIds)
-            ? collect()
-            : Attendance::with(['leaveRequest:id,leave_type,status'])
-                ->whereIn('user_id', $employeeIds)
-                ->whereBetween('shift_date', [$startDate->toDateString(), $endDate->toDateString()])
-                ->get([
-                    'id', 'user_id', 'shift_date', 'status', 'secondary_status',
-                    'total_minutes_worked', 'leave_request_id', 'admin_verified', 'is_advised',
-                    'actual_time_in', 'actual_time_out',
-                    'tardy_minutes', 'undertime_minutes', 'overtime_minutes',
-                ]);
-
-        // Build cell map: [user_id][YYYY-MM-DD] => cell
-        // When duplicates exist for the same user/date, prefer the row with biometric data
-        // (imported but unverified attendance) over a placeholder NCNS row.
-        $cellMap = [];
-        /** @var Attendance $row */
-        foreach ($attendanceRows as $row) {
-            $dateKey = Carbon::parse($row->shift_date)->format('Y-m-d');
-            $built = $this->buildSpreadsheetCell($row);
-            $existing = $cellMap[$row->user_id][$dateKey] ?? null;
-
-            if ($existing === null) {
-                $cellMap[$row->user_id][$dateKey] = $built;
-
-                continue;
-            }
-
-            $existingHasBio = (bool) ($existing['has_bio'] ?? false);
-            $newHasBio = (bool) $built['has_bio'];
-            $existingIsNcns = ($existing['status'] ?? null) === 'ncns';
-            $newIsNcns = $built['status'] === 'ncns';
-
-            // Prefer rows with bio data; otherwise prefer non-NCNS over NCNS
-            if (($newHasBio && ! $existingHasBio) || ($existingIsNcns && ! $newIsNcns)) {
-                $cellMap[$row->user_id][$dateKey] = $built;
-            }
-        }
-
-        // Active points per employee within the month (for the "Points" column)
-        $pointsByUser = empty($employeeIds)
-            ? []
-            : AttendancePoint::query()
-                ->whereIn('user_id', $employeeIds)
-                ->whereBetween('shift_date', [$startDate->toDateString(), $endDate->toDateString()])
-                ->where('is_expired', false)
-                ->where('is_excused', false)
-                ->selectRaw('user_id, SUM(points) as total')
-                ->groupBy('user_id')
-                ->pluck('total', 'user_id')
-                ->map(fn ($v) => (float) $v)
-                ->toArray();
-
-        // Group employees by campaign name (fallback "Unassigned")
         $grouped = [];
-        foreach ($employees as $emp) {
-            $campaignName = $emp->activeSchedule?->campaign?->name ?? 'Unassigned';
-            $sched = $emp->activeSchedule;
-            $grouped[$campaignName][] = [
-                'id' => $emp->id,
-                'name' => trim($emp->last_name.', '.$emp->first_name),
-                'role' => $emp->role,
-                'points' => round((float) ($pointsByUser[$emp->id] ?? 0), 2),
-                'schedule' => $sched ? [
-                    'shift_type' => $sched->shift_type,
-                    'scheduled_time_in' => $sched->scheduled_time_in,
-                    'scheduled_time_out' => $sched->scheduled_time_out,
-                    'work_days' => $sched->work_days,
-                    'campaign' => $sched->campaign?->name,
-                ] : null,
-                'cells' => $cellMap[$emp->id] ?? new \stdClass,
-            ];
+        if ($needsGroups) {
+            $grouped = $this->buildSpreadsheetGroups(
+                $scopedEmployeeIds,
+                $startDate,
+                $endDate,
+            );
         }
-        ksort($grouped);
 
         // Build days metadata for header
         $days = [];
@@ -3172,6 +3112,7 @@ class AttendanceController extends Controller
                 'day' => (int) $d->format('j'),
                 'weekday' => $d->format('D'),
                 'is_weekend' => in_array((int) $d->format('w'), [0, 6]),
+                'is_saturday' => (int) $d->format('w') === 6,
             ];
         }
 
@@ -3185,6 +3126,7 @@ class AttendanceController extends Controller
                 'campaign' => $name,
                 'employees' => $emps,
             ])->values(),
+            'weekTotals' => empty($weekTotalsByUser) ? new \stdClass : $weekTotalsByUser,
             'days' => $days,
             'month' => $month,
             'year' => $year,
@@ -3194,21 +3136,399 @@ class AttendanceController extends Controller
                 'campaign_id' => $campaignFilter,
                 'search' => $search,
             ],
+            'halfDayThreshold' => (int) config('attendance.half_day_absence_tardy_minutes', 15),
         ]);
     }
 
     /**
-     * Build a single grid cell from an Attendance row.
+     * Build the per-employee × per-day grid grouped by campaign.
+     *
+     * Extracted so partial Inertia reloads requesting only `weekTotals` (e.g.
+     * after Calc/Recalc/Remove) can skip this entirely.
      */
-    protected function buildSpreadsheetCell(Attendance $row): array
+    private function buildSpreadsheetGroups(array $employeeIds, Carbon $startDate, Carbon $endDate): array
     {
-        $hours = $row->total_minutes_worked ? round($row->total_minutes_worked / 60, 2) : null;
+        if (empty($employeeIds)) {
+            return [];
+        }
+
+        $employees = User::query()
+            ->select('users.id', 'users.first_name', 'users.last_name', 'users.role', 'users.avatar')
+            ->with(['activeSchedule.campaign:id,name'])
+            ->whereIn('users.id', $employeeIds)
+            ->orderBy('users.last_name')
+            ->orderBy('users.first_name')
+            ->get();
+
+        $attendanceRows = DB::table('attendances')
+            ->whereIn('user_id', $employeeIds)
+            ->whereBetween('shift_date', [$startDate->toDateString(), $endDate->toDateString()])
+            ->get([
+                'id', 'user_id', 'shift_date', 'status', 'secondary_status',
+                'total_minutes_worked', 'leave_request_id', 'admin_verified', 'is_advised',
+                'actual_time_in', 'actual_time_out',
+                'tardy_minutes', 'undertime_minutes', 'overtime_minutes',
+                'overtime_approved', 'is_set_home', 'is_partially_verified',
+                'undertime_approval_status', 'undertime_approval_reason',
+                'employee_schedule_id', 'scheduled_time_in', 'scheduled_time_out',
+                'warnings', 'notes', 'verification_notes',
+            ]);
+
+        $leaveIds = $attendanceRows->pluck('leave_request_id')->filter()->unique()->all();
+        $leaveTypes = empty($leaveIds)
+            ? []
+            : DB::table('leave_requests')
+                ->whereIn('id', $leaveIds)
+                ->pluck('leave_type', 'id')
+                ->all();
+
+        $scheduleIds = $attendanceRows->pluck('employee_schedule_id')->filter()->unique()->all();
+        $shiftTypes = empty($scheduleIds)
+            ? []
+            : DB::table('employee_schedules')
+                ->whereIn('id', $scheduleIds)
+                ->pluck('shift_type', 'id')
+                ->all();
+
+        $cellMap = [];
+        foreach ($attendanceRows as $row) {
+            $dateKey = substr((string) $row->shift_date, 0, 10);
+            $leaveType = $row->leave_request_id ? ($leaveTypes[$row->leave_request_id] ?? null) : null;
+            $shiftType = $row->employee_schedule_id ? ($shiftTypes[$row->employee_schedule_id] ?? null) : null;
+            $built = $this->buildSpreadsheetCell($row, $leaveType, $shiftType);
+            $existing = $cellMap[$row->user_id][$dateKey] ?? null;
+
+            if ($existing === null) {
+                $cellMap[$row->user_id][$dateKey] = $built;
+
+                continue;
+            }
+
+            $existingHasBio = (bool) ($existing['has_bio'] ?? false);
+            $newHasBio = (bool) $built['has_bio'];
+            $existingIsNcns = ($existing['status'] ?? null) === 'ncns';
+            $newIsNcns = $built['status'] === 'ncns';
+
+            if (($newHasBio && ! $existingHasBio) || ($existingIsNcns && ! $newIsNcns)) {
+                $cellMap[$row->user_id][$dateKey] = $built;
+            }
+        }
+
+        $pointsByUser = AttendancePoint::query()
+            ->whereIn('user_id', $employeeIds)
+            ->where('is_expired', false)
+            ->where('is_excused', false)
+            ->selectRaw('user_id, SUM(points) as total')
+            ->groupBy('user_id')
+            ->pluck('total', 'user_id')
+            ->map(fn ($v) => (float) $v)
+            ->toArray();
+
+        $grouped = [];
+        foreach ($employees as $emp) {
+            $campaignName = $emp->activeSchedule?->campaign?->name ?? 'Unassigned';
+            $sched = $emp->activeSchedule;
+
+            $cells = $cellMap[$emp->id] ?? [];
+            if ($sched && ! empty($sched->work_days)) {
+                foreach ($cells as $dateKey => $cell) {
+                    if (($cell['kind'] ?? '') === 'leave') {
+                        $dayName = strtolower(Carbon::parse($dateKey)->format('l'));
+                        if (! in_array($dayName, $sched->work_days)) {
+                            unset($cells[$dateKey]);
+                        }
+                    }
+                }
+            }
+
+            $grouped[$campaignName][] = [
+                'id' => $emp->id,
+                'name' => trim($emp->last_name.', '.$emp->first_name),
+                'role' => $emp->role,
+                'avatar_url' => $emp->avatar ? Storage::disk('public')->url($emp->avatar) : null,
+                'points' => round((float) ($pointsByUser[$emp->id] ?? 0), 2),
+                'schedule' => $sched ? [
+                    'shift_type' => $sched->shift_type,
+                    'scheduled_time_in' => $sched->scheduled_time_in,
+                    'scheduled_time_out' => $sched->scheduled_time_out,
+                    'work_days' => $sched->work_days,
+                    'campaign' => $sched->campaign?->name,
+                    'grace_period_minutes' => $sched->grace_period_minutes ?? 0,
+                ] : null,
+                'cells' => empty($cells) ? new \stdClass : $cells,
+            ];
+        }
+        ksort($grouped);
+
+        return $grouped;
+    }
+
+    /**
+     * Build per-week payroll totals keyed by [user_id][display_anchor_saturday].
+     */
+    private function buildWeekTotals(array $employeeIds, Carbon $startDate, Carbon $endDate): array
+    {
+        if (empty($employeeIds)) {
+            return [];
+        }
+
+        $totals = [];
+        AttendanceWeekTotal::query()
+            ->whereIn('user_id', $employeeIds)
+            ->whereBetween('week_end', [$startDate->toDateString(), $endDate->toDateString()])
+            ->get(['user_id', 'total_hours', 'display_group_end'])
+            ->each(function ($row) use (&$totals) {
+                $anchor = $row->display_group_end->toDateString();
+                $totals[$row->user_id][$anchor] = round(
+                    ($totals[$row->user_id][$anchor] ?? 0) + (float) $row->total_hours,
+                    2,
+                );
+            });
+
+        return $totals;
+    }
+
+    /**
+     * Calculate and persist the per-week worked-hours total for a single employee
+     * when an admin clicks a Saturday in the spreadsheet.
+     *
+     * Weeks run Sunday → Saturday (clamped to the month). Clicking a Saturday rolls
+     * up every consecutive *uncalculated* prior week into the same display anchor,
+     * so pressing week 2 while week 1 is still uncalculated shows the combined
+     * week1+week2 total; once week 1 has its own total, week 2 stands alone.
+     */
+    public function calculateWeekHours(Request $request)
+    {
+        $this->authorize('create', Attendance::class);
+
+        $data = $request->validate([
+            'user_id' => ['required', 'integer', 'exists:users,id'],
+            'saturday' => ['required', 'date'],
+        ]);
+
+        $userId = (int) $data['user_id'];
+        $saturday = Carbon::parse($data['saturday'])->startOfDay();
+
+        if ((int) $saturday->format('w') !== 6) {
+            return back()->with('flash', [
+                'message' => 'The selected date is not a Saturday.',
+                'type' => 'error',
+            ]);
+        }
+
+        $monthStart = (clone $saturday)->startOfMonth();
+        $monthEnd = (clone $saturday)->endOfMonth();
+
+        // Enumerate every Saturday in the month up to and including the clicked one.
+        $saturdays = [];
+        $cursor = (clone $monthStart);
+        while ((int) $cursor->format('w') !== 6) {
+            $cursor->addDay();
+        }
+        while ($cursor->lte($saturday)) {
+            $saturdays[] = (clone $cursor);
+            $cursor->addDays(7);
+        }
+
+        // Saturdays already calculated for this employee in the month.
+        $calculatedEnds = AttendanceWeekTotal::query()
+            ->where('user_id', $userId)
+            ->whereBetween('week_end', [$monthStart->toDateString(), $monthEnd->toDateString()])
+            ->pluck('week_end')
+            ->map(fn ($d) => Carbon::parse($d)->toDateString())
+            ->all();
+        $calculatedSet = array_flip($calculatedEnds);
+
+        // Walk backwards to the most recent already-calculated Saturday; everything
+        // after it (and not yet calculated) rolls into this click's display anchor.
+        $boundary = (clone $monthStart);
+        foreach (array_reverse($saturdays) as $sat) {
+            if ($sat->equalTo($saturday)) {
+                continue;
+            }
+            if (isset($calculatedSet[$sat->toDateString()])) {
+                $boundary = (clone $sat)->addDay();
+                break;
+            }
+        }
+
+        $included = array_filter(
+            $saturdays,
+            fn ($sat) => $sat->gte($boundary) && $sat->lte($saturday)
+        );
+
+        DB::transaction(function () use ($included, $saturday, $userId, $monthStart) {
+            foreach ($included as $sat) {
+                $weekStart = (clone $sat)->startOfWeek(Carbon::SUNDAY);
+                if ($weekStart->lt($monthStart)) {
+                    $weekStart = (clone $monthStart);
+                }
+
+                $hours = $this->computeWeekHours($userId, $weekStart, $sat);
+
+                // Skip empty weeks (e.g. a month-edge Saturday with no shifts)
+                // unless a total was already recorded, so recalculation can still
+                // zero out a previously calculated week.
+                $existing = AttendanceWeekTotal::query()
+                    ->where('user_id', $userId)
+                    ->whereDate('week_end', $sat->toDateString())
+                    ->exists();
+
+                if ($hours <= 0 && ! $existing) {
+                    continue;
+                }
+
+                AttendanceWeekTotal::updateOrCreate(
+                    ['user_id' => $userId, 'week_end' => $sat->toDateString()],
+                    [
+                        'week_start' => $weekStart->toDateString(),
+                        'total_hours' => $hours,
+                        'display_group_end' => $saturday->toDateString(),
+                        'calculated_at' => now(),
+                        'calculated_by' => auth()->id(),
+                    ]
+                );
+            }
+        });
+
+        $this->broadcastSpreadsheetUpdate('week', $userId, $saturday->toDateString());
+
+        if ($request->wantsJson()) {
+            return response()->json(['message' => 'Week hours calculated.']);
+        }
+
+        return back()->with('flash', [
+            'message' => 'Week hours calculated.',
+            'type' => 'success',
+        ]);
+    }
+
+    /**
+     * Remove a previously calculated week total. The clicked Saturday is a
+     * display anchor (display_group_end); deleting it removes every week that
+     * was rolled up under that anchor, clearing the badge entirely.
+     */
+    public function removeWeekHours(Request $request)
+    {
+        $this->authorize('create', Attendance::class);
+
+        $data = $request->validate([
+            'user_id' => ['required', 'integer', 'exists:users,id'],
+            'saturday' => ['required', 'date'],
+        ]);
+
+        $userId = (int) $data['user_id'];
+        $saturday = Carbon::parse($data['saturday'])->startOfDay();
+
+        $deleted = AttendanceWeekTotal::query()
+            ->where('user_id', $userId)
+            ->whereDate('display_group_end', $saturday->toDateString())
+            ->delete();
+
+        if ($deleted === 0) {
+            if ($request->wantsJson()) {
+                return response()->json(['message' => 'No calculation found to remove.'], 404);
+            }
+
+            return back()->with('flash', [
+                'message' => 'No calculation found to remove.',
+                'type' => 'warning',
+            ]);
+        }
+
+        $this->broadcastSpreadsheetUpdate('week', $userId, $saturday->toDateString());
+
+        if ($request->wantsJson()) {
+            return response()->json(['message' => 'Week hours calculation removed.']);
+        }
+
+        return back()->with('flash', [
+            'message' => 'Week hours calculation removed.',
+            'type' => 'success',
+        ]);
+    }
+
+    /**
+     * Sum worked hours for an employee across an inclusive date range. Duplicate
+     * rows for the same day (e.g. an NCNS placeholder plus an imported biometric
+     * row) are de-duplicated using the same preference as the grid: rows with
+     * biometric data win, otherwise a non-NCNS row wins.
+     *
+     * Overtime is only paid when approved: a day's worked minutes are capped at
+     * 8 hours (480 min) unless that attendance has approved overtime, in which
+     * case the full worked time (including overtime) counts. This guards against
+     * records where the overtime minutes were never derived but the raw worked
+     * time still exceeds the standard shift.
+     */
+    protected function computeWeekHours(int $userId, Carbon $start, Carbon $end): float
+    {
+        $rows = DB::table('attendances')
+            ->where('user_id', $userId)
+            ->whereBetween('shift_date', [$start->toDateString(), $end->toDateString()])
+            ->get(['shift_date', 'status', 'total_minutes_worked', 'actual_time_in', 'actual_time_out', 'overtime_minutes', 'overtime_approved']);
+
+        $byDate = [];
+        foreach ($rows as $row) {
+            $dateKey = substr((string) $row->shift_date, 0, 10);
+            $hasBio = $row->actual_time_in !== null || $row->actual_time_out !== null;
+            $isNcns = $row->status === 'ncns';
+            $existing = $byDate[$dateKey] ?? null;
+
+            if ($existing === null) {
+                $byDate[$dateKey] = $row;
+
+                continue;
+            }
+
+            $existingHasBio = $existing->actual_time_in !== null || $existing->actual_time_out !== null;
+            $existingIsNcns = $existing->status === 'ncns';
+
+            if (($hasBio && ! $existingHasBio) || ($existingIsNcns && ! $isNcns)) {
+                $byDate[$dateKey] = $row;
+            }
+        }
+
+        $minutes = 0;
+        foreach ($byDate as $row) {
+            $worked = (int) ($row->total_minutes_worked ?? 0);
+
+            // Cap at 8 hours unless this day's overtime was approved.
+            if (! (bool) $row->overtime_approved) {
+                $worked = min($worked, 480);
+            }
+
+            $minutes += max(0, $worked);
+        }
+
+        return round($minutes / 60, 2);
+    }
+
+    /**
+     * Build a single grid cell from a raw attendance row (stdClass from
+     * DB::table). Accepting raw rows + prefetched leave/shift lookups avoids
+     * the per-row Eloquent hydration and Carbon-cast cost that previously
+     * dominated spreadsheet load time.
+     *
+     * @param  object  $row  Raw row with attendance columns.
+     * @param  string|null  $leaveType  Leave type string (e.g. 'VL') for the linked leave_request, if any.
+     * @param  string|null  $shiftType  Shift type string for the linked employee_schedule, if any.
+     */
+    protected function buildSpreadsheetCell(object $row, ?string $leaveType = null, ?string $shiftType = null): array
+    {
+        $totalMinutes = $row->total_minutes_worked !== null ? (int) $row->total_minutes_worked : 0;
+        $hours = $totalMinutes ? round($totalMinutes / 60, 2) : null;
         $code = null;
         $kind = 'empty';
         $color = 'default';
 
-        if ($row->status === 'on_leave' && $row->leaveRequest) {
-            $code = strtoupper((string) $row->leaveRequest->leave_type);
+        // Raw datetime strings: 'YYYY-MM-DD HH:MM:SS' or null. Avoid Carbon parsing.
+        $timeIn = $row->actual_time_in ? substr((string) $row->actual_time_in, 11, 5) : null;
+        $timeOut = $row->actual_time_out ? substr((string) $row->actual_time_out, 11, 5) : null;
+        $hasBio = $timeIn !== null || $timeOut !== null;
+        $adminVerified = (bool) $row->admin_verified;
+
+        if ($row->status === 'on_leave' && $leaveType !== null) {
+            $code = strtoupper((string) $leaveType);
             $kind = 'leave';
             $color = match ($code) {
                 'VL' => 'leave-vl',
@@ -3232,6 +3552,10 @@ class AttendanceController extends Controller
             $code = 'BIO';
             $kind = 'bio';
             $color = 'bio';
+        } elseif ($row->status === 'needs_manual_review') {
+            $code = 'NMR';
+            $kind = 'review';
+            $color = 'review';
         } elseif ($row->is_partially_verified) {
             $code = 'PART';
             $kind = 'hours';
@@ -3239,34 +3563,59 @@ class AttendanceController extends Controller
         } elseif ($hours !== null) {
             $kind = 'hours';
             $color = $row->status === 'tardy' ? 'hours-tardy' : 'hours-ok';
-        } elseif ($row->actual_time_in !== null || $row->actual_time_out !== null) {
+        } elseif ($hasBio) {
             // Imported biometric data exists but hasn't been verified/processed yet.
             $code = 'BIO';
             $kind = 'bio';
             $color = 'bio';
         }
 
+        // `warnings` is JSON in the DB; with raw queries we must decode manually.
+        $warnings = [];
+        if (! empty($row->warnings)) {
+            if (is_string($row->warnings)) {
+                $decoded = json_decode($row->warnings, true);
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    Log::warning('Spreadsheet warnings JSON decode failed', [
+                        'attendance_id' => $row->id ?? null,
+                        'error' => json_last_error_msg(),
+                    ]);
+                }
+            } else {
+                $decoded = $row->warnings;
+            }
+            if (is_array($decoded)) {
+                $warnings = $decoded;
+            }
+        }
+
         return [
-            'attendance_id' => $row->id,
+            'attendance_id' => (int) $row->id,
             'kind' => $kind,
             'code' => $code,
             'hours' => $hours,
             'status' => $row->status,
             'secondary_status' => $row->secondary_status,
-            'verified' => (bool) $row->admin_verified,
+            'verified' => $adminVerified,
             'color' => $color,
-            'actual_time_in' => $row->actual_time_in?->format('H:i'),
-            'actual_time_out' => $row->actual_time_out?->format('H:i'),
-            'has_bio' => $row->actual_time_in !== null || $row->actual_time_out !== null,
-            'unverified_bio' => ($row->actual_time_in !== null || $row->actual_time_out !== null) && ! $row->admin_verified,
-            'tardy_minutes' => $row->tardy_minutes ?? 0,
-            'undertime_minutes' => $row->undertime_minutes ?? 0,
-            'overtime_minutes' => $row->overtime_minutes ?? 0,
+            'actual_time_in' => $timeIn,
+            'actual_time_out' => $timeOut,
+            'has_bio' => $hasBio,
+            'unverified_bio' => $hasBio && ! $adminVerified,
+            'tardy_minutes' => (int) ($row->tardy_minutes ?? 0),
+            'undertime_minutes' => (int) ($row->undertime_minutes ?? 0),
+            'overtime_minutes' => (int) ($row->overtime_minutes ?? 0),
             'overtime_approved' => (bool) $row->overtime_approved,
             'is_set_home' => (bool) $row->is_set_home,
             'is_partially_verified' => (bool) $row->is_partially_verified,
             'undertime_approval_status' => $row->undertime_approval_status,
             'undertime_approval_reason' => $row->undertime_approval_reason,
+            'warnings' => $warnings,
+            'scheduled_time_in' => $row->scheduled_time_in,
+            'scheduled_time_out' => $row->scheduled_time_out,
+            'shift_type' => $shiftType,
+            'notes' => $row->notes ?? null,
+            'verification_notes' => $row->verification_notes ?? null,
         ];
     }
 
@@ -3289,10 +3638,13 @@ class AttendanceController extends Controller
             'is_set_home' => ['nullable', 'boolean'],
             'undertime_approval_action' => ['nullable', 'in:approve,reject,request'],
             'undertime_approval_reason' => ['nullable', 'in:generate_points,skip_points,lunch_used'],
+            'notes' => ['nullable', 'string', 'max:1000'],
+            'verification_notes' => ['nullable', 'string', 'max:1000'],
         ]);
 
         try {
-            DB::transaction(function () use ($validated) {
+            $attendanceRef = null;
+            DB::transaction(function () use ($validated, &$attendanceRef) {
                 /** @var Attendance $attendance */
                 $attendance = Attendance::findOrFail($validated['attendance_id']);
 
@@ -3331,10 +3683,13 @@ class AttendanceController extends Controller
 
                 if (! empty($validated['status'])) {
                     $attendance->status = $validated['status'];
+                    $attendance->is_advised = $validated['status'] === 'advised_absence';
                     // Clearing leave linkage if status moves away from on_leave
                     if ($validated['status'] !== 'on_leave') {
                         $attendance->leave_request_id = null;
                     }
+                    // failed_bio_* is a flag-only status: keep any time-in/out the
+                    // user entered so total work hours still get computed.
                 }
 
                 if (! empty($validated['verify'])) {
@@ -3359,6 +3714,14 @@ class AttendanceController extends Controller
                 // Handle sent-home toggle
                 if (array_key_exists('is_set_home', $validated) && $validated['is_set_home'] !== null) {
                     $attendance->is_set_home = (bool) $validated['is_set_home'];
+                }
+
+                // Handle notes
+                if (array_key_exists('notes', $validated)) {
+                    $attendance->notes = $validated['notes'];
+                }
+                if (array_key_exists('verification_notes', $validated)) {
+                    $attendance->verification_notes = $validated['verification_notes'];
                 }
 
                 // Handle undertime approval action submitted with the cell save
@@ -3394,6 +3757,39 @@ class AttendanceController extends Controller
                     $this->processor->recalculateTotalMinutesWorked($attendance);
                 }
 
+                // When the user enters both time-in and time-out without typing
+                // an Hours value, derive total_minutes_worked from the times so
+                // the week-hours Calc picks them up (covers failed_bio_* edits
+                // where the operator filled in the missing biometric manually).
+                $timesProvided = array_key_exists('actual_time_in', $validated)
+                    && array_key_exists('actual_time_out', $validated)
+                    && $validated['actual_time_in'] !== null
+                    && $validated['actual_time_out'] !== null;
+                if (! $hoursManuallySet && $timesProvided && ! $overtimeApprovalChanged && $attendance->actual_time_in && $attendance->actual_time_out) {
+                    $this->processor->recalculateTotalMinutesWorked($attendance);
+                }
+
+                // Recompute tardy / undertime / overtime metrics whenever the
+                // times change. Without this, a manual edit (e.g. extending
+                // actual_time_out beyond the scheduled out) would leave the
+                // stored overtime_minutes/undertime_minutes at the stale value.
+                if ($timesProvided && $attendance->actual_time_in && $attendance->actual_time_out) {
+                    $attendance->loadMissing('employeeSchedule');
+                    $metrics = $this->processor->calculateManualAttendanceMetrics(
+                        $attendance->employeeSchedule,
+                        $attendance->actual_time_in,
+                        $attendance->actual_time_out,
+                        $attendance->shift_date->toDateString(),
+                        $attendance->status,
+                        $attendance->secondary_status,
+                        null,
+                    );
+                    $attendance->tardy_minutes = $metrics['tardy_minutes'];
+                    $attendance->undertime_minutes = $metrics['undertime_minutes'];
+                    $attendance->overtime_minutes = $metrics['overtime_minutes'];
+                    $attendance->save();
+                }
+
                 $this->regeneratePointsIfNeeded(
                     $attendance,
                     $oldStatus,
@@ -3402,7 +3798,17 @@ class AttendanceController extends Controller
                     $oldIsAdvised,
                     $forceUndertimeRegen
                 );
+
+                $attendanceRef = $attendance;
             });
+
+            if ($attendanceRef) {
+                $this->broadcastSpreadsheetUpdate(
+                    'cell',
+                    (int) $attendanceRef->user_id,
+                    $attendanceRef->shift_date?->toDateString(),
+                );
+            }
 
             return redirect()->back()
                 ->with('message', 'Cell updated.')
@@ -3446,12 +3852,17 @@ class AttendanceController extends Controller
                     }
                 }
 
-                // Reject if a row already exists for that user/date
+                // Reject if a row already exists for that user/date.
+                // Throw a ValidationException so Inertia surfaces the message
+                // via shared flash/errors instead of a raw 422 JSON page
+                // (prevents the white error screen on double-click races).
                 $existing = Attendance::where('user_id', $validated['user_id'])
                     ->where('shift_date', $validated['shift_date'])
                     ->first();
                 if ($existing) {
-                    abort(422, 'An attendance record already exists for this date.');
+                    throw ValidationException::withMessages([
+                        'shift_date' => 'An attendance record already exists for this date.',
+                    ]);
                 }
 
                 // Build actual_time_in Carbon — always on shift_date
@@ -3531,13 +3942,19 @@ class AttendanceController extends Controller
                     'verification_notes' => $hasLeaveConflict
                         ? $leaveResolution['verificationNote']
                         : 'Manually created via spreadsheet by '.auth()->user()->name,
-                    'notes' => $hasLeaveConflict ? $leaveResolution['conflictNote'] : null,
+                    'notes' => $hasLeaveConflict ? $leaveResolution['conflictNote'] : ($validated['notes'] ?? null),
                 ]);
 
                 // Run the shared finalize pipeline: recalc totals, regenerate points
                 // (when admin_verified), and notify the employee.
                 $this->attendanceWriteService->finalizeManualWrite($attendance, $validated['shift_date']);
             });
+
+            $this->broadcastSpreadsheetUpdate(
+                'cell',
+                (int) $validated['user_id'],
+                (string) $validated['shift_date'],
+            );
 
             return redirect()->back()
                 ->with('message', 'Attendance created.')
@@ -3546,12 +3963,31 @@ class AttendanceController extends Controller
             throw $e;
         } catch (HttpException $e) {
             throw $e;
+        } catch (ValidationException $e) {
+            throw $e;
         } catch (\Exception $e) {
             Log::error('AttendanceController createSpreadsheetCell Error: '.$e->getMessage());
 
             return redirect()->back()
                 ->with('message', 'Failed to create attendance.')
                 ->with('type', 'error');
+        }
+    }
+
+    /**
+     * Broadcast a spreadsheet update so other open spreadsheets refresh live.
+     */
+    protected function broadcastSpreadsheetUpdate(string $type, int $userId, ?string $date): void
+    {
+        try {
+            // toOthers() excludes the socket that triggered this request, using
+            // the X-Socket-Id header sent by Echo. That way the originating tab
+            // doesn't react to its own broadcast, even when multiple tabs are
+            // logged in as the same user.
+            broadcast(new AttendanceSpreadsheetUpdated($type, $userId, $date, auth()->id()))->toOthers();
+        } catch (\Throwable $e) {
+            // Never let a broadcast failure break a mutation request.
+            Log::warning('AttendanceSpreadsheetUpdated broadcast failed: '.$e->getMessage());
         }
     }
 }

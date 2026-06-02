@@ -2,15 +2,9 @@
 
 namespace Tests\Feature;
 
-use App\Models\Attendance;
-use App\Models\Campaign;
-use App\Models\CoachingSession;
-use App\Models\EmployeeSchedule;
 use App\Models\ItConcern;
 use App\Models\LeaveRequest;
 use App\Models\MedicationRequest;
-use App\Models\PcMaintenance;
-use App\Models\PcSpec;
 use App\Models\User;
 use App\Services\LoginDigestService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -107,9 +101,10 @@ class LoginDigestTest extends TestCase
         // HR should only have leave, coaching reviews, and medication keys
         $keys = collect($digest['items'])->pluck('key')->toArray();
         $validKeys = ['pending_leaves', 'coaching_reviews', 'pending_medication'];
-        foreach ($keys as $key) {
-            $this->assertContains($key, $validKeys, "HR digest has unexpected key: {$key}");
-        }
+        $this->assertEmpty(
+            array_diff($keys, $validKeys),
+            'HR digest contains unexpected keys: '.implode(', ', array_diff($keys, $validKeys))
+        );
     }
 
     #[Test]
@@ -180,9 +175,10 @@ class LoginDigestTest extends TestCase
 
         $keys = collect($digest['items'])->pluck('key')->toArray();
         $validKeys = ['pending_leaves', 'open_it_concerns'];
-        foreach ($keys as $key) {
-            $this->assertContains($key, $validKeys, "Utility digest has unexpected key: {$key}");
-        }
+        $this->assertEmpty(
+            array_diff($keys, $validKeys),
+            'Utility digest contains unexpected keys: '.implode(', ', array_diff($keys, $validKeys))
+        );
     }
 
     #[Test]
@@ -197,6 +193,10 @@ class LoginDigestTest extends TestCase
         $service = app(LoginDigestService::class);
         $digest = $service->getDigest($admin);
 
+        // When no items have non-zero counts, the entire items array should be empty
+        $this->assertEmpty($digest['items'], 'Zero-count items should be filtered out of the digest');
+
+        // If any items did slip through, they must all have count > 0
         foreach ($digest['items'] as $item) {
             $this->assertGreaterThan(0, $item['count'], "Item '{$item['key']}' should have been filtered out (count = 0)");
         }
@@ -232,7 +232,7 @@ class LoginDigestTest extends TestCase
         $lastPriority = -1;
         foreach ($digest['items'] as $item) {
             $currentPriority = $priorityOrder[$item['priority']] ?? 4;
-            $this->assertGreaterThanOrEqual($lastPriority, $currentPriority, "Items should be sorted by priority (critical → low)");
+            $this->assertGreaterThanOrEqual($lastPriority, $currentPriority, 'Items should be sorted by priority (critical → low)');
             $lastPriority = $currentPriority;
         }
     }

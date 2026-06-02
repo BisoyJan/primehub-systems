@@ -10,6 +10,7 @@ import { HasRole } from "@/components/authorization";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
@@ -45,8 +46,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Award, AlertCircle, TrendingUp, Calendar, CheckCircle, XCircle, FileText, Download, BarChart3, RotateCcw, Search, Loader2, Settings, AlertTriangle, RefreshCw, HelpCircle } from "lucide-react";
-import { DatePicker } from "@/components/ui/date-picker";
+import { ArrowLeft, Award, AlertCircle, TrendingUp, Calendar, CheckCircle, XCircle, FileText, Download, BarChart3, RotateCcw, Loader2, Settings, AlertTriangle, RefreshCw, HelpCircle } from "lucide-react";
 import type { SharedData } from "@/types";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import {
@@ -64,6 +64,7 @@ import managementRoutes from "@/routes/attendance-points/management";
 interface User {
     id: number;
     name: string;
+    avatar_url?: string | null;
 }
 
 interface ExcusedBy {
@@ -83,6 +84,7 @@ interface AttendancePoint {
     excused_at: string | null;
     excuse_reason: string | null;
     notes: string | null;
+    attendance: { notes: string | null } | null;
     user?: User;
     // Expiration fields
     expires_at: string | null;
@@ -118,11 +120,6 @@ interface Totals {
     };
 }
 
-interface DateRange {
-    start: string;
-    end: string;
-}
-
 interface GbroStats {
     days_clean: number;
     days_until_gbro: number;
@@ -135,19 +132,11 @@ interface GbroStats {
     is_gbro_ready: boolean;
 }
 
-interface Filters {
-    date_from?: string;
-    date_to?: string;
-    show_all?: boolean;
-}
-
 interface PageProps extends SharedData {
     user: User;
     points: AttendancePoint[];
     totals: Totals;
-    dateRange: DateRange;
     gbroStats: GbroStats;
-    filters?: Filters;
 }
 
 // formatDateShort, formatDateTime are now imported from @/lib/utils
@@ -190,7 +179,7 @@ const getPointTypeBadge = (type: string) => {
     );
 };
 
-const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateRange, gbroStats, filters }) => {
+const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, gbroStats }) => {
     useFlashMessage();
     const { can } = usePermission();
     const pageTitle = `${user.name}'s Attendance Points`;
@@ -202,11 +191,6 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
         ],
     });
     const isPageLoading = usePageLoading();
-
-    // Date filter state — empty by default (shows all records)
-    const [dateFrom, setDateFrom] = useState(filters?.date_from || '');
-    const [dateTo, setDateTo] = useState(filters?.date_to || '');
-    const [showAll, setShowAll] = useState(filters?.show_all || false);
 
     const [isExcuseDialogOpen, setIsExcuseDialogOpen] = useState(false);
     const [selectedPoint, setSelectedPoint] = useState<AttendancePoint | null>(null);
@@ -260,39 +244,6 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
 
     const goBack = () => {
         router.get(attendancePointsIndex().url);
-    };
-
-    const handleFilter = () => {
-        const query: Record<string, string> = {};
-        if (dateFrom) query.date_from = dateFrom;
-        if (dateTo) query.date_to = dateTo;
-
-        router.get(
-            attendancePointsShow({ user: user.id }).url,
-            query,
-            { preserveState: true }
-        );
-    };
-
-    const handleReset = () => {
-        setDateFrom('');
-        setDateTo('');
-        setShowAll(false);
-
-        router.get(
-            attendancePointsShow({ user: user.id }).url,
-            {},
-            { preserveState: true }
-        );
-    };
-
-    const handleShowAll = () => {
-        setShowAll(true);
-        router.get(
-            attendancePointsShow({ user: user.id }).url,
-            { show_all: '1' },
-            { preserveState: true }
-        );
     };
 
     const handleExportExcel = async () => {
@@ -584,10 +535,6 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
         }
     };
 
-    const formattedDateRange = showAll
-        ? 'All Records'
-        : `${formatDate(dateRange.start)} - ${formatDate(dateRange.end)}`;
-
     // Calculate which points are the last 2 eligible for GBRO
     const eligibleGbroPoints = React.useMemo(() => {
         return points
@@ -625,43 +572,15 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                     </div>
                 </div>
 
-                {/* Page Title with Date Filters */}
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                    <div>
-                        <h1 className="text-xl font-bold tracking-tight">{title}</h1>
-                        <p className="text-sm text-muted-foreground">{formattedDateRange}</p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                        <DatePicker
-                            value={dateFrom}
-                            onChange={(value) => setDateFrom(value)}
-                            placeholder="Start date"
-                            disabled={showAll}
-                            className="w-auto h-8 text-sm"
-                        />
-                        <span className="text-muted-foreground text-sm">to</span>
-                        <DatePicker
-                            value={dateTo}
-                            onChange={(value) => setDateTo(value)}
-                            placeholder="End date"
-                            disabled={showAll}
-                            className="w-auto h-8 text-sm"
-                        />
-                        <Button onClick={handleFilter} size="sm" className="h-8" disabled={showAll}>
-                            <Search className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button onClick={handleReset} variant="outline" size="sm" className="h-8">
-                            <RotateCcw className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                            onClick={handleShowAll}
-                            variant={showAll ? "default" : "outline"}
-                            size="sm"
-                            className="h-8"
-                        >
-                            All Records
-                        </Button>
-                    </div>
+                {/* Page Title */}
+                <div className="flex items-center gap-3">
+                    <Avatar className="h-10 w-10 shrink-0">
+                        <AvatarImage src={user.avatar_url ?? undefined} alt={user.name} />
+                        <AvatarFallback>
+                            {user.name.split(' ').filter(Boolean).map((p) => p[0]).slice(0, 2).join('').toUpperCase()}
+                        </AvatarFallback>
+                    </Avatar>
+                    <h1 className="text-xl font-bold tracking-tight">{title}</h1>
                 </div>
 
                 {/* Summary Cards */}
@@ -718,10 +637,10 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                         </CardHeader>
                         <CardContent>
                             <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
-                                {(Number(totals.by_type.tardy) + Number(totals.by_type.undertime)).toFixed(2)}
+                                {(Number(totals.by_type.tardy) + Number(totals.by_type.undertime) + Number(totals.by_type.undertime_more_than_hour)).toFixed(2)}
                             </div>
                             <p className="text-xs text-muted-foreground">
-                                {totals.count_by_type.tardy + totals.count_by_type.undertime} occurrences
+                                {totals.count_by_type.tardy + totals.count_by_type.undertime + totals.count_by_type.undertime_more_than_hour} occurrences
                             </p>
                         </CardContent>
                     </Card>
@@ -1190,6 +1109,15 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                                     <p className="text-sm">{selectedViolationPoint.violation_details}</p>
                                 </div>
                             </div>
+
+                            {(selectedViolationPoint.notes || selectedViolationPoint.attendance?.notes) && (
+                                <div>
+                                    <Label className="text-sm font-medium text-muted-foreground">Notes</Label>
+                                    <div className="mt-2 p-3 bg-muted rounded-md">
+                                        <p className="text-sm whitespace-pre-wrap">{selectedViolationPoint.notes || selectedViolationPoint.attendance?.notes}</p>
+                                    </div>
+                                </div>
+                            )}
 
                             {selectedViolationPoint.tardy_minutes && (
                                 <div>

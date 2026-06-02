@@ -1157,6 +1157,12 @@ export default function Edit({
                             </div>
 
                             {/* Date Range */}
+                            <div className="flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 dark:border-blue-800 dark:bg-blue-950">
+                                <Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" />
+                                <p className="text-xs text-blue-700 dark:text-blue-300">
+                                    <span className="font-semibold">Timezone notice:</span> If your device is set to a non-Philippine timezone (e.g., US, EU), the calendar may show dates shifted by a day — you may select what appears to be a weekday but it registers as a weekend, or vice versa. Ensure the date you select matches the intended <span className="font-semibold">Philippine date (PHT, UTC+8)</span>.
+                                </p>
+                            </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <Label htmlFor="start_date">

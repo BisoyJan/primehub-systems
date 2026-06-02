@@ -52,4 +52,17 @@ return [
 
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Script Element for Initial Page
+    |--------------------------------------------------------------------------
+    |
+    | Inertia.js v3 client reads the initial page data from a
+    | <script data-page="app" type="application/json"> element instead of
+    | a data-page attribute on the root div. Enable this to match v3.
+    |
+    */
+
+    'use_script_element_for_initial_page' => true,
+
 ];

@@ -348,7 +348,7 @@ class LeaveCreditController extends Controller
             ->where('status', 'approved')
             ->whereNotNull('credits_deducted')
             ->where('credits_deducted', '>', 0)
-            ->orderBy('start_date', 'desc')
+            ->orderBy('start_date', 'asc')
             ->get()
             ->map(function ($request) {
                 return [
@@ -1333,6 +1333,79 @@ class LeaveCreditController extends Controller
                 'success' => false,
                 'error' => 'Failed to convert carryover: '.$e->getMessage(),
             ], 500);
+        }
+    }
+
+    /**
+     * Recalculate leave credits for a user after a hire date correction.
+     * Deletes all existing credits and carryovers, then backfills from the correct hire date.
+     */
+    public function recalculateCredits(Request $request, User $user): RedirectResponse
+    {
+        $this->authorize('viewAny', LeaveRequest::class);
+
+        $validated = $request->validate([
+            'hired_date' => 'required|date|before_or_equal:today',
+            'reason' => 'required|string|max:500',
+        ]);
+
+        try {
+            $oldHireDate = $user->hired_date?->format('M d, Y') ?? 'not set';
+            $newHireDate = Carbon::parse($validated['hired_date']);
+            $hireDateChanged = ! $user->hired_date || ! $user->hired_date->isSameDay($newHireDate);
+
+            if ($hireDateChanged) {
+                $user->update(['hired_date' => $newHireDate]);
+                $user->refresh();
+            }
+
+            $result = $this->leaveCreditService->recalculateCreditsForUser($user, deleteExisting: true);
+
+            if (! $result['success']) {
+                return $this->backWithFlash($result['message'], 'error');
+            }
+
+            $details = $result['details'];
+            $msg = "Credits recalculated for {$user->name}. "
+                ."Deleted {$details['deleted_credits']} credit record(s) and {$details['deleted_carryovers']} carryover(s). "
+                ."Added {$details['credits_added']} new record(s) based on hire date "
+                .$user->hired_date->format('M d, Y').'.';
+
+            if ($hireDateChanged) {
+                $msg .= " Hire date updated from {$oldHireDate} to ".$user->hired_date->format('M d, Y').'.';
+            }
+
+            if (! empty($details['first_reg_transfer'])) {
+                $msg .= ' First regularization carryover also processed.';
+            }
+
+            if (! empty($details['leave_deductions_reapplied'])) {
+                $msg .= " Re-applied deductions from {$details['leave_deductions_reapplied']} leave request(s) (Leave Usage History).";
+            }
+
+            if (! empty($details['manual_adjustments_reapplied'])) {
+                $msg .= " Re-applied {$details['manual_adjustments_reapplied']} manual credit adjustment(s) (Credit Edit History).";
+            }
+
+            Log::info('Leave credits recalculated by admin', [
+                'admin_id' => auth()->id(),
+                'target_user_id' => $user->id,
+                'reason' => $validated['reason'],
+                'hire_date_changed' => $hireDateChanged,
+                'old_hire_date' => $oldHireDate,
+                'new_hire_date' => $user->hired_date->format('Y-m-d'),
+                'details' => $details,
+            ]);
+
+            return redirect()->route('leave-requests.credits.show', $user->id)
+                ->with('message', $msg)
+                ->with('type', 'success');
+        } catch (\Exception $e) {
+            Log::error('Credits recalculate error: '.$e->getMessage(), [
+                'user_id' => $user->id,
+            ]);
+
+            return $this->backWithFlash('Failed to recalculate credits: '.$e->getMessage(), 'error');
         }
     }
 }

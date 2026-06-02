@@ -6,6 +6,7 @@ use App\Models\Attendance;
 use App\Models\AttendancePoint;
 use App\Models\LeaveCredit;
 use App\Models\LeaveCreditCarryover;
+use App\Models\LeaveCreditManualAdjustment;
 use App\Models\LeaveRequest;
 use App\Models\User;
 use Carbon\Carbon;
@@ -518,7 +519,9 @@ class LeaveCreditService
         $accrued = 0;
         $currentDate = $startDate->copy();
 
-        while ($currentDate->copy()->endOfMonth()->startOfDay()->lte($today)) {
+        // Iterate through current month — accrueMonthly() handles whether the
+        // accrual date (anniversary for probation, end-of-month for regular) has passed.
+        while ($currentDate->startOfMonth()->lte($today)) {
             $key = "{$currentDate->year}-{$currentDate->month}";
 
             // Skip if already exists (checked from pre-fetched data)
@@ -2339,6 +2342,24 @@ class LeaveCreditService
         $creditsAdded = $this->backfillAllCredits($user);
         $details['credits_added'] = $creditsAdded;
 
+        if ($deleteExisting) {
+            // Re-apply manual earnings overrides from Credit Edit History
+            $adjustmentsApplied = $this->reapplyManualEarnedAdjustments($user);
+            $details['manual_adjustments_reapplied'] = $adjustmentsApplied;
+
+            // Re-apply leave deductions from Leave Usage History
+            $deductionsApplied = $this->reapplyLeaveDeductions($user);
+            $details['leave_deductions_reapplied'] = $deductionsApplied;
+        }
+
+        // Re-process first regularization transfer if applicable
+        // (user hired in previous year, regularization date has passed, no carryover yet)
+        $firstRegCarryover = null;
+        if ($this->needsFirstRegularizationTransfer($user)) {
+            $firstRegCarryover = $this->processFirstRegularizationTransfer($user);
+        }
+        $details['first_reg_transfer'] = $firstRegCarryover !== null;
+
         return [
             'success' => true,
             'message' => $deleteExisting
@@ -2346,6 +2367,159 @@ class LeaveCreditService
                 : "Backfilled missing credits. Added {$creditsAdded} credit records.",
             'details' => $details,
         ];
+    }
+
+    /**
+     * Re-apply the latest manual earnings adjustments from the activity log
+     * after a full credit reset. Only monthly credits are handled here;
+     * carryover adjustments are skipped because LeaveCreditCarryover records
+     * are rebuilt independently.
+     *
+     * @return int Number of monthly credit records whose earned amount was restored
+     */
+    private function reapplyManualEarnedAdjustments(User $user): int
+    {
+        // Read from the dedicated adjustments table — not from the activity log.
+        // This survives the 60-day activitylog:clean purge because the table
+        // is never deleted by backfillAllCredits.
+        $adjustments = LeaveCreditManualAdjustment::where('user_id', $user->id)->get();
+
+        if ($adjustments->isEmpty()) {
+            return 0;
+        }
+
+        $applied = 0;
+        foreach ($adjustments as $adjustment) {
+            $credit = LeaveCredit::forUser($user->id)
+                ->where('year', $adjustment->year)
+                ->where('month', $adjustment->month)
+                ->first();
+
+            if ($credit) {
+                // Deductions are re-applied in the next step; balance = earned for now
+                $credit->update([
+                    'credits_earned' => $adjustment->adjusted_earned,
+                    'credits_balance' => $adjustment->adjusted_earned,
+                ]);
+                $applied++;
+            }
+        }
+
+        return $applied;
+    }
+
+    /**
+     * Re-apply credit deductions from all approved leave requests after a
+     * full credit reset. Uses the stored credits_deducted value (which already
+     * accounts for partial approvals) and applies them FIFO across LeaveCredit
+     * records ordered by month (carryover month=0 first, then 1–12).
+     *
+     * @return int Number of leave requests whose deductions were re-applied
+     */
+    private function reapplyLeaveDeductions(User $user): int
+    {
+        $requests = LeaveRequest::where('user_id', $user->id)
+            ->where('status', 'approved')
+            ->whereNotNull('credits_year')
+            ->whereNotNull('credits_deducted')
+            ->where('credits_deducted', '>', 0)
+            ->orderBy('start_date')
+            ->get();
+
+        if ($requests->isEmpty()) {
+            return 0;
+        }
+
+        // Pre-load all credit records per year, keyed by month for O(1) lookup
+        $years = $requests->pluck('credits_year')->unique()->all();
+        $creditsByYear = [];
+        foreach ($years as $year) {
+            $creditsByYear[(int) $year] = LeaveCredit::forUser($user->id)
+                ->forYear((int) $year)
+                ->orderBy('month')
+                ->get()
+                ->keyBy('month');
+        }
+
+        $applied = 0;
+
+        foreach ($requests as $leaveRequest) {
+            $year = (int) $leaveRequest->credits_year;
+            $leaveMonth = (int) $leaveRequest->start_date->month;
+            $remaining = (float) $leaveRequest->credits_deducted;
+
+            if (! isset($creditsByYear[$year])) {
+                continue;
+            }
+
+            $credits = $creditsByYear[$year]; // Collection keyed by month
+
+            // Credits accrue at the end of each month, so a leave taken on day D of
+            // month L cannot use that month's credit yet — it uses the previous month's
+            // (L-1) credit, which is the most recently accrued balance available.
+            //
+            // Example: SL on Feb 9  → deducts from Jan (Feb not yet accrued)
+            //          VL on Mar 13 → deducts from Feb (Mar not yet accrued)
+            //          SL on Apr 22 → deducts from Mar (Apr not yet accrued)
+            //
+            // Priority:
+            //  1. Carryover (month 0)  — only for Jan/Feb/Mar leaves (expires Mar 31)
+            //  2. Previous month (L-1) — most recently accrued at time of leave
+            //  3. Earlier months going backward (L-2, L-3 … 1)
+            //  4. Leave's own month (L) — fallback; technically not yet accrued
+            //  5. Later months going forward (L+1 … 12) — last resort
+            $deductionOrder = [];
+
+            // 1. Carryover first so it is consumed before expiry (Jan–Mar leaves only)
+            if ($leaveMonth <= 3 && $credits->has(0)) {
+                $deductionOrder[] = 0;
+            }
+
+            // 2. Previous month — most recently available credit at time of leave
+            if ($leaveMonth >= 2 && $credits->has($leaveMonth - 1)) {
+                $deductionOrder[] = $leaveMonth - 1;
+            }
+
+            // 3. Earlier months going backward (L-2 … 1)
+            for ($m = $leaveMonth - 2; $m >= 1; $m--) {
+                if ($credits->has($m)) {
+                    $deductionOrder[] = $m;
+                }
+            }
+
+            // 4. Leave's own month as fallback
+            if ($credits->has($leaveMonth)) {
+                $deductionOrder[] = $leaveMonth;
+            }
+
+            // 5. Future months as last resort
+            for ($m = $leaveMonth + 1; $m <= 12; $m++) {
+                if ($credits->has($m)) {
+                    $deductionOrder[] = $m;
+                }
+            }
+
+            foreach ($deductionOrder as $month) {
+                if ($remaining <= 0) {
+                    break;
+                }
+
+                $credit = $credits->get($month);
+                $available = (float) $credit->credits_balance;
+                $deduct = min($remaining, $available);
+
+                if ($deduct > 0) {
+                    $credit->credits_used = round((float) $credit->credits_used + $deduct, 4);
+                    $credit->credits_balance = round((float) $credit->credits_balance - $deduct, 4);
+                    $credit->save();
+                    $remaining -= $deduct;
+                }
+            }
+
+            $applied++;
+        }
+
+        return $applied;
     }
 
     /**
@@ -2614,6 +2788,13 @@ class LeaveCreditService
                 'credits_balance' => $newEarned - $used,
             ]);
         }
+
+        // Persist the admin's override so recalculate can re-apply it even after
+        // activity logs have been purged (activitylog:clean runs every 60 days).
+        LeaveCreditManualAdjustment::updateOrCreate(
+            ['user_id' => $credit->user_id, 'year' => $credit->year, 'month' => $credit->month],
+            ['adjusted_earned' => $newEarned, 'reason' => $reason, 'adjusted_by' => $editorId, 'adjusted_at' => now()]
+        );
 
         // Log activity
         $user = User::find($credit->user_id);

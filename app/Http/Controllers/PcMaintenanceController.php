@@ -41,9 +41,7 @@ class PcMaintenanceController extends Controller
 
         // Filter by PC number
         if ($request->filled('search')) {
-            $query->whereHas('pcSpec', fn ($q) => $q->where('pc_number', 'like', "%{$request->search}%")
-                ->orWhere('model', 'like', "%{$request->search}%")
-            );
+            $query->whereHas('pcSpec', fn ($q) => $q->where('pc_number', 'like', "%{$request->search}%"));
         }
 
         // Filter by station number range (e.g., 1 to 20 for stations 1E-20E)

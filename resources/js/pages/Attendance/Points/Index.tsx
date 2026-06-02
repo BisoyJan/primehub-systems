@@ -50,6 +50,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
 import { AlertCircle, TrendingUp, Users, Eye, Award, RefreshCw, CheckCircle, XCircle, FileText, Download, Check, ChevronsUpDown, Search, Plus, Pencil, Trash2, Loader2, Play, Pause, Settings, RotateCcw, AlertTriangle, ClipboardList, BellOff, ChevronDown, ChevronRight, Wrench, HelpCircle } from "lucide-react";
@@ -78,6 +79,7 @@ interface User {
     first_name: string;
     last_name: string;
     middle_name?: string;
+    avatar_url?: string | null;
 }
 
 interface Campaign {
@@ -116,6 +118,7 @@ interface AttendancePoint {
     excused_at: string | null;
     excuse_reason: string | null;
     notes: string | null;
+    attendance: { notes: string | null } | null;
     expires_at: string | null;
     gbro_expires_at: string | null;
     expiration_type: 'sro' | 'gbro' | 'none';
@@ -157,6 +160,7 @@ interface Stats {
 interface HighPointsEmployee {
     user_id: number;
     user_name: string;
+    avatar_url?: string | null;
     total_points: number;
     violations_count: number;
     points: {
@@ -251,8 +255,6 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
     });
     const [selectedPointType, setSelectedPointType] = useState(filters?.point_type || "");
     const [selectedStatus, setSelectedStatus] = useState(filters?.status || "");
-    const [dateFrom, setDateFrom] = useState(filters?.date_from || "");
-    const [dateTo, setDateTo] = useState(filters?.date_to || "");
     const [filterExpiringSoon, setFilterExpiringSoon] = useState(filters?.expiring_soon === 'true' || false);
     const [filterGbroEligible, setFilterGbroEligible] = useState(filters?.gbro_eligible === 'true' || false);
     const [isRescanOpen, setIsRescanOpen] = useState(false);
@@ -363,12 +365,10 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
         if (selectedCampaignId) query.campaign_id = selectedCampaignId;
         if (selectedPointType) query.point_type = selectedPointType;
         if (selectedStatus) query.status = selectedStatus;
-        if (dateFrom) query.date_from = dateFrom;
-        if (dateTo) query.date_to = dateTo;
         if (filterExpiringSoon) query.expiring_soon = 'true';
         if (filterGbroEligible) query.gbro_eligible = 'true';
         return query;
-    }, [selectedUserId, selectedCampaignId, selectedPointType, selectedStatus, dateFrom, dateTo, filterExpiringSoon, filterGbroEligible]);
+    }, [selectedUserId, selectedCampaignId, selectedPointType, selectedStatus, filterExpiringSoon, filterGbroEligible]);
 
     const handleFilter = () => {
         router.get(
@@ -411,8 +411,6 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
         setSelectedCampaignId("");
         setSelectedPointType("");
         setSelectedStatus("");
-        setDateFrom("");
-        setDateTo("");
         setFilterExpiringSoon(false);
         setFilterGbroEligible(false);
 
@@ -964,7 +962,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
         // Points are already loaded from the backend, no need to fetch
     };
 
-    const showClearFilters = selectedUserId || selectedCampaignId || selectedPointType || selectedStatus || dateFrom || dateTo || userSearchQuery || filterExpiringSoon || filterGbroEligible;
+    const showClearFilters = selectedUserId || selectedCampaignId || selectedPointType || selectedStatus || userSearchQuery || filterExpiringSoon || filterGbroEligible;
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -1289,26 +1287,6 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                 <SelectItem value="expired">Expired</SelectItem>
                             </SelectContent>
                         </Select>
-
-                        <div className="flex items-center gap-2 text-sm">
-                            <span className="text-muted-foreground text-xs">From:</span>
-                            <DatePicker
-                                value={dateFrom}
-                                onChange={(value) => setDateFrom(value)}
-                                placeholder="Start date"
-                                className="w-full"
-                            />
-                        </div>
-
-                        <div className="flex items-center gap-2 text-sm">
-                            <span className="text-muted-foreground text-xs">To:</span>
-                            <DatePicker
-                                value={dateTo}
-                                onChange={(value) => setDateTo(value)}
-                                placeholder="End date"
-                                className="w-full"
-                            />
-                        </div>
                     </div>
 
                     {/* Additional Filters Row */}
@@ -1411,7 +1389,12 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                         <TableRow key={point.id} className={`hover:bg-muted/50 ${point.is_expired ? 'opacity-60' : ''}`}>
                                             <TableCell>
                                                 <div className="flex items-center gap-2">
-                                                    <Users className="h-4 w-4 text-muted-foreground" />
+                                                    <Avatar className="h-7 w-7 shrink-0">
+                                                        <AvatarImage loading="lazy" src={point.user.avatar_url ?? undefined} alt={formatUserName(point.user)} />
+                                                        <AvatarFallback className="text-xs">
+                                                            {`${point.user.first_name[0]}${point.user.last_name[0]}`}
+                                                        </AvatarFallback>
+                                                    </Avatar>
                                                     <span className="font-medium">{formatUserName(point.user)}</span>
                                                 </div>
                                             </TableCell>
@@ -1606,7 +1589,12 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                             >
                                 <div className="flex items-start justify-between">
                                     <div className="flex items-center gap-2 flex-1">
-                                        <Users className="h-4 w-4 text-muted-foreground" />
+                                        <Avatar className="h-8 w-8 shrink-0">
+                                            <AvatarImage loading="lazy" src={point.user.avatar_url ?? undefined} alt={formatUserName(point.user)} />
+                                            <AvatarFallback className="text-xs">
+                                                {`${point.user.first_name[0]}${point.user.last_name[0]}`}
+                                            </AvatarFallback>
+                                        </Avatar>
                                         <span className="font-medium text-sm">{formatUserName(point.user)}</span>
                                     </div>
                                     <div className="flex flex-col items-end gap-1">
@@ -2051,6 +2039,15 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                     <p className="text-sm">{selectedViolationPoint.violation_details}</p>
                                 </div>
                             </div>
+
+                            {(selectedViolationPoint.notes || selectedViolationPoint.attendance?.notes) && (
+                                <div>
+                                    <Label className="text-sm font-medium text-muted-foreground">Notes</Label>
+                                    <div className="mt-2 p-3 bg-muted rounded-md">
+                                        <p className="text-sm whitespace-pre-wrap">{selectedViolationPoint.notes || selectedViolationPoint.attendance?.notes}</p>
+                                    </div>
+                                </div>
+                            )}
 
                             {selectedViolationPoint.tardy_minutes && (
                                 <div>
@@ -2676,11 +2673,19 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                             onClick={() => handleViewHighPointsEmployee(employee)}
                                         >
                                             <div className="flex items-center justify-between">
-                                                <div>
-                                                    <p className="font-medium">{employee.user_name}</p>
-                                                    <p className="text-sm text-muted-foreground">
-                                                        {employee.violations_count} violation{employee.violations_count !== 1 ? 's' : ''}
-                                                    </p>
+                                                <div className="flex items-center gap-3">
+                                                    <Avatar className="h-9 w-9 shrink-0">
+                                                        <AvatarImage src={employee.avatar_url ?? undefined} alt={employee.user_name} />
+                                                        <AvatarFallback className="text-xs">
+                                                            {employee.user_name.split(',').map((p) => p.trim()[0]).reverse().join('')}
+                                                        </AvatarFallback>
+                                                    </Avatar>
+                                                    <div>
+                                                        <p className="font-medium">{employee.user_name}</p>
+                                                        <p className="text-sm text-muted-foreground">
+                                                            {employee.violations_count} violation{employee.violations_count !== 1 ? 's' : ''}
+                                                        </p>
+                                                    </div>
                                                 </div>
                                                 <div className="text-right">
                                                     <p className="text-xl font-bold text-red-600 dark:text-red-400">

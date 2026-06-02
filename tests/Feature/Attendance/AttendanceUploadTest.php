@@ -163,8 +163,31 @@ class AttendanceUploadTest extends TestCase
     #[Test]
     public function upload_tracks_matched_and_unmatched_employees(): void
     {
-        // Skip: Name format "Doe John" doesn't match processor's expected format "doe j"
-        $this->markTestSkipped('Name matching algorithm expects "LastName FirstInitial" format');
+        // Create a user whose name will match a biometric record ("First Last" format is supported)
+        User::factory()->create([
+            'first_name' => 'John',
+            'last_name' => 'Doe',
+            'is_approved' => true,
+        ]);
+
+        $content = "No\tDevNo\tUserId\tName\tMode\tDateTime\n".
+                   "1\t1\t10\tJohn Doe\tFP\t2025-11-05  08:00:00\n".   // matches user above
+                   "2\t1\t11\tUnknown Person\tFP\t2025-11-05  08:00:00\n"; // no matching user
+
+        $file = UploadedFile::fake()->createWithContent('attendance.txt', $content);
+
+        $this->actingAs($this->admin)
+            ->post('/attendance/upload', [
+                'file' => $file,
+                'date_from' => '2025-11-05',
+                'date_to' => '2025-11-05',
+                'biometric_site_id' => $this->site->id,
+            ]);
+
+        $upload = AttendanceUpload::first();
+        $this->assertEquals(1, $upload->matched_employees);
+        $this->assertEquals(1, $upload->unmatched_names);
+        $this->assertContains('Unknown Person', $upload->unmatched_names_list);
     }
 
     #[Test]

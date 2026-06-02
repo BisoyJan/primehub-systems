@@ -21,6 +21,40 @@ class InertiaNavigationTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * Returns the current Inertia asset version, mirroring how HandleInertiaRequests computes it.
+     * Inertia v2 uses xxh128 hashing (not md5).
+     */
+    private function inertiaVersion(): ?string
+    {
+        if (config('app.asset_url')) {
+            return hash('xxh128', config('app.asset_url'));
+        }
+
+        if (file_exists($manifest = public_path('build/manifest.json'))) {
+            return hash_file('xxh128', $manifest);
+        }
+
+        return null;
+    }
+
+    /**
+     * Build Inertia request headers including the version to avoid 409 responses.
+     *
+     * @param  array<string, string>  $extra
+     * @return array<string, string>
+     */
+    private function inertiaHeaders(array $extra = []): array
+    {
+        $headers = array_merge(['X-Inertia' => 'true'], $extra);
+        $version = $this->inertiaVersion();
+        if ($version !== null) {
+            $headers['X-Inertia-Version'] = $version;
+        }
+
+        return $headers;
+    }
+
     #[Test]
     public function it_navigates_between_pages_with_inertia(): void
     {
@@ -44,8 +78,14 @@ class InertiaNavigationTest extends TestCase
     #[Test]
     public function it_handles_inertia_request_header(): void
     {
-        // Skip: Inertia requires X-Inertia-Version header to match; without it, returns 409
-        $this->markTestSkipped('Inertia version validation causes 409 without proper version header');
+        $user = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+
+        $response = $this->actingAs($user)
+            ->withHeaders($this->inertiaHeaders())
+            ->get('/dashboard');
+
+        $response->assertOk();
+        $response->assertHeader('X-Inertia', 'true');
     }
 
     #[Test]
@@ -63,8 +103,19 @@ class InertiaNavigationTest extends TestCase
     #[Test]
     public function it_returns_json_response_for_inertia_requests(): void
     {
-        // Skip: Inertia requires X-Inertia-Version header to match; without it, returns 409
-        $this->markTestSkipped('Inertia version validation causes 409 without proper version header');
+        $user = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+
+        $response = $this->actingAs($user)
+            ->withHeaders($this->inertiaHeaders())
+            ->get('/dashboard');
+
+        $response->assertOk();
+        // Inertia requests return JSON (not full HTML)
+        $this->assertJson($response->content());
+        $data = $response->json();
+        $this->assertArrayHasKey('component', $data);
+        $this->assertArrayHasKey('props', $data);
+        $this->assertArrayHasKey('url', $data);
     }
 
     #[Test]
@@ -143,15 +194,37 @@ class InertiaNavigationTest extends TestCase
     #[Test]
     public function it_handles_partial_data_reload(): void
     {
-        // Skip: Inertia requires X-Inertia-Version header to match; without it, returns 409
-        $this->markTestSkipped('Inertia version validation causes 409 without proper version header');
+        $user = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+
+        $response = $this->actingAs($user)
+            ->withHeaders($this->inertiaHeaders([
+                'X-Inertia-Partial-Component' => 'dashboard',
+                'X-Inertia-Partial-Data' => 'loginDigest',
+            ]))
+            ->get('/dashboard');
+
+        $response->assertOk();
+        $data = $response->json();
+        $this->assertArrayHasKey('component', $data);
+        $this->assertArrayHasKey('props', $data);
+        // The requested partial key should be present in props
+        $this->assertArrayHasKey('loginDigest', $data['props']);
     }
 
     #[Test]
     public function it_maintains_scroll_position_information(): void
     {
-        // Skip: Inertia requires X-Inertia-Version header to match; without it, returns 409
-        $this->markTestSkipped('Inertia version validation causes 409 without proper version header');
+        $user = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+
+        $response = $this->actingAs($user)
+            ->withHeaders($this->inertiaHeaders())
+            ->get('/dashboard');
+
+        $response->assertOk();
+        // Inertia response includes the request URL, which the client uses for scroll restoration
+        $data = $response->json();
+        $this->assertArrayHasKey('url', $data);
+        $this->assertStringContainsString('/dashboard', $data['url']);
     }
 
     #[Test]

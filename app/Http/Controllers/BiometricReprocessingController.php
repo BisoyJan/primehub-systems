@@ -261,8 +261,16 @@ class BiometricReprocessingController extends Controller
                     }
                 }
 
-                // Normalize the user's name for matching (same as upload process)
-                $normalizedName = strtolower(trim($user->last_name));
+                // Normalize the user's name for matching (same as upload process).
+                //
+                // CRITICAL: include the first initial — using last_name alone is ambiguous
+                // when two employees share a surname (e.g. "Villanueva H" + "Villanueva J").
+                // Pattern 1 ("villanueva") returns BOTH users, and disambiguation by shift
+                // hour collapses to whichever has the lower id, silently writing one
+                // employee's scans under the other's user_id and dropping the loser entirely.
+                // The "lastname + initial" form (Pattern 3) is unique per employee.
+                $normalizedName = strtolower(trim($user->last_name))
+                    .' '.strtolower(substr(trim($user->first_name), 0, 1));
 
                 // Process ALL records at once (like upload does)
                 // This allows groupRecordsByShiftDate() to see all records and properly detect shift patterns
@@ -293,6 +301,25 @@ class BiometricReprocessingController extends Controller
                     'trace' => $e->getTraceAsString(),
                 ]);
             }
+        }
+
+        // After processing individual employees, detect absences across the date range.
+        // This creates NCNS records for scheduled employees who had no biometric scans —
+        // something the per-user loop above cannot do because it only iterates users who
+        // have existing BiometricRecord rows for the range.
+        //
+        // Pass $userIds when a specific subset was selected; null means check all active employees.
+        $filterForAbsent = ($request->user_ids && count($request->user_ids) > 0)
+            ? $request->user_ids
+            : (($request->campaign_ids && count($request->campaign_ids) > 0) ? $userIds : null);
+
+        try {
+            $this->processor->detectAbsentEmployeesForDateRange($startDate, $endDate, $filterForAbsent);
+        } catch (\Exception $e) {
+            Log::error('Absent detection failed during reprocessing', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
         }
 
         return back()->with([

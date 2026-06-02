@@ -69,7 +69,8 @@ import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { updateCarryover, processCashConversions, convertUserCarryover } from '@/actions/App/Http/Controllers/LeaveCreditController';
+import { updateCarryover, processCashConversions, convertUserCarryover, recalculateCredits as recalculateCreditsAction } from '@/actions/App/Http/Controllers/LeaveCreditController';
+import RecalculateCreditsDialog from '@/components/leave/RecalculateCreditsDialog';
 
 interface RegularizationStats {
     pending_count: number;
@@ -266,6 +267,15 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
     const [convertingEmployeeId, setConvertingEmployeeId] = useState<number | null>(null);
     const [convertingEmployeeName, setConvertingEmployeeName] = useState<string>('');
     const [isConverting, setIsConverting] = useState(false);
+
+    // Recalculate credits state
+    const [isRecalculateOpen, setIsRecalculateOpen] = useState(false);
+    const [recalculatingEmployee, setRecalculatingEmployee] = useState<CreditData | null>(null);
+
+    const openRecalculate = (employee: CreditData) => {
+        setRecalculatingEmployee(employee);
+        setIsRecalculateOpen(true);
+    };
 
     const openEditCarryover = (employee: CreditData) => {
         if (!employee.carryover_received) return;
@@ -1161,6 +1171,22 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
                                                                     </Tooltip>
                                                                 </TooltipProvider>
                                                             )}
+                                                            {canEdit && (
+                                                                <TooltipProvider>
+                                                                    <Tooltip>
+                                                                        <TooltipTrigger asChild>
+                                                                            <Button
+                                                                                variant="outline"
+                                                                                size="icon"
+                                                                                onClick={() => openRecalculate(employee)}
+                                                                            >
+                                                                                <RefreshCw className="h-4 w-4" />
+                                                                            </Button>
+                                                                        </TooltipTrigger>
+                                                                        <TooltipContent><p>Recalculate Credits</p></TooltipContent>
+                                                                    </Tooltip>
+                                                                </TooltipProvider>
+                                                            )}
                                                         </div>
                                                     </TableCell>
                                                 </TableRow>
@@ -1384,6 +1410,17 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
                                             Convert to Cash
                                         </Button>
                                     )}
+                                    {canEdit && (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="w-full"
+                                            onClick={() => openRecalculate(employee)}
+                                        >
+                                            <RefreshCw className="h-4 w-4 mr-2" />
+                                            Recalculate Credits
+                                        </Button>
+                                    )}
                                 </div>
                             ))}
                             {creditsData.links && creditsData.links.length > 0 && (
@@ -1395,6 +1432,23 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
                     )}
                 </div>
             </div>
+
+            {/* Recalculate Credits Dialog */}
+            {recalculatingEmployee && (
+                <RecalculateCreditsDialog
+                    open={isRecalculateOpen}
+                    onOpenChange={(open) => {
+                        setIsRecalculateOpen(open);
+                        if (!open) setRecalculatingEmployee(null);
+                    }}
+                    employeeName={recalculatingEmployee.name}
+                    employeeRole={recalculatingEmployee.role}
+                    monthlyRate={recalculatingEmployee.monthly_rate}
+                    initialHireDate={recalculatingEmployee.hired_date ? recalculatingEmployee.hired_date.substring(0, 10) : ''}
+                    postUrl={recalculateCreditsAction({ user: recalculatingEmployee.id }).url}
+                    onSuccess={() => setRecalculatingEmployee(null)}
+                />
+            )}
 
             {/* Export Dialog */}
             <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>

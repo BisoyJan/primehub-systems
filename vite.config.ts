@@ -49,28 +49,19 @@ export default defineConfig({
         chunkSizeWarningLimit: 1000,
         rollupOptions: {
             output: {
-                manualChunks: {
-                    // Split vendor chunks to reduce memory pressure
-                    'react-vendor': ['react', 'react-dom'],
-                    'radix-ui': [
-                        '@radix-ui/react-alert-dialog',
-                        '@radix-ui/react-avatar',
-                        '@radix-ui/react-checkbox',
-                        '@radix-ui/react-collapsible',
-                        '@radix-ui/react-dialog',
-                        '@radix-ui/react-dropdown-menu',
-                        '@radix-ui/react-label',
-                        '@radix-ui/react-navigation-menu',
-                        '@radix-ui/react-popover',
-                        '@radix-ui/react-select',
-                        '@radix-ui/react-separator',
-                        '@radix-ui/react-slot',
-                        '@radix-ui/react-toggle',
-                        '@radix-ui/react-toggle-group',
-                        '@radix-ui/react-tooltip',
-                    ],
-                    'animations': ['framer-motion', 'gsap', 'react-useanimations'],
-                    'utils': ['clsx', 'tailwind-merge', 'class-variance-authority', 'date-fns'],
+                manualChunks(id) {
+                    if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) {
+                        return 'react-vendor';
+                    }
+                    if (id.includes('@radix-ui/')) {
+                        return 'radix-ui';
+                    }
+                    if (id.includes('framer-motion') || id.includes('gsap') || id.includes('react-useanimations')) {
+                        return 'animations';
+                    }
+                    if (id.includes('clsx') || id.includes('tailwind-merge') || id.includes('class-variance-authority') || id.includes('date-fns')) {
+                        return 'utils';
+                    }
                 },
             },
             onwarn(warning: RollupLog, warn: LoggingFunction) {

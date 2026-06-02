@@ -38,8 +38,8 @@ class GbroAnomalyServiceTest extends TestCase
     {
         AttendancePoint::factory()
             ->forUser($this->user)
-            ->onDate(now()->subDays(10))
             ->tardy()
+            ->onDate(now()->subDays(10))
             ->create();
 
         $this->assertCount(0, $this->service->detect());
@@ -154,8 +154,8 @@ class GbroAnomalyServiceTest extends TestCase
     {
         AttendancePoint::factory()
             ->forUser($this->user)
-            ->onDate(now()->subDays(10))
             ->tardy()
+            ->onDate(now()->subDays(10))
             ->create();
 
         $result = $this->service->repair();

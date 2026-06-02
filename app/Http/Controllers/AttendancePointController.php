@@ -81,26 +81,10 @@ class AttendancePointController extends Controller
     {
         $this->authorize('viewUserPoints', [AttendancePoint::class, $user]);
 
-        $showAll = $request->boolean('show_all', false);
-        $hasDateFilter = $request->filled('date_from') || $request->filled('date_to');
-
-        $startDate = $request->filled('date_from')
-            ? Carbon::parse($request->date_from)
-            : Carbon::now()->startOfMonth();
-
-        $endDate = $request->filled('date_to')
-            ? Carbon::parse($request->date_to)
-            : Carbon::now()->endOfMonth();
-
-        $pointsQuery = AttendancePoint::with(['attendance', 'excusedBy'])
-            ->where('user_id', $user->id);
-
-        // Only apply date range when dates are explicitly provided and show_all is not set
-        if (! $showAll && $hasDateFilter) {
-            $pointsQuery->dateRange($startDate, $endDate);
-        }
-
-        $points = $pointsQuery->orderBy('shift_date', 'desc')->get();
+        $points = AttendancePoint::with(['attendance', 'excusedBy'])
+            ->where('user_id', $user->id)
+            ->orderBy('shift_date', 'desc')
+            ->get();
         $totals = $this->statsService->calculateTotals($points);
         $gbroStats = $this->gbroService->calculateGbroStats($user);
 
@@ -108,16 +92,7 @@ class AttendancePointController extends Controller
             'user' => $user,
             'points' => $points,
             'totals' => $totals,
-            'dateRange' => [
-                'start' => $startDate->format('Y-m-d'),
-                'end' => $endDate->format('Y-m-d'),
-            ],
             'gbroStats' => $gbroStats,
-            'filters' => [
-                'date_from' => $request->date_from,
-                'date_to' => $request->date_to,
-                'show_all' => $showAll,
-            ],
         ]);
     }
 
@@ -677,10 +652,6 @@ class AttendancePointController extends Controller
             });
         }
 
-        if ($request->filled('date_from') && $request->filled('date_to')) {
-            $query->dateRange($request->date_from, $request->date_to);
-        }
-
         if ($request->boolean('expiring_soon')) {
             $query->where('is_expired', false)
                 ->where('expires_at', '<=', Carbon::now()->addDays(30))
@@ -719,8 +690,6 @@ class AttendancePointController extends Controller
             'campaign_id' => $request->campaign_id,
             'point_type' => $request->point_type,
             'status' => $request->status,
-            'date_from' => $request->date_from,
-            'date_to' => $request->date_to,
             'expiring_soon' => $request->boolean('expiring_soon') ? 'true' : null,
             'gbro_eligible' => $request->boolean('gbro_eligible') ? 'true' : null,
         ];

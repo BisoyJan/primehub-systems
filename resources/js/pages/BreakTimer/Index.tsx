@@ -16,7 +16,7 @@ import {
     end as endRoute,
     reset as resetRoute,
 } from '@/routes/break-timer';
-import { Play, Pause, Square, Coffee, UtensilsCrossed, RotateCcw, Merge, Layers, ChevronDown, ChevronUp, Palette, Maximize, Minimize, Volume2 } from 'lucide-react';
+import { Play, Pause, Square, Coffee, UtensilsCrossed, RotateCcw, Merge, Layers, ChevronDown, ChevronUp, Palette, Maximize, Minimize, Volume2, Info } from 'lucide-react';
 import { ThemeDecor } from './ThemeDecor';
 import {
     DropdownMenu,
@@ -668,7 +668,7 @@ export default function BreakTimerIndex() {
                                     </span>
                                 )}
                                 {activeSession?.status === 'paused' && activeSession?.last_pause_reason && (
-                                    <span className={isMobileDevice ? 'hidden' : 'text-muted-foreground mt-1 block max-w-75 truncate text-sm italic'}>
+                                    <span className={isMobileDevice ? 'hidden' : 'text-muted-foreground mt-1 block max-w-[280px] text-center text-sm italic leading-snug'}>
                                         Paused: {activeSession.last_pause_reason}
                                     </span>
                                 )}
@@ -946,6 +946,15 @@ export default function BreakTimerIndex() {
                                                 )}
                                             </div>
                                         </div>
+                                        {/* Restore hint for early-ended sessions */}
+                                        {session.status === 'completed' && (session.remaining_seconds ?? 0) >= 60 && (
+                                            <div className="flex items-start gap-2 border-t border-blue-200/50 bg-blue-50/60 px-4 py-2.5 text-[11px] text-blue-700 last:rounded-b-2xl dark:border-blue-500/20 dark:bg-blue-500/5 dark:text-blue-400">
+                                                <Info className="mt-0.5 h-3 w-3 shrink-0" />
+                                                <span>
+                                                    Ended with <span className="font-semibold">{formatTime(session.remaining_seconds!)}</span> remaining — inform your <strong>Team Lead or Admin</strong> if you need your timer restored.
+                                                </span>
+                                            </div>
+                                        )}
                                         {/* Break Event Timeline */}
                                         {expandedSession === session.id && session.break_events.length > 0 && (
                                             <div className="border-t border-white/15 px-4 py-3 dark:border-white/5">
@@ -1083,6 +1092,12 @@ export default function BreakTimerIndex() {
                             You still have {formatTime(remainingSeconds)} remaining. Are you sure you want to end now?
                         </DialogDescription>
                     </DialogHeader>
+                    {remainingSeconds >= 60 && (
+                        <div className="flex items-start gap-2 rounded-lg bg-blue-50 px-3 py-2.5 text-xs text-blue-700 dark:bg-blue-500/10 dark:text-blue-400">
+                            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                            <span>If you ended by mistake, let your <strong>Team Lead or Admin</strong> know — they can restore your remaining time.</span>
+                        </div>
+                    )}
                     <div className="flex justify-end gap-2">
                         <Button variant="outline" onClick={handleEndCancel}>
                             Cancel

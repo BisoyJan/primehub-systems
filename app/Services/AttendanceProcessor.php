@@ -65,9 +65,9 @@ class AttendanceProcessor
         $this->usersByLastName = [];
 
         foreach ($this->cachedUsers as $user) {
-            $lastName = strtolower(trim($user->last_name));
-            $firstName = strtolower(trim($user->first_name));
-            $middleName = strtolower(trim($user->middle_name ?? ''));
+            $lastName = strtolower(trim(AttendanceFileParser::foldDiacritics($user->last_name)));
+            $firstName = strtolower(trim(AttendanceFileParser::foldDiacritics($user->first_name)));
+            $middleName = strtolower(trim(AttendanceFileParser::foldDiacritics($user->middle_name ?? '')));
             $firstInitial = substr($firstName, 0, 1);
             $firstTwoLetters = substr($firstName, 0, 2);
 
@@ -121,6 +121,24 @@ class AttendanceProcessor
 
             // Pattern 1: Just last name (may have multiple matches)
             $this->addToIndex($lastName, $user);
+
+            // Handle compound last names (e.g., DB last_name="Dela Peña" → also index as "Peña").
+            // This allows a biometric scan of "Peña N" to match a user whose stored
+            // last name includes the compound prefix "Dela".
+            if (str_contains($lastName, ' ')) {
+                $lastNameSuffix = implode(' ', array_slice(explode(' ', $lastName), 1));
+
+                $this->addToIndex($lastNameSuffix, $user);
+                $this->addToIndex($lastNameSuffix.' '.$firstInitial, $user);
+                $this->addToIndex($lastNameSuffix.' '.$firstTwoLetters, $user);
+                $this->addToIndex($lastNameSuffix.' '.$firstName, $user);
+                $this->addToIndex($firstName.' '.$lastNameSuffix, $user);
+
+                if (! empty($middleName)) {
+                    $middleInitial = substr($middleName, 0, 1);
+                    $this->addToIndex($lastNameSuffix.' '.$firstName.' '.$middleInitial, $user);
+                }
+            }
         }
     }
 
@@ -2008,6 +2026,25 @@ class AttendanceProcessor
             }
         }
 
+        // Fallback: strip known Filipino/Spanish compound last-name prefixes.
+        // Handles biometric "Dela Peña N" when DB only stores last_name="Peña".
+        $compoundPrefixes = ['de los ', 'de las ', 'de la ', 'dela ', 'del ', 'de '];
+        foreach ($compoundPrefixes as $prefix) {
+            if (str_starts_with($normalizedName, $prefix)) {
+                $remainder = substr($normalizedName, strlen($prefix));
+                if (isset($this->userLookupIndex[$remainder])) {
+                    $matches = $this->userLookupIndex[$remainder];
+                    if (count($matches) === 1) {
+                        return $matches[0];
+                    }
+                    if (count($matches) > 1) {
+                        return $this->disambiguateMatches($matches, $remainder, $records);
+                    }
+                }
+                break;
+            }
+        }
+
         // No match found
         return null;
     }
@@ -2558,26 +2595,101 @@ class AttendanceProcessor
      */
     protected function detectAbsentEmployees(AttendanceUpload $upload, Collection $records): void
     {
-        // Get all dates found in the biometric records
-        $datesInFile = $records->pluck('datetime')
-            ->map(fn ($dt) => $dt->format('Y-m-d'))
-            ->unique()
-            ->values();
+        // Build the list of dates to check for absentees.
+        //
+        // IMPORTANT: use the upload's explicit date_from / date_to range as the source
+        // of truth — NOT the dates that happen to appear in the biometric file. A date
+        // only appears in the file if at least one employee scanned that day, so days
+        // with zero scans (mass absence, device offline, partial export, holiday with
+        // no clock-ins) would otherwise be silently skipped and scheduled employees
+        // would never be marked NCNS for those dates.
+        if ($upload->date_from && $upload->date_to) {
+            $rangeStart = Carbon::parse($upload->date_from);
+            $rangeEnd = Carbon::parse($upload->date_to);
+            $datesInFile = collect();
+            for ($d = $rangeStart->copy(); $d->lte($rangeEnd); $d->addDay()) {
+                $datesInFile->push($d->format('Y-m-d'));
+            }
+        } else {
+            // Legacy uploads with no explicit range — fall back to file dates.
+            $datesInFile = $records->pluck('datetime')
+                ->map(fn ($dt) => $dt->format('Y-m-d'))
+                ->unique()
+                ->values();
+        }
 
         if ($datesInFile->isEmpty()) {
             return;
         }
 
-        // Get all employees who are in the biometric file
-        $employeesWithScans = $records->pluck('name')
-            ->map(fn ($name) => $this->parser->normalizeName($name))
-            ->unique()
-            ->values();
+        $this->runAbsentDetection($datesInFile, $records, null, $upload->id);
+    }
+
+    /**
+     * Core absent-employee detection logic shared by detectAbsentEmployees (upload flow)
+     * and detectAbsentEmployeesForDateRange (reprocess flow).
+     *
+     * @param  Collection  $datesInFile  Y-m-d strings for each date to evaluate
+     * @param  Collection  $records  Formatted biometric records (keys: normalized_name, datetime)
+     * @param  array|null  $filterUserIds  When set, only check these user IDs for absence
+     * @param  int|null  $uploadId  For log context only (null in reprocess flow)
+     */
+    private function runAbsentDetection(
+        Collection $datesInFile,
+        Collection $records,
+        ?array $filterUserIds,
+        ?int $uploadId
+    ): void {
+        // Resolve every name in the biometric file to a real user ID (when possible)
+        // using the same matcher used to create attendance records. This is far more
+        // reliable than comparing the user's last_name to the parser-normalized full
+        // name (which never matches and caused duplicate NCNS rows for users who
+        // actually had scans).
+        //
+        // CRITICAL: key the map by `user_id . '_' . Y-m-d` (NOT by user_id alone).
+        // Absence is a per-day fact: an employee who scanned on May 4 may legitimately
+        // be absent on May 6. Skipping them for the whole date range because of any
+        // single scan caused real NCNS days to silently disappear (e.g. a cross-site
+        // midnight scan on May 4 hid all of May 6/7/8 from absent detection).
+        //
+        // CRITICAL: key by SHIFT date, not calendar date. Night-shift scans cross
+        // midnight — e.g. a 22:00-07:00 employee who time-outs at 06:05 on May 5 is
+        // closing their May 4 shift, not present for the May 5 shift. Using calendar
+        // date here previously caused those employees to be silently skipped for
+        // absent-detection on the calendar date their time-out happened to fall on.
+        $this->initializeUserCache();
+        $userScansByDate = [];
+        $scansByMatchedUser = [];
+        foreach ($records as $record) {
+            $matchedUser = $this->findUserByName($record['normalized_name'], $records);
+            if (! $matchedUser) {
+                continue;
+            }
+            if (! isset($scansByMatchedUser[$matchedUser->id])) {
+                $scansByMatchedUser[$matchedUser->id] = ['user' => $matchedUser, 'records' => collect()];
+            }
+            $scansByMatchedUser[$matchedUser->id]['records']->push($record);
+        }
+
+        foreach ($scansByMatchedUser as $userId => $bucket) {
+            // Reuse the same shift-date mapping used to create attendance rows so
+            // "scan-on-shift-date" agrees with what processShift would have produced.
+            $shiftGroups = $this->groupRecordsByShiftDate($bucket['records'], $bucket['user']);
+            foreach (array_keys($shiftGroups) as $shiftDate) {
+                $userScansByDate[$userId.'_'.$shiftDate] = true;
+            }
+        }
 
         // Eager-load active schedules to avoid N+1 on $employee->employeeSchedules()
-        $allActiveEmployees = User::whereHas('employeeSchedules', function ($query) {
+        $employeeQuery = User::whereHas('employeeSchedules', function ($query) {
             $query->where('is_active', true);
-        })->with(['employeeSchedules' => fn ($q) => $q->where('is_active', true)])->get();
+        })->with(['employeeSchedules' => fn ($q) => $q->where('is_active', true)]);
+
+        if ($filterUserIds !== null && count($filterUserIds) > 0) {
+            $employeeQuery->whereIn('id', $filterUserIds);
+        }
+
+        $allActiveEmployees = $employeeQuery->get();
 
         $userIds = $allActiveEmployees->pluck('id');
         $datesArray = $datesInFile->toArray();
@@ -2591,21 +2703,17 @@ class AttendanceProcessor
             ->groupBy('user_id');
 
         // Pre-load existing attendances for all employees × the date set — eliminates one query per (employee, date)
+        // IMPORTANT: format the cast Carbon shift_date as Y-m-d so the lookup key matches
+        // $dateStr (which is also Y-m-d). Stringifying a Carbon defaults to "Y-m-d H:i:s",
+        // which previously caused the duplicate guard below to silently fail.
         $existingAttendancesMap = Attendance::whereIn('user_id', $userIds)
             ->whereIn('shift_date', $datesArray)
             ->get()
-            ->groupBy(fn ($a) => $a->user_id.'_'.$a->shift_date);
+            ->groupBy(fn ($a) => $a->user_id.'_'.$a->shift_date->format('Y-m-d'));
 
         $ncnsCreated = 0;
 
         foreach ($allActiveEmployees as $employee) {
-            $normalizedName = strtolower(trim($employee->last_name));
-
-            // Skip if this employee has scans in the file
-            if ($employeesWithScans->contains($normalizedName)) {
-                continue;
-            }
-
             // Use the eager-loaded relationship instead of a lazy query
             $schedule = $employee->employeeSchedules->first();
             if (! $schedule) {
@@ -2614,6 +2722,12 @@ class AttendanceProcessor
 
             // Check each date in the file
             foreach ($datesInFile as $dateStr) {
+                // Skip if this employee was matched to any scan ON THIS SPECIFIC DATE.
+                // (per-day check — see comment above on $userScansByDate)
+                if (isset($userScansByDate[$employee->id.'_'.$dateStr])) {
+                    continue;
+                }
+
                 $date = Carbon::parse($dateStr);
                 $dayName = $date->format('l');
 
@@ -2677,10 +2791,49 @@ class AttendanceProcessor
 
         if ($ncnsCreated > 0) {
             Log::warning('Absent employees detected', [
-                'upload_id' => $upload->id,
+                'upload_id' => $uploadId,
                 'ncns_created' => $ncnsCreated,
             ]);
         }
+    }
+
+    /**
+     * Public entry point for absent detection during the reprocess flow.
+     * Loads biometric records from the database for the given date range and
+     * runs the same detection logic as the upload flow.
+     *
+     * @param  array|null  $filterUserIds  When set, only check these user IDs for absence
+     */
+    public function detectAbsentEmployeesForDateRange(
+        Carbon $startDate,
+        Carbon $endDate,
+        ?array $filterUserIds = null
+    ): void {
+        $this->initializeUserCache();
+
+        $datesInFile = collect();
+        for ($d = $startDate->copy(); $d->lte($endDate); $d->addDay()) {
+            $datesInFile->push($d->format('Y-m-d'));
+        }
+
+        if ($datesInFile->isEmpty()) {
+            return;
+        }
+
+        // Load ALL biometric records for the date range so we correctly determine
+        // who showed up (regardless of which users are being reprocessed).
+        $records = BiometricRecord::whereBetween('record_date', [
+            $startDate->format('Y-m-d'),
+            $endDate->format('Y-m-d'),
+        ])->get()->map(function ($record) {
+            return [
+                'normalized_name' => $this->parser->normalizeName($record->employee_name),
+                'datetime' => $record->datetime,
+                'name' => $record->employee_name,
+            ];
+        });
+
+        $this->runAbsentDetection($datesInFile, $records, $filterUserIds, null);
     }
 
     /**

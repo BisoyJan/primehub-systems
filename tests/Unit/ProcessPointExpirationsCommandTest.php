@@ -385,7 +385,7 @@ class ProcessPointExpirationsCommandTest extends TestCase
     }
 
     #[Test]
-    public function it_does_not_apply_gbro_when_excused_ncns_breaks_60_day_window(): void
+    public function it_applies_gbro_when_excused_ncns_does_not_break_60_day_window(): void
     {
         $user = User::factory()->create();
 
@@ -402,7 +402,7 @@ class ProcessPointExpirationsCommandTest extends TestCase
             ->onDate(now()->subDays(75))
             ->create(['eligible_for_gbro' => true]);
 
-        // Excused NCNS within 60 days — still resets the clock even though excused
+        // Excused NCNS within 60 days — does NOT reset the clock (excused points are forgiven)
         AttendancePoint::factory()
             ->ncns()
             ->forUser($user)
@@ -413,9 +413,9 @@ class ProcessPointExpirationsCommandTest extends TestCase
         Artisan::call('points:process-expirations');
         Artisan::call('points:process-expirations');
 
-        // GBRO should NOT fire — excused NCNS still breaks the 60-day window
-        $this->assertFalse($point1->fresh()->is_expired);
-        $this->assertFalse($point2->fresh()->is_expired);
+        // GBRO SHOULD fire — excused NCNS does not break the 60-day window
+        $this->assertTrue($point1->fresh()->is_expired);
+        $this->assertTrue($point2->fresh()->is_expired);
     }
 
     #[Test]

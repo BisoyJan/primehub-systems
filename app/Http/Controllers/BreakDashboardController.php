@@ -139,6 +139,7 @@ class BreakDashboardController extends Controller
                 'type' => $session->type,
                 'status' => $session->status,
                 'duration_seconds' => $session->duration_seconds,
+                'combined_break_count' => $session->combined_break_count,
                 'started_at' => $session->started_at?->toDateTimeString(),
                 'ended_at' => $session->ended_at?->toDateTimeString(),
                 'expected_end_at' => $timing['expected_end_at']?->toDateTimeString(),
@@ -456,6 +457,7 @@ class BreakDashboardController extends Controller
     {
         $request->validate([
             'reason' => ['required', 'string', 'max:500'],
+            'restore_full' => ['boolean'],
         ]);
 
         $this->ensureSessionInScope($breakSession);
@@ -466,6 +468,19 @@ class BreakDashboardController extends Controller
 
         if ((int) $breakSession->remaining_seconds < 30) {
             return $this->backWithFlash('Session has less than 30 seconds remaining and cannot be restored.', 'error');
+        }
+
+        // Team Leads and IT cannot restore their own sessions — only Super Admins can.
+        $admin = auth()->user();
+        if (in_array($admin->role, ['Team Lead', 'it'], true) && $breakSession->user_id === $admin->id) {
+            return $this->backWithFlash('You cannot restore your own session. Please ask a Super Admin.', 'error');
+        }
+
+        $restoreFull = (bool) $request->input('restore_full', false);
+
+        // Only Admin, Super Admin, and Team Lead can restore full break minutes.
+        if ($restoreFull && ! in_array($admin->role, ['Admin', 'Super Admin', 'Team Lead'], true)) {
+            return $this->backWithFlash('You do not have permission to restore full break minutes.', 'error');
         }
 
         $hasActive = BreakSession::query()
@@ -480,7 +495,6 @@ class BreakDashboardController extends Controller
         }
 
         try {
-            $admin = auth()->user();
             $adminName = trim("{$admin->first_name} {$admin->last_name}") ?: $admin->email;
 
             $this->breakTimerService->restoreSession(
@@ -488,6 +502,8 @@ class BreakDashboardController extends Controller
                 (int) $admin->id,
                 $adminName,
                 $request->input('reason'),
+                $admin->role,
+                $restoreFull,
             );
 
             return $this->backWithFlash('Session restored successfully.');
@@ -495,6 +511,41 @@ class BreakDashboardController extends Controller
             Log::error('BreakTimer Restore Error: '.$e->getMessage());
 
             return $this->backWithFlash('Failed to restore session.', 'error');
+        }
+    }
+
+    /**
+     * Void a single session so it no longer counts toward the agent's quota.
+     * Works on any non-reset status. In-flight sessions are terminated first.
+     */
+    public function voidSession(Request $request, BreakSession $breakSession)
+    {
+        $request->validate([
+            'reason' => ['required', 'string', 'max:500'],
+        ]);
+
+        $this->ensureSessionInScope($breakSession);
+
+        if ($breakSession->status === 'reset') {
+            return $this->backWithFlash('This session is already voided.', 'error');
+        }
+
+        try {
+            $admin = auth()->user();
+            $adminName = trim("{$admin->first_name} {$admin->last_name}") ?: $admin->email;
+
+            $this->breakTimerService->voidSession(
+                $breakSession,
+                (int) $admin->id,
+                $adminName,
+                $request->input('reason'),
+            );
+
+            return $this->backWithFlash('Session voided. The quota slot has been freed.');
+        } catch (\Exception $e) {
+            Log::error('BreakTimer Void Error: '.$e->getMessage());
+
+            return $this->backWithFlash('Failed to void session.', 'error');
         }
     }
 

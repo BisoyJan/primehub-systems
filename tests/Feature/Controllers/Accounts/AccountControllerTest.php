@@ -403,7 +403,21 @@ class AccountControllerTest extends TestCase
         $this->assertDatabaseMissing('employee_schedules', ['id' => $schedule->id]);
     }
 
-    public function test_toggle_active_activating_does_not_affect_schedules(): void
+    public function test_toggle_active_activating_requires_hired_date(): void
+    {
+        $user = User::factory()->create([
+            'is_active' => false,
+            'hired_date' => now()->subYear(),
+        ]);
+
+        $response = $this->actingAs($this->adminUser)
+            ->post(route('accounts.toggleActive', $user), []);
+
+        $response->assertSessionHasErrors('hired_date');
+        $this->assertFalse($user->fresh()->is_active);
+    }
+
+    public function test_toggle_active_activating_does_not_auto_reactivate_schedules(): void
     {
         $user = User::factory()->create([
             'is_active' => false,
@@ -415,14 +429,38 @@ class AccountControllerTest extends TestCase
             'is_active' => false,
         ]);
 
+        $newHireDate = now()->format('Y-m-d');
+
         $response = $this->actingAs($this->adminUser)
-            ->post(route('accounts.toggleActive', $user));
+            ->post(route('accounts.toggleActive', $user), ['hired_date' => $newHireDate]);
 
         $response->assertRedirect()
             ->assertSessionHas('flash.type', 'success');
 
         $this->assertTrue($user->fresh()->is_active);
-        $this->assertDatabaseHas('employee_schedules', ['id' => $schedule->id]);
+        $this->assertEquals($newHireDate, $user->fresh()->hired_date->format('Y-m-d'));
+        // Schedules are NOT auto-reactivated; admin must manage them via the Schedules page
+        $this->assertDatabaseHas('employee_schedules', ['id' => $schedule->id, 'is_active' => false]);
+    }
+
+    public function test_toggle_active_activating_updates_hired_date(): void
+    {
+        $oldDate = now()->subYear()->format('Y-m-d');
+        $newDate = now()->format('Y-m-d');
+
+        $user = User::factory()->create([
+            'is_active' => false,
+            'hired_date' => $oldDate,
+        ]);
+
+        $response = $this->actingAs($this->adminUser)
+            ->post(route('accounts.toggleActive', $user), ['hired_date' => $newDate]);
+
+        $response->assertRedirect()
+            ->assertSessionHas('flash.type', 'success');
+
+        $this->assertTrue($user->fresh()->is_active);
+        $this->assertEquals($newDate, $user->fresh()->hired_date->format('Y-m-d'));
     }
 
     public function test_toggle_active_prevents_toggling_own_account(): void
@@ -434,5 +472,97 @@ class AccountControllerTest extends TestCase
             ->assertSessionHas('flash.type', 'error');
 
         $this->assertTrue($this->adminUser->fresh()->is_active);
+    }
+
+    public function test_toggle_active_deactivating_sets_resigned_at(): void
+    {
+        $user = User::factory()->create([
+            'is_active' => true,
+            'hired_date' => now()->subYear(),
+            'resigned_at' => null,
+        ]);
+
+        $this->actingAs($this->adminUser)
+            ->post(route('accounts.toggleActive', $user));
+
+        $fresh = $user->fresh();
+        $this->assertFalse($fresh->is_active);
+        $this->assertNotNull($fresh->resigned_at);
+    }
+
+    public function test_toggle_active_rehiring_clears_resigned_at(): void
+    {
+        $user = User::factory()->create([
+            'is_active' => false,
+            'is_approved' => false,
+            'hired_date' => now()->subYear(),
+            'resigned_at' => now()->subMonth(),
+        ]);
+
+        $this->actingAs($this->adminUser)
+            ->post(route('accounts.toggleActive', $user), ['hired_date' => now()->format('Y-m-d')]);
+
+        $fresh = $user->fresh();
+        $this->assertTrue($fresh->is_active);
+        $this->assertNull($fresh->resigned_at);
+    }
+
+    public function test_stale_accounts_returns_resigned_accounts_older_than_two_years(): void
+    {
+        $staleUser = User::factory()->create([
+            'is_active' => false,
+            'is_approved' => false,
+            'hired_date' => now()->subYears(5),
+            'resigned_at' => now()->subYears(3),
+        ]);
+
+        $recentUser = User::factory()->create([
+            'is_active' => false,
+            'is_approved' => false,
+            'hired_date' => now()->subYears(2),
+            'resigned_at' => now()->subMonths(6),
+        ]);
+
+        $response = $this->actingAs($this->adminUser)
+            ->getJson(route('accounts.staleAccounts'));
+
+        $response->assertOk();
+        $ids = collect($response->json())->pluck('id');
+        $this->assertTrue($ids->contains($staleUser->id));
+        $this->assertFalse($ids->contains($recentUser->id));
+    }
+
+    public function test_bulk_delete_stale_permanently_deletes_eligible_accounts(): void
+    {
+        $staleUser = User::factory()->create([
+            'is_active' => false,
+            'is_approved' => false,
+            'hired_date' => now()->subYears(5),
+            'resigned_at' => now()->subYears(3),
+        ]);
+
+        $response = $this->actingAs($this->adminUser)
+            ->post(route('accounts.bulkDeleteStale'), ['ids' => [$staleUser->id]]);
+
+        $response->assertRedirect()
+            ->assertSessionHas('flash.type', 'success');
+
+        $this->assertDatabaseMissing('users', ['id' => $staleUser->id]);
+    }
+
+    public function test_bulk_delete_stale_rejects_non_stale_accounts(): void
+    {
+        $activeUser = User::factory()->create([
+            'is_active' => true,
+            'hired_date' => now()->subYear(),
+        ]);
+
+        $response = $this->actingAs($this->adminUser)
+            ->post(route('accounts.bulkDeleteStale'), ['ids' => [$activeUser->id]]);
+
+        $response->assertRedirect()
+            ->assertSessionHas('flash.type', 'error');
+
+        $this->assertDatabaseHas('users', ['id' => $activeUser->id]);
     }
 }

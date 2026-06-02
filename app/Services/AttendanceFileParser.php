@@ -251,13 +251,17 @@ class AttendanceFileParser
 
     /**
      * Normalize name for matching.
-     * Removes extra spaces, periods, converts hyphens to spaces, and lowercase.
-     * Handles edge cases like: "cabarliza m.", "Ogao-ogao", "Antonio g"
+     * Removes extra spaces, periods, converts hyphens to spaces, folds diacritics, and lowercase.
+     * Handles edge cases like: "cabarliza m.", "Ogao-ogao", "Antonio g", "Salaño" → "salano"
      */
     public function normalizeName(string $name): string
     {
         // Trim whitespace
         $normalized = trim($name);
+
+        // Fold diacritics (ñ → n, é → e, etc.) so biometric files written without
+        // accents (e.g. "Salano P" for "Salaño, Phoebe") still match.
+        $normalized = self::foldDiacritics($normalized);
 
         // Remove periods
         $normalized = str_replace('.', '', $normalized);
@@ -272,6 +276,45 @@ class AttendanceFileParser
         $normalized = strtolower($normalized);
 
         return $normalized;
+    }
+
+    /**
+     * Strip accents/diacritics from a string while preserving the base letter.
+     * E.g. "Salaño" → "Salano", "José" → "Jose".
+     */
+    public static function foldDiacritics(string $value): string
+    {
+        if ($value === '') {
+            return $value;
+        }
+
+        if (class_exists(\Transliterator::class)) {
+            $transliterator = \Transliterator::create('Any-Latin; Latin-ASCII');
+            if ($transliterator !== null) {
+                $result = $transliterator->transliterate($value);
+                if ($result !== false) {
+                    return $result;
+                }
+            }
+        }
+
+        // Fallback: manual map of common Filipino/Spanish characters.
+        $map = [
+            'ñ' => 'n', 'Ñ' => 'N',
+            'á' => 'a', 'à' => 'a', 'â' => 'a', 'ä' => 'a', 'ã' => 'a', 'å' => 'a',
+            'Á' => 'A', 'À' => 'A', 'Â' => 'A', 'Ä' => 'A', 'Ã' => 'A', 'Å' => 'A',
+            'é' => 'e', 'è' => 'e', 'ê' => 'e', 'ë' => 'e',
+            'É' => 'E', 'È' => 'E', 'Ê' => 'E', 'Ë' => 'E',
+            'í' => 'i', 'ì' => 'i', 'î' => 'i', 'ï' => 'i',
+            'Í' => 'I', 'Ì' => 'I', 'Î' => 'I', 'Ï' => 'I',
+            'ó' => 'o', 'ò' => 'o', 'ô' => 'o', 'ö' => 'o', 'õ' => 'o',
+            'Ó' => 'O', 'Ò' => 'O', 'Ô' => 'O', 'Ö' => 'O', 'Õ' => 'O',
+            'ú' => 'u', 'ù' => 'u', 'û' => 'u', 'ü' => 'u',
+            'Ú' => 'U', 'Ù' => 'U', 'Û' => 'U', 'Ü' => 'U',
+            'ç' => 'c', 'Ç' => 'C',
+        ];
+
+        return strtr($value, $map);
     }
 
     /**

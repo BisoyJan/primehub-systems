@@ -1,5 +1,8 @@
 <?php
 
+use App\Http\Middleware\CheckPermission;
+use App\Http\Middleware\CheckRole;
+use App\Http\Middleware\CheckUserApproved;
 use App\Http\Middleware\EnsureUserHasSchedule;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
@@ -17,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
         commands: __DIR__.'/../routes/console.php',
+        channels: __DIR__.'/../routes/channels.php',
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
@@ -25,11 +29,11 @@ return Application::configure(basePath: dirname(__DIR__))
         // Trust all proxies (needed for ngrok, load balancers, etc.)
         $middleware->trustProxies(
             at: '*',
-            headers: \Symfony\Component\HttpFoundation\Request::HEADER_X_FORWARDED_FOR |
-                    \Symfony\Component\HttpFoundation\Request::HEADER_X_FORWARDED_HOST |
-                    \Symfony\Component\HttpFoundation\Request::HEADER_X_FORWARDED_PORT |
-                    \Symfony\Component\HttpFoundation\Request::HEADER_X_FORWARDED_PROTO |
-                    \Symfony\Component\HttpFoundation\Request::HEADER_X_FORWARDED_PREFIX
+            headers: Symfony\Component\HttpFoundation\Request::HEADER_X_FORWARDED_FOR |
+                    Symfony\Component\HttpFoundation\Request::HEADER_X_FORWARDED_HOST |
+                    Symfony\Component\HttpFoundation\Request::HEADER_X_FORWARDED_PORT |
+                    Symfony\Component\HttpFoundation\Request::HEADER_X_FORWARDED_PROTO |
+                    Symfony\Component\HttpFoundation\Request::HEADER_X_FORWARDED_PREFIX
         );
 
         $middleware->web(append: [
@@ -42,14 +46,14 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Register permission and role middleware aliases
         $middleware->alias([
-            'permission' => \App\Http\Middleware\CheckPermission::class,
-            'role' => \App\Http\Middleware\CheckRole::class,
-            'approved' => \App\Http\Middleware\CheckUserApproved::class,
+            'permission' => CheckPermission::class,
+            'role' => CheckRole::class,
+            'approved' => CheckUserApproved::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         // Handle HTTP exceptions with Inertia error pages
-        $exceptions->respond(function (Response $response, \Throwable $e, Request $request) {
+        $exceptions->respond(function (Response $response, Throwable $e, Request $request) {
             $status = $response->getStatusCode();
 
             // Only handle specific error codes with Inertia

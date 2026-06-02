@@ -83,11 +83,11 @@ class EmployeeSchedule extends Model
      */
     public function scopeActive($query)
     {
-        return $query->where('is_active', true)
-            ->where('effective_date', '<=', now())
+        return $query->where('employee_schedules.is_active', true)
+            ->where('employee_schedules.effective_date', '<=', now())
             ->where(function ($q) {
-                $q->whereNull('end_date')
-                    ->orWhere('end_date', '>=', now());
+                $q->whereNull('employee_schedules.end_date')
+                    ->orWhere('employee_schedules.end_date', '>=', now());
             });
     }
 

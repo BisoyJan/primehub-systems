@@ -2,6 +2,7 @@
 
 namespace App\Services\AttendancePoint;
 
+use App\Models\Attendance;
 use App\Models\AttendancePoint;
 use App\Models\User;
 use Carbon\Carbon;
@@ -347,6 +348,14 @@ class GbroCalculationService
             }
 
             $daysClean = Carbon::parse($gbroReferenceDate)->diffInDays(Carbon::now());
+
+            // Subtract approved leave days so leave time doesn't count toward the 60-day window.
+            $leaveDays = Attendance::where('user_id', $user->id)
+                ->where('status', 'on_leave')
+                ->whereDate('shift_date', '>', $gbroReferenceDate)
+                ->whereDate('shift_date', '<=', now())
+                ->count();
+            $daysClean = max(0, $daysClean - $leaveDays);
             $daysUntilGbro = max(0, 60 - $daysClean);
 
             $eligiblePoints = AttendancePoint::where('user_id', $user->id)

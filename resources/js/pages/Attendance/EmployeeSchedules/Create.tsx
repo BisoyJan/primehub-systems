@@ -197,6 +197,11 @@ export default function EmployeeScheduleCreate() {
             if (userIdParam && !data.user_id) {
                 setData("user_id", userIdParam);
             }
+            // Pre-fill effective_date from query param (e.g. after re-hire)
+            const effectiveDateParam = urlParams.get('effective_date');
+            if (effectiveDateParam) {
+                setData("effective_date", effectiveDateParam);
+            }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isRestrictedRole, currentUser]);

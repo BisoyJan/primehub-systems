@@ -62,10 +62,10 @@ Cache::get("qrcode_zip_job:{$jobId}");
 - **Auth:** Laravel Fortify with 2FA support (see `config/fortify.php`)
 
 ## Key Reference Files
-- Controller example: [RamSpecsController.php](app/Http/Controllers/RamSpecsController.php)
-- Model with relationships: [PcSpec.php](app/Models/PcSpec.php)
-- React page pattern: [RamSpecs/Index.tsx](resources/js/pages/Computer/RamSpecs/Index.tsx)
-- Permissions config: [config/permissions.php](config/permissions.php)
+- Controller example: [ProcessorSpecsController.php](../app/Http/Controllers/ProcessorSpecsController.php)
+- Model with relationships: [PcSpec.php](../app/Models/PcSpec.php)
+- React page pattern: [ProcessorSpecs/Index.tsx](../resources/js/pages/Computer/ProcessorSpecs/Index.tsx)
+- Permissions config: [config/permissions.php](../config/permissions.php)
 
 ## Error Handling & Logging
 

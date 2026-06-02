@@ -90,7 +90,7 @@ class GenerateAllPcSpecQRCodesZipTest extends TestCase
         $job->handle();
 
         $zipPath = storage_path("app/temp/pc-qrcodes-{$jobId}.zip");
-        $zip = new ZipArchive();
+        $zip = new ZipArchive;
         $zip->open($zipPath);
 
         $this->assertEquals(1, $zip->numFiles);
@@ -108,7 +108,7 @@ class GenerateAllPcSpecQRCodesZipTest extends TestCase
         $job->handle();
 
         $zipPath = storage_path("app/temp/pc-qrcodes-{$jobId}.zip");
-        $zip = new ZipArchive();
+        $zip = new ZipArchive;
         $zip->open($zipPath);
 
         $this->assertEquals('PC-002.svg', $zip->getNameIndex(0));
@@ -125,7 +125,7 @@ class GenerateAllPcSpecQRCodesZipTest extends TestCase
         $job->handle();
 
         $zipPath = storage_path("app/temp/pc-qrcodes-{$jobId}.zip");
-        $zip = new ZipArchive();
+        $zip = new ZipArchive;
         $zip->open($zipPath);
 
         $expectedFilename = "PC-{$pcSpec->id}.png";
@@ -175,7 +175,6 @@ class GenerateAllPcSpecQRCodesZipTest extends TestCase
         $pcSpec = PcSpec::factory()->create([
             'pc_number' => 'PC-META',
             'manufacturer' => 'Dell',
-            'model' => 'OptiPlex',
             'memory_type' => 'DDR4',
         ]);
 
@@ -199,7 +198,7 @@ class GenerateAllPcSpecQRCodesZipTest extends TestCase
         $job->handle();
 
         $zipPath = storage_path("app/temp/pc-qrcodes-{$jobId}.zip");
-        $zip = new ZipArchive();
+        $zip = new ZipArchive;
         $zip->open($zipPath);
 
         $this->assertEquals(3, $zip->numFiles);
@@ -249,7 +248,7 @@ class GenerateAllPcSpecQRCodesZipTest extends TestCase
         $zipPath = storage_path("app/temp/pc-qrcodes-{$jobId}.zip");
         $this->assertFileExists($zipPath);
 
-        $zip = new ZipArchive();
+        $zip = new ZipArchive;
         if ($zip->open($zipPath) === true) {
             $this->assertEquals(0, $zip->numFiles);
             $zip->close();

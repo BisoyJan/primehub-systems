@@ -154,6 +154,7 @@ class StreakService
         // All workdays for the user, newest first.
         $attendanceDates = Attendance::query()
             ->where('user_id', $user->id)
+            ->where('status', '!=', 'on_leave')
             ->orderByDesc('shift_date')
             ->pluck('shift_date')
             ->map(fn ($d) => $d->toDateString())
