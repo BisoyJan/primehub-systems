@@ -97,6 +97,9 @@ export default defineConfig({
             'react',
             'react-dom',
             '@inertiajs/react',
+            'react-useanimations',
+            'react-useanimations/lib/help',
+            'react-useanimations/lib/alertTriangle',
         ],
         exclude: [
             // Exclude large dependencies from pre-bundling if causing issues

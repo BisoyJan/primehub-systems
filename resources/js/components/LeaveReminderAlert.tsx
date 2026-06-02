@@ -1,6 +1,10 @@
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import UseAnimations from 'react-useanimations';
-import alertTriangle from 'react-useanimations/lib/alertTriangle';
+import _UseAnimations from 'react-useanimations';
+import _alertTriangle from 'react-useanimations/lib/alertTriangle';
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const UseAnimations = (_UseAnimations as any)?.default ?? _UseAnimations;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const alertTriangle = (_alertTriangle as any)?.default ?? _alertTriangle;
 
 const LEAVE_TYPES_WITH_REMINDER = ['VL', 'UPTO', 'LOA', 'ML'];
 

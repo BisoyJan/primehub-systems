@@ -2,8 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import { toast } from 'sonner';
 import { ArrowLeft, Search, ArrowRight, Check, AlertCircle, X, MousePointer, CheckSquare, ListChecks, ChevronDown } from 'lucide-react';
-import UseAnimations from 'react-useanimations';
-import help from 'react-useanimations/lib/help';
+import _UseAnimations from 'react-useanimations';
+import _help from 'react-useanimations/lib/help';
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const UseAnimations = (_UseAnimations as any)?.default ?? _UseAnimations;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const help = (_help as any)?.default ?? _help;
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
