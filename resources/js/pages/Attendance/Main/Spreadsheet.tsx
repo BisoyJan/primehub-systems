@@ -4,6 +4,7 @@ import { createContext, useContext, useMemo, useEffect, useRef, useState, memo, 
 import AppLayout from "@/layouts/app-layout";
 import { type SharedData } from "@/types";
 import { useFlashMessage, usePageMeta, usePermission } from "@/hooks";
+import { getEcho } from "@/echo";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -435,7 +436,7 @@ export default function AttendanceSpreadsheet() {
     // even when multiple tabs are signed in as the same account). Reloads are
     // debounced so a burst of updates collapses into a single round-trip.
     useEffect(() => {
-        let echoInstance: ReturnType<typeof import('@/echo').getEcho> = null;
+        let echoInstance: ReturnType<typeof getEcho> = null;
         let reloadTimer: ReturnType<typeof setTimeout> | null = null;
         let pendingNeedsGroups = false;
 
@@ -452,16 +453,14 @@ export default function AttendanceSpreadsheet() {
             }, 400);
         };
 
-        (async () => {
-            const { getEcho } = await import('@/echo');
-            echoInstance = getEcho();
-            if (!echoInstance) return;
+        echoInstance = getEcho();
+        if (echoInstance) {
             echoInstance
                 .private('attendance.spreadsheet')
                 .listen('.spreadsheet.updated', (e: { type: string }) => {
                     schedule(e.type === 'cell');
                 });
-        })();
+        }
 
         return () => {
             if (reloadTimer) clearTimeout(reloadTimer);
@@ -479,7 +478,7 @@ export default function AttendanceSpreadsheet() {
     const selfId = auth?.user?.id ?? null;
     const [activeUsers, setActiveUsers] = useState<PresenceUser[]>([]);
     const [editingMap, setEditingMap] = useState<EditingMap>({});
-    const presenceChannelRef = useRef<ReturnType<NonNullable<ReturnType<typeof import('@/echo').getEcho>>['join']> | null>(null);
+    const presenceChannelRef = useRef<ReturnType<NonNullable<ReturnType<typeof getEcho>>['join']> | null>(null);
     const selfRef = useRef<PresenceUser | null>(null);
 
     // Deterministic, collision-free color assignment synchronized across
@@ -522,7 +521,7 @@ export default function AttendanceSpreadsheet() {
 
     useEffect(() => {
         let cancelled = false;
-        let channel: ReturnType<NonNullable<ReturnType<typeof import('@/echo').getEcho>>['join']> | null = null;
+        let channel: ReturnType<NonNullable<ReturnType<typeof getEcho>>['join']> | null = null;
 
         const removeUserEverywhere = (userId: number) =>
             setEditingMap((prev) => {
@@ -534,10 +533,8 @@ export default function AttendanceSpreadsheet() {
                 return next;
             });
 
-        (async () => {
-            const { getEcho } = await import('@/echo');
-            const echo = getEcho();
-            if (!echo || cancelled) return;
+        const echo = getEcho();
+        if (echo && !cancelled) {
 
             // Broadcast our session's palette salt. Whoever has the lowest user
             // id among active users "wins" — their salt is adopted by everyone.
@@ -584,7 +581,7 @@ export default function AttendanceSpreadsheet() {
                 });
 
             presenceChannelRef.current = channel;
-        })();
+        }
 
         return () => {
             cancelled = true;
@@ -614,227 +611,227 @@ export default function AttendanceSpreadsheet() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={title} />
             <PresenceContext.Provider value={presenceValue}>
-            <div className="flex h-full min-w-0 max-w-full flex-1 flex-col gap-3 overflow-hidden rounded-xl p-3">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                    <PageHeader
-                        title="Attendance Spreadsheet"
-                        description={`Per-employee × per-day grid for ${MONTH_NAMES[month - 1]} ${year} — ${totalEmployees} employees`}
-                    />
-                    <ActiveEditorsPanel users={activeUsers} selfId={selfId} colorFor={colorFor} />
-                </div>
+                <div className="flex h-full min-w-0 max-w-full flex-1 flex-col gap-3 overflow-hidden rounded-xl p-3">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                        <PageHeader
+                            title="Attendance Spreadsheet"
+                            description={`Per-employee × per-day grid for ${MONTH_NAMES[month - 1]} ${year} — ${totalEmployees} employees`}
+                        />
+                        <ActiveEditorsPanel users={activeUsers} selfId={selfId} colorFor={colorFor} />
+                    </div>
 
-                {/* Toolbar */}
-                <form onSubmit={handleApplyFilters} className="flex flex-col gap-3">
-                    {/* Row 1: month nav + filters */}
-                    <div className="flex flex-wrap items-center gap-3">
-                        {/* Month navigation */}
-                        <div className="flex items-center gap-1">
-                            <Button
-                                type="button"
-                                variant="outline"
-                                size="icon"
-                                onClick={handlePrevMonth}
-                                aria-label="Previous month"
-                            >
-                                <ChevronLeft className="h-4 w-4" />
-                            </Button>
-                            <div className="min-w-44 px-2 text-center text-sm font-semibold text-foreground">
-                                {MONTH_NAMES[month - 1]} {year}
-                            </div>
-                            <Button
-                                type="button"
-                                variant="outline"
-                                size="icon"
-                                onClick={handleNextMonth}
-                                aria-label="Next month"
-                            >
-                                <ChevronRight className="h-4 w-4" />
-                            </Button>
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={handleToday}
-                            >
-                                Today
-                            </Button>
-                        </div>
-
-                        {/* Search — combobox style */}
-                        <Popover open={employeePopoverOpen} onOpenChange={setEmployeePopoverOpen}>
-                            <PopoverTrigger asChild>
+                    {/* Toolbar */}
+                    <form onSubmit={handleApplyFilters} className="flex flex-col gap-3">
+                        {/* Row 1: month nav + filters */}
+                        <div className="flex flex-wrap items-center gap-3">
+                            {/* Month navigation */}
+                            <div className="flex items-center gap-1">
                                 <Button
                                     type="button"
                                     variant="outline"
-                                    role="combobox"
-                                    aria-expanded={employeePopoverOpen}
-                                    className="w-52 justify-between font-normal"
+                                    size="icon"
+                                    onClick={handlePrevMonth}
+                                    aria-label="Previous month"
                                 >
-                                    <span className="truncate">
-                                        {search || "All Employees"}
-                                    </span>
-                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    <ChevronLeft className="h-4 w-4" />
                                 </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-80 p-0" align="start">
-                                <Command shouldFilter={false}>
-                                    <CommandInput
-                                        placeholder="Search employee..."
-                                        value={employeeQuery}
-                                        onValueChange={setEmployeeQuery}
-                                    />
-                                    <CommandList>
-                                        <CommandEmpty>No employee found.</CommandEmpty>
-                                        <CommandGroup>
-                                            <CommandItem
-                                                value="all"
-                                                onSelect={() => {
-                                                    setSearch("");
-                                                    setEmployeePopoverOpen(false);
-                                                    setEmployeeQuery("");
-                                                }}
-                                                className="cursor-pointer"
-                                            >
-                                                <Check
-                                                    className={`mr-2 h-4 w-4 ${search === "" ? "opacity-100" : "opacity-0"
-                                                        }`}
-                                                />
-                                                All Employees
-                                            </CommandItem>
-                                            {filteredEmployeeList.map((emp) => (
+                                <div className="min-w-44 px-2 text-center text-sm font-semibold text-foreground">
+                                    {MONTH_NAMES[month - 1]} {year}
+                                </div>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={handleNextMonth}
+                                    aria-label="Next month"
+                                >
+                                    <ChevronRight className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={handleToday}
+                                >
+                                    Today
+                                </Button>
+                            </div>
+
+                            {/* Search — combobox style */}
+                            <Popover open={employeePopoverOpen} onOpenChange={setEmployeePopoverOpen}>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        role="combobox"
+                                        aria-expanded={employeePopoverOpen}
+                                        className="w-52 justify-between font-normal"
+                                    >
+                                        <span className="truncate">
+                                            {search || "All Employees"}
+                                        </span>
+                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-80 p-0" align="start">
+                                    <Command shouldFilter={false}>
+                                        <CommandInput
+                                            placeholder="Search employee..."
+                                            value={employeeQuery}
+                                            onValueChange={setEmployeeQuery}
+                                        />
+                                        <CommandList>
+                                            <CommandEmpty>No employee found.</CommandEmpty>
+                                            <CommandGroup>
                                                 <CommandItem
-                                                    key={emp.id}
-                                                    value={emp.name}
+                                                    value="all"
                                                     onSelect={() => {
-                                                        setSearch(emp.name);
+                                                        setSearch("");
                                                         setEmployeePopoverOpen(false);
                                                         setEmployeeQuery("");
                                                     }}
                                                     className="cursor-pointer"
                                                 >
                                                     <Check
-                                                        className={`mr-2 h-4 w-4 ${search === emp.name
-                                                            ? "opacity-100"
-                                                            : "opacity-0"
+                                                        className={`mr-2 h-4 w-4 ${search === "" ? "opacity-100" : "opacity-0"
                                                             }`}
                                                     />
-                                                    {emp.name}
+                                                    All Employees
                                                 </CommandItem>
-                                            ))}
-                                        </CommandGroup>
-                                    </CommandList>
-                                </Command>
-                            </PopoverContent>
-                        </Popover>
+                                                {filteredEmployeeList.map((emp) => (
+                                                    <CommandItem
+                                                        key={emp.id}
+                                                        value={emp.name}
+                                                        onSelect={() => {
+                                                            setSearch(emp.name);
+                                                            setEmployeePopoverOpen(false);
+                                                            setEmployeeQuery("");
+                                                        }}
+                                                        className="cursor-pointer"
+                                                    >
+                                                        <Check
+                                                            className={`mr-2 h-4 w-4 ${search === emp.name
+                                                                ? "opacity-100"
+                                                                : "opacity-0"
+                                                                }`}
+                                                        />
+                                                        {emp.name}
+                                                    </CommandItem>
+                                                ))}
+                                            </CommandGroup>
+                                        </CommandList>
+                                    </Command>
+                                </PopoverContent>
+                            </Popover>
 
-                        {/* Campaign */}
-                        <Select value={campaignFilter} onValueChange={setCampaignFilter}>
-                            <SelectTrigger id="ss-campaign" className="w-48">
-                                <SelectValue placeholder="All campaigns" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All campaigns</SelectItem>
-                                {campaigns.map((c) => (
-                                    <SelectItem key={c.id} value={String(c.id)}>
-                                        {c.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                            {/* Campaign */}
+                            <Select value={campaignFilter} onValueChange={setCampaignFilter}>
+                                <SelectTrigger id="ss-campaign" className="w-48">
+                                    <SelectValue placeholder="All campaigns" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All campaigns</SelectItem>
+                                    {campaigns.map((c) => (
+                                        <SelectItem key={c.id} value={String(c.id)}>
+                                            {c.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
 
-                        {/* Apply */}
-                        <Button type="submit" className="w-full sm:w-auto">
-                            <Search className="mr-2 h-4 w-4" />
-                            Apply Filters
-                        </Button>
-                    </div>
-                </form>
-
-                {/* Legend */}
-                <Legend />
-
-                {/* Grid */}
-                <div className="relative min-h-0 w-full flex-1 overflow-auto rounded-lg border bg-card">
-                    {isNavigating && (
-                        <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60 backdrop-blur-[1px]">
-                            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                            {/* Apply */}
+                            <Button type="submit" className="w-full sm:w-auto">
+                                <Search className="mr-2 h-4 w-4" />
+                                Apply Filters
+                            </Button>
                         </div>
-                    )}
-                    {!tableReady ? (
-                        <div className="flex h-48 items-center justify-center">
-                            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                        </div>
-                    ) : (
-                        <table className="w-max min-w-full border-separate border-spacing-0 text-xs">
-                            <thead className="sticky top-0 z-2 bg-slate-100 dark:bg-slate-800">
-                                <tr>
-                                    <th
-                                        className="sticky left-0 z-3 w-46 min-w-46 border-b border-r bg-slate-200 px-2 py-1 text-left font-semibold dark:bg-slate-700"
-                                    >
-                                        Name
-                                    </th>
-                                    <th className="sticky left-46 z-3 w-15 min-w-15 border-b border-r bg-slate-200 px-2 py-1 text-center font-semibold dark:bg-slate-700">
-                                        <TooltipProvider>
-                                            <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                    <span className="cursor-help">Pts</span>
-                                                </TooltipTrigger>
-                                                <TooltipContent side="right">
-                                                    Total active attendance points (all-time)
-                                                </TooltipContent>
-                                            </Tooltip>
-                                        </TooltipProvider>
-                                    </th>
-                                    {days.map((d) => (
-                                        <Fragment key={d.date}>
-                                            <th
-                                                className={`w-11 min-w-11 max-w-11 border-b border-r px-1 py-1 text-center font-semibold ${d.is_saturday ? "bg-emerald-100 dark:bg-emerald-950/40" : d.is_weekend ? "bg-slate-300 dark:bg-slate-700" : ""}`}
-                                            >
-                                                <div className="leading-tight">{d.day}</div>
-                                                <div className="text-[10px] font-normal text-muted-foreground leading-tight">
-                                                    {d.weekday}
-                                                </div>
-                                            </th>
-                                            {d.is_saturday && (
-                                                <th className="w-16 min-w-16 max-w-16 border-b border-r bg-emerald-200 px-1 py-1 text-center font-semibold dark:bg-emerald-900/60">
-                                                    <div className="leading-tight">Wk Hrs</div>
+                    </form>
+
+                    {/* Legend */}
+                    <Legend />
+
+                    {/* Grid */}
+                    <div className="relative min-h-0 w-full flex-1 overflow-auto rounded-lg border bg-card">
+                        {isNavigating && (
+                            <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60 backdrop-blur-[1px]">
+                                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                            </div>
+                        )}
+                        {!tableReady ? (
+                            <div className="flex h-48 items-center justify-center">
+                                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                            </div>
+                        ) : (
+                            <table className="w-max min-w-full border-separate border-spacing-0 text-xs">
+                                <thead className="sticky top-0 z-2 bg-slate-100 dark:bg-slate-800">
+                                    <tr>
+                                        <th
+                                            className="sticky left-0 z-3 w-46 min-w-46 border-b border-r bg-slate-200 px-2 py-1 text-left font-semibold dark:bg-slate-700"
+                                        >
+                                            Name
+                                        </th>
+                                        <th className="sticky left-46 z-3 w-15 min-w-15 border-b border-r bg-slate-200 px-2 py-1 text-center font-semibold dark:bg-slate-700">
+                                            <TooltipProvider>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <span className="cursor-help">Pts</span>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent side="right">
+                                                        Total active attendance points (all-time)
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            </TooltipProvider>
+                                        </th>
+                                        {days.map((d) => (
+                                            <Fragment key={d.date}>
+                                                <th
+                                                    className={`w-11 min-w-11 max-w-11 border-b border-r px-1 py-1 text-center font-semibold ${d.is_saturday ? "bg-emerald-100 dark:bg-emerald-950/40" : d.is_weekend ? "bg-slate-300 dark:bg-slate-700" : ""}`}
+                                                >
+                                                    <div className="leading-tight">{d.day}</div>
                                                     <div className="text-[10px] font-normal text-muted-foreground leading-tight">
-                                                        ending {d.day}
+                                                        {d.weekday}
                                                     </div>
                                                 </th>
-                                            )}
-                                        </Fragment>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {groups.length === 0 && (
-                                    <tr>
-                                        <td
-                                            colSpan={2 + totalDayCols}
-                                            className="px-4 py-6 text-center text-muted-foreground"
-                                        >
-                                            No employees match the current filters.
-                                        </td>
+                                                {d.is_saturday && (
+                                                    <th className="w-16 min-w-16 max-w-16 border-b border-r bg-emerald-200 px-1 py-1 text-center font-semibold dark:bg-emerald-900/60">
+                                                        <div className="leading-tight">Wk Hrs</div>
+                                                        <div className="text-[10px] font-normal text-muted-foreground leading-tight">
+                                                            ending {d.day}
+                                                        </div>
+                                                    </th>
+                                                )}
+                                            </Fragment>
+                                        ))}
                                     </tr>
-                                )}
-                                {groups.map((g) => (
-                                    <GroupRows
-                                        key={g.campaign}
-                                        group={g}
-                                        days={days}
-                                        canEdit={canEdit}
-                                        colCount={2 + totalDayCols}
-                                        selectedEmployeeId={selectedEmployeeId}
-                                        onSelectEmployee={setSelectedEmployeeId}
-                                        weekTotals={weekTotals}
-                                    />
-                                ))}
-                            </tbody>
-                        </table>
-                    )}
+                                </thead>
+                                <tbody>
+                                    {groups.length === 0 && (
+                                        <tr>
+                                            <td
+                                                colSpan={2 + totalDayCols}
+                                                className="px-4 py-6 text-center text-muted-foreground"
+                                            >
+                                                No employees match the current filters.
+                                            </td>
+                                        </tr>
+                                    )}
+                                    {groups.map((g) => (
+                                        <GroupRows
+                                            key={g.campaign}
+                                            group={g}
+                                            days={days}
+                                            canEdit={canEdit}
+                                            colCount={2 + totalDayCols}
+                                            selectedEmployeeId={selectedEmployeeId}
+                                            onSelectEmployee={setSelectedEmployeeId}
+                                            weekTotals={weekTotals}
+                                        />
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
                 </div>
-            </div>
             </PresenceContext.Provider>
         </AppLayout>
     );
@@ -1967,30 +1964,30 @@ function CellEditor({
                 const otMins = Math.max(cell?.overtime_minutes ?? 0, hoursOtMins);
                 if (otMins <= 0) return null;
                 return (
-                <div className="rounded border border-blue-400/40 bg-blue-950/20 p-2 text-[11px]">
-                    <div className="mb-1 font-semibold uppercase text-[10px] text-muted-foreground tracking-wide">
-                        Overtime Approval
-                    </div>
-                    <div className="flex items-start gap-2">
-                        <Checkbox
-                            id="cell-ot-approved"
-                            checked={form.data.overtime_approved}
-                            onCheckedChange={(checked) => form.setData("overtime_approved", checked === true)}
-                            className="mt-0.5"
-                        />
-                        <div className="space-y-0.5">
-                            <label htmlFor="cell-ot-approved" className="cursor-pointer font-medium leading-tight">
-                                Approve {fmtMins(otMins)} overtime
-                            </label>
-                            <p className="text-[10px] text-muted-foreground">
-                                {form.data.overtime_approved
-                                    ? <span className="text-emerald-400">OT hours will be included in total hours worked.</span>
-                                    : <span className="text-blue-400/80">OT hours are not counted until approved.</span>
-                                }
-                            </p>
+                    <div className="rounded border border-blue-400/40 bg-blue-950/20 p-2 text-[11px]">
+                        <div className="mb-1 font-semibold uppercase text-[10px] text-muted-foreground tracking-wide">
+                            Overtime Approval
+                        </div>
+                        <div className="flex items-start gap-2">
+                            <Checkbox
+                                id="cell-ot-approved"
+                                checked={form.data.overtime_approved}
+                                onCheckedChange={(checked) => form.setData("overtime_approved", checked === true)}
+                                className="mt-0.5"
+                            />
+                            <div className="space-y-0.5">
+                                <label htmlFor="cell-ot-approved" className="cursor-pointer font-medium leading-tight">
+                                    Approve {fmtMins(otMins)} overtime
+                                </label>
+                                <p className="text-[10px] text-muted-foreground">
+                                    {form.data.overtime_approved
+                                        ? <span className="text-emerald-400">OT hours will be included in total hours worked.</span>
+                                        : <span className="text-blue-400/80">OT hours are not counted until approved.</span>
+                                    }
+                                </p>
+                            </div>
                         </div>
                     </div>
-                </div>
                 );
             })()}
 
@@ -2001,30 +1998,30 @@ function CellEditor({
                 const otMins = Math.max(previewStatus?.overtimeMins ?? 0, hoursOtMins);
                 if (otMins <= 0) return null;
                 return (
-                <div className="rounded border border-blue-400/40 bg-blue-950/20 p-2 text-[11px]">
-                    <div className="mb-1 font-semibold uppercase text-[10px] text-muted-foreground tracking-wide">
-                        Overtime Approval
-                    </div>
-                    <div className="flex items-start gap-2">
-                        <Checkbox
-                            id="cell-ot-approved-create"
-                            checked={form.data.overtime_approved}
-                            onCheckedChange={(checked) => form.setData("overtime_approved", checked === true)}
-                            className="mt-0.5"
-                        />
-                        <div className="space-y-0.5">
-                            <label htmlFor="cell-ot-approved-create" className="cursor-pointer font-medium leading-tight">
-                                Approve {fmtMins(otMins)} overtime
-                            </label>
-                            <p className="text-[10px] text-muted-foreground">
-                                {form.data.overtime_approved
-                                    ? <span className="text-emerald-400">OT hours will be included in total hours worked.</span>
-                                    : <span className="text-blue-400/80">OT hours are not counted until approved.</span>
-                                }
-                            </p>
+                    <div className="rounded border border-blue-400/40 bg-blue-950/20 p-2 text-[11px]">
+                        <div className="mb-1 font-semibold uppercase text-[10px] text-muted-foreground tracking-wide">
+                            Overtime Approval
+                        </div>
+                        <div className="flex items-start gap-2">
+                            <Checkbox
+                                id="cell-ot-approved-create"
+                                checked={form.data.overtime_approved}
+                                onCheckedChange={(checked) => form.setData("overtime_approved", checked === true)}
+                                className="mt-0.5"
+                            />
+                            <div className="space-y-0.5">
+                                <label htmlFor="cell-ot-approved-create" className="cursor-pointer font-medium leading-tight">
+                                    Approve {fmtMins(otMins)} overtime
+                                </label>
+                                <p className="text-[10px] text-muted-foreground">
+                                    {form.data.overtime_approved
+                                        ? <span className="text-emerald-400">OT hours will be included in total hours worked.</span>
+                                        : <span className="text-blue-400/80">OT hours are not counted until approved.</span>
+                                    }
+                                </p>
+                            </div>
                         </div>
                     </div>
-                </div>
                 );
             })()}
 
@@ -2289,13 +2286,13 @@ function CellEditor({
                             <SelectItem value="on_leave">On Leave</SelectItem>
                         )}
                     </SelectContent>
-                    </Select>
-                    {form.errors.status && (
-                        <div className="text-xs text-destructive">
-                            {form.errors.status}
-                        </div>
-                    )}
-                </div>
+                </Select>
+                {form.errors.status && (
+                    <div className="text-xs text-destructive">
+                        {form.errors.status}
+                    </div>
+                )}
+            </div>
 
             <div className="grid grid-cols-2 gap-2" hidden={!showTimeFields}>
                 <div className="space-y-1">
