@@ -302,100 +302,96 @@ export default function Index({ stations: stationsPayload, filters }: PageProps)
                     </div>
                 </PageHeader>
 
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Filters</CardTitle>
-                        <CardDescription>Search and filter stations</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-                            <div>
-                                <Label>Search</Label>
-                                <div className="relative">
-                                    <Search className="absolute left-2.5 top-3 h-4 w-4 text-muted-foreground" />
-                                    <Input
-                                        type="search"
-                                        placeholder="Station, site, campaign..."
-                                        className="pl-8"
-                                        value={search}
-                                        onChange={(event) => setSearch(event.target.value)}
-                                        onKeyDown={(event) => event.key === 'Enter' && handleApplyFilters()}
-                                    />
-                                </div>
-                            </div>
-
-                            <div>
-                                <Label>Site</Label>
-                                <Select value={siteFilter} onValueChange={setSiteFilter}>
-                                    <SelectTrigger>
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Sites</SelectItem>
-                                        {filters.sites.map((site) => (
-                                            <SelectItem key={site.id} value={String(site.id)}>
-                                                {site.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div>
-                                <Label>Campaign</Label>
-                                <Select value={campaignFilter} onValueChange={setCampaignFilter}>
-                                    <SelectTrigger>
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Campaigns</SelectItem>
-                                        {filters.campaigns.map((campaign) => (
-                                            <SelectItem key={campaign.id} value={String(campaign.id)}>
-                                                {campaign.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-end">
-                                <Button onClick={handleApplyFilters} disabled={isFilterLoading} className="w-full md:w-auto">
-                                    <Search className="h-4 w-4 mr-2" />
-                                    Apply Filters
-                                </Button>
-                                {showClearFilters && (
-                                    <Button
-                                        variant="outline"
-                                        onClick={handleClearFilters}
-                                        disabled={isFilterLoading}
-                                        className="w-full md:w-auto"
-                                    >
-                                        Clear Filters
-                                    </Button>
-                                )}
-                                <div className="flex gap-2 justify-end">
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={handleManualRefresh}
-                                        disabled={isFilterLoading}
-                                        title="Refresh"
-                                    >
-                                        <RefreshCw className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                        variant={autoRefreshEnabled ? "default" : "ghost"}
-                                        size="icon"
-                                        onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
-                                        title={autoRefreshEnabled ? "Disable auto-refresh" : "Enable auto-refresh (30s)"}
-                                    >
-                                        {autoRefreshEnabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                                    </Button>
-                                </div>
+                <div className="rounded-lg border bg-card p-3 space-y-4">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                        <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Search</Label>
+                            <div className="relative">
+                                <Search className="absolute left-2.5 top-3 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    type="search"
+                                    placeholder="Station, site, campaign..."
+                                    className="pl-8"
+                                    value={search}
+                                    onChange={(event) => setSearch(event.target.value)}
+                                    onKeyDown={(event) => event.key === 'Enter' && handleApplyFilters()}
+                                />
                             </div>
                         </div>
-                    </CardContent>
-                </Card>
+
+                        <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Site</Label>
+                            <Select value={siteFilter} onValueChange={setSiteFilter}>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="All Sites" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Sites</SelectItem>
+                                    {filters.sites.map((site) => (
+                                        <SelectItem key={site.id} value={String(site.id)}>
+                                            {site.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Campaign</Label>
+                            <Select value={campaignFilter} onValueChange={setCampaignFilter}>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="All Campaigns" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Campaigns</SelectItem>
+                                    {filters.campaigns.map((campaign) => (
+                                        <SelectItem key={campaign.id} value={String(campaign.id)}>
+                                            {campaign.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2 pt-2 border-t">
+                        <div className="flex items-center gap-2">
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={handleManualRefresh}
+                                disabled={isFilterLoading}
+                                title="Refresh"
+                            >
+                                <RefreshCw className="h-4 w-4" />
+                            </Button>
+                            <Button
+                                variant={autoRefreshEnabled ? "secondary" : "ghost"}
+                                size="icon"
+                                onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
+                                title={autoRefreshEnabled ? "Disable auto-refresh" : "Enable auto-refresh (30s)"}
+                            >
+                                {autoRefreshEnabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                            </Button>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            {showClearFilters && (
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={handleClearFilters}
+                                    disabled={isFilterLoading}
+                                >
+                                    Reset
+                                </Button>
+                            )}
+                            <Button onClick={handleApplyFilters} disabled={isFilterLoading} size="sm">
+                                <Search className="h-4 w-4 mr-2" />
+                                Apply Filters
+                            </Button>
+                        </div>
+                    </div>
+                </div>
 
                 <div className="flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
                     <span>
