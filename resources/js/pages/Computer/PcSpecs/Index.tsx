@@ -655,11 +655,11 @@ export default function Index() {
 
                             <Select value={sortDir} onValueChange={(value: 'asc' | 'desc') => setSortDir(value)}>
                                 <SelectTrigger className="w-full font-normal">
-                                    <SelectValue placeholder="PC Number Order" />
+                                    <SelectValue placeholder="QR Number Order" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="asc">PC Number: Ascending (A-Z)</SelectItem>
-                                    <SelectItem value="desc">PC Number: Descending (Z-A)</SelectItem>
+                                    <SelectItem value="asc">QR Number: Ascending (A-Z)</SelectItem>
+                                    <SelectItem value="desc">QR Number: Descending (Z-A)</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -785,7 +785,7 @@ export default function Index() {
                                                 aria-label="Select all PC specs"
                                             />
                                         </TableHead>
-                                        <TableHead>PC Number</TableHead>
+                                        <TableHead>QR Number</TableHead>
                                         <TableHead>Manufacturer</TableHead>
                                         <TableHead className="hidden xl:table-cell">Processor</TableHead>
                                         <TableHead className="hidden xl:table-cell">Cores</TableHead>
@@ -1015,7 +1015,7 @@ export default function Index() {
                                             aria-label={`Select PC ${pc.pc_number || pc.id}`}
                                         />
                                         <div>
-                                            <div className="text-xs text-muted-foreground">PC Number</div>
+                                            <div className="text-xs text-muted-foreground">QR Number</div>
                                             <div className="font-bold text-blue-600">
                                                 {pc.pc_number || <span className="text-gray-400">Not assigned</span>}
                                             </div>

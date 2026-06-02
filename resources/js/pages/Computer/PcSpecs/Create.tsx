@@ -159,7 +159,7 @@ export default function Create() {
                         <h2 className="mb-2 text-lg font-semibold">Core Info</h2>
                         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                             <div>
-                                <Label htmlFor="pc_number">PC Number <span className="text-red-500">*</span></Label>
+                                <Label htmlFor="pc_number">QR Number <span className="text-red-500">*</span></Label>
                                 <Input
                                     id="pc_number"
                                     value={form.data.pc_number}

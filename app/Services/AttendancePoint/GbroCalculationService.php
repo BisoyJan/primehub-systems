@@ -177,16 +177,14 @@ class GbroCalculationService
             $violationDate = Carbon::parse($violationAfterGbro->shift_date)->startOfDay();
 
             if ($violationDate->lessThan($nextScheduledGbro)) {
-                $daysFromNewest = $newestDate->diffInDays($today);
+                // Clock reset. Re-run initial gap detection on points after lastGbroDate
+                // so an intermediate point (e.g. Feb 24) can still GBRO-expire if a
+                // 60+ day clean window follows it before the next violation.
+                $pointsAfterLastGbro = $sortedPoints->filter(
+                    fn ($p) => Carbon::parse($p->shift_date)->startOfDay()->greaterThan($lastGbroDate->startOfDay())
+                )->values();
 
-                if ($daysFromNewest > 60) {
-                    $newGbro = $newestDate->copy()->addDays(60);
-                    if ($newGbro->lessThanOrEqualTo($today)) {
-                        return $newGbro;
-                    }
-                }
-
-                return null;
+                return $this->calculateInitialGbroDate($pointsAfterLastGbro, $newestDate, $today);
             }
         }
 

@@ -189,6 +189,14 @@ class AttendancePointCreationService
             $pointsCreated += $this->createUndertimePoint($attendance, $shiftDate);
         }
 
+        // Cascade after all points for this attendance are created so older points
+        // past their GBRO date get expired instead of having gbro_expires_at reset
+        // to (newShiftDate + 60) by a naive update of the newest 2 points.
+        if ($pointsCreated > 0) {
+            $this->gbroService->cascadeRecalculateGbro($attendance->user_id);
+            $this->auditUser($attendance->user_id, 'attendance_point_create');
+        }
+
         return $pointsCreated;
     }
 
@@ -222,10 +230,6 @@ class AttendancePointCreationService
             'eligible_for_gbro' => ! $isNcns,
         ]);
 
-        if (! $isNcns) {
-            $this->gbroService->updateUserGbroExpirationDates($attendance->user_id, $shiftDate);
-        }
-
         return 1;
     }
 
@@ -250,8 +254,6 @@ class AttendancePointCreationService
             'expiration_type' => 'sro',
             'eligible_for_gbro' => true,
         ]);
-
-        $this->gbroService->updateUserGbroExpirationDates($attendance->user_id, $shiftDate);
 
         return 1;
     }
@@ -278,8 +280,6 @@ class AttendancePointCreationService
             'expiration_type' => 'sro',
             'eligible_for_gbro' => true,
         ]);
-
-        $this->gbroService->updateUserGbroExpirationDates($attendance->user_id, $shiftDate);
 
         return 1;
     }
