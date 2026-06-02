@@ -28,6 +28,8 @@ use Illuminate\Support\Facades\Log;
  *   EXCUSED_HAS_GBRO_DATE  is_excused=true but gbro_expires_at set
  *   GBRO_ELIGIBILITY_MISMATCH  eligible_for_gbro flag wrong vs. point_type+is_advised
  *   EXPIRES_AT_OVERFLOW    expires_at doesn't match shift_date + (1y FTN/NCNS or 6mo)
+ *   GBRO_EXPIRES_AT_DRIFT  active point should have GBRO-expired by gap rule but
+ *                          gbro_expires_at was bumped forward (hiding overdue state)
  */
 class GbroAnomalyService
 {
@@ -172,6 +174,86 @@ class GbroAnomalyService
                     'expected' => $expectedFmt,
                     'actual' => $actualFmt,
                     'context' => ['shift_date' => $shift->format('Y-m-d')],
+                ]);
+            }
+        }
+
+        // GBRO_EXPIRES_AT_DRIFT
+        // Run cascadeRecalculateGbro inside a transaction per affected user, snapshot
+        // the resulting state, then rollback. Compare actual vs. simulated to catch
+        // any point whose is_expired / gbro_expires_at / expired_at differ from what
+        // the canonical cascade would produce. Catches subtle drift like an older
+        // point that should have GBRO-expired before a newer violation reset the clock.
+        $userScope = AttendancePoint::query()
+            ->where('eligible_for_gbro', true)
+            ->when($userId, fn ($q) => $q->where('user_id', $userId))
+            ->select('user_id')
+            ->distinct()
+            ->pluck('user_id');
+
+        foreach ($userScope as $uid) {
+            $before = AttendancePoint::query()
+                ->where('user_id', $uid)
+                ->where('eligible_for_gbro', true)
+                ->get(['id', 'is_expired', 'expiration_type', 'expired_at', 'gbro_expires_at'])
+                ->keyBy('id');
+
+            $after = null;
+            DB::beginTransaction();
+            try {
+                $this->gbroService->cascadeRecalculateGbro((int) $uid);
+                $after = AttendancePoint::query()
+                    ->where('user_id', $uid)
+                    ->where('eligible_for_gbro', true)
+                    ->get(['id', 'is_expired', 'expiration_type', 'expired_at', 'gbro_expires_at'])
+                    ->keyBy('id');
+            } catch (\Throwable $e) {
+                Log::warning('GBRO drift simulation failed', [
+                    'user_id' => $uid,
+                    'message' => $e->getMessage(),
+                ]);
+            } finally {
+                DB::rollBack();
+            }
+
+            if (! $after) {
+                continue;
+            }
+
+            foreach ($after as $id => $sim) {
+                $act = $before->get($id);
+                if (! $act) {
+                    continue;
+                }
+
+                $actExpired = (bool) $act->is_expired;
+                $simExpired = (bool) $sim->is_expired;
+                $actGbro = optional($act->gbro_expires_at)->format('Y-m-d');
+                $simGbro = optional($sim->gbro_expires_at)->format('Y-m-d');
+                $actType = $act->expiration_type;
+                $simType = $sim->expiration_type;
+
+                if ($actExpired === $simExpired && $actGbro === $simGbro && $actType === $simType) {
+                    continue;
+                }
+
+                $anomalies->push([
+                    'type' => 'GBRO_EXPIRES_AT_DRIFT',
+                    'user_id' => $uid,
+                    'attendance_point_id' => $id,
+                    'expected' => sprintf(
+                        'is_expired=%s; expiration_type=%s; gbro_expires_at=%s',
+                        $simExpired ? 'true' : 'false',
+                        $simType ?? 'null',
+                        $simGbro ?? 'null',
+                    ),
+                    'actual' => sprintf(
+                        'is_expired=%s; expiration_type=%s; gbro_expires_at=%s',
+                        $actExpired ? 'true' : 'false',
+                        $actType ?? 'null',
+                        $actGbro ?? 'null',
+                    ),
+                    'context' => null,
                 ]);
             }
         }
