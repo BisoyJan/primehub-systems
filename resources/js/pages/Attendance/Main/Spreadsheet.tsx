@@ -785,7 +785,7 @@ export default function AttendanceSpreadsheet() {
                                         {days.map((d) => (
                                             <Fragment key={d.date}>
                                                 <th
-                                                    className={`sticky top-0 z-10 w-11 min-w-11 max-w-11 border-b border-r px-1 py-1 text-center font-semibold ${d.is_saturday ? "bg-emerald-100 dark:bg-emerald-950" : d.is_weekend ? "bg-slate-300 dark:bg-slate-700" : "bg-slate-100 dark:bg-slate-800"}`}
+                                                    className={`sticky top-0 z-11 w-11 min-w-11 max-w-11 border-b border-r px-1 py-1 text-center font-semibold ${d.is_saturday ? "bg-emerald-100 dark:bg-emerald-950" : d.is_weekend ? "bg-slate-300 dark:bg-slate-700" : "bg-slate-100 dark:bg-slate-800"}`}
                                                 >
                                                     <div className="leading-tight">{d.day}</div>
                                                     <div className="text-[10px] font-normal text-muted-foreground leading-tight">
@@ -793,7 +793,7 @@ export default function AttendanceSpreadsheet() {
                                                     </div>
                                                 </th>
                                                 {d.is_saturday && (
-                                                    <th className="sticky top-0 z-10 w-16 min-w-16 max-w-16 border-b border-r bg-emerald-200 px-1 py-1 text-center font-semibold dark:bg-emerald-900">
+                                                    <th className="sticky top-0 z-11 w-16 min-w-16 max-w-16 border-b border-r bg-emerald-200 px-1 py-1 text-center font-semibold dark:bg-emerald-900">
                                                         <div className="leading-tight">Wk Hrs</div>
                                                         <div className="text-[10px] font-normal text-muted-foreground leading-tight">
                                                             ending {d.day}
@@ -864,7 +864,7 @@ function GroupRows({
             <tr>
                 <td
                     colSpan={2}
-                    className="sticky left-0 z-2 border-b border-t border-r bg-blue-100 px-3 py-1 text-sm font-bold uppercase tracking-wide text-blue-900 dark:bg-blue-950/80 dark:text-blue-100"
+                    className="sticky left-0 z-11 border-b border-t border-r bg-blue-100 px-3 py-1 text-sm font-bold uppercase tracking-wide text-blue-900 dark:bg-blue-950/80 dark:text-blue-100"
                 >
                     {group.campaign}
                 </td>
@@ -943,13 +943,13 @@ const EmployeeRow = memo(function EmployeeRow({
     return (
         <tr>
             <td
-                className={`sticky left-0 z-2 border-b border-r px-2 py-1 font-medium ${isRowSelected ? "bg-blue-100 dark:bg-blue-900/60" : rowBg
+                className={`sticky left-0 z-11 border-b border-r px-2 py-1 font-medium ${isRowSelected ? "bg-blue-100 dark:bg-blue-900/60" : rowBg
                     }`}
             >
                 <span>{employee.name}</span>
             </td>
             <td
-                className={`sticky left-46 z-2 border-b border-r p-0 text-center font-mono ${isRowSelected ? "bg-blue-100 dark:bg-blue-900/60" : rowBg
+                className={`sticky left-46 z-11 border-b border-r p-0 text-center font-mono ${isRowSelected ? "bg-blue-100 dark:bg-blue-900/60" : rowBg
                     }`}
             >
                 {canManagePoints ? (
@@ -1265,7 +1265,7 @@ function LiveEditorBadge({ editors, colorFor }: { editors: PresenceUser[]; color
     const title = editors.map((e) => e.name).join(', ') + ' editing';
     return (
         <span
-            className="absolute -top-1 -right-1 z-10 flex items-center justify-center"
+            className="absolute top-0.5 right-0.5 z-10 flex items-center justify-center"
             title={title}
         >
             <Avatar
@@ -1282,7 +1282,7 @@ function LiveEditorBadge({ editors, colorFor }: { editors: PresenceUser[]; color
             </Avatar>
             {editors.length > 1 && (
                 <span
-                    className="absolute -bottom-1 -right-1 rounded-full px-1 text-[7px] font-semibold leading-none text-white"
+                    className="absolute top-0 -right-1 rounded-full px-1 text-[7px] font-semibold leading-none text-white"
                     style={{ backgroundColor: color }}
                 >
                     +{editors.length - 1}
@@ -1339,7 +1339,7 @@ const CellView = memo(function CellView({
         return () => whisperFocus(null);
     }, [open, key, whisperFocus]);
 
-    const tdClass = `w-11 min-w-11 max-w-11 h-9 border-b border-r px-1 py-1 text-center text-[11px] tabular-nums align-middle ${cellClass(
+    const tdClass = `w-11 min-w-11 max-w-11 h-9 overflow-hidden border-b border-r px-1 py-1 text-center text-[11px] tabular-nums align-middle ${cellClass(
         cell,
         date.is_weekend
     )} ${unverifiedRing(cell)}`;
