@@ -1386,7 +1386,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                     </TableRow>
                                 ) : (
                                     pointsData.data.map((point) => (
-                                        <TableRow key={point.id} className={`hover:bg-muted/50 ${point.is_expired ? 'opacity-60' : ''}`}>
+                                        <TableRow key={point.id} className={`hover:bg-muted/50 ${point.is_expired || point.is_excused ? 'opacity-60' : ''}`}>
                                             <TableCell>
                                                 <div className="flex items-center gap-2">
                                                     <Avatar className="h-7 w-7 shrink-0">
@@ -1585,7 +1585,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                         pointsData.data.map((point) => (
                             <div
                                 key={point.id}
-                                className="bg-card border rounded-lg p-4 shadow-sm space-y-3"
+                                className={`bg-card border rounded-lg p-4 shadow-sm space-y-3${point.is_expired || point.is_excused ? ' opacity-60' : ''}`}
                             >
                                 <div className="flex items-start justify-between">
                                     <div className="flex items-center gap-2 flex-1">

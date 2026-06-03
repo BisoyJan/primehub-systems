@@ -77,7 +77,6 @@ interface Station {
         id: number;
         pc_number?: string | null;
         manufacturer?: string | null;
-        model: string;
         memory_type?: string | null;
         ram_gb: number;
         disk_gb: number;
@@ -1009,7 +1008,7 @@ export default function StationIndex() {
                                         <TableHead>Campaign</TableHead>
                                         <TableHead>Status</TableHead>
                                         <TableHead>Monitor Type</TableHead>
-                                        <TableHead>PC Spec</TableHead>
+                                        <TableHead>PC Full Details</TableHead>
                                         <TableHead className="hidden lg:table-cell">Processor</TableHead>
                                         <TableHead className="hidden xl:table-cell">PC Issue</TableHead>
                                         <TableHead className="hidden xl:table-cell">PC Notes</TableHead>
@@ -1145,7 +1144,7 @@ export default function StationIndex() {
                                                                     <span>{station.pc_spec}</span>
                                                                     {station.pc_spec_details.pc_number && (
                                                                         <div className="text-xs text-blue-600 mt-0.5">
-                                                                            PC: {station.pc_spec_details.pc_number}
+                                                                            # {station.pc_spec_details.pc_number}
                                                                         </div>
                                                                     )}
                                                                 </div>
@@ -1483,7 +1482,7 @@ export default function StationIndex() {
                                 {selectedPcSpec?.pc_number || (selectedPcSpec ? `PC #${selectedPcSpec.id}` : 'PC Details')}
                             </DialogTitle>
                             <DialogDescription>
-                                {selectedPcSpec ? `${selectedPcSpec.manufacturer ?? ''} ${selectedPcSpec.model}`.trim() : 'No PC selected'}
+                                {selectedPcSpec ? selectedPcSpec.manufacturer ?? '' : 'No PC selected'}
                             </DialogDescription>
                         </DialogHeader>
                         {selectedPcSpec ? (
@@ -1556,7 +1555,7 @@ export default function StationIndex() {
                             <DialogDescription>
                                 {selectedPcSpec && (
                                     <span className="text-sm wrap-break-word">
-                                        {selectedPcSpec.pc_number || selectedPcSpec.model}
+                                        {selectedPcSpec.pc_number || selectedPcSpec.manufacturer}
                                     </span>
                                 )}
                             </DialogDescription>
@@ -1596,7 +1595,7 @@ export default function StationIndex() {
                             <DialogDescription>
                                 {selectedPcSpec && (
                                     <span className="text-sm wrap-break-word">
-                                        {selectedPcSpec.model}
+                                        {selectedPcSpec.pc_number || selectedPcSpec.manufacturer}
                                     </span>
                                 )}
                             </DialogDescription>
@@ -1636,7 +1635,7 @@ export default function StationIndex() {
                             <DialogDescription>
                                 {selectedPcSpec && (
                                     <span className="text-sm wrap-break-word">
-                                        {selectedPcSpec.pc_number || selectedPcSpec.model}
+                                        {selectedPcSpec.pc_number || selectedPcSpec.manufacturer}
                                     </span>
                                 )}
                             </DialogDescription>

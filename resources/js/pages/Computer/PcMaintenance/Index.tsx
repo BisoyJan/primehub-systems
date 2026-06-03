@@ -631,7 +631,7 @@ export default function Index({ maintenances, sites, filters = {}, allMatchingId
                                                     />
                                                 </TableHead>
                                             )}
-                                            <TableHead>PC Number</TableHead>
+                                            <TableHead>Stock Number</TableHead>
                                             <TableHead>Current Station</TableHead>
                                             <TableHead>Site</TableHead>
                                             <TableHead>Maintenance Type</TableHead>

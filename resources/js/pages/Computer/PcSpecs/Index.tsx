@@ -90,6 +90,7 @@ interface PcSpec {
     bios_release_date?: string | null;
     issue?: string | null;
     processorSpecs: ProcessorSpec[];
+    station_numbers: string[];
 }
 
 interface PaginatedPcSpecs {
@@ -785,7 +786,8 @@ export default function Index() {
                                                 aria-label="Select all PC specs"
                                             />
                                         </TableHead>
-                                        <TableHead>QR Number</TableHead>
+                                        <TableHead>Stock Number</TableHead>
+                                        <TableHead>Station</TableHead>
                                         <TableHead>Manufacturer</TableHead>
                                         <TableHead className="hidden xl:table-cell">Processor</TableHead>
                                         <TableHead className="hidden xl:table-cell">Cores</TableHead>
@@ -814,6 +816,17 @@ export default function Index() {
                                                 </TableCell>
                                                 <TableCell className="font-medium">
                                                     {pc.pc_number || <span className="text-gray-400">—</span>}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {pc.station_numbers.length > 0 ? (
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {pc.station_numbers.map((sn) => (
+                                                                <Badge key={sn} variant="secondary" className="text-xs">{sn}</Badge>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-xs text-gray-400">—</span>
+                                                    )}
                                                 </TableCell>
                                                 <TableCell>{pc.manufacturer}</TableCell>
                                                 <TableCell className="hidden xl:table-cell">{procLabel}</TableCell>
@@ -988,7 +1001,7 @@ export default function Index() {
 
                                 <TableFooter>
                                     <TableRow>
-                                        <TableCell colSpan={11} className="text-center font-medium">
+                                        <TableCell colSpan={12} className="text-center font-medium">
                                             PC Specs List
                                         </TableCell>
                                     </TableRow>
@@ -1050,6 +1063,18 @@ export default function Index() {
                                     <div className="flex justify-between">
                                         <span className="text-muted-foreground">Disk:</span>
                                         <span className="font-medium">{pc.disk_gb} GB</span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-muted-foreground">Station:</span>
+                                        {pc.station_numbers.length > 0 ? (
+                                            <div className="flex flex-wrap gap-1 justify-end">
+                                                {pc.station_numbers.map((sn) => (
+                                                    <Badge key={sn} variant="secondary" className="text-xs">{sn}</Badge>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <span className="text-xs text-gray-400">—</span>
+                                        )}
                                     </div>
                                     {pc.available_ports && (
                                         <div className="flex justify-between">

@@ -141,6 +141,7 @@ interface DayMeta {
     weekday: string;
     is_weekend: boolean;
     is_saturday: boolean;
+    is_overflow: boolean;
 }
 
 interface Campaign {
@@ -785,7 +786,7 @@ export default function AttendanceSpreadsheet() {
                                         {days.map((d) => (
                                             <Fragment key={d.date}>
                                                 <th
-                                                    className={`sticky top-0 z-11 w-11 min-w-11 max-w-11 border-b border-r px-1 py-1 text-center font-semibold ${d.is_saturday ? "bg-emerald-100 dark:bg-emerald-950" : d.is_weekend ? "bg-slate-300 dark:bg-slate-700" : "bg-slate-100 dark:bg-slate-800"}`}
+                                                    className={`sticky top-0 z-11 w-11 min-w-11 max-w-11 border-b border-r px-1 py-1 text-center font-semibold ${d.is_overflow ? "bg-slate-50 text-slate-400 dark:bg-slate-900 dark:text-slate-600" : d.is_saturday ? "bg-emerald-100 dark:bg-emerald-950" : d.is_weekend ? "bg-slate-300 dark:bg-slate-700" : "bg-slate-100 dark:bg-slate-800"}`}
                                                 >
                                                     <div className="leading-tight">{d.day}</div>
                                                     <div className="text-[10px] font-normal text-muted-foreground leading-tight">
@@ -1342,7 +1343,7 @@ const CellView = memo(function CellView({
     const tdClass = `w-11 min-w-11 max-w-11 h-9 overflow-hidden border-b border-r px-1 py-1 text-center text-[11px] tabular-nums align-middle ${cellClass(
         cell,
         date.is_weekend
-    )} ${unverifiedRing(cell)}`;
+    )} ${unverifiedRing(cell)} ${date.is_overflow ? "opacity-60" : ""}`;
 
     const label = cellLabel(cell);
 

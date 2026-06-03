@@ -3042,9 +3042,14 @@ class AttendanceController extends Controller
         $campaignFilter = $request->input('campaign_id');
         $search = trim((string) $request->input('search', ''));
 
-        // Whole-month calendar view (Sunday → Saturday weeks).
-        $startDate = Carbon::create($year, $month, 1)->startOfMonth();
-        $endDate = (clone $startDate)->endOfMonth();
+        // Whole-month calendar view (Sunday → Saturday weeks). Extend the
+        // visible range to the surrounding full weeks so month-edge days
+        // (e.g. Jun 28–30 + Jul 1–4 for June 2026) are part of a complete
+        // week column and roll into the same Saturday week-total.
+        $monthStart = Carbon::create($year, $month, 1)->startOfMonth();
+        $monthEnd = (clone $monthStart)->endOfMonth();
+        $startDate = (clone $monthStart)->startOfWeek(Carbon::SUNDAY);
+        $endDate = (clone $monthEnd)->endOfWeek(Carbon::SATURDAY);
 
         // Resolve which campaigns to include
         $campaignIds = null;
@@ -3113,6 +3118,7 @@ class AttendanceController extends Controller
                 'weekday' => $d->format('D'),
                 'is_weekend' => in_array((int) $d->format('w'), [0, 6]),
                 'is_saturday' => (int) $d->format('w') === 6,
+                'is_overflow' => $d->lt($monthStart) || $d->gt($monthEnd),
             ];
         }
 
@@ -3357,12 +3363,11 @@ class AttendanceController extends Controller
             fn ($sat) => $sat->gte($boundary) && $sat->lte($saturday)
         );
 
-        DB::transaction(function () use ($included, $saturday, $userId, $monthStart) {
+        DB::transaction(function () use ($included, $saturday, $userId) {
             foreach ($included as $sat) {
+                // Weeks run Sunday → Saturday and may span the month boundary
+                // (e.g. clicking Sat Jul 4 from the June view rolls in Jun 28–30).
                 $weekStart = (clone $sat)->startOfWeek(Carbon::SUNDAY);
-                if ($weekStart->lt($monthStart)) {
-                    $weekStart = (clone $monthStart);
-                }
 
                 $hours = $this->computeWeekHours($userId, $weekStart, $sat);
 

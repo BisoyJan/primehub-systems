@@ -141,8 +141,9 @@ cd /var/www/primehub-systems
 # Step 3: Enable maintenance mode
 php artisan down --secret="migration-in-progress-2024"
 
-# Step 4: Stop queue workers (prevents jobs from running with old schema)
+# Step 4: Stop queue workers and Reverb (prevents jobs from running with old schema)
 sudo supervisorctl stop primehub-queue
+sudo supervisorctl stop primehub-reverb
 
 # Step 5: Pull latest code
 git pull origin main
@@ -159,8 +160,9 @@ php artisan route:cache
 php artisan view:cache
 php artisan event:cache
 
-# Step 9: Restart queue workers
+# Step 9: Restart queue workers and Reverb
 sudo supervisorctl start primehub-queue
+sudo supervisorctl start primehub-reverb
 
 # Step 10: Disable maintenance mode
 php artisan up
@@ -391,6 +393,8 @@ deploy_full() {
     
     php artisan down --secret="deploy-$(date +%Y%m%d)"
     sudo supervisorctl stop primehub-queue
+    sudo supervisorctl stop primehub-reverb
+    sudo supervisorctl stop primehub-reverb
     
     git pull origin $BRANCH
     composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
@@ -409,7 +413,7 @@ deploy_full() {
     sudo chmod -R 775 storage bootstrap/cache
     
     sudo supervisorctl start primehub-queue
-    sudo systemctl restart php8.4-fpm
+    sudo supervisorctl start primehub-reverb    sudo supervisorctl start primehub-reverb    sudo systemctl restart php8.4-fpm
     
     php artisan up
     echo "✅ Full deployment complete!"
@@ -540,7 +544,26 @@ sudo supervisorctl restart primehub-queue
 tail -f /var/log/supervisor/primehub-queue.log
 ```
 
-#### 4. Permission Issues After Deployment
+#### 4. Reverb WebSocket Not Connecting
+
+```bash
+# Check Reverb status
+sudo supervisorctl status primehub-reverb
+
+# Restart Reverb
+sudo supervisorctl restart primehub-reverb
+
+# Check Reverb logs
+tail -f /var/log/supervisor/primehub-reverb.log
+
+# Verify Reverb is listening on port 8080
+ss -tlnp | grep 8080
+
+# Test WebSocket connectivity (requires wscat)
+wscat -c wss://yourdomain.com/app/YOUR_REVERB_APP_KEY
+```
+
+#### 5. Permission Issues After Deployment
 
 ```bash
 sudo chown -R primehub:www-data /var/www/primehub-systems
@@ -548,7 +571,7 @@ sudo chmod -R 775 /var/www/primehub-systems/storage
 sudo chmod -R 775 /var/www/primehub-systems/bootstrap/cache
 ```
 
-#### 5. Cache Not Clearing
+#### 6. Cache Not Clearing
 
 ```bash
 # Clear all caches
@@ -566,7 +589,7 @@ php artisan view:cache
 sudo systemctl restart php8.4-fpm
 ```
 
-#### 6. Git Pull Conflicts
+#### 7. Git Pull Conflicts
 
 ```bash
 # Force pull (overwrites local changes)
@@ -579,7 +602,7 @@ git pull origin main
 git stash pop  # Apply stashed changes back
 ```
 
-#### 7. NPM Build Failing
+#### 8. NPM Build Failing
 
 ```bash
 # Clear npm cache
@@ -591,7 +614,7 @@ npm install
 npm run build
 ```
 
-#### 8. Composer Memory Issues
+#### 9. Composer Memory Issues
 
 ```bash
 # Increase PHP memory limit for composer
@@ -621,6 +644,32 @@ sudo supervisorctl restart primehub-queue
 sudo supervisorctl reread
 sudo supervisorctl update
 ```
+
+### Reverb WebSocket Server Management
+
+```bash
+# View status
+sudo supervisorctl status primehub-reverb
+
+# Stop
+sudo supervisorctl stop primehub-reverb
+
+# Start
+sudo supervisorctl start primehub-reverb
+
+# Restart
+sudo supervisorctl restart primehub-reverb
+
+# View logs
+tail -f /var/log/supervisor/primehub-reverb.log
+
+# Reload supervisor config (after editing supervisor.conf)
+sudo supervisorctl reread
+sudo supervisorctl update
+```
+
+> **Note:** Reverb runs on port `8080` and is proxied through Nginx on port 443.
+> Always restart Reverb after deploying code changes that affect broadcasting or WebSocket event classes.
 
 ### Nginx Management
 
@@ -729,6 +778,9 @@ mysql -u primehub_user -p primehub_systems < /var/backups/primehub/backup_YYYYMM
 | Cache config | `php artisan config:cache` |
 | Cache routes | `php artisan route:cache` |
 | Restart queue | `php artisan queue:restart` |
+| Stop Reverb | `sudo supervisorctl stop primehub-reverb` |
+| Start Reverb | `sudo supervisorctl start primehub-reverb` |
+| Restart Reverb | `sudo supervisorctl restart primehub-reverb` |
 | Restart PHP-FPM | `sudo systemctl restart php8.4-fpm` |
 | Stop queue worker | `sudo supervisorctl stop primehub-queue` |
 | Start queue worker | `sudo supervisorctl start primehub-queue` |

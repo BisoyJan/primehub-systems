@@ -32,7 +32,7 @@ class PcSpecController extends Controller
 
         $sortDirection = in_array($request->input('sort_dir'), ['asc', 'desc']) ? $request->input('sort_dir') : 'asc';
 
-        $query = PcSpec::with(['processorSpecs'])
+        $query = PcSpec::with(['processorSpecs', 'stations'])
             ->orderByRaw("CAST(REGEXP_REPLACE(pc_number, '[^0-9]', '') AS UNSIGNED) {$sortDirection}")
             ->orderBy('pc_number', $sortDirection);
 
@@ -101,6 +101,7 @@ class PcSpecController extends Controller
                     'base_clock_ghz' => $p->base_clock_ghz ?? null,
                     'boost_clock_ghz' => $p->boost_clock_ghz ?? null,
                 ])->toArray(),
+                'station_numbers' => $pc->stations->pluck('station_number')->filter()->values()->toArray(),
             ]);
 
         // All PCs for multi-select dropdown (lightweight)

@@ -36,16 +36,72 @@ const errorConfig: Record<number, { title: string; description: string; icon: Re
     },
 };
 
-const quotes = [
-    'Not all who wander are lost, but this page definitely is.',
-    'The best journeys sometimes take unexpected detours.',
-    'Every wrong turn is a chance to discover something new.',
-    'Lost pages are just adventures waiting to be found.',
-    'Sometimes the path less traveled doesn\'t exist at all.',
+const quotesByStatus: Record<number, string[]> = {
+    403: [
+        'Not all doors are meant to be opened.',
+        'Power is nothing without permission.',
+        'Some rooms require a key — you don\'t have this one.',
+        'Access is a privilege, not a right.',
+        'Even curiosity has its limits.',
+        'The lock exists for a reason.',
+        'Not every path is meant for every traveler.',
+        'Boundaries are the architecture of trust.',
+        'You knocked — but this door doesn\'t answer.',
+        'Some knowledge is guarded for good reason.',
+        'If there is birth death is certain, if there is death birth is certain.'
+    ],
+    404: [
+        'Not all who wander are lost, but this page definitely is.',
+        'The best journeys sometimes take unexpected detours.',
+        'Every wrong turn is a chance to discover something new.',
+        'Lost pages are just adventures waiting to be found.',
+        'Sometimes the path less traveled doesn\'t exist at all.',
+        'Even the best explorers occasionally lose their map.',
+        'Getting lost is the first step to being found.',
+        'The page you seek may be gone, but the journey continues.',
+        'Great discoveries often begin with a wrong turn.',
+        'In the land of 404s, imagination is your compass.',
+        'Some pages are like shooting stars — brief, brilliant, and gone.',
+        'The road to knowledge is paved with broken links.',
+        'If there is birth death is certain, if there is death birth is certain.'
+    ],
+    500: [
+        'Even the best machines stumble sometimes.',
+        'Behind every error message is a story worth telling.',
+        'The best code is written after the worst bugs are found.',
+        'Debugging is the art of being a detective in a story you wrote yourself.',
+        'Every crash is a lesson the system needed to learn.',
+        'Great software is built on the ruins of its failures.',
+        'Chaos is just order waiting to be understood.',
+        'Errors are the universe\'s way of saying: try again, differently.',
+        'Even systems need a moment to breathe and reflect.',
+        'The server stumbled — but it will rise again.',
+        'If there is birth death is certain, if there is death birth is certain.'
+    ],
+    503: [
+        'Good things come to those who wait.',
+        'Even the best performers need intermission.',
+        'Maintenance today means reliability tomorrow.',
+        'Pause, breathe — we\'ll be back stronger.',
+        'The best systems know when to rest.',
+        'A moment of downtime is a promise of uptime.',
+        'We\'re polishing the gears — back soon.',
+        'Scheduled silence is better than unexpected noise.',
+        'Even champions take a timeout.',
+        'The stage is being set for your return.',
+        'If there is birth death is certain, if there is death birth is certain.'
+    ],
+};
+
+const defaultQuotes = [
+    'Every error is a lesson dressed in digital clothing.',
+    'The road to knowledge is paved with broken links.',
+    'Chaos is just order waiting to be understood.',
 ];
 
 export default function Error({ status, message }: ErrorPageProps) {
     const config = errorConfig[status] || errorConfig[404];
+    const quotes = quotesByStatus[status] ?? defaultQuotes;
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [currentQuote, setCurrentQuote] = useState(quotes[0]);
     const [fadeOut, setFadeOut] = useState(false);
@@ -196,6 +252,7 @@ export default function Error({ status, message }: ErrorPageProps) {
 
     // Quote rotation
     useEffect(() => {
+        setCurrentQuote(quotes[0]);
         let quoteIndex = 0;
         const interval = setInterval(() => {
             setFadeOut(true);

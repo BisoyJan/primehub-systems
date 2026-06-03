@@ -71,7 +71,7 @@ const getNavigationConfig = (userId: number, userRole: string, coachingPendingAc
             label: 'Computer Specs',
             items: [
                 {
-                    title: 'Processor Specs',
+                    title: 'Processor List',
                     href: processorIndex.url(),
                     icon: CpuIcon,
                     permission: 'hardware.view',
