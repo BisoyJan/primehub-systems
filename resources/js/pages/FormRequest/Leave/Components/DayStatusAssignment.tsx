@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 
 export interface DayStatus {
     date: string;
-    status: 'pending' | 'sl_credited' | 'ncns' | 'advised_absence' | 'vl_credited' | 'upto' | 'spl_credited' | 'absent';
+    status: 'pending' | 'sl_credited' | 'ncns' | 'advised_absence' | 'vl_credited' | 'upto' | 'spl_credited' | 'absent' | 'partial_day_absence';
     notes?: string;
     is_half_day?: boolean;
 }
@@ -69,6 +69,16 @@ const SL_STATUS_OPTIONS = [
         dotColor: 'bg-amber-500',
         tag: 'Unpaid',
         tagColor: 'text-amber-600 dark:text-amber-400',
+    },
+    {
+        value: 'partial_day_absence',
+        label: 'Partial-day Absence',
+        shortLabel: 'Partial-day Absence',
+        description: 'Worked hours are counted on attendance; no credits used',
+        color: 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800',
+        dotColor: 'bg-blue-500',
+        tag: 'Unpaid',
+        tagColor: 'text-blue-600 dark:text-blue-400',
     },
 ] as const;
 
@@ -173,9 +183,10 @@ export default function DayStatusAssignment({ dayStatuses, onChange, readOnly = 
             .reduce((sum, d) => sum + (d.is_half_day ? 0.5 : 1), 0);
         const ncns = dayStatuses.filter((d) => d.status === 'ncns').length;
         const advised = dayStatuses.filter((d) => d.status === 'advised_absence' || d.status === 'upto').length;
+        const partialDay = dayStatuses.filter((d) => d.status === 'partial_day_absence').length;
         const absent = dayStatuses.filter((d) => d.status === 'absent').length;
         const pending = dayStatuses.filter((d) => d.status === 'pending').length;
-        return { credited, creditedValue, ncns, advised, absent, pending, total: dayStatuses.length };
+        return { credited, creditedValue, ncns, advised, partialDay, absent, pending, total: dayStatuses.length };
     }, [dayStatuses, paidStatuses]);
 
     const creditExceeded = creditPreviewInfo && summary.creditedValue > creditPreviewInfo.availableCredits;
@@ -227,6 +238,11 @@ export default function DayStatusAssignment({ dayStatuses, onChange, readOnly = 
                 {summary.advised > 0 && (
                     <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-400">
                         <AlertTriangle className="h-3 w-3" /> {summary.advised} {creditLabel === 'VL' ? 'UPTO' : 'Advised Absence'}
+                    </span>
+                )}
+                {summary.partialDay > 0 && (
+                    <span className="inline-flex items-center gap-1 text-xs font-medium text-blue-700 dark:text-blue-400">
+                        <AlertTriangle className="h-3 w-3" /> {summary.partialDay} Partial-day Absence
                     </span>
                 )}
                 {summary.absent > 0 && (

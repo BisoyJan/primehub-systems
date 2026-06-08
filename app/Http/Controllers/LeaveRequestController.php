@@ -713,6 +713,7 @@ class LeaveRequestController extends Controller
                 'campaign_department' => $request->campaign_department,
                 'medical_cert_submitted' => $request->boolean('medical_cert_submitted', false),
                 'medical_cert_path' => $medicalCertPath,
+                'sl_with_undertime' => $request->leave_type === 'SL' ? $request->boolean('sl_with_undertime', false) : false,
                 'status' => 'pending',
                 'attendance_points_at_request' => $attendancePoints,
                 'requires_tl_approval' => $requiresTlApproval,
@@ -1315,6 +1316,7 @@ class LeaveRequestController extends Controller
                 'campaign_department' => $request->campaign_department,
                 'medical_cert_submitted' => $request->boolean('medical_cert_submitted', false),
                 'medical_cert_path' => $medicalCertPath,
+                'sl_with_undertime' => $request->leave_type === 'SL' ? $request->boolean('sl_with_undertime', false) : false,
                 'attendance_points_at_request' => $attendancePoints,
             ];
 
@@ -1945,7 +1947,7 @@ class LeaveRequestController extends Controller
             'denial_reason' => 'nullable|required_with:denied_dates|string|min:10',
             'day_statuses' => 'nullable|array',
             'day_statuses.*.date' => 'required_with:day_statuses|date',
-            'day_statuses.*.status' => 'required_with:day_statuses|string|in:pending,sl_credited,ncns,advised_absence,vl_credited,upto,spl_credited,absent',
+            'day_statuses.*.status' => 'required_with:day_statuses|string|in:pending,sl_credited,ncns,advised_absence,vl_credited,upto,spl_credited,absent,partial_day_absence',
             'day_statuses.*.is_half_day' => 'nullable|boolean',
             'day_statuses.*.notes' => 'nullable|string|max:500',
             'spl_half_day_overrides' => 'nullable|array',
@@ -2326,7 +2328,7 @@ class LeaveRequestController extends Controller
             'review_notes' => 'nullable|string|max:1000',
             'day_statuses' => 'nullable|array',
             'day_statuses.*.date' => 'required_with:day_statuses|date',
-            'day_statuses.*.status' => 'required_with:day_statuses|string|in:pending,sl_credited,ncns,advised_absence,vl_credited,upto,spl_credited,absent',
+            'day_statuses.*.status' => 'required_with:day_statuses|string|in:pending,sl_credited,ncns,advised_absence,vl_credited,upto,spl_credited,absent,partial_day_absence',
             'day_statuses.*.is_half_day' => 'nullable|boolean',
             'day_statuses.*.notes' => 'nullable|string|max:500',
         ]);
@@ -3651,6 +3653,7 @@ class LeaveRequestController extends Controller
         $creditedDays = 0;
         $ncnsDays = 0;
         $advisedAbsenceDays = 0;
+        $partialDayAbsenceDays = 0;
 
         foreach ($allDates as $dateStr) {
             $dayInfo = $dayStatusMap[$dateStr] ?? null;
@@ -3687,6 +3690,20 @@ class LeaveRequestController extends Controller
                     );
                     $advisedAbsenceDays++;
                     break;
+
+                case LeaveRequestDay::STATUS_PARTIAL_DAY_ABSENCE:
+                    // Partial-day Absence — employee reported to work but went home sick (or arrived late).
+                    // Preserve the existing attendance status/times so worked hours are still counted on
+                    // the spreadsheet; only link the leave request so the resulting attendance point can
+                    // be auto-excused when a medical certificate is attached.
+                    $this->linkAttendanceForPartialDayAbsence(
+                        $user,
+                        $dateStr,
+                        "Partial-day Absence (SL with Undertime) - Leave Request #{$leaveRequest->id}".($dayNotes ? " - {$dayNotes}" : ''),
+                        $leaveRequest->id
+                    );
+                    $partialDayAbsenceDays++;
+                    break;
             }
         }
 
@@ -3704,7 +3721,7 @@ class LeaveRequestController extends Controller
             'credits_deducted' => $creditedDays,
             'sl_credits_applied' => $creditedDays > 0,
             'approved_days' => $creditedDays,
-            'sl_no_credit_reason' => $this->buildSlSummaryReason($creditedDays, $ncnsDays, $advisedAbsenceDays),
+            'sl_no_credit_reason' => $this->buildSlSummaryReason($creditedDays, $ncnsDays, $advisedAbsenceDays, $partialDayAbsenceDays),
         ]);
 
         // Auto-excuse attendance points for credited and advised absence days (with med cert)
@@ -3716,6 +3733,7 @@ class LeaveRequestController extends Controller
             'credited_days' => $creditedDays,
             'ncns_days' => $ncnsDays,
             'advised_absence_days' => $advisedAbsenceDays,
+            'partial_day_absence_days' => $partialDayAbsenceDays,
             'total_days' => count($allDates),
             'admin_assigned' => $dayStatuses !== null,
         ]);
@@ -3735,6 +3753,38 @@ class LeaveRequestController extends Controller
     protected function autoAssignSlDayStatuses(LeaveRequest $leaveRequest, LeaveCreditService $leaveCreditService, array $allDates): Collection
     {
         $user = $leaveRequest->user;
+
+        // SL with Undertime: employee reported to work but went home sick.
+        // Per policy, leave credits are not consumed for partial-day absences —
+        // all days default to Advised Absence (UPTO, unpaid). Admin can still
+        // override per-day via updateDayStatuses if needed.
+        if ($leaveRequest->sl_with_undertime) {
+            $existingAttendances = Attendance::where('user_id', $user->id)
+                ->whereIn('shift_date', $allDates)
+                ->pluck('status', 'shift_date')
+                ->mapWithKeys(fn ($status, $date) => [Carbon::parse($date)->format('Y-m-d') => $status]);
+
+            $result = collect();
+            foreach ($allDates as $dateStr) {
+                $existingStatus = $existingAttendances[$dateStr] ?? null;
+                if ($existingStatus === 'ncns') {
+                    $result[$dateStr] = [
+                        'date' => $dateStr,
+                        'status' => LeaveRequestDay::STATUS_NCNS,
+                        'notes' => 'Auto-detected: Existing NCNS status preserved',
+                    ];
+                } else {
+                    $result[$dateStr] = [
+                        'date' => $dateStr,
+                        'status' => LeaveRequestDay::STATUS_PARTIAL_DAY_ABSENCE,
+                        'notes' => 'Auto-assigned: Partial-day Absence — worked hours counted, no leave credits consumed',
+                    ];
+                }
+            }
+
+            return $result;
+        }
+
         $creditCheck = $leaveCreditService->checkSlCreditDeduction($user, $leaveRequest);
 
         // Get existing attendance records to detect NCNS
@@ -3897,6 +3947,77 @@ class LeaveRequestController extends Controller
     }
 
     /**
+     * Link an SL leave request to an existing attendance record without
+     * destroying its worked hours. Used for "Partial-day Absence" days where
+     * the employee worked partial hours (tardy/undertime) — total_minutes_worked
+     * and biometric scans are preserved so the spreadsheet keeps counting the
+     * hours and the attendance point can be auto-excused via medical certificate.
+     *
+     * Any "absent-like" status (advised_absence, ncns, half_day_absence, absent)
+     * is cleared so the spreadsheet does not show ABS for this day — partial-day
+     * by definition means the employee did some work.
+     *
+     * If no attendance row exists yet, one is created as 'present_no_bio' so the
+     * row is linked to the leave request without falsely showing ABS.
+     */
+    protected function linkAttendanceForPartialDayAbsence(
+        User $user,
+        string $dateStr,
+        string $notes,
+        int $leaveRequestId
+    ): void {
+        $absentLikeStatuses = ['advised_absence', 'ncns', 'half_day_absence', 'absent'];
+
+        $attendance = Attendance::where('user_id', $user->id)
+            ->where('shift_date', $dateStr)
+            ->first();
+
+        if ($attendance) {
+            $existingNotes = $attendance->notes ? $attendance->notes."\n" : '';
+            $payload = [
+                'notes' => $existingNotes.$notes,
+                'leave_request_id' => $leaveRequestId,
+                'admin_verified' => true,
+            ];
+
+            // Always snapshot the prior status so cancellation can revert (not
+            // delete) this row — required because a Partial-day SL day intentionally
+            // keeps a worked-hours status and the rollback logic uses pre_leave_status
+            // to decide between revert vs delete.
+            if ($attendance->pre_leave_status === null) {
+                $payload['pre_leave_status'] = $attendance->status;
+            }
+
+            if (in_array($attendance->status, $absentLikeStatuses, true)) {
+                $hasBio = $attendance->actual_time_in !== null || $attendance->actual_time_out !== null;
+                // Has biometric → 'tardy' so worked hours render on the spreadsheet.
+                // No biometric → 'present_no_bio' so the cell stays neutral (not ABS).
+                $payload['status'] = $hasBio ? 'tardy' : 'present_no_bio';
+            }
+
+            $attendance->update($payload);
+
+            return;
+        }
+
+        $schedule = $this->getActiveScheduleForDate($user->id, $dateStr);
+        Attendance::create([
+            'user_id' => $user->id,
+            'employee_schedule_id' => $schedule?->id,
+            'shift_date' => $dateStr,
+            'scheduled_time_in' => $schedule?->scheduled_time_in,
+            'scheduled_time_out' => $schedule?->scheduled_time_out,
+            'status' => 'present_no_bio',
+            // Capture so cancellation can revert (and keep any scans added later)
+            // instead of deleting the row outright.
+            'pre_leave_status' => 'present_no_bio',
+            'notes' => $notes,
+            'leave_request_id' => $leaveRequestId,
+            'admin_verified' => true,
+        ]);
+    }
+
+    /**
      * Process an NCNS day for SL approval.
      * Sets/preserves ncns status on attendance and creates attendance point.
      */
@@ -3983,7 +4104,7 @@ class LeaveRequestController extends Controller
 
         // Get the per-day statuses — only excuse points for sl_credited and advised_absence days
         $excusableDates = $leaveRequest->days()
-            ->whereIn('day_status', [LeaveRequestDay::STATUS_SL_CREDITED, LeaveRequestDay::STATUS_ADVISED_ABSENCE])
+            ->whereIn('day_status', [LeaveRequestDay::STATUS_SL_CREDITED, LeaveRequestDay::STATUS_ADVISED_ABSENCE, LeaveRequestDay::STATUS_PARTIAL_DAY_ABSENCE])
             ->pluck('date')
             ->map(fn ($d) => Carbon::parse($d)->format('Y-m-d'))
             ->toArray();
@@ -4033,7 +4154,7 @@ class LeaveRequestController extends Controller
     /**
      * Build a summary reason string for SL per-day status breakdown.
      */
-    protected function buildSlSummaryReason(int $creditedDays, int $ncnsDays, int $advisedAbsenceDays): ?string
+    protected function buildSlSummaryReason(int $creditedDays, int $ncnsDays, int $advisedAbsenceDays, int $partialDayAbsenceDays = 0): ?string
     {
         $parts = [];
         if ($creditedDays > 0) {
@@ -4044,6 +4165,9 @@ class LeaveRequestController extends Controller
         }
         if ($advisedAbsenceDays > 0) {
             $parts[] = "{$advisedAbsenceDays} day(s) Advised Absence (UPTO - Unpaid)";
+        }
+        if ($partialDayAbsenceDays > 0) {
+            $parts[] = "{$partialDayAbsenceDays} day(s) Partial-day Absence (worked hours counted, no credits)";
         }
 
         return ! empty($parts) ? implode(', ', $parts) : null;

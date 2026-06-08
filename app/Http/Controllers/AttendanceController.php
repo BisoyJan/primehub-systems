@@ -18,10 +18,12 @@ use App\Models\AttendanceWeekTotal;
 use App\Models\Campaign;
 use App\Models\EmployeeSchedule;
 use App\Models\LeaveRequest;
+use App\Models\LeaveRequestDay;
 use App\Models\Site;
 use App\Models\User;
 use App\Services\AttendanceFileParser;
 use App\Services\AttendancePoint\GbroCalculationService;
+use App\Services\AttendancePoint\PartialDaySlExcuseService;
 use App\Services\AttendanceProcessor;
 use App\Services\AttendanceWriteService;
 use App\Services\LeaveConflictResolver;
@@ -49,6 +51,7 @@ class AttendanceController extends Controller
         protected PermissionService $permissionService,
         protected LeaveConflictResolver $leaveConflictResolver,
         protected AttendanceWriteService $attendanceWriteService,
+        protected PartialDaySlExcuseService $partialDaySlExcuseService,
     ) {}
 
     /**
@@ -3188,6 +3191,19 @@ class AttendanceController extends Controller
                 ->pluck('leave_type', 'id')
                 ->all();
 
+        // Per-day status lookup keyed by "{leave_request_id}|{Y-m-d}". Used so the
+        // spreadsheet can distinguish, e.g., a Partial-day Absence (SL with Undertime)
+        // day from a normal SL day even when the attendance status is the same.
+        $leaveDayStatuses = empty($leaveIds)
+            ? []
+            : DB::table('leave_request_days')
+                ->whereIn('leave_request_id', $leaveIds)
+                ->get(['leave_request_id', 'date', 'day_status'])
+                ->mapWithKeys(fn ($r) => [
+                    $r->leave_request_id.'|'.substr((string) $r->date, 0, 10) => $r->day_status,
+                ])
+                ->all();
+
         $scheduleIds = $attendanceRows->pluck('employee_schedule_id')->filter()->unique()->all();
         $shiftTypes = empty($scheduleIds)
             ? []
@@ -3201,7 +3217,10 @@ class AttendanceController extends Controller
             $dateKey = substr((string) $row->shift_date, 0, 10);
             $leaveType = $row->leave_request_id ? ($leaveTypes[$row->leave_request_id] ?? null) : null;
             $shiftType = $row->employee_schedule_id ? ($shiftTypes[$row->employee_schedule_id] ?? null) : null;
-            $built = $this->buildSpreadsheetCell($row, $leaveType, $shiftType);
+            $leaveDayStatus = $row->leave_request_id
+                ? ($leaveDayStatuses[$row->leave_request_id.'|'.$dateKey] ?? null)
+                : null;
+            $built = $this->buildSpreadsheetCell($row, $leaveType, $shiftType, $leaveDayStatus);
             $existing = $cellMap[$row->user_id][$dateKey] ?? null;
 
             if ($existing === null) {
@@ -3517,8 +3536,9 @@ class AttendanceController extends Controller
      * @param  object  $row  Raw row with attendance columns.
      * @param  string|null  $leaveType  Leave type string (e.g. 'VL') for the linked leave_request, if any.
      * @param  string|null  $shiftType  Shift type string for the linked employee_schedule, if any.
+     * @param  string|null  $leaveDayStatus  leave_request_days.day_status for this date, if any.
      */
-    protected function buildSpreadsheetCell(object $row, ?string $leaveType = null, ?string $shiftType = null): array
+    protected function buildSpreadsheetCell(object $row, ?string $leaveType = null, ?string $shiftType = null, ?string $leaveDayStatus = null): array
     {
         $totalMinutes = $row->total_minutes_worked !== null ? (int) $row->total_minutes_worked : 0;
         $hours = $totalMinutes ? round($totalMinutes / 60, 2) : null;
@@ -3531,6 +3551,8 @@ class AttendanceController extends Controller
         $timeOut = $row->actual_time_out ? substr((string) $row->actual_time_out, 11, 5) : null;
         $hasBio = $timeIn !== null || $timeOut !== null;
         $adminVerified = (bool) $row->admin_verified;
+
+        $isPartialDaySl = $leaveDayStatus === 'partial_day_absence';
 
         if ($row->status === 'on_leave' && $leaveType !== null) {
             $code = strtoupper((string) $leaveType);
@@ -3573,6 +3595,18 @@ class AttendanceController extends Controller
             $code = 'BIO';
             $kind = 'bio';
             $color = 'bio';
+        } elseif ($isPartialDaySl) {
+            // Partial-day Absence (SL with Undertime) approved but no worked hours yet —
+            // surface the SL tag so the day isn't blank on the spreadsheet.
+            $code = 'P-SL';
+            $kind = 'leave';
+            $color = 'leave-partial-sl';
+        }
+
+        // When the day has actual worked hours, keep the hours number visible —
+        // the cyan-tinted background (set below) signals it is a Partial-day SL day.
+        if ($isPartialDaySl && $kind === 'hours') {
+            $color = 'leave-partial-sl-hours';
         }
 
         // `warnings` is JSON in the DB; with raw queries we must decode manually.
@@ -3621,6 +3655,7 @@ class AttendanceController extends Controller
             'shift_type' => $shiftType,
             'notes' => $row->notes ?? null,
             'verification_notes' => $row->verification_notes ?? null,
+            'is_partial_day_sl' => $isPartialDaySl,
         ];
     }
 
@@ -3689,9 +3724,19 @@ class AttendanceController extends Controller
                 if (! empty($validated['status'])) {
                     $attendance->status = $validated['status'];
                     $attendance->is_advised = $validated['status'] === 'advised_absence';
-                    // Clearing leave linkage if status moves away from on_leave
+                    // Clearing leave linkage if status moves away from on_leave.
+                    // EXCEPTION: a Partial-day Absence day (SL with Undertime) is
+                    // intentionally linked to an SL request while keeping a work
+                    // status (tardy / present_no_bio / etc.) — never sever that link.
                     if ($validated['status'] !== 'on_leave') {
-                        $attendance->leave_request_id = null;
+                        $isPartialDaySl = $attendance->leave_request_id
+                            && LeaveRequestDay::where('leave_request_id', $attendance->leave_request_id)
+                                ->whereDate('date', $attendance->shift_date->toDateString())
+                                ->where('day_status', LeaveRequestDay::STATUS_PARTIAL_DAY_ABSENCE)
+                                ->exists();
+                        if (! $isPartialDaySl) {
+                            $attendance->leave_request_id = null;
+                        }
                     }
                     // failed_bio_* is a flag-only status: keep any time-in/out the
                     // user entered so total work hours still get computed.
@@ -3803,6 +3848,13 @@ class AttendanceController extends Controller
                     $oldIsAdvised,
                     $forceUndertimeRegen
                 );
+
+                // Partial-day SL: any newly-generated attendance points for this
+                // date must be auto-excused if a medical certificate is on file,
+                // matching the original approval behavior.
+                if ($attendance->leave_request_id) {
+                    $this->partialDaySlExcuseService->excuseForAttendance($attendance, auth()->id());
+                }
 
                 $attendanceRef = $attendance;
             });

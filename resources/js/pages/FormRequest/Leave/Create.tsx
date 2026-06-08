@@ -24,6 +24,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import { index as leaveIndexRoute, create as leaveCreateRoute, store as leaveStoreRoute } from '@/routes/leave-requests';
 import {
     type CreditsSummary,
@@ -95,6 +96,7 @@ export default function Create({
         campaign_department: selectedCampaign || '',
         medical_cert_submitted: false,
         medical_cert_file: null as File | null,
+        sl_with_undertime: false,
         spl_day_settings: [] as { date: string; is_half_day: boolean }[],
     });
 
@@ -342,6 +344,9 @@ export default function Create({
     useEffect(() => {
         if (data.leave_type !== 'SL') {
             setSlCreditInfo(null);
+            if (data.sl_with_undertime) {
+                setData('sl_with_undertime', false);
+            }
             return;
         }
 
@@ -673,7 +678,7 @@ export default function Create({
                 </div>
 
                 {/* Leave Credits Summary - Compact with progress bar */}
-                {requiresCredits && creditsSummary.is_eligible && (
+                {requiresCredits && creditsSummary.is_eligible && !(data.leave_type === 'SL' && data.sl_with_undertime) && (
                     <Card className="mb-6">
                         <CardHeader className="pb-3">
                             <CardTitle className="flex items-center gap-2 text-base">
@@ -1546,6 +1551,31 @@ export default function Create({
                                     </p>
                                 )}
                             </div>
+
+                            {/* SL with Undertime — partial-day absence (reported but went home sick) */}
+                            {data.leave_type === 'SL' && (
+                                <div className="rounded-lg border bg-blue-50 dark:bg-blue-950 dark:border-blue-800 p-4 space-y-2">
+                                    <div className="flex items-start gap-3">
+                                        <Checkbox
+                                            id="sl_with_undertime"
+                                            checked={data.sl_with_undertime}
+                                            onCheckedChange={(checked) => setData('sl_with_undertime', checked === true)}
+                                            className="mt-0.5"
+                                        />
+                                        <div className="space-y-1">
+                                            <Label htmlFor="sl_with_undertime" className="font-medium cursor-pointer">
+                                                Partial-day Absence
+                                            </Label>
+                                            <p className="text-xs text-muted-foreground">
+                                                Check this if you reported to work but either arrived late or had to leave early due to illness.
+                                                Leave credits will <span className="font-semibold">NOT</span> be consumed for this request —
+                                                credits are only deducted for whole-day SL absences. Upload a medical certificate
+                                                so the resulting attendance point can be excused.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Medical/Supporting Document (for SL, BL, and UPTO) */}
                             {(data.leave_type === 'SL' || data.leave_type === 'BL' || data.leave_type === 'UPTO') && (

@@ -39,6 +39,8 @@ class LeaveRequestDay extends Model
 
     const STATUS_ABSENT = 'absent';
 
+    const STATUS_PARTIAL_DAY_ABSENCE = 'partial_day_absence';
+
     /**
      * Human-readable labels for day statuses.
      */
@@ -51,6 +53,7 @@ class LeaveRequestDay extends Model
         self::STATUS_UPTO => 'UPTO — Unpaid Time Off',
         self::STATUS_SPL_CREDITED => 'SPL Credited (Paid)',
         self::STATUS_ABSENT => 'Absent',
+        self::STATUS_PARTIAL_DAY_ABSENCE => 'Partial-day Absence',
     ];
 
     /**
@@ -61,7 +64,7 @@ class LeaveRequestDay extends Model
     /**
      * Statuses that are considered unpaid.
      */
-    const UNPAID_STATUSES = [self::STATUS_NCNS, self::STATUS_ADVISED_ABSENCE, self::STATUS_UPTO, self::STATUS_ABSENT];
+    const UNPAID_STATUSES = [self::STATUS_NCNS, self::STATUS_ADVISED_ABSENCE, self::STATUS_UPTO, self::STATUS_ABSENT, self::STATUS_PARTIAL_DAY_ABSENCE];
 
     protected $fillable = [
         'leave_request_id',

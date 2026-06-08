@@ -109,6 +109,7 @@ interface Cell {
     shift_type: string | null;
     notes: string | null;
     verification_notes: string | null;
+    is_partial_day_sl?: boolean;
 }
 
 interface EmployeeSchedule {
@@ -206,6 +207,12 @@ const cellClass = (cell: Cell | undefined, isWeekend: boolean): string => {
             return "bg-violet-500 text-white font-semibold";
         case "leave-other":
             return "bg-blue-500 text-white font-semibold";
+        case "leave-partial-sl":
+            return "bg-cyan-200 text-cyan-900 dark:bg-cyan-900/40 dark:text-cyan-100 font-semibold";
+        case "leave-partial-sl-hours":
+            // Worked hours under a Partial-day SL day: keep the numeric label visible
+            // but tint the background cyan so reviewers can tell the day is P-SL.
+            return "bg-cyan-50 text-cyan-900 dark:bg-cyan-950/40 dark:text-cyan-100 ring-1 ring-cyan-300 dark:ring-cyan-700";
         case "review":
             return "bg-amber-400 text-white font-semibold";
         default:
@@ -1886,6 +1893,18 @@ function CellEditor({
                 </div>
             )}
 
+            {/* Partial-day SL informational banner */}
+            {!isLeave && cell?.is_partial_day_sl && (
+                <div className="rounded border border-cyan-300 bg-cyan-50 p-2 text-xs text-cyan-900 dark:border-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-100">
+                    <div className="font-semibold">Partial-day Absence (SL with Undertime)</div>
+                    <p className="mt-0.5 text-[11px] opacity-90">
+                        This day is covered by an approved Sick Leave. Worked hours are counted
+                        normally, and any tardy/undertime point generated here is automatically
+                        excused via the medical certificate — no approval action needed.
+                    </p>
+                </div>
+            )}
+
             {/* Partial approval — for records with time-in but no time-out, not yet fully verified */}
             {!isCreate && cell && !cell.actual_time_out && cell.actual_time_in && !cell.verified && (
                 <div className="rounded border border-orange-400 bg-orange-50 dark:bg-orange-950/30 p-2 text-[11px] space-y-2">
@@ -2033,7 +2052,7 @@ function CellEditor({
             })()}
 
             {/* Undertime approval — edit mode: show when undertime > 30 min */}
-            {!isCreate && (cell?.undertime_minutes ?? 0) > 30 && (() => {
+            {!isCreate && !cell?.is_partial_day_sl && (cell?.undertime_minutes ?? 0) > 30 && (() => {
                 const approvalStatus = cell!.undertime_approval_status;
                 const approvalReason = cell!.undertime_approval_reason;
                 const action = form.data.undertime_approval_action;
@@ -2534,6 +2553,7 @@ function Legend() {
         { label: "PART", desc: "Partially verified — time-out pending", cls: "bg-orange-400 text-white font-semibold" },
         { label: "VL", desc: "Vacation Leave", cls: "bg-green-500 text-white" },
         { label: "SL", desc: "Sick Leave", cls: "bg-cyan-400 text-white" },
+        { label: "P-SL", desc: "Partial-day Absence (SL with Undertime) — worked hours counted", cls: "bg-cyan-200 text-cyan-900 font-semibold" },
         { label: "ML", desc: "Maternity / Paternity Leave", cls: "bg-fuchsia-500 text-white" },
         { label: "LOA", desc: "Leave of Absence", cls: "bg-rose-400 text-white" },
         { label: "UPTO", desc: "Unpaid Time Off", cls: "bg-sky-500 text-white" },

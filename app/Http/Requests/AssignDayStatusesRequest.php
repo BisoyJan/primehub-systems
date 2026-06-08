@@ -3,7 +3,9 @@
 namespace App\Http\Requests;
 
 use App\Models\LeaveRequestDay;
+use App\Services\LeaveCreditService;
 use Carbon\Carbon;
+use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -20,7 +22,7 @@ class AssignDayStatusesRequest extends FormRequest
     /**
      * Get the validation rules that apply to the request.
      *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
+     * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
@@ -35,6 +37,7 @@ class AssignDayStatusesRequest extends FormRequest
                     LeaveRequestDay::STATUS_ADVISED_ABSENCE,
                     LeaveRequestDay::STATUS_VL_CREDITED,
                     LeaveRequestDay::STATUS_UPTO,
+                    LeaveRequestDay::STATUS_PARTIAL_DAY_ABSENCE,
                 ]),
             ],
             'day_statuses.*.notes' => ['nullable', 'string', 'max:500'],
@@ -124,7 +127,7 @@ class AssignDayStatusesRequest extends FormRequest
                 ->count();
 
             if ($creditedCount > 0) {
-                $leaveCreditService = app(\App\Services\LeaveCreditService::class);
+                $leaveCreditService = app(LeaveCreditService::class);
                 $year = $startDate->year;
                 $balance = $leaveCreditService->getBalance($leaveRequest->user, $year);
 

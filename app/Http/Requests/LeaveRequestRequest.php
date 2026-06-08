@@ -57,6 +57,7 @@ class LeaveRequestRequest extends FormRequest
             'campaign_department' => ['required', 'string', 'max:255'],
             'medical_cert_submitted' => ['sometimes', 'boolean'],
             'medical_cert_file' => ['nullable', 'file', 'mimes:jpeg,jpg,png,gif,webp,pdf', 'max:4096'], // 4MB max - Accept images and PDF
+            'sl_with_undertime' => ['sometimes', 'boolean'],
         ];
 
         // SPL half-day settings per day
@@ -112,6 +113,12 @@ class LeaveRequestRequest extends FormRequest
         if ($this->has('medical_cert_submitted')) {
             $this->merge([
                 'medical_cert_submitted' => filter_var($this->medical_cert_submitted, FILTER_VALIDATE_BOOLEAN),
+            ]);
+        }
+
+        if ($this->has('sl_with_undertime')) {
+            $this->merge([
+                'sl_with_undertime' => filter_var($this->sl_with_undertime, FILTER_VALIDATE_BOOLEAN),
             ]);
         }
     }

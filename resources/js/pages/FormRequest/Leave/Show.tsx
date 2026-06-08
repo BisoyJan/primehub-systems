@@ -26,7 +26,7 @@ import { ArrowLeft, Check, X, Ban, Info, Trash2, CheckCircle, Clock, UserCheck, 
 import { toast } from 'sonner';
 import { usePermission } from '@/hooks/use-permission';
 import { index as leaveIndexRoute, approve as leaveApproveRoute, deny as leaveDenyRoute, partialDeny as leavePartialDenyRoute, cancel as leaveCancelRoute, destroy as leaveDestroyRoute, edit as leaveEditRoute, medicalCert as leaveMedicalCertRoute, updateDayStatuses as leaveUpdateDayStatusesRoute } from '@/routes/leave-requests';
-import DayStatusAssignment, { type DayStatus, VL_STATUS_OPTIONS } from './Components/DayStatusAssignment';
+import DayStatusAssignment, { type DayStatus, VL_STATUS_OPTIONS, SL_STATUS_OPTIONS } from './Components/DayStatusAssignment';
 
 interface User {
     id: number;
@@ -59,6 +59,7 @@ interface LeaveRequest {
     campaign_department: string;
     campaign_id?: number;
     medical_cert_submitted: boolean;
+    sl_with_undertime?: boolean;
     status: string;
     reviewed_at: string | null;
     review_notes: string | null;
@@ -234,6 +235,13 @@ export default function Show({
     const isVl = leaveRequest.leave_type === 'VL';
     const isSpl = leaveRequest.leave_type === 'SPL';
     const hasDayStatuses = isSl || isVl;
+
+    // SL with Undertime (partial-day absence) restricts options to "Partial-day Absence" only —
+    // employee worked partial hours; existing attendance is preserved, no credits consumed,
+    // and the resulting attendance point is auto-excused via medical certificate.
+    const slStatusOptions = isSl && leaveRequest.sl_with_undertime
+        ? [...SL_STATUS_OPTIONS].filter((o) => o.value === 'partial_day_absence')
+        : undefined;
 
     // Check if there are pre-stored day statuses from a previous approver (TL/Admin)
     const hasPreStoredDayStatuses = hasDayStatuses && leaveRequest.status === 'pending' && leaveRequestDays && leaveRequestDays.length > 0;
@@ -953,9 +961,16 @@ export default function Show({
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                                 <p className="text-sm font-medium text-muted-foreground">Leave Type</p>
-                                <Badge variant="secondary" className="mt-1">
-                                    {leaveRequest.leave_type}
-                                </Badge>
+                                <div className="mt-1 flex flex-wrap items-center gap-2">
+                                    <Badge variant="secondary">
+                                        {leaveRequest.leave_type}
+                                    </Badge>
+                                    {leaveRequest.leave_type === 'SL' && leaveRequest.sl_with_undertime && (
+                                        <Badge className="bg-blue-600 hover:bg-blue-700">
+                                            Partial-day Absence
+                                        </Badge>
+                                    )}
+                                </div>
                             </div>
                             <div>
                                 <p className="text-sm font-medium text-muted-foreground">Duration</p>
@@ -1734,7 +1749,7 @@ export default function Show({
                                             ? { availableCredits: Math.floor(creditPreview.credits_to_deduct ?? 0) }
                                             : null
                                     }
-                                    statusOptions={isVl ? [...VL_STATUS_OPTIONS] : undefined}
+                                    statusOptions={isVl ? [...VL_STATUS_OPTIONS] : slStatusOptions}
                                     creditLabel={isVl ? 'VL' : 'SL'}
                                     onCreditValidation={setDayStatusInvalid}
                                 />
@@ -1995,7 +2010,7 @@ export default function Show({
                                             ? { availableCredits: Math.floor(creditPreview.credits_to_deduct ?? 0) }
                                             : null
                                     }
-                                    statusOptions={isVl ? [...VL_STATUS_OPTIONS] : undefined}
+                                    statusOptions={isVl ? [...VL_STATUS_OPTIONS] : slStatusOptions}
                                     creditLabel={isVl ? 'VL' : 'SL'}
                                     onCreditValidation={setPartialDenyDayStatusInvalid}
                                 />
@@ -2279,7 +2294,7 @@ export default function Show({
                             </>
                         )}
                         {/* Credit Preview for SL in Force Approve */}
-                        {creditPreview && isSl && (
+                        {creditPreview && isSl && !leaveRequest.sl_with_undertime && (
                             <>
                                 {creditPreview.should_deduct && (
                                     <Alert className="border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950">
@@ -2467,7 +2482,7 @@ export default function Show({
                                                 ? { availableCredits: Math.floor(creditPreview.credits_to_deduct ?? 0) }
                                                 : null
                                         }
-                                        statusOptions={isVl ? [...VL_STATUS_OPTIONS] : undefined}
+                                        statusOptions={isVl ? [...VL_STATUS_OPTIONS] : slStatusOptions}
                                         creditLabel={isVl ? 'VL' : 'SL'}
                                         onCreditValidation={setForceApproveDayStatusInvalid}
                                     />
@@ -2904,7 +2919,7 @@ export default function Show({
                                         ? { availableCredits: Math.floor(creditPreview.credits_to_deduct ?? 0) + (leaveRequest.credits_deducted ?? 0) }
                                         : null
                                 }
-                                statusOptions={isVl ? [...VL_STATUS_OPTIONS] : undefined}
+                                statusOptions={isVl ? [...VL_STATUS_OPTIONS] : slStatusOptions}
                                 creditLabel={isVl ? 'VL' : 'SL'}
                             />
                         )}

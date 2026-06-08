@@ -6,6 +6,7 @@ use App\Models\Attendance;
 use App\Models\AttendancePoint;
 use App\Services\AttendancePoint\GbroAnomalyService;
 use App\Services\AttendancePoint\GbroCalculationService;
+use App\Services\AttendancePoint\PartialDaySlExcuseService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 
@@ -45,6 +46,7 @@ class AttendanceWriteService
         protected NotificationService $notifications,
         protected GbroCalculationService $gbroService,
         protected GbroAnomalyService $anomalyService,
+        protected PartialDaySlExcuseService $partialDaySlExcuseService,
     ) {}
 
     /**
@@ -61,6 +63,12 @@ class AttendanceWriteService
 
         if ($attendance->admin_verified) {
             $this->regeneratePoints($attendance);
+
+            // Auto-excuse newly-generated points if this date is a Partial-day SL
+            // day with a medical certificate on file.
+            if ($attendance->leave_request_id) {
+                $this->partialDaySlExcuseService->excuseForAttendance($attendance, auth()->id());
+            }
         }
 
         if ($attendance->admin_verified && $attendance->status !== 'on_time') {
