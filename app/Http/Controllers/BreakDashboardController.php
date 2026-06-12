@@ -4,10 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Http\Traits\RedirectsWithFlashMessages;
 use App\Jobs\GenerateBreakTimerExportExcel;
+use App\Models\BreakEvent;
 use App\Models\BreakSession;
 use App\Models\Campaign;
 use App\Models\User;
 use App\Services\BreakTimerService;
+use App\Services\PermissionService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -602,6 +604,9 @@ class BreakDashboardController extends Controller
     {
         $this->ensureSessionInScope($breakSession);
 
+        $rewindableActions = ['end', 'force_end', 'auto_end', 'reimburse'];
+        $canRewind = app(PermissionService::class)->userHasPermission(auth()->user(), 'break_timer.restore');
+
         $events = $breakSession->breakEvents()
             ->orderBy('occurred_at')
             ->orderBy('id')
@@ -613,6 +618,7 @@ class BreakDashboardController extends Controller
                 'overage_seconds' => $e->overage_seconds,
                 'reason' => $e->reason,
                 'occurred_at' => $e->occurred_at?->toDateTimeString(),
+                'can_rewind' => $canRewind && in_array($e->action, $rewindableActions, true) && $breakSession->status !== 'reset',
             ])
             ->all();
 
@@ -626,6 +632,55 @@ class BreakDashboardController extends Controller
             ],
             'events' => $events,
         ]);
+    }
+
+    /**
+     * Rewind the session timeline to the state it had immediately BEFORE the
+     * given event. Deletes the event and every event after it.
+     *
+     * Only end, force_end, auto_end, and reimburse events can be undone.
+     */
+    public function rewindTimeline(Request $request, BreakSession $breakSession, BreakEvent $breakEvent)
+    {
+        $request->validate([
+            'reason' => ['required', 'string', 'min:3', 'max:500'],
+        ]);
+
+        $this->ensureSessionInScope($breakSession);
+
+        if ($breakEvent->break_session_id !== $breakSession->id) {
+            abort(404);
+        }
+
+        if ($breakSession->status === 'reset') {
+            return $this->backWithFlash('Voided/reset sessions cannot be rewound.', 'error');
+        }
+
+        // TLs and IT cannot rewind their own sessions — same rule as restore.
+        $admin = auth()->user();
+        if (in_array($admin->role, ['Team Lead', 'it'], true) && $breakSession->user_id === $admin->id) {
+            return $this->backWithFlash('You cannot rewind your own session. Please ask a Super Admin.', 'error');
+        }
+
+        try {
+            $adminName = trim("{$admin->first_name} {$admin->last_name}") ?: $admin->email;
+
+            $this->breakTimerService->rewindToEvent(
+                $breakSession,
+                $breakEvent,
+                (int) $admin->id,
+                $adminName,
+                $request->input('reason'),
+            );
+
+            return $this->backWithFlash('Timeline rewound successfully.');
+        } catch (\RuntimeException $e) {
+            return $this->backWithFlash($e->getMessage(), 'error');
+        } catch (\Exception $e) {
+            Log::error('BreakTimer RewindTimeline Error: '.$e->getMessage());
+
+            return $this->backWithFlash('Failed to rewind timeline.', 'error');
+        }
     }
 
     /**

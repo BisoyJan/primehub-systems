@@ -685,6 +685,9 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
         Route::get('/{breakSession}/timeline', [BreakDashboardController::class, 'timeline'])
             ->middleware('permission:break_timer.dashboard')
             ->name('timeline');
+        Route::post('/{breakSession}/timeline/{breakEvent}/rewind', [BreakDashboardController::class, 'rewindTimeline'])
+            ->middleware(['permission:break_timer.restore', 'throttle:30,1'])
+            ->name('timeline.rewind');
 
         // Reports
         Route::get('/reports', [BreakDashboardController::class, 'reports'])

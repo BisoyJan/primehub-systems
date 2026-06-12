@@ -887,6 +887,14 @@ class BreakTimerService
                 $updates['overbreak_notified_at'] = null;
                 $updates['ended_at'] = null;
                 $updates['ended_by'] = null;
+
+                // Wall-clock kept ticking after the session was ended. Absorb that
+                // offline gap into total_paused_seconds so endSession()/resumeSession()
+                // don't recompute the original overage from raw elapsed time.
+                if ($session->ended_at) {
+                    $offlineGap = max(0, (int) now()->diffInSeconds($session->ended_at, absolute: true));
+                    $updates['total_paused_seconds'] = (int) $session->total_paused_seconds + $offlineGap;
+                }
             } else {
                 // active or paused — extend the remaining countdown.
                 $newRemaining += $addedSeconds;
@@ -899,6 +907,18 @@ class BreakTimerService
             $updates['last_pause_reason'] = "Admin reimbursed {$minutes} min";
 
             $session->update($updates);
+
+            // Write a pause event at now() so subsequent resumeSession()/endSession()
+            // correctly account for the reimburse-paused interval (they both rely on
+            // the latest 'pause' event timestamp).
+            BreakEvent::create([
+                'break_session_id' => $session->id,
+                'action' => 'pause',
+                'remaining_seconds' => $newRemaining,
+                'overage_seconds' => $newOverage,
+                'reason' => "Admin reimbursed {$minutes} min",
+                'occurred_at' => now(),
+            ]);
 
             BreakEvent::create([
                 'break_session_id' => $session->id,
@@ -921,6 +941,183 @@ class BreakTimerService
                     'total_reimbursed_seconds' => $newReimbursed,
                 ])
                 ->log('Break session minutes reimbursed by admin');
+
+            return $session->refresh();
+        });
+    }
+
+    /**
+     * Rewind a session to the state it had immediately BEFORE the given event.
+     *
+     * Deletes the target event and every event that occurred after it (by
+     * occurred_at, then id), then snaps the session's mutable fields back to
+     * the predecessor event's snapshot. For each removed `reimburse` event,
+     * the parsed minutes are subtracted from `duration_seconds` and
+     * `reimbursed_seconds`. An audit `BreakEvent` (action='restore') is written.
+     *
+     * Only events of action 'end', 'force_end', 'auto_end', or 'reimburse'
+     * may be targeted — these are the events that materially change session state
+     * and where a clean rollback is well-defined.
+     */
+    public function rewindToEvent(
+        BreakSession $session,
+        BreakEvent $event,
+        int $adminId,
+        string $adminName,
+        string $reason,
+    ): BreakSession {
+        $allowed = ['end', 'force_end', 'auto_end', 'reimburse'];
+
+        if (! in_array($event->action, $allowed, true)) {
+            throw new \RuntimeException('Only end, force-end, auto-end, or reimburse events can be undone.');
+        }
+
+        if ($event->break_session_id !== $session->id) {
+            throw new \RuntimeException('Event does not belong to this session.');
+        }
+
+        return DB::transaction(function () use ($session, $event, $adminId, $adminName, $reason): BreakSession {
+            $locked = BreakSession::query()->whereKey($session->id)->lockForUpdate()->first();
+
+            if (! $locked) {
+                throw new \RuntimeException('Session not found.');
+            }
+
+            if ($locked->status === 'reset') {
+                throw new \RuntimeException('Voided/reset sessions cannot be rewound.');
+            }
+
+            $session = $locked;
+
+            // Re-fetch the event under lock against the session id.
+            $target = BreakEvent::query()
+                ->where('break_session_id', $session->id)
+                ->whereKey($event->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $target) {
+                throw new \RuntimeException('Event no longer exists.');
+            }
+
+            // All events at or after the target (chronologically, ties broken by id).
+            $removed = BreakEvent::query()
+                ->where('break_session_id', $session->id)
+                ->where(function ($q) use ($target) {
+                    $q->where('occurred_at', '>', $target->occurred_at)
+                        ->orWhere(function ($qq) use ($target) {
+                            $qq->where('occurred_at', $target->occurred_at)
+                                ->where('id', '>=', $target->id);
+                        });
+                })
+                ->orderBy('occurred_at')
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+
+            // Predecessor: the most recent event strictly before the target.
+            $predecessor = BreakEvent::query()
+                ->where('break_session_id', $session->id)
+                ->where(function ($q) use ($target) {
+                    $q->where('occurred_at', '<', $target->occurred_at)
+                        ->orWhere(function ($qq) use ($target) {
+                            $qq->where('occurred_at', $target->occurred_at)
+                                ->where('id', '<', $target->id);
+                        });
+                })
+                ->orderByDesc('occurred_at')
+                ->orderByDesc('id')
+                ->first();
+
+            // Reverse the duration bump from every reimburse event we are removing.
+            $reimbursedMinutesUndone = 0;
+            foreach ($removed as $ev) {
+                if ($ev->action === 'reimburse' && $ev->reason && preg_match('/Reimbursed\s+(\d+)\s+min/i', $ev->reason, $m)) {
+                    $reimbursedMinutesUndone += (int) $m[1];
+                }
+            }
+            $undoneSeconds = $reimbursedMinutesUndone * 60;
+
+            $newDuration = max(0, (int) $session->duration_seconds - $undoneSeconds);
+            $newReimbursed = max(0, (int) $session->reimbursed_seconds - $undoneSeconds);
+
+            // Derive restored state from the predecessor (or session defaults).
+            if ($predecessor) {
+                $newRemaining = max(0, (int) $predecessor->remaining_seconds);
+                $newOverage = max(0, (int) $predecessor->overage_seconds);
+                $predAction = $predecessor->action;
+            } else {
+                // No predecessor — snap to the very start of the session.
+                $newRemaining = $newDuration;
+                $newOverage = 0;
+                $predAction = 'start';
+            }
+
+            $updates = [
+                'duration_seconds' => $newDuration,
+                'reimbursed_seconds' => $newReimbursed,
+                'remaining_seconds' => $newRemaining,
+                'overage_seconds' => $newOverage,
+                'overbreak_notified_at' => null,
+            ];
+
+            // Determine status + ended_at/ended_by from the predecessor's nature.
+            if (in_array($predAction, ['end', 'force_end', 'auto_end'], true)) {
+                $updates['status'] = $newOverage > 0 ? 'overage' : 'completed';
+                $updates['ended_at'] = $predecessor->occurred_at;
+                $updates['ended_by'] = match ($predAction) {
+                    'force_end' => 'admin',
+                    'auto_end' => 'system',
+                    default => 'agent',
+                };
+            } elseif (in_array($predAction, ['pause', 'reimburse'], true)) {
+                $updates['status'] = 'paused';
+                $updates['ended_at'] = null;
+                $updates['ended_by'] = null;
+            } else {
+                // start, resume, restore — session is active.
+                $updates['status'] = 'active';
+                $updates['ended_at'] = null;
+                $updates['ended_by'] = null;
+            }
+
+            $session->update($updates);
+
+            // Delete the rewound events.
+            BreakEvent::query()
+                ->whereIn('id', $removed->pluck('id')->all())
+                ->delete();
+
+            // Audit trail entry.
+            $undoneSummary = $removed->count().' event'.($removed->count() === 1 ? '' : 's');
+            if ($reimbursedMinutesUndone > 0) {
+                $undoneSummary .= ", -{$reimbursedMinutesUndone} reimbursed min";
+            }
+
+            BreakEvent::create([
+                'break_session_id' => $session->id,
+                'action' => 'restore',
+                'remaining_seconds' => $newRemaining,
+                'overage_seconds' => $newOverage,
+                'reason' => "Rewound timeline by {$adminName} (#{$adminId}) — undid {$target->action} at {$target->occurred_at} ({$undoneSummary}): {$reason}",
+                'occurred_at' => now(),
+            ]);
+
+            activity()
+                ->causedBy($adminId)
+                ->performedOn($session)
+                ->withProperties([
+                    'reason' => $reason,
+                    'session_id' => $session->session_id,
+                    'agent_user_id' => $session->user_id,
+                    'undone_event_id' => $target->id,
+                    'undone_event_action' => $target->action,
+                    'undone_event_occurred_at' => $target->occurred_at?->toDateTimeString(),
+                    'removed_event_count' => $removed->count(),
+                    'undone_reimbursed_minutes' => $reimbursedMinutesUndone,
+                    'new_status' => $updates['status'],
+                ])
+                ->log('Break session timeline rewound by admin');
 
             return $session->refresh();
         });

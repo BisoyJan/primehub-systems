@@ -902,7 +902,7 @@ export default function BreakTimerDashboard() {
                                 : actionDialog?.kind === 'void'
                                     ? 'Mark this session as voided — it will no longer count toward the agent\'s break quota. Use this when the agent selected the wrong break type. This action is logged.'
                                     : actionDialog?.kind === 'reimburse'
-                                        ? 'Add minutes back to this break session (e.g., the agent forgot to pause and time was unintentionally consumed). For active sessions the timer extends live; for ended/overage sessions the overage is reduced first. This action is logged.'
+                                        ? 'Give the agent back minutes that were unintentionally consumed (e.g., they forgot to pause and were pulled into a call). The session lands in Paused so the agent must Resume to use the time.'
                                         : 'Restore this previously ended session. The agent will get back the remaining time. This action is logged.'}
                         </DialogDescription>
                     </DialogHeader>
@@ -995,8 +995,16 @@ export default function BreakTimerDashboard() {
                                         disabled={isSubmittingAction}
                                     />
                                     <p className="text-xs text-muted-foreground">
-                                        Max {Math.floor((actionDialog.session.max_reimbursable_seconds ?? 0) / 60)} minute(s) — cannot exceed consumed time. Session will be paused after reimbursing.
+                                        Max {Math.floor((actionDialog.session.max_reimbursable_seconds ?? 0) / 60)} minute(s) — cannot exceed consumed time.
                                     </p>
+                                    <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
+                                        <div className="font-medium mb-0.5">What happens:</div>
+                                        <ul className="list-disc pl-4 space-y-0.5">
+                                            <li>Overage is reduced first; leftover minutes refill the timer.</li>
+                                            <li>Session lands in <strong>Paused</strong> — the agent must Resume to use the time.</li>
+                                            <li>If the session was already ended, it reopens and the agent can continue the break.</li>
+                                        </ul>
+                                    </div>
                                 </div>
                             )}
                             <div className="space-y-1.5">
