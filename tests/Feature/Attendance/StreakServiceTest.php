@@ -4,6 +4,7 @@ namespace Tests\Feature\Attendance;
 
 use App\Models\Attendance;
 use App\Models\AttendancePoint;
+use App\Models\AttendancePointLeaderboardExclusion;
 use App\Models\User;
 use App\Policies\AttendancePointPolicy;
 use App\Services\AttendancePoint\StreakService;
@@ -26,6 +27,9 @@ class StreakServiceTest extends TestCase
     {
         parent::setUp();
 
+        // Freeze "now" so user.created_at (the streak baseline) is deterministic.
+        Carbon::setTestNow(Carbon::create(2026, 5, 1, 12));
+
         $this->service = app(StreakService::class);
         $this->user = User::factory()->create([
             'role' => 'Agent',
@@ -34,6 +38,12 @@ class StreakServiceTest extends TestCase
         ]);
 
         Cache::flush();
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+        parent::tearDown();
     }
 
     /** @return array<int, string> last $count workdays as Y-m-d, newest first. */
@@ -71,23 +81,23 @@ class StreakServiceTest extends TestCase
     }
 
     #[Test]
-    public function user_with_no_attendance_returns_zero_streak(): void
+    public function user_with_no_violations_streak_equals_days_since_creation(): void
     {
+        // Baseline = created_at = today (May 1) → streak counts today alone.
         $result = $this->service->getUserStreak($this->user);
 
-        $this->assertSame(0, $result['current_streak']);
-        $this->assertSame(0, $result['longest_streak']);
+        $this->assertSame(1, $result['current_streak']);
+        $this->assertSame(1, $result['longest_streak']);
         $this->assertNull($result['badge']);
         $this->assertNotNull($result['next_badge']);
         $this->assertSame(7, $result['next_badge']['days']);
     }
 
     #[Test]
-    public function clean_consecutive_workdays_build_full_streak(): void
+    public function no_violations_yields_full_streak_since_creation(): void
     {
-        foreach ($this->workdays(10) as $date) {
-            $this->attendOn($date);
-        }
+        // Created May 1, today May 10 → 10 clean calendar days (no attendance rows required).
+        Carbon::setTestNow(Carbon::create(2026, 5, 10, 12));
 
         $result = $this->service->getUserStreak($this->user);
 
@@ -100,28 +110,22 @@ class StreakServiceTest extends TestCase
     #[Test]
     public function non_excused_violation_breaks_current_streak(): void
     {
-        $dates = $this->workdays(5);
-        // Newest → oldest: today, t-1 (violation), t-2..t-4
-        foreach ($dates as $date) {
-            $this->attendOn($date);
-        }
-        $this->pointOn($dates[1], 'tardy', excused: false);
+        // Created May 1, today May 5. Violation on May 4 → today (May 5) is a 1-day streak.
+        Carbon::setTestNow(Carbon::create(2026, 5, 5, 12));
+        $this->pointOn('2026-05-04', 'tardy', excused: false);
 
         $result = $this->service->getUserStreak($this->user);
 
         $this->assertSame(1, $result['current_streak']); // only today is clean
-        $this->assertSame(3, $result['longest_streak']); // t-2..t-4 longer historical run
-        $this->assertSame($dates[1], $result['last_violation_date']);
+        $this->assertSame(3, $result['longest_streak']); // May 1..May 3 clean run
+        $this->assertSame('2026-05-04', $result['last_violation_date']);
     }
 
     #[Test]
     public function excused_violation_does_not_break_streak(): void
     {
-        $dates = $this->workdays(5);
-        foreach ($dates as $date) {
-            $this->attendOn($date);
-        }
-        $this->pointOn($dates[2], 'tardy', excused: true);
+        Carbon::setTestNow(Carbon::create(2026, 5, 5, 12));
+        $this->pointOn('2026-05-03', 'tardy', excused: true);
 
         $result = $this->service->getUserStreak($this->user);
 
@@ -158,42 +162,40 @@ class StreakServiceTest extends TestCase
     }
 
     #[Test]
+    public function leaderboard_includes_users_with_no_attendance_points(): void
+    {
+        // Brand-new agent — zero Attendance rows, zero AttendancePoint rows.
+        Carbon::setTestNow(Carbon::create(2026, 5, 1, 12));
+        $fresh = User::factory()->create(['role' => 'Agent', 'is_approved' => true, 'approved_at' => now()]);
+
+        Carbon::setTestNow(Carbon::create(2026, 5, 8, 12));
+        $board = $this->service->getLeaderboard(10);
+
+        $row = collect($board)->firstWhere('user_id', $fresh->id);
+        $this->assertNotNull($row, 'Agent with no AttendancePoint records should appear on the leaderboard.');
+        $this->assertSame(8, $row['current_streak']); // May 1..May 8 inclusive
+    }
+
+    #[Test]
     public function leaderboard_returns_users_sorted_by_current_streak(): void
     {
-        // user A: 10 days clean
+        // userA created May 1, no violations → streak from May 1 to today.
         $userA = $this->user;
-        foreach ($this->workdays(10) as $date) {
-            Attendance::factory()->create([
-                'user_id' => $userA->id,
-                'shift_date' => $date,
-                'status' => 'on_time',
-            ]);
-        }
 
-        // user B: 5 days clean
+        // userB created May 3 → shorter baseline.
+        Carbon::setTestNow(Carbon::create(2026, 5, 3, 12));
         $userB = User::factory()->create(['role' => 'Agent', 'is_approved' => true, 'approved_at' => now()]);
-        foreach ($this->workdays(5) as $date) {
-            Attendance::factory()->create([
-                'user_id' => $userB->id,
-                'shift_date' => $date,
-                'status' => 'on_time',
-            ]);
-        }
 
-        // user C: violation breaks streak to 0
+        // userC created May 1 but has a violation today → current_streak = 0.
+        Carbon::setTestNow(Carbon::create(2026, 5, 1, 12));
         $userC = User::factory()->create(['role' => 'Agent', 'is_approved' => true, 'approved_at' => now()]);
-        $datesC = $this->workdays(3);
-        foreach ($datesC as $date) {
-            Attendance::factory()->create([
-                'user_id' => $userC->id,
-                'shift_date' => $date,
-                'status' => 'on_time',
-            ]);
-        }
+
+        // Advance "today" to May 5.
+        Carbon::setTestNow(Carbon::create(2026, 5, 5, 12));
         AttendancePoint::factory()->create([
             'user_id' => $userC->id,
             'attendance_id' => null,
-            'shift_date' => $datesC[0],
+            'shift_date' => '2026-05-05',
             'point_type' => 'tardy',
             'is_excused' => false,
             'is_expired' => false,
@@ -201,24 +203,55 @@ class StreakServiceTest extends TestCase
 
         $board = $this->service->getLeaderboard(10);
 
-        $this->assertCount(2, $board); // userC excluded (streak = 0)
+        // userA: May 1..May 5 = 5, userB: May 3..May 5 = 3, userC excluded.
+        $this->assertCount(2, $board);
         $this->assertSame($userA->id, $board[0]['user_id']);
-        $this->assertSame(10, $board[0]['current_streak']);
+        $this->assertSame(5, $board[0]['current_streak']);
         $this->assertSame($userB->id, $board[1]['user_id']);
-        $this->assertSame(5, $board[1]['current_streak']);
+        $this->assertSame(3, $board[1]['current_streak']);
+    }
+
+    #[Test]
+    public function leaderboard_excludes_admin_curated_users(): void
+    {
+        // Both users created May 1, no violations.
+        Carbon::setTestNow(Carbon::create(2026, 5, 1, 12));
+        $other = User::factory()->create(['role' => 'Agent', 'is_approved' => true, 'approved_at' => now()]);
+
+        Carbon::setTestNow(Carbon::create(2026, 5, 5, 12));
+
+        // Sanity: both appear before exclusion.
+        $before = $this->service->getLeaderboard(10);
+        $this->assertCount(2, $before);
+
+        // Exclude $other.
+        AttendancePointLeaderboardExclusion::create([
+            'user_id' => $other->id,
+            'excluded_by' => $this->user->id,
+            'reason' => 'Resigned',
+        ]);
+
+        $after = $this->service->getLeaderboard(10);
+        $this->assertCount(1, $after);
+        $this->assertSame($this->user->id, $after[0]['user_id']);
+
+        // Excluded list reflects metadata.
+        $list = $this->service->getExcludedUsers();
+        $this->assertCount(1, $list);
+        $this->assertSame($other->id, $list[0]['user_id']);
+        $this->assertSame('Resigned', $list[0]['reason']);
     }
 
     #[Test]
     public function observer_invalidates_cache_on_point_change(): void
     {
-        foreach ($this->workdays(5) as $date) {
-            $this->attendOn($date);
-        }
-        $first = $this->service->getUserStreak($this->user);
-        $this->assertSame(5, $first['current_streak']);
+        Carbon::setTestNow(Carbon::create(2026, 5, 5, 12));
 
-        // Adding a violation must invalidate cache and yield smaller streak.
-        $this->pointOn($this->workdays(1)[0], 'tardy', excused: false);
+        $first = $this->service->getUserStreak($this->user);
+        $this->assertSame(5, $first['current_streak']); // May 1..May 5, no violations
+
+        // Adding a violation today must invalidate cache and yield a 0-day streak.
+        $this->pointOn('2026-05-05', 'tardy', excused: false);
 
         $after = $this->service->getUserStreak($this->user);
         $this->assertSame(0, $after['current_streak']);
@@ -227,15 +260,15 @@ class StreakServiceTest extends TestCase
     #[Test]
     public function streak_endpoint_returns_inertia_page(): void
     {
+        Carbon::setTestNow(Carbon::create(2026, 5, 1, 12));
         $admin = User::factory()->create([
             'role' => 'Admin',
             'is_approved' => true,
             'approved_at' => now(),
         ]);
 
-        foreach ($this->workdays(8) as $date) {
-            $this->attendOn($date);
-        }
+        // Advance to May 8 → 8 clean calendar days for $this->user (created May 1).
+        Carbon::setTestNow(Carbon::create(2026, 5, 8, 12));
 
         $response = $this->actingAs($admin)
             ->get(route('attendance-points.streak', ['user' => $this->user->id]));
@@ -271,7 +304,70 @@ class StreakServiceTest extends TestCase
                 ->where('limit', 10)
                 ->has('leaderboard')
                 ->has('badges')
+                ->where('canManage', true)
+                ->has('excluded')
         );
+    }
+
+    #[Test]
+    public function admin_can_exclude_and_restore_user_from_leaderboard(): void
+    {
+        $admin = User::factory()->create([
+            'role' => 'Admin',
+            'is_approved' => true,
+            'approved_at' => now(),
+        ]);
+        $target = User::factory()->create([
+            'role' => 'Agent',
+            'is_approved' => true,
+            'approved_at' => now(),
+        ]);
+
+        // Exclude
+        $this->actingAs($admin)
+            ->post(route('attendance-points.leaderboard.exclude', ['user' => $target->id]), [
+                'reason' => 'Resigned',
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('attendance_point_leaderboard_exclusions', [
+            'user_id' => $target->id,
+            'excluded_by' => $admin->id,
+            'reason' => 'Resigned',
+        ]);
+
+        // Restore
+        $this->actingAs($admin)
+            ->delete(route('attendance-points.leaderboard.restore', ['user' => $target->id]))
+            ->assertRedirect();
+
+        $this->assertDatabaseMissing('attendance_point_leaderboard_exclusions', [
+            'user_id' => $target->id,
+        ]);
+    }
+
+    #[Test]
+    public function non_admin_cannot_exclude_user_from_leaderboard(): void
+    {
+        $agent = User::factory()->create([
+            'role' => 'Agent',
+            'is_approved' => true,
+            'approved_at' => now(),
+        ]);
+        $target = User::factory()->create([
+            'role' => 'Agent',
+            'is_approved' => true,
+            'approved_at' => now(),
+        ]);
+
+        $response = $this->actingAs($agent)
+            ->post(route('attendance-points.leaderboard.exclude', ['user' => $target->id]));
+
+        // Permission middleware rejects (403) or redirects — either way no DB write.
+        $this->assertContains($response->status(), [302, 403]);
+        $this->assertDatabaseMissing('attendance_point_leaderboard_exclusions', [
+            'user_id' => $target->id,
+        ]);
     }
 
     #[Test]

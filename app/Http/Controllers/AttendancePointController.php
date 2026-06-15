@@ -8,6 +8,7 @@ use App\Http\Requests\UpdateAttendancePointRequest;
 use App\Http\Traits\RedirectsWithFlashMessages;
 use App\Models\Attendance;
 use App\Models\AttendancePoint;
+use App\Models\AttendancePointLeaderboardExclusion;
 use App\Models\Campaign;
 use App\Models\User;
 use App\Services\AttendancePoint\AttendancePointCreationService;
@@ -392,11 +393,103 @@ class AttendancePointController extends Controller
         $limit = (int) $request->integer('limit', 10);
         $limit = max(1, min($limit, 50));
 
+        $user = auth()->user();
+        $canManage = $user?->hasPermission('attendance_points.manage') ?? false;
+
+        // List of eligible users an admin can exclude — active users not already excluded.
+        $eligibleUsers = [];
+        if ($canManage) {
+            $excludedIds = AttendancePointLeaderboardExclusion::query()->pluck('user_id');
+
+            $eligibleUsers = User::query()
+                ->where('is_active', true)
+                ->whereNotIn('id', $excludedIds)
+                ->select(['id', 'first_name', 'middle_name', 'last_name', 'role'])
+                ->with(['activeSchedule.campaign:id,name'])
+                ->orderBy('first_name')
+                ->orderBy('last_name')
+                ->get()
+                ->map(fn (User $u) => [
+                    'id' => $u->id,
+                    'name' => $u->name,
+                    'role' => $u->role,
+                    'campaign' => $u->activeSchedule?->campaign?->name,
+                ])
+                ->all();
+        }
+
         return Inertia::render('Attendance/Points/Leaderboard', [
             'leaderboard' => $this->streakService->getLeaderboard($limit),
             'limit' => $limit,
             'badges' => StreakService::BADGES,
+            'canManage' => $canManage,
+            'excluded' => $canManage ? $this->streakService->getExcludedUsers() : [],
+            'eligibleUsers' => $eligibleUsers,
         ]);
+    }
+
+    /**
+     * Add a user to the leaderboard exclusion list (Audit feature 5.2).
+     */
+    public function excludeFromLeaderboard(Request $request, User $user)
+    {
+        $this->authorize('manage', AttendancePoint::class);
+
+        $validated = $request->validate([
+            'reason' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        AttendancePointLeaderboardExclusion::updateOrCreate(
+            ['user_id' => $user->id],
+            [
+                'excluded_by' => auth()->id(),
+                'reason' => $validated['reason'] ?? null,
+            ]
+        );
+
+        return $this->backWithFlash("{$user->name} has been excluded from the leaderboard.");
+    }
+
+    /**
+     * Bulk-exclude multiple users from the leaderboard.
+     */
+    public function excludeBatchFromLeaderboard(Request $request)
+    {
+        $this->authorize('manage', AttendancePoint::class);
+
+        $validated = $request->validate([
+            'user_ids' => ['required', 'array', 'min:1'],
+            'user_ids.*' => ['integer', 'exists:users,id'],
+            'reason' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $reason = $validated['reason'] ?? null;
+        $actorId = auth()->id();
+
+        foreach ($validated['user_ids'] as $userId) {
+            AttendancePointLeaderboardExclusion::updateOrCreate(
+                ['user_id' => $userId],
+                ['excluded_by' => $actorId, 'reason' => $reason]
+            );
+        }
+
+        $count = count($validated['user_ids']);
+
+        return $this->backWithFlash("{$count} employee" . ($count === 1 ? '' : 's') . ' excluded from the leaderboard.');
+    }
+
+    /**
+     * Restore a user to the leaderboard.
+     */
+    public function restoreToLeaderboard(User $user)
+    {
+        $this->authorize('manage', AttendancePoint::class);
+
+        AttendancePointLeaderboardExclusion::query()
+            ->where('user_id', $user->id)
+            ->delete();
+
+        return $this->backWithFlash("{$user->name} has been restored to the leaderboard.");
     }
 
     /**

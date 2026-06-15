@@ -367,6 +367,14 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
         // Streak leaderboard (Audit feature 5.2) — declared BEFORE {user} routes.
         Route::get('/leaderboard', [AttendancePointController::class, 'leaderboard'])
             ->middleware('permission:attendance_points.view')->name('leaderboard');
+        Route::post('/leaderboard/exclude-batch', [AttendancePointController::class, 'excludeBatchFromLeaderboard'])
+            ->middleware('permission:attendance_points.manage')->name('leaderboard.exclude-batch');
+        Route::post('/leaderboard/exclude/{user}', [AttendancePointController::class, 'excludeFromLeaderboard'])
+            ->where('user', '[0-9]+')
+            ->middleware('permission:attendance_points.manage')->name('leaderboard.exclude');
+        Route::delete('/leaderboard/exclude/{user}', [AttendancePointController::class, 'restoreToLeaderboard'])
+            ->where('user', '[0-9]+')
+            ->middleware('permission:attendance_points.manage')->name('leaderboard.restore');
 
         // Per-user routes — numeric constraint prevents wildcard collisions.
         Route::get('/{user}', [AttendancePointController::class, 'show'])
