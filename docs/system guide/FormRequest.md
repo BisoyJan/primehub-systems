@@ -176,14 +176,49 @@ Columns: **User**, **Leave Type** (colored badge), **Dates**, **Days**, **Status
 4. **Conflict Alerts** — Shows campaign schedule overlaps if any.
 5. **Timeline** — History of status changes and who made them.
 
-### Approve/Deny (Admin/HR only)
+### Approval Flow
 
-1. Click **Approve**, **Deny**, or **Partial Deny**.
-2. A confirmation dialog opens:
-   - **Review Notes** — Type any notes (optional).
-   - **Day Status Assignment** (for SL/VL/SPL) — For each day in the range, pick the status (SL credited, NCNS, advised absence, VL credited, UPTO, SPL credited, absent, partial). For SL with Undertime, all days are locked to **Partial-day Absence**.
-   - **SPL Half-Day Settings** (for SPL) — Toggle Half Day on any day; auto-downgrade applies when credits run low.
-3. Click **Confirm** to apply.
+Leave requests now move through a **two-stage approval** workflow.
+
+#### Stage 1 — Team Lead (when applicable)
+
+When `canTlApprove` is true (Team Leads on pending requests from their campaign), three buttons appear in the header:
+
+- **Approve (TL)** — Marks the request as endorsed by the Team Lead. Opens a notes dialog.
+- **Reject (TL)** — Denies the request at the Team Lead level. Opens a notes dialog.
+- **Partial Approved (TL)** — Only shown for multi-day requests. Lets the TL approve specific days only.
+
+A separate **Team Lead Approval** card on the page tracks the TL decision and shows the approver name and timestamp once acted on.
+
+#### Stage 2 — Admin / HR
+
+When `canUserApprove` is true (Admin or HR on a pending request, after TL approval if required, and the current user has not yet approved), three buttons appear:
+
+- **Approve** — Opens the approval dialog with **Review Notes**, **Day Status Assignment** (SL/VL/SPL — choose SL credited, NCNS, advised absence, VL credited, UPTO, SPL credited, absent, or partial), and **SPL Half-Day Settings**. For SL with Undertime, all days are locked to **Partial-day Absence**.
+- **Deny** — Opens a notes dialog.
+- **Partial Approved** — Only shown for multi-day requests. Approves specific days only.
+
+After you have approved, a **You've Approved** badge replaces the buttons until the second admin/HR signer acts.
+
+#### Super Admin — Force Approve
+
+When a request is still pending and not fully approved by both Admin and HR, a **Force Approve** button (purple) appears for Super Admins. It bypasses the remaining required signers.
+
+#### Actions on Approved Leaves (Admin)
+
+Once the leave is fully approved, two extra buttons appear for admins (`canEditApproved`):
+
+- **Edit Dates** — Opens the edit page so the date range can be changed.
+- **Adjust for Work** — Opens a dialog to reassign one or more leave days back to worked days (with day-status overrides).
+
+#### Cancellation
+
+- **Cancel** — Visible to the owner on pending or approved requests (`leave.cancel` permission).
+- **Cancel** / **Cancel Approved** — Admins with cancel-approved permission see this red button instead; the label changes to "Cancel Approved" when the request is already approved.
+
+#### Delete
+
+- **Delete** (red) — Visible to users with `leave.delete` permission.
 
 ### Day Status Assignment (Admin only)
 
