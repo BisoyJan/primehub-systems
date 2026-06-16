@@ -7,23 +7,14 @@ import { PageHeader } from "@/components/PageHeader";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { formatTime, formatDateShort } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue
-} from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { Database, Calendar, Clock, Trash2, Eye, Check, ChevronsUpDown, RefreshCw, Search, Play, Pause } from "lucide-react";
+import { Database, Calendar, Clock, Trash2, Eye, RefreshCw, Search, Play, Pause } from "lucide-react";
 import { index as biometricRecordsIndex, show as biometricRecordsShow } from "@/routes/biometric-records";
+import { MultiSelectFilter, parseMultiSelectParam, multiSelectToParam } from "@/components/multi-select-filter";
 
 interface User {
     id: number;
@@ -104,31 +95,18 @@ export default function BiometricRecordsIndex() {
     useFlashMessage();
     const isPageLoading = usePageLoading();
 
-    const [searchTerm, setSearchTerm] = useState(filters?.search || "");
-    const [selectedUserId, setSelectedUserId] = useState(filters?.user_id || "");
-    const [selectedSiteId, setSelectedSiteId] = useState(filters?.site_id || "");
+    const [selectedUserIds, setSelectedUserIds] = useState<string[]>(parseMultiSelectParam(filters?.user_id));
+    const [selectedSiteIds, setSelectedSiteIds] = useState<string[]>(parseMultiSelectParam(filters?.site_id));
     const [dateFrom, setDateFrom] = useState(filters?.date_from || "");
     const [dateTo, setDateTo] = useState(filters?.date_to || "");
-    const [isEmployeePopoverOpen, setIsEmployeePopoverOpen] = useState(false);
-    const [employeeSearchQuery, setEmployeeSearchQuery] = useState("");
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
 
     // Filter employees based on search query
     const filteredEmployees = useMemo(() => {
         if (!filters?.users) return [];
-        if (!employeeSearchQuery) return filters.users;
-        return filters.users.filter(user =>
-            user.name.toLowerCase().includes(employeeSearchQuery.toLowerCase())
-        );
-    }, [filters?.users, employeeSearchQuery]);
-
-    // Get the selected employee's name
-    const selectedEmployeeName = useMemo(() => {
-        if (!selectedUserId || !filters?.users) return "";
-        const employee = filters.users.find(user => String(user.id) === selectedUserId);
-        return employee?.name || "";
-    }, [selectedUserId, filters?.users]);
+        return filters.users;
+    }, [filters?.users]);
 
     const recordsData = {
         data: records?.data || [],
@@ -147,9 +125,8 @@ export default function BiometricRecordsIndex() {
         router.get(
             biometricRecordsIndex().url,
             {
-                search: searchTerm,
-                user_id: selectedUserId,
-                site_id: selectedSiteId,
+                user_id: multiSelectToParam(selectedUserIds),
+                site_id: multiSelectToParam(selectedSiteIds),
                 date_from: dateFrom,
                 date_to: dateTo
             },
@@ -174,9 +151,8 @@ export default function BiometricRecordsIndex() {
             router.get(
                 biometricRecordsIndex().url,
                 {
-                    search: searchTerm,
-                    user_id: selectedUserId,
-                    site_id: selectedSiteId,
+                    user_id: multiSelectToParam(selectedUserIds),
+                    site_id: multiSelectToParam(selectedSiteIds),
                     date_from: dateFrom,
                     date_to: dateTo
                 },
@@ -192,12 +168,11 @@ export default function BiometricRecordsIndex() {
         }, 30000);
 
         return () => clearInterval(interval);
-    }, [autoRefreshEnabled, searchTerm, selectedUserId, selectedSiteId, dateFrom, dateTo]);
+    }, [autoRefreshEnabled, selectedUserIds, selectedSiteIds, dateFrom, dateTo]);
 
     const handleReset = () => {
-        setSearchTerm("");
-        setSelectedUserId("");
-        setSelectedSiteId("");
+        setSelectedUserIds([]);
+        setSelectedSiteIds([]);
         setDateFrom("");
         setDateTo("");
         router.get(biometricRecordsIndex().url);
@@ -207,7 +182,7 @@ export default function BiometricRecordsIndex() {
         router.get(biometricRecordsShow({ user: userId, date }).url);
     };
 
-    const showClearFilters = searchTerm || selectedUserId || selectedSiteId || dateFrom || dateTo;
+    const showClearFilters = selectedUserIds.length > 0 || selectedSiteIds.length > 0 || dateFrom || dateTo;
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -276,95 +251,26 @@ export default function BiometricRecordsIndex() {
 
                 {/* Filters */}
                 <div className="flex flex-col gap-3">
-                    <div className="w-full">
-                        <Input
-                            type="search"
-                            placeholder="Search employee name..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleFilter()}
-                            className="w-full"
-                        />
-                    </div>
-
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                        <Popover open={isEmployeePopoverOpen} onOpenChange={setIsEmployeePopoverOpen}>
-                            <PopoverTrigger asChild>
-                                <Button
-                                    variant="outline"
-                                    role="combobox"
-                                    aria-expanded={isEmployeePopoverOpen}
-                                    className="w-full justify-between font-normal"
-                                >
-                                    <span className="truncate">
-                                        {selectedUserId ? selectedEmployeeName : "All Employees"}
-                                    </span>
-                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-full p-0" align="start">
-                                <Command shouldFilter={false}>
-                                    <CommandInput
-                                        placeholder="Search employee..."
-                                        value={employeeSearchQuery}
-                                        onValueChange={setEmployeeSearchQuery}
-                                    />
-                                    <CommandList>
-                                        <CommandEmpty>No employee found.</CommandEmpty>
-                                        <CommandGroup>
-                                            <CommandItem
-                                                value="all"
-                                                onSelect={() => {
-                                                    setSelectedUserId("");
-                                                    setIsEmployeePopoverOpen(false);
-                                                    setEmployeeSearchQuery("");
-                                                }}
-                                                className="cursor-pointer"
-                                            >
-                                                <Check
-                                                    className={`mr-2 h-4 w-4 ${!selectedUserId ? "opacity-100" : "opacity-0"
-                                                        }`}
-                                                />
-                                                All Employees
-                                            </CommandItem>
-                                            {filteredEmployees.map((user) => (
-                                                <CommandItem
-                                                    key={user.id}
-                                                    value={user.name}
-                                                    onSelect={() => {
-                                                        setSelectedUserId(String(user.id));
-                                                        setIsEmployeePopoverOpen(false);
-                                                        setEmployeeSearchQuery("");
-                                                    }}
-                                                    className="cursor-pointer"
-                                                >
-                                                    <Check
-                                                        className={`mr-2 h-4 w-4 ${selectedUserId === String(user.id)
-                                                            ? "opacity-100"
-                                                            : "opacity-0"
-                                                            }`}
-                                                    />
-                                                    {user.name}
-                                                </CommandItem>
-                                            ))}
-                                        </CommandGroup>
-                                    </CommandList>
-                                </Command>
-                            </PopoverContent>
-                        </Popover>
+                        <MultiSelectFilter
+                            options={filteredEmployees.map((u) => ({ label: u.name, value: String(u.id) }))}
+                            value={selectedUserIds}
+                            onChange={setSelectedUserIds}
+                            placeholder="All Employees"
+                            emptyMessage="No employee found."
+                            className="w-full min-h-9"
+                            multipleSelectionLabel={(n) => `${n} employees selected`}
+                        />
 
-                        <Select value={selectedSiteId || undefined} onValueChange={(value) => setSelectedSiteId(value || "")}>
-                            <SelectTrigger className="w-full">
-                                <SelectValue placeholder="All Sites" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {filters?.sites.map((site) => (
-                                    <SelectItem key={site.id} value={String(site.id)}>
-                                        {site.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <MultiSelectFilter
+                            options={(filters?.sites ?? []).map((site) => ({ label: site.name, value: String(site.id) }))}
+                            value={selectedSiteIds}
+                            onChange={setSelectedSiteIds}
+                            placeholder="All Sites"
+                            emptyMessage="No site found."
+                            className="w-full min-h-9"
+                            multipleSelectionLabel={(n) => `${n} sites selected`}
+                        />
 
                         <div className="flex items-center gap-2 text-sm">
                             <span className="text-muted-foreground text-xs">From:</span>

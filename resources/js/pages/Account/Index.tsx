@@ -119,7 +119,7 @@ interface Filters {
     role: string;
     status: string;
     employee_status: string;
-    user_id: string;
+    user_ids: string[];
 }
 
 export default function AccountIndex() {
@@ -134,7 +134,9 @@ export default function AccountIndex() {
     const [loading, setLoading] = useState(false);
     const getInitials = useInitials();
     const [search, setSearch] = useState(filters.search || "");
-    const [selectedUserId, setSelectedUserId] = useState(filters.user_id || "");
+    const [selectedUserIds, setSelectedUserIds] = useState<string[]>(
+        Array.isArray(filters.user_ids) ? filters.user_ids.map(String) : []
+    );
     const [isUserPopoverOpen, setIsUserPopoverOpen] = useState(false);
     const [userSearchQuery, setUserSearchQuery] = useState("");
     const [roleFilter, setRoleFilter] = useState(filters.role || "all");
@@ -234,7 +236,7 @@ export default function AccountIndex() {
         const interval = setInterval(() => {
             if (isPollingRef.current) return;
             isPollingRef.current = true;
-            router.get(accountsIndex().url, buildFilterParams(search, selectedUserId, roleFilter, statusFilter, employeeStatusFilter), {
+            router.get(accountsIndex().url, buildFilterParams(search, selectedUserIds, roleFilter, statusFilter, employeeStatusFilter), {
                 preserveState: true,
                 preserveScroll: true,
                 replace: true,
@@ -245,21 +247,21 @@ export default function AccountIndex() {
         }, 30000);
 
         return () => clearInterval(interval);
-    }, [autoRefreshEnabled, search, selectedUserId, roleFilter, statusFilter, employeeStatusFilter]);
+    }, [autoRefreshEnabled, search, selectedUserIds, roleFilter, statusFilter, employeeStatusFilter]);
 
-    const showClearFilters = roleFilter !== "all" || statusFilter !== "all" || employeeStatusFilter !== "all" || Boolean(search) || Boolean(selectedUserId);
+    const showClearFilters = roleFilter !== "all" || statusFilter !== "all" || employeeStatusFilter !== "all" || Boolean(search) || selectedUserIds.length > 0;
 
     const buildFilterParams = (
         searchValue: string,
-        userIdValue: string,
+        userIdValues: string[],
         roleValue: string,
         statusValue: string,
         employeeStatusValue: string,
         options: { resetPage?: boolean } = {}
     ) => {
-        const params: Record<string, string | number> = {};
+        const params: Record<string, string | number | string[]> = {};
         if (searchValue) params.search = searchValue;
-        if (userIdValue) params.user_id = userIdValue;
+        if (userIdValues.length > 0) params.user_ids = userIdValues;
         if (roleValue && roleValue !== "all") params.role = roleValue;
         if (statusValue && statusValue !== "all") params.status = statusValue;
         if (employeeStatusValue && employeeStatusValue !== "all") params.employee_status = employeeStatusValue;
@@ -267,8 +269,14 @@ export default function AccountIndex() {
         return params;
     };
 
+    const toggleSelectedUserId = (id: string) => {
+        setSelectedUserIds(prev =>
+            prev.includes(id) ? prev.filter(v => v !== id) : [...prev, id]
+        );
+    };
+
     const handleSearch = () => {
-        const params = buildFilterParams(search, selectedUserId, roleFilter, statusFilter, employeeStatusFilter, { resetPage: true });
+        const params = buildFilterParams(search, selectedUserIds, roleFilter, statusFilter, employeeStatusFilter, { resetPage: true });
         setLoading(true);
         router.get(accountsIndex().url, params, {
             preserveState: true,
@@ -509,7 +517,7 @@ export default function AccountIndex() {
 
     const clearFilters = () => {
         setSearch("");
-        setSelectedUserId("");
+        setSelectedUserIds([]);
         setRoleFilter("all");
         setStatusFilter("all");
         setEmployeeStatusFilter("all");
@@ -526,7 +534,7 @@ export default function AccountIndex() {
 
     const handleManualRefresh = () => {
         setLoading(true);
-        router.get(accountsIndex().url, buildFilterParams(search, selectedUserId, roleFilter, statusFilter, employeeStatusFilter), {
+        router.get(accountsIndex().url, buildFilterParams(search, selectedUserIds, roleFilter, statusFilter, employeeStatusFilter), {
             preserveState: true,
             preserveScroll: true,
             replace: true,
@@ -587,7 +595,7 @@ export default function AccountIndex() {
 
     const handlePageChange = (page: number) => {
         setLoading(true);
-        router.get(accountsIndex().url, { ...buildFilterParams(search, selectedUserId, roleFilter, statusFilter, employeeStatusFilter), page }, {
+        router.get(accountsIndex().url, { ...buildFilterParams(search, selectedUserIds, roleFilter, statusFilter, employeeStatusFilter), page }, {
             preserveState: true,
             preserveScroll: true,
             only: ["users"],
@@ -670,9 +678,11 @@ export default function AccountIndex() {
                                     className="w-full justify-between font-normal"
                                 >
                                     <span className="truncate">
-                                        {selectedUserId
-                                            ? allUsers.find(u => u.id.toString() === selectedUserId)?.name || "Select employee..."
-                                            : "All Employees"}
+                                        {selectedUserIds.length === 0
+                                            ? "All Employees"
+                                            : selectedUserIds.length === 1
+                                                ? allUsers.find(u => u.id.toString() === selectedUserIds[0])?.name || "1 employee selected"
+                                                : `${selectedUserIds.length} employees selected`}
                                     </span>
                                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                 </Button>
@@ -690,41 +700,59 @@ export default function AccountIndex() {
                                             <CommandItem
                                                 value="all"
                                                 onSelect={() => {
-                                                    setSelectedUserId("");
-                                                    setIsUserPopoverOpen(false);
+                                                    setSelectedUserIds([]);
                                                 }}
                                                 className="cursor-pointer"
                                             >
                                                 <Check
-                                                    className={`mr-2 h-4 w-4 ${!selectedUserId ? "opacity-100" : "opacity-0"}`}
+                                                    className={`mr-2 h-4 w-4 ${selectedUserIds.length === 0 ? "opacity-100" : "opacity-0"}`}
                                                 />
                                                 All Employees
                                             </CommandItem>
-                                            {filteredUsers.map((user) => (
-                                                <CommandItem
-                                                    key={user.id}
-                                                    value={user.name}
-                                                    onSelect={() => {
-                                                        setSelectedUserId(user.id.toString());
-                                                        setIsUserPopoverOpen(false);
-                                                    }}
-                                                    className="cursor-pointer"
-                                                >
-                                                    <Check
-                                                        className={`mr-2 h-4 w-4 ${selectedUserId === user.id.toString()
-                                                            ? "opacity-100"
-                                                            : "opacity-0"
-                                                            }`}
-                                                    />
-                                                    <div className="flex flex-col">
-                                                        <span>{user.name}</span>
-                                                        <span className="text-xs text-muted-foreground">{user.email}</span>
-                                                    </div>
-                                                </CommandItem>
-                                            ))}
+                                            {filteredUsers.map((user) => {
+                                                const idStr = user.id.toString();
+                                                const isSelected = selectedUserIds.includes(idStr);
+                                                return (
+                                                    <CommandItem
+                                                        key={user.id}
+                                                        value={user.name}
+                                                        onSelect={() => {
+                                                            toggleSelectedUserId(idStr);
+                                                        }}
+                                                        className="cursor-pointer"
+                                                    >
+                                                        <Checkbox
+                                                            checked={isSelected}
+                                                            className="mr-2"
+                                                            onCheckedChange={() => toggleSelectedUserId(idStr)}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        />
+                                                        <div className="flex flex-col">
+                                                            <span>{user.name}</span>
+                                                            <span className="text-xs text-muted-foreground">{user.email}</span>
+                                                        </div>
+                                                    </CommandItem>
+                                                );
+                                            })}
                                         </CommandGroup>
                                     </CommandList>
                                 </Command>
+                                {selectedUserIds.length > 0 && (
+                                    <div className="flex items-center justify-between border-t p-2 text-xs">
+                                        <span className="text-muted-foreground">
+                                            {selectedUserIds.length} selected
+                                        </span>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-7 px-2"
+                                            onClick={() => setSelectedUserIds([])}
+                                        >
+                                            Clear
+                                        </Button>
+                                    </div>
+                                )}
                             </PopoverContent>
                         </Popover>
 

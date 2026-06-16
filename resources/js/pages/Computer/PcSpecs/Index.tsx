@@ -542,9 +542,11 @@ export default function Index() {
                                         className="w-full justify-between font-normal"
                                     >
                                         <span className="truncate">
-                                            {selectedFilterPcIds.length > 0
-                                                ? `${selectedFilterPcIds.length} PC${selectedFilterPcIds.length !== 1 ? 's' : ''} selected`
-                                                : 'Select PCs to filter...'}
+                                            {selectedFilterPcIds.length === 0
+                                                ? 'All PCs'
+                                                : selectedFilterPcIds.length === 1
+                                                    ? (allPcSpecs.find(p => p.id === selectedFilterPcIds[0])?.label ?? '1 PC selected')
+                                                    : `${selectedFilterPcIds.length} PCs selected`}
                                         </span>
                                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                     </Button>
@@ -559,22 +561,42 @@ export default function Index() {
                                         <CommandList>
                                             <CommandEmpty>No PC specs found.</CommandEmpty>
                                             <CommandGroup>
-                                                {filteredPcOptions.map((pc) => (
-                                                    <CommandItem
-                                                        key={pc.id}
-                                                        value={pc.label}
-                                                        onSelect={() => handleTogglePcSelect(pc.id)}
-                                                        className="cursor-pointer"
-                                                    >
-                                                        <Check
-                                                            className={`mr-2 h-4 w-4 ${selectedFilterPcIds.includes(pc.id) ? "opacity-100" : "opacity-0"}`}
-                                                        />
-                                                        {pc.label}
-                                                    </CommandItem>
-                                                ))}
+                                                {filteredPcOptions.map((pc) => {
+                                                    const isSelected = selectedFilterPcIds.includes(pc.id);
+                                                    return (
+                                                        <CommandItem
+                                                            key={pc.id}
+                                                            value={pc.label}
+                                                            onSelect={() => handleTogglePcSelect(pc.id)}
+                                                            className="cursor-pointer"
+                                                        >
+                                                            <Checkbox
+                                                                checked={isSelected}
+                                                                className="mr-2"
+                                                                onCheckedChange={() => handleTogglePcSelect(pc.id)}
+                                                                onClick={(e) => e.stopPropagation()}
+                                                            />
+                                                            {pc.label}
+                                                        </CommandItem>
+                                                    );
+                                                })}
                                             </CommandGroup>
                                         </CommandList>
                                     </Command>
+                                    {selectedFilterPcIds.length > 0 && (
+                                        <div className="flex items-center justify-between border-t p-2 text-xs">
+                                            <span className="text-muted-foreground">{selectedFilterPcIds.length} selected</span>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-7 px-2"
+                                                onClick={() => setSelectedFilterPcIds([])}
+                                            >
+                                                Clear
+                                            </Button>
+                                        </div>
+                                    )}
                                 </PopoverContent>
                             </Popover>
 
@@ -588,9 +610,11 @@ export default function Index() {
                                         className="w-full justify-between font-normal"
                                     >
                                         <span className="truncate">
-                                            {selectedProcessorIds.length > 0
-                                                ? `${selectedProcessorIds.length} processor${selectedProcessorIds.length !== 1 ? 's' : ''} selected`
-                                                : 'All Processors'}
+                                            {selectedProcessorIds.length === 0
+                                                ? 'All Processors'
+                                                : selectedProcessorIds.length === 1
+                                                    ? (allProcessors.find(p => p.id === selectedProcessorIds[0])?.label ?? '1 processor selected')
+                                                    : `${selectedProcessorIds.length} processors selected`}
                                         </span>
                                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                     </Button>
@@ -605,25 +629,45 @@ export default function Index() {
                                         <CommandList>
                                             <CommandEmpty>No processor found.</CommandEmpty>
                                             <CommandGroup>
-                                                {filteredProcessorOptions.map((proc) => (
-                                                    <CommandItem
-                                                        key={proc.id}
-                                                        value={proc.label}
-                                                        onSelect={() => handleToggleProcessorSelect(proc.id)}
-                                                        className="cursor-pointer"
-                                                    >
-                                                        <Check
-                                                            className={`mr-2 h-4 w-4 ${selectedProcessorIds.includes(proc.id) ? "opacity-100" : "opacity-0"}`}
-                                                        />
-                                                        {proc.label}
-                                                        {proc.core_count != null && (
-                                                            <span className="ml-auto text-xs text-muted-foreground">{proc.core_count != null ? `${proc.core_count}C` : ''}/{proc.thread_count != null ? `${proc.thread_count}T` : ''}</span>
-                                                        )}
-                                                    </CommandItem>
-                                                ))}
+                                                {filteredProcessorOptions.map((proc) => {
+                                                    const isSelected = selectedProcessorIds.includes(proc.id);
+                                                    return (
+                                                        <CommandItem
+                                                            key={proc.id}
+                                                            value={proc.label}
+                                                            onSelect={() => handleToggleProcessorSelect(proc.id)}
+                                                            className="cursor-pointer"
+                                                        >
+                                                            <Checkbox
+                                                                checked={isSelected}
+                                                                className="mr-2"
+                                                                onCheckedChange={() => handleToggleProcessorSelect(proc.id)}
+                                                                onClick={(e) => e.stopPropagation()}
+                                                            />
+                                                            {proc.label}
+                                                            {proc.core_count != null && (
+                                                                <span className="ml-auto text-xs text-muted-foreground">{proc.core_count != null ? `${proc.core_count}C` : ''}/{proc.thread_count != null ? `${proc.thread_count}T` : ''}</span>
+                                                            )}
+                                                        </CommandItem>
+                                                    );
+                                                })}
                                             </CommandGroup>
                                         </CommandList>
                                     </Command>
+                                    {selectedProcessorIds.length > 0 && (
+                                        <div className="flex items-center justify-between border-t p-2 text-xs">
+                                            <span className="text-muted-foreground">{selectedProcessorIds.length} selected</span>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-7 px-2"
+                                                onClick={() => setSelectedProcessorIds([])}
+                                            >
+                                                Clear
+                                            </Button>
+                                        </div>
+                                    )}
                                 </PopoverContent>
                             </Popover>
 

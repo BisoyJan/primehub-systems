@@ -1,12 +1,15 @@
 import { useMemo, useState } from 'react';
 import { Head, Link, usePage, router } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
-import { Calendar as CalendarIcon, CalendarClock, Eye, Plus, Filter, Users, AlertTriangle, ArrowUpDown, ChevronUp, ChevronDown, ClipboardList, TrendingUp, TrendingDown, Download, Loader2 } from 'lucide-react';
+import { Calendar as CalendarIcon, CalendarClock, Eye, Plus, Filter, Users, AlertTriangle, ArrowUpDown, ChevronUp, ChevronDown, ClipboardList, TrendingUp, TrendingDown, Download, Loader2, ChevronsUpDown } from 'lucide-react';
 import PaginationNav, { type PaginationLink } from '@/components/pagination-nav';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
     Select,
     SelectContent,
@@ -163,9 +166,15 @@ export default function CoachingDashboardIndex() {
     const [isExporting, setIsExporting] = useState(false);
     const [exportStatusText, setExportStatusText] = useState<{ percent: number; status: string } | null>(null);
     const [selectedAgentIds, setSelectedAgentIds] = useState<number[]>([]);
+    const [selectedFilterAgentIds, setSelectedFilterAgentIds] = useState<number[]>([]);
+    const [isAgentPopoverOpen, setIsAgentPopoverOpen] = useState(false);
+    const [agentSearchQuery, setAgentSearchQuery] = useState('');
 
     const sortedAgents = useMemo(() => {
-        const agents = [...dashboardData.agents];
+        let agents = [...dashboardData.agents];
+        if (selectedFilterAgentIds.length > 0) {
+            agents = agents.filter(a => selectedFilterAgentIds.includes(a.id));
+        }
         agents.sort((a, b) => {
             let cmp = 0;
             switch (sortField) {
@@ -301,7 +310,24 @@ export default function CoachingDashboardIndex() {
         setCoachingStatus('');
         setDateFrom('');
         setDateTo('');
+        setSelectedFilterAgentIds([]);
         router.get(coachingDashboard().url);
+    };
+
+    const filteredAgentOptions = useMemo(() => {
+        const opts = dashboardData.agents;
+        if (!agentSearchQuery) return opts;
+        const lower = agentSearchQuery.toLowerCase();
+        return opts.filter(a =>
+            a.name.toLowerCase().includes(lower) ||
+            (a.account ?? '').toLowerCase().includes(lower)
+        );
+    }, [dashboardData.agents, agentSearchQuery]);
+
+    const toggleAgentFilter = (id: number) => {
+        setSelectedFilterAgentIds(prev =>
+            prev.includes(id) ? prev.filter(v => v !== id) : [...prev, id]
+        );
     };
 
     return (
@@ -416,7 +442,80 @@ export default function CoachingDashboardIndex() {
                     {/* Agent Overview Tab */}
                     <TabsContent value="agents" className="space-y-4">
                         {/* Filters */}
-                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
+                            <Popover open={isAgentPopoverOpen} onOpenChange={setIsAgentPopoverOpen}>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        role="combobox"
+                                        aria-expanded={isAgentPopoverOpen}
+                                        className="w-full justify-between font-normal"
+                                    >
+                                        <span className="truncate">
+                                            {selectedFilterAgentIds.length === 0
+                                                ? 'All Agents'
+                                                : selectedFilterAgentIds.length === 1
+                                                    ? dashboardData.agents.find(a => a.id === selectedFilterAgentIds[0])?.name || '1 agent selected'
+                                                    : `${selectedFilterAgentIds.length} agents selected`}
+                                        </span>
+                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-full min-w-75 p-0" align="start">
+                                    <Command shouldFilter={false}>
+                                        <CommandInput
+                                            placeholder="Search agent..."
+                                            value={agentSearchQuery}
+                                            onValueChange={setAgentSearchQuery}
+                                        />
+                                        <CommandList>
+                                            <CommandEmpty>No agent found.</CommandEmpty>
+                                            <CommandGroup>
+                                                {filteredAgentOptions.map((agent) => {
+                                                    const isSelected = selectedFilterAgentIds.includes(agent.id);
+                                                    return (
+                                                        <CommandItem
+                                                            key={agent.id}
+                                                            value={agent.name}
+                                                            onSelect={() => toggleAgentFilter(agent.id)}
+                                                            className="cursor-pointer"
+                                                        >
+                                                            <Checkbox
+                                                                checked={isSelected}
+                                                                className="mr-2"
+                                                                onCheckedChange={() => toggleAgentFilter(agent.id)}
+                                                                onClick={(e) => e.stopPropagation()}
+                                                            />
+                                                            <div className="flex flex-col">
+                                                                <span>{agent.name}</span>
+                                                                {agent.account && (
+                                                                    <span className="text-xs text-muted-foreground">{agent.account}</span>
+                                                                )}
+                                                            </div>
+                                                        </CommandItem>
+                                                    );
+                                                })}
+                                            </CommandGroup>
+                                        </CommandList>
+                                    </Command>
+                                    {selectedFilterAgentIds.length > 0 && (
+                                        <div className="flex items-center justify-between border-t p-2 text-xs">
+                                            <span className="text-muted-foreground">
+                                                {selectedFilterAgentIds.length} selected
+                                            </span>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-7 px-2"
+                                                onClick={() => setSelectedFilterAgentIds([])}
+                                            >
+                                                Clear
+                                            </Button>
+                                        </div>
+                                    )}
+                                </PopoverContent>
+                            </Popover>
                             <Select value={coachingStatus} onValueChange={setCoachingStatus}>
                                 <SelectTrigger>
                                     <SelectValue placeholder="Coaching Status" />

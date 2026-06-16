@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { MultiSelectFilter, parseMultiSelectParam, multiSelectToParam } from "@/components/multi-select-filter";
 import {
     Dialog,
     DialogContent,
@@ -246,15 +247,10 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
     const restrictedRoles: UserRole[] = ['Agent', 'IT', 'Utility'];
     const isRestrictedUser = auth.user.role && restrictedRoles.includes(auth.user.role);
 
-    const [selectedUserId, setSelectedUserId] = useState(filters?.user_id || "");
-    const [isUserPopoverOpen, setIsUserPopoverOpen] = useState(false);
-    const [userSearchQuery, setUserSearchQuery] = useState("");
-    const [selectedCampaignId, setSelectedCampaignId] = useState(() => {
-        if (filters?.campaign_id) return filters.campaign_id;
-        return "";
-    });
-    const [selectedPointType, setSelectedPointType] = useState(filters?.point_type || "");
-    const [selectedStatus, setSelectedStatus] = useState(filters?.status || "");
+    const [selectedUserIds, setSelectedUserIds] = useState<string[]>(parseMultiSelectParam(filters?.user_id));
+    const [selectedCampaignIds, setSelectedCampaignIds] = useState<string[]>(parseMultiSelectParam(filters?.campaign_id));
+    const [selectedPointTypes, setSelectedPointTypes] = useState<string[]>(parseMultiSelectParam(filters?.point_type));
+    const [selectedStatuses, setSelectedStatuses] = useState<string[]>(parseMultiSelectParam(filters?.status));
     const [filterExpiringSoon, setFilterExpiringSoon] = useState(filters?.expiring_soon === 'true' || false);
     const [filterGbroEligible, setFilterGbroEligible] = useState(filters?.gbro_eligible === 'true' || false);
     const [isRescanOpen, setIsRescanOpen] = useState(false);
@@ -361,14 +357,14 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
 
     const buildFilterQuery = useCallback(() => {
         const query: Record<string, string> = {};
-        if (selectedUserId) query.user_id = selectedUserId;
-        if (selectedCampaignId) query.campaign_id = selectedCampaignId;
-        if (selectedPointType) query.point_type = selectedPointType;
-        if (selectedStatus) query.status = selectedStatus;
+        if (selectedUserIds.length > 0) query.user_id = multiSelectToParam(selectedUserIds);
+        if (selectedCampaignIds.length > 0) query.campaign_id = multiSelectToParam(selectedCampaignIds);
+        if (selectedPointTypes.length > 0) query.point_type = multiSelectToParam(selectedPointTypes);
+        if (selectedStatuses.length > 0) query.status = multiSelectToParam(selectedStatuses);
         if (filterExpiringSoon) query.expiring_soon = 'true';
         if (filterGbroEligible) query.gbro_eligible = 'true';
         return query;
-    }, [selectedUserId, selectedCampaignId, selectedPointType, selectedStatus, filterExpiringSoon, filterGbroEligible]);
+    }, [selectedUserIds, selectedCampaignIds, selectedPointTypes, selectedStatuses, filterExpiringSoon, filterGbroEligible]);
 
     const handleFilter = () => {
         router.get(
@@ -406,11 +402,10 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
     }, [autoRefreshEnabled, buildFilterQuery]);
 
     const handleReset = () => {
-        setSelectedUserId("");
-        setUserSearchQuery("");
-        setSelectedCampaignId("");
-        setSelectedPointType("");
-        setSelectedStatus("");
+        setSelectedUserIds([]);
+        setSelectedCampaignIds([]);
+        setSelectedPointTypes([]);
+        setSelectedStatuses([]);
         setFilterExpiringSoon(false);
         setFilterGbroEligible(false);
 
@@ -962,7 +957,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
         // Points are already loaded from the backend, no need to fetch
     };
 
-    const showClearFilters = selectedUserId || selectedCampaignId || selectedPointType || selectedStatus || userSearchQuery || filterExpiringSoon || filterGbroEligible;
+    const showClearFilters = selectedUserIds.length > 0 || selectedCampaignIds.length > 0 || selectedPointTypes.length > 0 || selectedStatuses.length > 0 || filterExpiringSoon || filterGbroEligible;
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -1166,127 +1161,60 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
                         {!isRestrictedUser && (
-                            <Popover open={isUserPopoverOpen} onOpenChange={setIsUserPopoverOpen}>
-                                <PopoverTrigger asChild>
-                                    <Button
-                                        variant="outline"
-                                        role="combobox"
-                                        aria-expanded={isUserPopoverOpen}
-                                        className="w-full justify-between font-normal"
-                                    >
-                                        <span className="truncate">
-                                            {selectedUserId
-                                                ? (() => {
-                                                    const user = users?.find(u => String(u.id) === selectedUserId);
-                                                    return user ? formatUserName(user) : "Select employee...";
-                                                })()
-                                                : "All Employees"}
-                                        </span>
-                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-full p-0" align="start">
-                                    <Command shouldFilter={false}>
-                                        <CommandInput
-                                            placeholder="Search employee..."
-                                            value={userSearchQuery}
-                                            onValueChange={setUserSearchQuery}
-                                        />
-                                        <CommandList>
-                                            <CommandEmpty>No employee found.</CommandEmpty>
-                                            <CommandGroup>
-                                                <CommandItem
-                                                    value="all"
-                                                    onSelect={() => {
-                                                        setSelectedUserId("");
-                                                        setIsUserPopoverOpen(false);
-                                                        setUserSearchQuery("");
-                                                    }}
-                                                    className="cursor-pointer"
-                                                >
-                                                    <Check
-                                                        className={`mr-2 h-4 w-4 ${!selectedUserId
-                                                            ? "opacity-100"
-                                                            : "opacity-0"
-                                                            }`}
-                                                    />
-                                                    All Employees
-                                                </CommandItem>
-                                                {users
-                                                    ?.filter(user => {
-                                                        if (!userSearchQuery) return true;
-                                                        const query = userSearchQuery.toLowerCase();
-                                                        const formattedName = formatUserName(user).toLowerCase();
-                                                        const regularName = user.name.toLowerCase();
-                                                        return formattedName.includes(query) || regularName.includes(query);
-                                                    })
-                                                    .map((user) => (
-                                                        <CommandItem
-                                                            key={user.id}
-                                                            value={formatUserName(user)}
-                                                            onSelect={() => {
-                                                                setSelectedUserId(String(user.id));
-                                                                setIsUserPopoverOpen(false);
-                                                                setUserSearchQuery("");
-                                                            }}
-                                                            className="cursor-pointer"
-                                                        >
-                                                            <Check
-                                                                className={`mr-2 h-4 w-4 ${selectedUserId === String(user.id)
-                                                                    ? "opacity-100"
-                                                                    : "opacity-0"
-                                                                    }`}
-                                                            />
-                                                            {formatUserName(user)}
-                                                        </CommandItem>
-                                                    ))}
-                                            </CommandGroup>
-                                        </CommandList>
-                                    </Command>
-                                </PopoverContent>
-                            </Popover>
+                            <MultiSelectFilter
+                                options={(users ?? []).map(u => ({ label: formatUserName(u), value: String(u.id) }))}
+                                value={selectedUserIds}
+                                onChange={setSelectedUserIds}
+                                placeholder="All Employees"
+                                emptyMessage="No employee found."
+                                className="w-full min-h-9"
+                                multipleSelectionLabel={(n) => `${n} employees selected`}
+                            />
                         )}
 
                         {!isRestrictedUser && (
-                            <Select value={selectedCampaignId || "all"} onValueChange={(value) => setSelectedCampaignId(value === "all" ? "" : value)}>
-                                <SelectTrigger className="w-full">
-                                    <SelectValue placeholder="All Campaigns" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Campaigns</SelectItem>
-                                    {(teamLeadCampaignIds?.length ? campaigns?.filter(c => teamLeadCampaignIds.includes(c.id)) : campaigns)?.map(campaign => (
-                                        <SelectItem key={campaign.id} value={String(campaign.id)}>
-                                            {campaign.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            <MultiSelectFilter
+                                options={(teamLeadCampaignIds?.length ? campaigns?.filter(c => teamLeadCampaignIds.includes(c.id)) : campaigns)?.map(campaign => ({
+                                    label: campaign.name,
+                                    value: String(campaign.id),
+                                })) ?? []}
+                                value={selectedCampaignIds}
+                                onChange={setSelectedCampaignIds}
+                                placeholder="All Campaigns"
+                                emptyMessage="No campaign found."
+                                className="w-full min-h-9"
+                                multipleSelectionLabel={(n) => `${n} campaigns selected`}
+                            />
                         )}
 
-                        <Select value={selectedPointType || undefined} onValueChange={(value) => setSelectedPointType(value || "")}>
-                            <SelectTrigger className="w-full">
-                                <SelectValue placeholder="All Types" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="whole_day_absence">Whole Day Absence</SelectItem>
-                                <SelectItem value="half_day_absence">Half-Day Absence</SelectItem>
-                                <SelectItem value="undertime">Undertime (Hour)</SelectItem>
-                                <SelectItem value="undertime_more_than_hour">Undertime (More than Hour)</SelectItem>
-                                <SelectItem value="tardy">Tardy</SelectItem>
-                            </SelectContent>
-                        </Select>
+                        <MultiSelectFilter
+                            options={[
+                                { label: "Whole Day Absence", value: "whole_day_absence" },
+                                { label: "Half-Day Absence", value: "half_day_absence" },
+                                { label: "Undertime (Hour)", value: "undertime" },
+                                { label: "Undertime (More than Hour)", value: "undertime_more_than_hour" },
+                                { label: "Tardy", value: "tardy" },
+                            ]}
+                            value={selectedPointTypes}
+                            onChange={setSelectedPointTypes}
+                            placeholder="All Types"
+                            emptyMessage="No type found."
+                            className="w-full min-h-9"
+                            multipleSelectionLabel={(n) => `${n} types selected`}
+                        />
 
-                        <Select value={selectedStatus || "all"} onValueChange={(value) => setSelectedStatus(value === "all" ? "" : value)}>
-                            <SelectTrigger className="w-full">
-                                <SelectValue placeholder="All Status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Status</SelectItem>
-                                <SelectItem value="active">Active</SelectItem>
-                                <SelectItem value="excused">Excused</SelectItem>
-                                <SelectItem value="expired">Expired</SelectItem>
-                            </SelectContent>
-                        </Select>
+                        <MultiSelectFilter
+                            options={[
+                                { label: "Active", value: "active" },
+                                { label: "Excused", value: "excused" },
+                                { label: "Expired", value: "expired" },
+                            ]}
+                            value={selectedStatuses}
+                            onChange={setSelectedStatuses}
+                            placeholder="All Status"
+                            emptyMessage="No status found."
+                            className="w-full min-h-9"
+                        />
                     </div>
 
                     {/* Additional Filters Row */}

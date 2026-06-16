@@ -20,6 +20,7 @@ import {
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Check, ChevronsUpDown, Users } from "lucide-react";
+import { MultiSelectFilter, parseMultiSelectParam, multiSelectToParam } from "@/components/multi-select-filter";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -184,15 +185,14 @@ export default function EmployeeSchedulesIndex() {
 
     const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState(appliedFilters.search || "");
-    const [userFilter, setUserFilter] = useState(appliedFilters.user_id || "all");
-    const [isUserPopoverOpen, setIsUserPopoverOpen] = useState(false);
-    const [userSearchQuery, setUserSearchQuery] = useState("");
-    const [roleFilter, setRoleFilter] = useState(appliedFilters.role || "all");
-    const [campaignFilter, setCampaignFilter] = useState(() => {
-        if (appliedFilters.campaign_id) return appliedFilters.campaign_id;
-        return "all";
+    const [selectedUserIds, setSelectedUserIds] = useState<string[]>(parseMultiSelectParam(appliedFilters.user_id));
+    const [selectedRoles, setSelectedRoles] = useState<string[]>(parseMultiSelectParam(appliedFilters.role));
+    const [selectedCampaignIds, setSelectedCampaignIds] = useState<string[]>(() => {
+        const fromFilter = parseMultiSelectParam(appliedFilters.campaign_id);
+        if (fromFilter.length > 0) return fromFilter;
+        return [];
     });
-    const [statusFilter, setStatusFilter] = useState(appliedFilters.is_active || "all");
+    const [selectedStatuses, setSelectedStatuses] = useState<string[]>(parseMultiSelectParam(appliedFilters.is_active));
     const [activeOnly, setActiveOnly] = useState(appliedFilters.active_only || false);
     const [showResigned, setShowResigned] = useState(appliedFilters.show_resigned || false);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
@@ -201,10 +201,10 @@ export default function EmployeeSchedulesIndex() {
     // Update local state when filters prop changes (e.g., when navigating back)
     useEffect(() => {
         setSearch(appliedFilters.search || "");
-        setUserFilter(appliedFilters.user_id || "all");
-        setRoleFilter(appliedFilters.role || "all");
-        setCampaignFilter(appliedFilters.campaign_id || "all");
-        setStatusFilter(appliedFilters.is_active || "all");
+        setSelectedUserIds(parseMultiSelectParam(appliedFilters.user_id));
+        setSelectedRoles(parseMultiSelectParam(appliedFilters.role));
+        setSelectedCampaignIds(parseMultiSelectParam(appliedFilters.campaign_id));
+        setSelectedStatuses(parseMultiSelectParam(appliedFilters.is_active));
         setActiveOnly(appliedFilters.active_only || false);
         setShowResigned(appliedFilters.show_resigned || false);
     }, [appliedFilters.search, appliedFilters.user_id, appliedFilters.role, appliedFilters.campaign_id, appliedFilters.is_active, appliedFilters.active_only, appliedFilters.show_resigned]);
@@ -222,10 +222,10 @@ export default function EmployeeSchedulesIndex() {
     const handleSearch = () => {
         const params: Record<string, string> = {};
         if (search) params.search = search;
-        if (userFilter !== "all") params.user_id = userFilter;
-        if (roleFilter !== "all") params.role = roleFilter;
-        if (campaignFilter !== "all") params.campaign_id = campaignFilter;
-        if (statusFilter !== "all") params.is_active = statusFilter;
+        if (selectedUserIds.length > 0) params.user_id = multiSelectToParam(selectedUserIds);
+        if (selectedRoles.length > 0) params.role = multiSelectToParam(selectedRoles);
+        if (selectedCampaignIds.length > 0) params.campaign_id = multiSelectToParam(selectedCampaignIds);
+        if (selectedStatuses.length > 0) params.is_active = multiSelectToParam(selectedStatuses);
         if (activeOnly) params.active_only = "1";
         if (showResigned) params.show_resigned = "1";
 
@@ -252,10 +252,10 @@ export default function EmployeeSchedulesIndex() {
             isPollingRef.current = true;
             const params: Record<string, string> = {};
             if (search) params.search = search;
-            if (userFilter !== "all") params.user_id = userFilter;
-            if (roleFilter !== "all") params.role = roleFilter;
-            if (campaignFilter !== "all") params.campaign_id = campaignFilter;
-            if (statusFilter !== "all") params.is_active = statusFilter;
+            if (selectedUserIds.length > 0) params.user_id = multiSelectToParam(selectedUserIds);
+            if (selectedRoles.length > 0) params.role = multiSelectToParam(selectedRoles);
+            if (selectedCampaignIds.length > 0) params.campaign_id = multiSelectToParam(selectedCampaignIds);
+            if (selectedStatuses.length > 0) params.is_active = multiSelectToParam(selectedStatuses);
             if (activeOnly) params.active_only = "1";
             if (showResigned) params.show_resigned = "1";
 
@@ -270,23 +270,23 @@ export default function EmployeeSchedulesIndex() {
         }, 30000);
 
         return () => clearInterval(interval);
-    }, [autoRefreshEnabled, search, userFilter, roleFilter, campaignFilter, statusFilter, activeOnly, showResigned]);
+    }, [autoRefreshEnabled, search, selectedUserIds, selectedRoles, selectedCampaignIds, selectedStatuses, activeOnly, showResigned]);
 
     const showClearFilters =
-        userFilter !== "all" ||
-        roleFilter !== "all" ||
-        campaignFilter !== "all" ||
-        statusFilter !== "all" ||
+        selectedUserIds.length > 0 ||
+        selectedRoles.length > 0 ||
+        selectedCampaignIds.length > 0 ||
+        selectedStatuses.length > 0 ||
         activeOnly ||
         showResigned ||
         Boolean(search);
 
     const clearFilters = () => {
         setSearch("");
-        setUserFilter("all");
-        setRoleFilter("all");
-        setCampaignFilter("all");
-        setStatusFilter("all");
+        setSelectedUserIds([]);
+        setSelectedRoles([]);
+        setSelectedCampaignIds([]);
+        setSelectedStatuses([]);
         setActiveOnly(false);
         setShowResigned(false);
 
@@ -438,118 +438,50 @@ export default function EmployeeSchedulesIndex() {
 
                 <div className="flex flex-col gap-3">
                     <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,3fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
-                        <Popover open={isUserPopoverOpen} onOpenChange={setIsUserPopoverOpen}>
-                            <PopoverTrigger asChild>
-                                <Button
-                                    variant="outline"
-                                    role="combobox"
-                                    aria-expanded={isUserPopoverOpen}
-                                    className="w-full justify-between font-normal"
-                                >
-                                    <span className="truncate">
-                                        {userFilter !== "all"
-                                            ? users.find(u => String(u.id) === userFilter)?.name || "Select employee..."
-                                            : "All Employees"}
-                                    </span>
-                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-full p-0" align="start">
-                                <Command shouldFilter={false}>
-                                    <CommandInput
-                                        placeholder="Search employee..."
-                                        value={userSearchQuery}
-                                        onValueChange={setUserSearchQuery}
-                                    />
-                                    <CommandList>
-                                        <CommandEmpty>No employee found.</CommandEmpty>
-                                        <CommandGroup>
-                                            <CommandItem
-                                                value="all"
-                                                onSelect={() => {
-                                                    setUserFilter("all");
-                                                    setIsUserPopoverOpen(false);
-                                                    setUserSearchQuery("");
-                                                }}
-                                                className="cursor-pointer"
-                                            >
-                                                <Check
-                                                    className={`mr-2 h-4 w-4 ${userFilter === "all"
-                                                        ? "opacity-100"
-                                                        : "opacity-0"
-                                                        }`}
-                                                />
-                                                All Employees
-                                            </CommandItem>
-                                            {users
-                                                .filter(user =>
-                                                    !userSearchQuery ||
-                                                    user.name.toLowerCase().includes(userSearchQuery.toLowerCase())
-                                                )
-                                                .map((user) => (
-                                                    <CommandItem
-                                                        key={user.id}
-                                                        value={user.name}
-                                                        onSelect={() => {
-                                                            setUserFilter(String(user.id));
-                                                            setIsUserPopoverOpen(false);
-                                                            setUserSearchQuery("");
-                                                        }}
-                                                        className="cursor-pointer"
-                                                    >
-                                                        <Check
-                                                            className={`mr-2 h-4 w-4 ${userFilter === String(user.id)
-                                                                ? "opacity-100"
-                                                                : "opacity-0"
-                                                                }`}
-                                                        />
-                                                        {user.name}
-                                                    </CommandItem>
-                                                ))}
-                                        </CommandGroup>
-                                    </CommandList>
-                                </Command>
-                            </PopoverContent>
-                        </Popover>
+                        <MultiSelectFilter
+                            options={users.map(u => ({ label: u.name, value: String(u.id) }))}
+                            value={selectedUserIds}
+                            onChange={setSelectedUserIds}
+                            placeholder="All Employees"
+                            emptyMessage="No employee found."
+                            className="w-full min-h-9"
+                            multipleSelectionLabel={(n) => `${n} employees selected`}
+                        />
 
-                        <Select value={roleFilter} onValueChange={setRoleFilter}>
-                            <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Filter by Role" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Roles</SelectItem>
-                                {roles.map(role => (
-                                    <SelectItem key={role} value={role}>
-                                        {role}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <MultiSelectFilter
+                            options={roles.map(role => ({ label: role, value: role }))}
+                            value={selectedRoles}
+                            onChange={setSelectedRoles}
+                            placeholder="All Roles"
+                            emptyMessage="No role found."
+                            className="w-full min-h-9"
+                            multipleSelectionLabel={(n) => `${n} roles selected`}
+                        />
 
-                        <Select value={campaignFilter} onValueChange={setCampaignFilter}>
-                            <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Filter by Campaign" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Campaigns</SelectItem>
-                                {(teamLeadCampaignIds?.length ? campaigns.filter(c => teamLeadCampaignIds.includes(c.id)) : campaigns).map(campaign => (
-                                    <SelectItem key={campaign.id} value={String(campaign.id)}>
-                                        {campaign.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <MultiSelectFilter
+                            options={(teamLeadCampaignIds?.length ? campaigns.filter(c => teamLeadCampaignIds.includes(c.id)) : campaigns).map(campaign => ({
+                                label: campaign.name,
+                                value: String(campaign.id),
+                            }))}
+                            value={selectedCampaignIds}
+                            onChange={setSelectedCampaignIds}
+                            placeholder="All Campaigns"
+                            emptyMessage="No campaign found."
+                            className="w-full min-h-9"
+                            multipleSelectionLabel={(n) => `${n} campaigns selected`}
+                        />
 
-                        <Select value={statusFilter} onValueChange={setStatusFilter}>
-                            <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Filter by Status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Status</SelectItem>
-                                <SelectItem value="1">Active</SelectItem>
-                                <SelectItem value="0">Inactive</SelectItem>
-                            </SelectContent>
-                        </Select>
+                        <MultiSelectFilter
+                            options={[
+                                { label: "Active", value: "1" },
+                                { label: "Inactive", value: "0" },
+                            ]}
+                            value={selectedStatuses}
+                            onChange={setSelectedStatuses}
+                            placeholder="All Status"
+                            emptyMessage="No status found."
+                            className="w-full min-h-9"
+                        />
 
                         <Button
                             variant={activeOnly ? "default" : "outline"}

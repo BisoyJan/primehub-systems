@@ -720,28 +720,52 @@ class AttendancePointController extends Controller
             ->orderBy('shift_date', 'desc');
 
         if ($request->filled('user_id')) {
-            $query->where('user_id', $request->user_id);
+            $userIds = is_array($request->user_id)
+                ? $request->user_id
+                : array_filter(explode(',', (string) $request->user_id));
+            if (count($userIds) > 0) {
+                $query->whereIn('user_id', $userIds);
+            }
         }
 
         if ($request->filled('point_type')) {
-            $query->where('point_type', $request->point_type);
+            $pointTypes = is_array($request->point_type)
+                ? $request->point_type
+                : array_filter(explode(',', (string) $request->point_type));
+            if (count($pointTypes) > 0) {
+                $query->whereIn('point_type', $pointTypes);
+            }
         }
 
         if ($request->filled('status')) {
-            $this->applyStatusFilter($query, $request->status);
+            $statuses = is_array($request->status)
+                ? $request->status
+                : array_filter(explode(',', (string) $request->status));
+            if (count($statuses) > 0) {
+                $query->where(function ($q) use ($statuses) {
+                    foreach ($statuses as $status) {
+                        $q->orWhere(function ($q2) use ($status) {
+                            $this->applyStatusFilter($q2, $status);
+                        });
+                    }
+                });
+            }
         }
 
-        $campaignIdToFilter = ($request->filled('campaign_id') && $request->campaign_id !== 'all')
-            ? $request->campaign_id
-            : null;
+        $campaignIdsToFilter = [];
+        if ($request->filled('campaign_id') && $request->campaign_id !== 'all') {
+            $campaignIdsToFilter = is_array($request->campaign_id)
+                ? $request->campaign_id
+                : array_filter(explode(',', (string) $request->campaign_id));
+        }
 
-        if (! $campaignIdToFilter && $user->role === 'Team Lead' && ! empty($teamLeadCampaignIds)) {
+        if (count($campaignIdsToFilter) === 0 && $user->role === 'Team Lead' && ! empty($teamLeadCampaignIds)) {
             $query->whereHas('user.activeSchedule', function ($q) use ($teamLeadCampaignIds) {
                 $q->whereIn('campaign_id', $teamLeadCampaignIds);
             });
-        } elseif ($campaignIdToFilter) {
-            $query->whereHas('user.activeSchedule', function ($q) use ($campaignIdToFilter) {
-                $q->where('campaign_id', $campaignIdToFilter);
+        } elseif (count($campaignIdsToFilter) > 0) {
+            $query->whereHas('user.activeSchedule', function ($q) use ($campaignIdsToFilter) {
+                $q->whereIn('campaign_id', $campaignIdsToFilter);
             });
         }
 

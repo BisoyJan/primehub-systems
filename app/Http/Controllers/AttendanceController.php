@@ -335,11 +335,16 @@ class AttendanceController extends Controller
             }
         }
 
-        // Filter by site (via employee schedule)
+        // Filter by site (via employee schedule) - supports multiple IDs comma-separated
         if ($request->has('site_id') && $request->site_id !== 'all' && $request->site_id) {
-            $query->whereHas('employeeSchedule', function ($q) use ($request) {
-                $q->where('site_id', $request->site_id);
-            });
+            $siteIds = is_array($request->site_id)
+                ? $request->site_id
+                : array_filter(explode(',', $request->site_id));
+            if (count($siteIds) > 0) {
+                $query->whereHas('employeeSchedule', function ($q) use ($siteIds) {
+                    $q->whereIn('site_id', $siteIds);
+                });
+            }
         }
 
         // Filter by campaign (via employee schedule) - supports multiple IDs comma-separated

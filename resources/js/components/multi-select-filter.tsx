@@ -1,9 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { Check, ChevronsUpDown, X } from "lucide-react";
+import { ChevronsUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
     Popover,
     PopoverContent,
@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 export interface MultiSelectOption {
     label: string;
     value: string;
+    description?: string;
 }
 
 interface MultiSelectFilterProps {
@@ -32,6 +33,10 @@ interface MultiSelectFilterProps {
     emptyMessage?: string;
     className?: string;
     disabled?: boolean;
+    /** Label shown when a single item is selected; defaults to that option's label */
+    singleSelectionLabel?: (label: string) => string;
+    /** Label for multiple selections; defaults to "N selected" */
+    multipleSelectionLabel?: (count: number) => string;
 }
 
 export function MultiSelectFilter({
@@ -42,22 +47,20 @@ export function MultiSelectFilter({
     emptyMessage = "No items found.",
     className,
     disabled = false,
+    singleSelectionLabel,
+    multipleSelectionLabel,
 }: MultiSelectFilterProps) {
     const [open, setOpen] = React.useState(false);
     const [searchQuery, setSearchQuery] = React.useState("");
 
-    // Filter options based on search query
     const filteredOptions = React.useMemo(() => {
         if (!searchQuery) return options;
+        const q = searchQuery.toLowerCase();
         return options.filter((opt) =>
-            opt.label.toLowerCase().includes(searchQuery.toLowerCase())
+            opt.label.toLowerCase().includes(q) ||
+            (opt.description ?? "").toLowerCase().includes(q)
         );
     }, [options, searchQuery]);
-
-    // Get selected option labels
-    const selectedLabels = React.useMemo(() => {
-        return value.map(v => options.find(opt => opt.value === v)?.label || v);
-    }, [options, value]);
 
     const handleSelect = (optionValue: string) => {
         if (value.includes(optionValue)) {
@@ -67,15 +70,16 @@ export function MultiSelectFilter({
         }
     };
 
-    const handleRemove = (optionValue: string, e: React.MouseEvent) => {
-        e.stopPropagation();
-        onChange(value.filter(v => v !== optionValue));
-    };
-
-    const handleClearAll = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        onChange([]);
-    };
+    const triggerLabel = React.useMemo(() => {
+        if (value.length === 0) return placeholder;
+        if (value.length === 1) {
+            const label = options.find(opt => opt.value === value[0])?.label ?? value[0];
+            return singleSelectionLabel ? singleSelectionLabel(label) : label;
+        }
+        return multipleSelectionLabel
+            ? multipleSelectionLabel(value.length)
+            : `${value.length} selected`;
+    }, [value, options, placeholder, singleSelectionLabel, multipleSelectionLabel]);
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
@@ -91,87 +95,63 @@ export function MultiSelectFilter({
                         className
                     )}
                 >
-                    <span className="flex flex-1 flex-wrap gap-1 truncate">
-                        {value.length === 0 ? (
-                            placeholder
-                        ) : value.length <= 2 ? (
-                            selectedLabels.map((label, i) => (
-                                <Badge
-                                    key={value[i]}
-                                    variant="secondary"
-                                    className="text-xs px-1.5 py-0 h-5"
-                                >
-                                    {label}
-                                    <span
-                                        role="button"
-                                        tabIndex={0}
-                                        title={`Remove ${label}`}
-                                        aria-label={`Remove ${label}`}
-                                        className="ml-1 hover:bg-muted rounded-full cursor-pointer"
-                                        onClick={(e) => handleRemove(value[i], e)}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter' || e.key === ' ') {
-                                                handleRemove(value[i], e as unknown as React.MouseEvent);
-                                            }
-                                        }}
-                                    >
-                                        <X className="h-3 w-3" />
-                                    </span>
-                                </Badge>
-                            ))
-                        ) : (
-                            <Badge variant="secondary" className="text-xs">
-                                {value.length} selected
-                                <span
-                                    role="button"
-                                    tabIndex={0}
-                                    title="Clear all"
-                                    aria-label="Clear all"
-                                    className="ml-1 hover:bg-muted rounded-full cursor-pointer"
-                                    onClick={handleClearAll}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter' || e.key === ' ') {
-                                            handleClearAll(e as unknown as React.MouseEvent);
-                                        }
-                                    }}
-                                >
-                                    <X className="h-3 w-3" />
-                                </span>
-                            </Badge>
-                        )}
-                    </span>
+                    <span className="truncate">{triggerLabel}</span>
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-full p-0" align="start">
+            <PopoverContent className="w-full min-w-60 p-0" align="start">
                 <Command shouldFilter={false}>
                     <CommandInput
-                        placeholder={`Search...`}
+                        placeholder="Search..."
                         value={searchQuery}
                         onValueChange={setSearchQuery}
                     />
                     <CommandList>
                         <CommandEmpty>{emptyMessage}</CommandEmpty>
                         <CommandGroup>
-                            {filteredOptions.map((option) => (
-                                <CommandItem
-                                    key={option.value}
-                                    value={option.value}
-                                    onSelect={() => handleSelect(option.value)}
-                                    className="cursor-pointer"
-                                >
-                                    <Check
-                                        className={cn(
-                                            "mr-2 h-4 w-4",
-                                            value.includes(option.value) ? "opacity-100" : "opacity-0"
-                                        )}
-                                    />
-                                    {option.label}
-                                </CommandItem>
-                            ))}
+                            {filteredOptions.map((option) => {
+                                const isSelected = value.includes(option.value);
+                                return (
+                                    <CommandItem
+                                        key={option.value}
+                                        value={option.value}
+                                        onSelect={() => handleSelect(option.value)}
+                                        className="cursor-pointer"
+                                    >
+                                        <Checkbox
+                                            checked={isSelected}
+                                            className="mr-2"
+                                            onCheckedChange={() => handleSelect(option.value)}
+                                            onClick={(e) => e.stopPropagation()}
+                                        />
+                                        <div className="flex flex-col">
+                                            <span>{option.label}</span>
+                                            {option.description && (
+                                                <span className="text-xs text-muted-foreground">{option.description}</span>
+                                            )}
+                                        </div>
+                                    </CommandItem>
+                                );
+                            })}
                         </CommandGroup>
                     </CommandList>
                 </Command>
+                {value.length > 0 && (
+                    <div className="flex items-center justify-between border-t p-2 text-xs">
+                        <span className="text-muted-foreground">
+                            {value.length} selected
+                        </span>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2"
+                            onClick={() => onChange([])}
+                        >
+                            Clear
+                        </Button>
+                    </div>
+                )}
             </PopoverContent>
         </Popover>
     );

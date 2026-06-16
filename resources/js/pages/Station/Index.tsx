@@ -690,9 +690,11 @@ export default function StationIndex() {
                                             className="w-full justify-between font-normal"
                                         >
                                             <span className="truncate">
-                                                {selectedFilterStationIds.length > 0
-                                                    ? `${selectedFilterStationIds.length} selected`
-                                                    : "All stations"}
+                                                {selectedFilterStationIds.length === 0
+                                                    ? "All stations"
+                                                    : selectedFilterStationIds.length === 1
+                                                        ? allStations.find(s => s.id === selectedFilterStationIds[0])?.label || "1 selected"
+                                                        : `${selectedFilterStationIds.length} selected`}
                                             </span>
                                             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                         </Button>
@@ -707,21 +709,44 @@ export default function StationIndex() {
                                             <CommandList>
                                                 <CommandEmpty>No station found.</CommandEmpty>
                                                 <CommandGroup>
-                                                    {filteredStationOptions.map((station) => (
-                                                        <CommandItem
-                                                            key={station.id}
-                                                            value={String(station.id)}
-                                                            onSelect={() => handleToggleStationSelect(station.id)}
-                                                        >
-                                                            <Check
-                                                                className={`mr-2 h-4 w-4 ${selectedFilterStationIds.includes(station.id) ? "opacity-100" : "opacity-0"}`}
-                                                            />
-                                                            {station.label}
-                                                        </CommandItem>
-                                                    ))}
+                                                    {filteredStationOptions.map((station) => {
+                                                        const isSelected = selectedFilterStationIds.includes(station.id);
+                                                        return (
+                                                            <CommandItem
+                                                                key={station.id}
+                                                                value={String(station.id)}
+                                                                onSelect={() => handleToggleStationSelect(station.id)}
+                                                                className="cursor-pointer"
+                                                            >
+                                                                <Checkbox
+                                                                    checked={isSelected}
+                                                                    className="mr-2"
+                                                                    onCheckedChange={() => handleToggleStationSelect(station.id)}
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                />
+                                                                {station.label}
+                                                            </CommandItem>
+                                                        );
+                                                    })}
                                                 </CommandGroup>
                                             </CommandList>
                                         </Command>
+                                        {selectedFilterStationIds.length > 0 && (
+                                            <div className="flex items-center justify-between border-t p-2 text-xs">
+                                                <span className="text-muted-foreground">
+                                                    {selectedFilterStationIds.length} selected
+                                                </span>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-7 px-2"
+                                                    onClick={() => setSelectedFilterStationIds([])}
+                                                >
+                                                    Clear
+                                                </Button>
+                                            </div>
+                                        )}
                                     </PopoverContent>
                                 </Popover>
                             </div>
@@ -807,9 +832,11 @@ export default function StationIndex() {
                                             className="w-full justify-between font-normal"
                                         >
                                             <span className="truncate">
-                                                {selectedFilterProcessorIds.length > 0
-                                                    ? `${selectedFilterProcessorIds.length} selected`
-                                                    : 'All processors'}
+                                                {selectedFilterProcessorIds.length === 0
+                                                    ? 'All processors'
+                                                    : selectedFilterProcessorIds.length === 1
+                                                        ? (filters.processors ?? []).find(p => p.id === selectedFilterProcessorIds[0])?.label || '1 selected'
+                                                        : `${selectedFilterProcessorIds.length} selected`}
                                             </span>
                                             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                         </Button>
@@ -824,25 +851,47 @@ export default function StationIndex() {
                                             <CommandList>
                                                 <CommandEmpty>No processor found.</CommandEmpty>
                                                 <CommandGroup>
-                                                    {filteredProcessorOptions.map((proc) => (
-                                                        <CommandItem
-                                                            key={proc.id}
-                                                            value={proc.label}
-                                                            onSelect={() => handleToggleProcessorSelect(proc.id)}
-                                                            className="cursor-pointer"
-                                                        >
-                                                            <Check
-                                                                className={`mr-2 h-4 w-4 ${selectedFilterProcessorIds.includes(proc.id) ? "opacity-100" : "opacity-0"}`}
-                                                            />
-                                                            {proc.label}
-                                                            {proc.core_count != null && proc.thread_count != null && (
-                                                                <span className="ml-auto text-xs text-muted-foreground">{proc.core_count}C / {proc.thread_count}T</span>
-                                                            )}
-                                                        </CommandItem>
-                                                    ))}
+                                                    {filteredProcessorOptions.map((proc) => {
+                                                        const isSelected = selectedFilterProcessorIds.includes(proc.id);
+                                                        return (
+                                                            <CommandItem
+                                                                key={proc.id}
+                                                                value={proc.label}
+                                                                onSelect={() => handleToggleProcessorSelect(proc.id)}
+                                                                className="cursor-pointer"
+                                                            >
+                                                                <Checkbox
+                                                                    checked={isSelected}
+                                                                    className="mr-2"
+                                                                    onCheckedChange={() => handleToggleProcessorSelect(proc.id)}
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                />
+                                                                {proc.label}
+                                                                {proc.core_count != null && proc.thread_count != null && (
+                                                                    <span className="ml-auto text-xs text-muted-foreground">{proc.core_count}C / {proc.thread_count}T</span>
+                                                                )}
+                                                            </CommandItem>
+                                                        );
+                                                    })}
                                                 </CommandGroup>
                                             </CommandList>
                                         </Command>
+                                        {selectedFilterProcessorIds.length > 0 && (
+                                            <div className="flex items-center justify-between border-t p-2 text-xs">
+                                                <span className="text-muted-foreground">
+                                                    {selectedFilterProcessorIds.length} selected
+                                                </span>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-7 px-2"
+                                                    onClick={() => setSelectedFilterProcessorIds([])}
+                                                >
+                                                    Clear
+                                                </Button>
+                                            </div>
+                                        )}
                                     </PopoverContent>
                                 </Popover>
                             </div>

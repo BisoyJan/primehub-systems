@@ -19,14 +19,24 @@ class BiometricRecordController extends Controller
     {
         $query = BiometricRecord::with(['user', 'site', 'attendanceUpload']);
 
-        // Filter by user
+        // Filter by user (supports multiple IDs comma-separated)
         if ($request->filled('user_id')) {
-            $query->where('user_id', $request->user_id);
+            $userIds = is_array($request->user_id)
+                ? $request->user_id
+                : array_filter(explode(',', (string) $request->user_id));
+            if (count($userIds) > 0) {
+                $query->whereIn('user_id', $userIds);
+            }
         }
 
-        // Filter by site
+        // Filter by site (supports multiple IDs comma-separated)
         if ($request->filled('site_id')) {
-            $query->where('site_id', $request->site_id);
+            $siteIds = is_array($request->site_id)
+                ? $request->site_id
+                : array_filter(explode(',', (string) $request->site_id));
+            if (count($siteIds) > 0) {
+                $query->whereIn('site_id', $siteIds);
+            }
         }
 
         // Filter by date range

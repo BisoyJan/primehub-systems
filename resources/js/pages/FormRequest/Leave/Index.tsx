@@ -57,6 +57,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { index as leaveIndexRoute, create as leaveCreateRoute, show as leaveShowRoute, cancel as leaveCancelRoute, destroy as leaveDestroyRoute, edit as leaveEditRoute, medicalCert as leaveMedicalCertRoute } from '@/routes/leave-requests';
+import { MultiSelectFilter, parseMultiSelectParam, multiSelectToParam } from '@/components/multi-select-filter';
 
 interface User {
     id: number;
@@ -125,6 +126,7 @@ interface Props {
         period?: string;
         employee_name?: string;
         campaign_department?: string;
+        user_id?: string;
     };
     statusCounts: StatusCounts;
     isAdmin: boolean;
@@ -167,21 +169,16 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
     const { can } = usePermission();
 
     const [activeTab, setActiveTab] = useState<StatusTab>((filters.status as StatusTab) || 'all');
-    const [filterType, setFilterType] = useState(filters.type || 'all');
+    const [selectedTypes, setSelectedTypes] = useState<string[]>(parseMultiSelectParam(filters.type));
     const [filterPeriod, setFilterPeriod] = useState(filters.period || 'all');
-    const [filterEmployeeName, setFilterEmployeeName] = useState(filters.employee_name || '');
-    const [filterCampaign, setFilterCampaign] = useState(() => {
-        if (filters.campaign_department) return filters.campaign_department;
-        return 'all';
-    });
-    const [employeeSearchQuery, setEmployeeSearchQuery] = useState('');
+    const [selectedUserIds, setSelectedUserIds] = useState<string[]>(parseMultiSelectParam(filters.user_id));
+    const [selectedCampaigns, setSelectedCampaigns] = useState<string[]>(parseMultiSelectParam(filters.campaign_department));
     const [showCancelDialog, setShowCancelDialog] = useState(false);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
     const [selectedLeaveId, setSelectedLeaveId] = useState<number | null>(null);
     const cancelForm = useForm({ cancellation_reason: '' });
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
-    const [showEmployeeSearch, setShowEmployeeSearch] = useState(false);
 
     // Medical Certificate dialog state
     const [showMedicalCertDialog, setShowMedicalCertDialog] = useState(false);
@@ -216,21 +213,7 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
     const handleZoomReset = () => setMedicalCertZoom(100);
 
     // Filter employees based on search query (from all employees list)
-    const filteredEmployees = React.useMemo(() => {
-        if (!employeeSearchQuery) return allEmployees.slice(0, 50);
-        return allEmployees.filter(emp =>
-            emp.name.toLowerCase().includes(employeeSearchQuery.toLowerCase())
-        ).slice(0, 50);
-    }, [allEmployees, employeeSearchQuery]);
-
-    const showClearFilters = activeTab !== 'all' || filterType !== 'all' || filterEmployeeName !== '' || (filterCampaign && filterCampaign !== 'all') || filterPeriod !== 'all';
-
-    // Clear employee search query when popover closes
-    useEffect(() => {
-        if (!showEmployeeSearch) {
-            setEmployeeSearchQuery('');
-        }
-    }, [showEmployeeSearch]);
+    const showClearFilters = activeTab !== 'all' || selectedTypes.length > 0 || selectedUserIds.length > 0 || selectedCampaigns.length > 0 || filterPeriod !== 'all';
 
     const buildFilterParams = React.useCallback((overrideStatus?: StatusTab) => {
         const params: Record<string, string> = {};
@@ -238,20 +221,23 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
         if (status !== 'all') {
             params.status = status;
         }
-        if (filterType !== 'all') {
-            params.type = filterType;
+        const typesParam = multiSelectToParam(selectedTypes);
+        if (typesParam) {
+            params.type = typesParam;
         }
-        if (filterEmployeeName) {
-            params.employee_name = filterEmployeeName;
+        const userIdsParam = multiSelectToParam(selectedUserIds);
+        if (userIdsParam) {
+            params.user_id = userIdsParam;
         }
-        if (filterCampaign && filterCampaign !== 'all') {
-            params.campaign_department = filterCampaign;
+        const campaignsParam = multiSelectToParam(selectedCampaigns);
+        if (campaignsParam) {
+            params.campaign_department = campaignsParam;
         }
         if (filterPeriod !== 'all') {
             params.period = filterPeriod;
         }
         return params;
-    }, [activeTab, filterType, filterEmployeeName, filterCampaign, filterPeriod]);
+    }, [activeTab, selectedTypes, selectedUserIds, selectedCampaigns, filterPeriod]);
 
     const requestWithFilters = (params: Record<string, string>) => {
         router.get(leaveIndexRoute().url, params, {
@@ -297,9 +283,9 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
 
     const clearFilters = () => {
         setActiveTab('all');
-        setFilterType('all');
-        setFilterEmployeeName('');
-        setFilterCampaign('all');
+        setSelectedTypes([]);
+        setSelectedUserIds([]);
+        setSelectedCampaigns([]);
         setFilterPeriod('all');
         requestWithFilters({});
     };
@@ -570,97 +556,45 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
                         <div className="w-full sm:w-auto flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
 
                             {showEmployeeColumn && (
-                                <Popover open={showEmployeeSearch} onOpenChange={setShowEmployeeSearch}>
-                                    <PopoverTrigger asChild>
-                                        <Button
-                                            variant="outline"
-                                            role="combobox"
-                                            aria-expanded={showEmployeeSearch}
-                                            className="w-full justify-between font-normal"
-                                        >
-                                            <span className="truncate">
-                                                {filterEmployeeName || "All Employees"}
-                                            </span>
-                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-full p-0" align="start">
-                                        <Command shouldFilter={false}>
-                                            <CommandInput
-                                                placeholder="Search employee..."
-                                                value={employeeSearchQuery}
-                                                onValueChange={setEmployeeSearchQuery}
-                                            />
-                                            <CommandList>
-                                                <CommandEmpty>No employee found.</CommandEmpty>
-                                                <CommandGroup>
-                                                    <CommandItem
-                                                        value="all"
-                                                        onSelect={() => {
-                                                            setFilterEmployeeName('');
-                                                            setShowEmployeeSearch(false);
-                                                        }}
-                                                        className="cursor-pointer"
-                                                    >
-                                                        <Check
-                                                            className={`mr-2 h-4 w-4 ${!filterEmployeeName ? "opacity-100" : "opacity-0"}`}
-                                                        />
-                                                        All Employees
-                                                    </CommandItem>
-                                                    {filteredEmployees.map((employee) => (
-                                                        <CommandItem
-                                                            key={employee.id}
-                                                            value={employee.name}
-                                                            onSelect={() => {
-                                                                setFilterEmployeeName(employee.name);
-                                                                setShowEmployeeSearch(false);
-                                                            }}
-                                                            className="cursor-pointer"
-                                                        >
-                                                            <Check
-                                                                className={`mr-2 h-4 w-4 ${filterEmployeeName === employee.name
-                                                                    ? "opacity-100"
-                                                                    : "opacity-0"
-                                                                    }`}
-                                                            />
-                                                            {employee.name}
-                                                        </CommandItem>
-                                                    ))}
-                                                </CommandGroup>
-                                            </CommandList>
-                                        </Command>
-                                    </PopoverContent>
-                                </Popover>
+                                <MultiSelectFilter
+                                    options={allEmployees.map((emp) => ({ label: emp.name, value: String(emp.id) }))}
+                                    value={selectedUserIds}
+                                    onChange={setSelectedUserIds}
+                                    placeholder="All Employees"
+                                    searchPlaceholder="Search employee..."
+                                    emptyText="No employee found."
+                                    multipleSelectionLabel={(n) => `${n} employees selected`}
+                                />
                             )}
 
-                            <Select value={filterType} onValueChange={setFilterType}>
-                                <SelectTrigger className="w-full">
-                                    <SelectValue placeholder="All Types" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Types</SelectItem>
-                                    <SelectItem value="VL">Vacation Leave</SelectItem>
-                                    <SelectItem value="SL">Sick Leave</SelectItem>
-                                    <SelectItem value="BL">Bereavement Leave</SelectItem>
-                                    <SelectItem value="SPL">Solo Parent Leave</SelectItem>
-                                    <SelectItem value="LOA">Leave of Absence</SelectItem>
-                                    <SelectItem value="LDV">Leave due to Domestic Violence</SelectItem>
-                                    <SelectItem value="UPTO">Unpaid Time Off</SelectItem>
-                                    <SelectItem value="ML">Maternity Leave</SelectItem>
-                                </SelectContent>
-                            </Select>
+                            <MultiSelectFilter
+                                options={[
+                                    { label: 'Vacation Leave', value: 'VL' },
+                                    { label: 'Sick Leave', value: 'SL' },
+                                    { label: 'Bereavement Leave', value: 'BL' },
+                                    { label: 'Solo Parent Leave', value: 'SPL' },
+                                    { label: 'Leave of Absence', value: 'LOA' },
+                                    { label: 'Leave due to Domestic Violence', value: 'LDV' },
+                                    { label: 'Unpaid Time Off', value: 'UPTO' },
+                                    { label: 'Maternity Leave', value: 'ML' },
+                                ]}
+                                value={selectedTypes}
+                                onChange={setSelectedTypes}
+                                placeholder="All Types"
+                                searchPlaceholder="Search type..."
+                                emptyText="No type found."
+                                multipleSelectionLabel={(n) => `${n} types selected`}
+                            />
 
-                            <Select value={filterCampaign} onValueChange={setFilterCampaign}>
-                                <SelectTrigger className="w-full">
-                                    <SelectValue placeholder="All Campaigns" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Campaigns</SelectItem>
-                                    {(teamLeadCampaignNames?.length ? campaigns.filter(c => teamLeadCampaignNames.includes(c)) : campaigns).map((c) => (
-                                        <SelectItem key={c} value={c}>{c}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            <MultiSelectFilter
+                                options={(teamLeadCampaignNames?.length ? campaigns.filter(c => teamLeadCampaignNames.includes(c)) : campaigns).map((c) => ({ label: c, value: c }))}
+                                value={selectedCampaigns}
+                                onChange={setSelectedCampaigns}
+                                placeholder="All Campaigns"
+                                searchPlaceholder="Search campaign..."
+                                emptyText="No campaign found."
+                                multipleSelectionLabel={(n) => `${n} campaigns selected`}
+                            />
 
                             <Select value={filterPeriod} onValueChange={setFilterPeriod}>
                                 <SelectTrigger className="w-full">

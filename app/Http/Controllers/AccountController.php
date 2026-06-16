@@ -46,9 +46,19 @@ class AccountController extends Controller
             });
         }
 
-        // Filter by user_id (for employee dropdown)
-        if ($userId = $request->query('user_id')) {
+        // Filter by user_ids (multi-select employee dropdown)
+        $userIds = $request->query('user_ids');
+        if (is_string($userIds) && $userIds !== '') {
+            $userIds = array_filter(explode(',', $userIds), fn ($v) => $v !== '');
+        }
+        if (is_array($userIds) && count($userIds) > 0) {
+            $query->whereIn('id', $userIds);
+        } elseif ($userId = $request->query('user_id')) {
+            // Backward compatibility for single user_id parameter
             $query->where('id', $userId);
+            $userIds = [$userId];
+        } else {
+            $userIds = [];
         }
 
         // Filter by role
@@ -115,7 +125,7 @@ class AccountController extends Controller
                 'role' => $role ?? '',
                 'status' => $status ?? '',
                 'employee_status' => $employeeStatus ?? '',
-                'user_id' => $userId ?? '',
+                'user_ids' => array_values(array_map('strval', $userIds)),
             ],
             'staleCount' => $staleCount,
         ]);

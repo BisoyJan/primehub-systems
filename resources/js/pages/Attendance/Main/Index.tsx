@@ -194,7 +194,7 @@ export default function AttendanceIndex() {
     const [selectedUserIds, setSelectedUserIds] = useState<string[]>(() =>
         parseMultiSelectParam(appliedFilters.user_id)
     );
-    const [selectedSiteId, setSelectedSiteId] = useState(appliedFilters.site_id || "");
+    const [selectedSiteIds, setSelectedSiteIds] = useState<string[]>(parseMultiSelectParam(appliedFilters.site_id));
     // Multi-select state for campaigns - auto-select Team Lead's campaign if no filter is applied
     const [selectedCampaignIds, setSelectedCampaignIds] = useState<string[]>(() => {
         const fromFilter = parseMultiSelectParam(appliedFilters.campaign_id);
@@ -282,7 +282,7 @@ export default function AttendanceIndex() {
     // Update local state when filters prop changes (e.g., when navigating back or pagination)
     useEffect(() => {
         setSelectedUserIds(parseMultiSelectParam(appliedFilters.user_id));
-        setSelectedSiteId(appliedFilters.site_id || "");
+        setSelectedSiteIds(parseMultiSelectParam(appliedFilters.site_id));
         // For Team Leads, default to their campaign if no filter is applied
         const campaignFromFilter = parseMultiSelectParam(appliedFilters.campaign_id);
         if (campaignFromFilter.length > 0) {
@@ -316,7 +316,7 @@ export default function AttendanceIndex() {
             params.user_id = multiSelectToParam(selectedUserIds);
         }
 
-        if (selectedSiteId) params.site_id = selectedSiteId;
+        if (selectedSiteIds.length > 0) params.site_id = multiSelectToParam(selectedSiteIds);
         if (selectedCampaignIds.length > 0) params.campaign_id = multiSelectToParam(selectedCampaignIds);
         if (selectedStatuses.length > 0) params.status = multiSelectToParam(selectedStatuses);
         if (startDate) params.start_date = startDate;
@@ -353,7 +353,7 @@ export default function AttendanceIndex() {
                 params.user_id = multiSelectToParam(selectedUserIds);
             }
 
-            if (selectedSiteId) params.site_id = selectedSiteId;
+            if (selectedSiteIds.length > 0) params.site_id = multiSelectToParam(selectedSiteIds);
             if (selectedCampaignIds.length > 0) params.campaign_id = multiSelectToParam(selectedCampaignIds);
             if (selectedStatuses.length > 0) params.status = multiSelectToParam(selectedStatuses);
             if (startDate) params.start_date = startDate;
@@ -372,7 +372,7 @@ export default function AttendanceIndex() {
         }, 30000);
 
         return () => clearInterval(interval);
-    }, [autoRefreshEnabled, selectedUserIds, selectedSiteId, selectedCampaignIds, selectedStatuses, startDate, endDate, needsVerification, verifiedFilter, isRestrictedUser, userId]);
+    }, [autoRefreshEnabled, selectedUserIds, selectedSiteIds, selectedCampaignIds, selectedStatuses, startDate, endDate, needsVerification, verifiedFilter, isRestrictedUser, userId]);
 
     // Compute default dates (yesterday & today) for comparison
     const getDefaultDates = () => {
@@ -390,13 +390,13 @@ export default function AttendanceIndex() {
         (Boolean(endDate) && endDate !== defaultTo) ||
         needsVerification ||
         selectedUserIds.length > 0 ||
-        Boolean(selectedSiteId) ||
+        selectedSiteIds.length > 0 ||
         selectedCampaignIds.length > 0 ||
         (verifiedFilter && verifiedFilter !== "all");
 
     const clearFilters = () => {
         setSelectedUserIds([]);
-        setSelectedSiteId("");
+        setSelectedSiteIds([]);
         setSelectedCampaignIds([]);
         setSelectedStatuses([]);
         setStartDate(defaultFrom);
@@ -571,22 +571,21 @@ export default function AttendanceIndex() {
                                     />
                                 </div>
 
-                                {/* Site Filter - Single Select */}
+                                {/* Site Multi-Select */}
                                 <div className="space-y-2">
                                     <Label>Site</Label>
-                                    <Select value={selectedSiteId || "all"} onValueChange={(value) => setSelectedSiteId(value === "all" ? "" : value)}>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="All Sites" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">All Sites</SelectItem>
-                                            {sites.map((site) => (
-                                                <SelectItem key={site.id} value={site.id.toString()}>
-                                                    {site.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                    <MultiSelectFilter
+                                        options={sites.map((site) => ({
+                                            label: site.name,
+                                            value: site.id.toString(),
+                                        }))}
+                                        value={selectedSiteIds}
+                                        onChange={setSelectedSiteIds}
+                                        placeholder="All Sites"
+                                        emptyMessage="No site found."
+                                        className="w-full min-h-9"
+                                        multipleSelectionLabel={(n) => `${n} sites selected`}
+                                    />
                                 </div>
 
                                 {/* Campaign Multi-Select */}

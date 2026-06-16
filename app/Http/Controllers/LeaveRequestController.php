@@ -90,9 +90,14 @@ class LeaveRequestController extends Controller
             $query->forUser($user->id);
         }
 
-        // Filter by leave type
+        // Filter by leave type (single value or CSV/array → whereIn)
         if ($request->filled('type')) {
-            $query->byType($request->type);
+            $types = is_array($request->type)
+                ? $request->type
+                : array_filter(explode(',', (string) $request->type));
+            if (count($types) > 0) {
+                $query->whereIn('type', $types);
+            }
         }
 
         // Filter by period (upcoming, past, this_month, this_week)
@@ -125,9 +130,14 @@ class LeaveRequestController extends Controller
             };
         }
 
-        // Filter by user (admin only)
-        if ($isAdmin && $request->filled('user_id')) {
-            $query->forUser($request->user_id);
+        // Filter by user (admin or TL) — accepts single value or CSV/array
+        if (($isAdmin || $isTeamLead) && $request->filled('user_id')) {
+            $userIds = is_array($request->user_id)
+                ? $request->user_id
+                : array_filter(explode(',', (string) $request->user_id));
+            if (count($userIds) > 0) {
+                $query->whereIn('user_id', $userIds);
+            }
         }
 
         // Filter by employee name (admin/TL only)
@@ -146,9 +156,14 @@ class LeaveRequestController extends Controller
         }
 
         // Filter by campaign/department - auto-filter for Team Leads
-        $campaignFilter = $request->filled('campaign_department') ? $request->campaign_department : null;
-        if ($campaignFilter) {
-            $query->where('campaign_department', $campaignFilter);
+        $campaignFilterValues = [];
+        if ($request->filled('campaign_department')) {
+            $campaignFilterValues = is_array($request->campaign_department)
+                ? $request->campaign_department
+                : array_filter(explode(',', (string) $request->campaign_department));
+        }
+        if (count($campaignFilterValues) > 0) {
+            $query->whereIn('campaign_department', $campaignFilterValues);
         } elseif ($isTeamLead && ! empty($teamLeadCampaignNames)) {
             $query->whereIn('campaign_department', $teamLeadCampaignNames);
         }

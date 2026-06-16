@@ -1560,7 +1560,7 @@ export default function Create({
                                             id="sl_with_undertime"
                                             checked={data.sl_with_undertime}
                                             onCheckedChange={(checked) => setData('sl_with_undertime', checked === true)}
-                                            className="mt-0.5"
+                                            className="mt-0.5 border-blue-400 bg-white dark:border-blue-300 dark:bg-blue-900"
                                         />
                                         <div className="space-y-1">
                                             <Label htmlFor="sl_with_undertime" className="font-medium cursor-pointer">

@@ -40,26 +40,46 @@ class EmployeeScheduleController extends Controller
         }
 
         // Filters
-        if ($request->has('user_id') && $request->user_id !== 'all') {
-            $query->where('user_id', $request->user_id);
+        if ($request->has('user_id') && $request->user_id !== 'all' && $request->user_id) {
+            $userIds = is_array($request->user_id)
+                ? $request->user_id
+                : array_filter(explode(',', $request->user_id));
+            if (count($userIds) > 0) {
+                $query->whereIn('user_id', $userIds);
+            }
         }
 
-        if ($request->has('role') && $request->role !== 'all') {
-            $query->whereHas('user', function ($q) use ($request) {
-                $q->where('role', $request->role);
-            });
+        if ($request->has('role') && $request->role !== 'all' && $request->role) {
+            $roles = is_array($request->role)
+                ? $request->role
+                : array_filter(explode(',', $request->role));
+            if (count($roles) > 0) {
+                $query->whereHas('user', function ($q) use ($roles) {
+                    $q->whereIn('role', $roles);
+                });
+            }
         }
 
         // Campaign filter - auto-filter for Team Leads
-        $campaignIdToFilter = ($request->has('campaign_id') && $request->campaign_id !== 'all') ? $request->campaign_id : null;
-        if (! $campaignIdToFilter && $user->role === 'Team Lead' && ! empty($teamLeadCampaignIds)) {
+        $campaignIdsToFilter = [];
+        if ($request->has('campaign_id') && $request->campaign_id !== 'all' && $request->campaign_id) {
+            $campaignIdsToFilter = is_array($request->campaign_id)
+                ? $request->campaign_id
+                : array_filter(explode(',', $request->campaign_id));
+        }
+        if (empty($campaignIdsToFilter) && $user->role === 'Team Lead' && ! empty($teamLeadCampaignIds)) {
             $query->whereIn('campaign_id', $teamLeadCampaignIds);
-        } elseif ($campaignIdToFilter) {
-            $query->where('campaign_id', $campaignIdToFilter);
+        } elseif (! empty($campaignIdsToFilter)) {
+            $query->whereIn('campaign_id', $campaignIdsToFilter);
         }
 
-        if ($request->has('is_active') && $request->is_active !== 'all') {
-            $query->where('employee_schedules.is_active', $request->is_active);
+        if ($request->has('is_active') && $request->is_active !== 'all' && $request->is_active !== null && $request->is_active !== '') {
+            $statuses = is_array($request->is_active)
+                ? $request->is_active
+                : array_filter(explode(',', (string) $request->is_active), fn ($v) => $v !== '');
+            if (count($statuses) > 0) {
+                $query->whereIn('employee_schedules.is_active', $statuses);
+            }
         }
 
         if ($request->has('active_only') && $request->active_only) {
