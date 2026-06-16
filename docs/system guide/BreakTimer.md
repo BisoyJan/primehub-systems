@@ -18,7 +18,7 @@ This is the main timer page — a circular countdown clock in the center of the 
 
 1. **Station** — Type your workstation number (e.g., ST-01, PC-05). *Required for Agents and Team Leads. If you leave it blank, the system will show an error.*
 
-2. **Theme** — Click the theme dropdown (top-right) to choose a visual background. 13 themes available: Default, Cozy Cafe, Rainy Window, Sakura, Ocean Tide, Neon City, Golden Hour, Deep Forest, Snowfall, Moonlit, Aurora, Cyberpunk, Synthwave, Desktop Goose.
+2. **Theme** — Click the theme dropdown (top-right) to choose a visual background. **14 themes available**: Default, Cozy Cafe, Rainy Window, Sakura, Ocean Tide, Neon City, Golden Hour, Deep Forest, Snowfall, Moonlit, Aurora, Cyberpunk, Synthwave, Desktop Goose.
 
 3. **Alarm Sound** — Click the alarm dropdown to choose what sound plays when time runs out. Options: No Sound, Zen Bell, Corporate, 8-Bit, Beep, Urgent, Chime, Alert, Buzzer.
 
@@ -69,7 +69,7 @@ This is the main timer page — a circular countdown clock in the center of the 
 
 ### End of Day
 
-- Click **Reset Shift** to clear all today's session data. *(Only visible if you have reset permission.)* A confirmation dialog appears — type the approval details and click **Reset Shift**.
+- Click **Reset Shift** to clear all today's session data. *(Only visible if you have `break_timer.reset` permission.)* A confirmation dialog appears — type the approval details and click **Reset Shift**.
 
 ### Today's Sessions
 
@@ -93,8 +93,8 @@ Seven cards: **Total Sessions**, **Active Now** (green), **Currently Overbreak**
 
 1. **Date** — Pick a date.
 2. **Employee** — Search and select.
-3. **Status** — Choose **All**, **Active**, **Paused**, **Completed**, or **Overage**.
-4. **Type** — Choose **All**, **1st Break**, **2nd Break**, **Lunch**, or **Combined**.
+3. **Status** — Choose **Active**, **Paused**, **Completed**, or **Overage**. *(Leave blank to show all.)*
+4. **Type** — Choose **1st Break**, **2nd Break**, **Lunch**, or **Combined**. *(Leave blank to show all.)*
 5. **Campaign** — Select a campaign.
 6. Click **Filter** or **Reset**.
 
@@ -104,14 +104,14 @@ Columns: **Agent**, **Campaign**, **Station**, **Break Type**, **Status** (with 
 
 **Actions per session:**
 - **View Timeline** — Opens a dialog showing the full event timeline with timestamps and reasons.
-- **Force End** (red) — Ends immediately. Type the reason (required, min 3 chars). *(Requires force-end permission.)*
-- **Restore** — Restores remaining time. Optionally check **Restore full break minutes** (Admin/Super Admin/Team Lead only). Type the reason. *(Requires restore permission.)*
-- **Void** (orange) — Voids the session and frees the break/lunch slot. Type the reason. *(Requires void permission.)*
-- **Reimburse** (green) — Adds minutes back. Shows allotted time, current overage, already reimbursed, max reimbursable. Type minutes (1–180) and reason. *(Requires reimburse permission.)*
+- **Force End** (red) — Ends immediately. Type the reason (required, min 3 chars). *(Requires `break_timer.force_end` permission.)*
+- **Restore** — Restores remaining time. Optionally check **Restore full break minutes** (Admin/Super Admin/Team Lead only). Type the reason. *(Requires `break_timer.restore` permission.)*
+- **Void** (orange) — Voids the session and frees the break/lunch slot. Type the reason. *(Requires `break_timer.void_session` permission.)*
+- **Reimburse** (green) — Adds minutes back. Shows allotted time, current overage, already reimbursed, max reimbursable. Type minutes (1–180) and reason. *(Requires `break_timer.reimburse` permission.)*
 
 ### Timeline Dialog
 
-Shows all events in order (Start, Pause, Resume, End, Time Up, Auto-End, Force-End, Restore) with timestamps, remaining seconds, overage seconds, and reason. Click **Undo from here** on eligible events to rewind. *(Requires restore permission.)*
+Shows all events in order (**Start**, **Pause**, **Resume**, **End**, **Time Up**, **Auto-End**, **Reset**, **Force-End**, **Restore**, **Reimburse**) with timestamps, remaining seconds, overage seconds, and reason. Click **Undo from here** on eligible events to rewind — the button only appears on events the backend has flagged as rewindable. *(Requires `break_timer.restore` permission.)*
 
 ---
 
@@ -133,14 +133,14 @@ Columns: **Name**, **Max Breaks**, **Break Duration** (min), **Max Lunch**, **Lu
 
 ### Add / Edit a Policy
 
-*(Requires manage policy permission.)*
+*(Requires `break_timer.manage_policy` permission.)*
 
 1. Click **Add Policy**. A dialog opens.
 2. **Name** — Required.
 3. **Max Breaks** — 0–10. Required.
 4. **Break Duration** — Minutes (1–120). Required.
-5. **Max Lunch** — 0–3. Required.
-6. **Lunch Duration** — Minutes (1–180). Required.
+5. **Max Lunch** — 0–5. Required. *(Helper text below the field recommends 0–3 per day.)*
+6. **Lunch Duration** — Minutes (1–240). Required. *(Helper text below the field recommends 1–180 minutes.)*
 7. **Grace Period** — Seconds (0–1800). Required.
 8. **Shift Reset Time** — 24-hour format.
 9. **Data Retention** — Months (1–120) or empty for forever.

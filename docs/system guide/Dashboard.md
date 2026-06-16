@@ -12,11 +12,11 @@ The Dashboard is your main landing screen after logging in. What you see changes
 
 ### Tabs
 
-You have access to three tabs: **My Dashboard**, **Attendance**, and **Coaching**.
+You have access to four tabs: **My Dashboard**, **Attendance**, **Presence Insights**, and **Coaching**.
 
-### Sidebar Widget
+### Sidebar Widgets
 
-You see one widget: **Notifications**.
+You see two widgets: **Notifications** and **Coaching Follow-ups**.
 
 ### My Dashboard Tab
 
@@ -28,7 +28,7 @@ You see one widget: **Notifications**.
 - *This is for viewing only. If no schedule is assigned, the card says "No active schedule found."*
 
 **Attendance Summary Card**
-- Shows your counts for **Present**, **On Time**, **Tardy**, **Absent**, **NCNS**, **Half Day**, and **On Leave** as icon tiles.
+- Shows your counts for **Present**, **On Time**, **Tardy**, **Absent**, **NCNS** as icon tiles in the top row, and **Half Day** and **On Leave** as a second row of tiles below.
 - A **donut chart** (colored ring) displays your attendance status breakdown.
 - A **points gauge** shows your current attendance points out of the threshold (default is 6). The status reads **Good standing** (green), **Moderate risk** (yellow), or **Approaching threshold** (red).
 - A **bar chart** breaks down points by type (Full Day Absence, Half Day Absence, Tardy, Undertime, etc.).
@@ -90,34 +90,42 @@ Three charts in a row:
 - A red badge shows your unread count.
 - Click **View All** to go to the Notifications page.
 
+### Coaching Follow-ups Widget (Sidebar)
+
+Same as the **Coaching Follow-ups Widget** described in the Team Lead section below.
+
+### Presence Insights Tab — Agent View
+
+Agents see the basic **Presence Overview**, **Leave Calendar**, and **Attendance Points Overview** sections. The campaign-level sections (Campaign Presence Comparison, Points by Campaign) and the Leave Conflicts Alert are **not** shown to Agents.
+
 ---
 
 ## What Team Leads See
 
 ### Tabs
 
-You have access to four tabs: **My Dashboard**, **Attendance**, **Presence Insights**, and **Coaching**.
+You have access to three tabs: **Attendance**, **Presence Insights**, and **Coaching**. *(There is no "My Dashboard" tab for Team Leads.)*
 
 ### Sidebar Widgets
 
-You see four widgets: **Notifications**, **Pending Leave Approvals**, **Coaching Overview**, and **Coaching Follow-ups**.
+You see three widgets: **Notifications**, **Pending Leave Approvals**, and **Coaching Follow-ups**.
 
 ### My Dashboard Tab
 
-Same content and layout as the Agent view (see above).
+*Not available to Team Leads.*
 
 ### Attendance Tab
 
-Same content and layout as the Agent view (see above).
+Same base content as the Agent view (filters, statistics cards, charts, Monthly Attendance Trends). **You also see** the **Leave Conflicts Alert** described in the Admin section below (whenever any conflicts exist).
 
 ### Presence Insights Tab
 
 [Insert Screenshot: 'Presence Insights' Tab - Team Lead View]
 
 **Presence Overview**
-- Five clickable cards: **Total Scheduled**, **Present** (green), **Absent** (red), **On Leave** (warning), **Unaccounted** (warning if >0).
+- Five cards: **Total Scheduled**, **Present** (green), **Absent** (red), **On Leave** (warning), **Unaccounted** (warning if >0).
 - Use the **Date** picker or click **Today** to change the view date.
-- Click any card (except Total Scheduled) to open a detail dialog.
+- Only the **Present** and **Absent** cards open a detail dialog when clicked. **Total Scheduled**, **On Leave**, and **Unaccounted** are informational only.
 
 **Leave Calendar**
 - Navigate months using left/right arrows. Click **Today** to return to current month.
@@ -152,15 +160,9 @@ Same as Agent view (see above).
 ### Pending Leave Approvals Widget
 
 - Shows upcoming leave requests needing approval. Each entry shows employee name, leave type, date range, countdown.
-- Entries due today/tomorrow appear in **red**; within 3 days in **orange**.
+- Entries due today/tomorrow appear in **red**; within 3 days in **orange**; further out in **yellow**.
 - Click any request to go to the leave detail page.
 - Click **View All Pending** to go to the pending list.
-
-### Coaching Overview Widget
-
-- Grid of coaching status counts: Coaching Done, Needs Coaching, Badly Needs Coaching, Please Coach ASAP, No Record.
-- Shows pending acks, pending reviews, sessions this month.
-- Click **View Coaching Dashboard** to go to the Coaching page.
 
 ### Coaching Follow-ups Widget
 
@@ -175,19 +177,19 @@ Same as Agent view (see above).
 
 ### Tabs
 
-You have access to four tabs: **My Dashboard**, **Attendance** (with Enhanced Analytics), **Presence Insights**, and **Coaching**.
+You have access to three tabs: **Attendance** (with Enhanced Analytics), **Presence Insights**, and **Coaching**. *(No "My Dashboard" tab.)*
 
 ### Sidebar Widgets
 
-You see five widgets: **Notifications**, **Pending Leave Approvals**, **Coaching Overview**, **Coaching Follow-ups**, and **Biometric Anomaly**.
+You see four widgets: **Notifications**, **Pending Leave Approvals**, **Coaching Follow-ups**, and **Biometric Anomaly**.
 
 ### My Dashboard Tab
 
-Same as Agent view (see above).
+*Not available to HR.*
 
 ### Attendance Tab (with Enhanced Analytics)
 
-Same base content as Agent/Team Lead view (filters, stats, charts, trends). **You also see the following:**
+Same base content as Team Lead view (filters, stats, charts, trends, Leave Conflicts Alert). **You also see the following:**
 
 **Enhanced Analytics section:**
 - **Attendance Compliance Rate** — Large percentage colored green (≥80%), yellow (≥60%), or red (<60%). Includes progress bar and breakdown counts.
@@ -209,7 +211,6 @@ Same content and layout as the Team Lead view (see above).
 
 - **Notifications** — Same as Agent view.
 - **Pending Leave Approvals** — Same as Team Lead view.
-- **Coaching Overview** — Same as Team Lead view.
 - **Coaching Follow-ups** — Same as Team Lead view.
 - **Biometric Anomaly** — Shows counts for 5 anomaly types: Simultaneous Sites, Impossible Gaps, Duplicate Scans, Unusual Hours, Excessive Scans. Badge shows total (yellow) or **Clear** (green). Click **View Details** to go to the Attendance Anomalies page.
 
@@ -219,15 +220,17 @@ Same content and layout as the Team Lead view (see above).
 
 ### Tabs
 
-You have access to all six tabs: **My Dashboard**, **Attendance** (with Enhanced Analytics), **Presence Insights** (with Campaign sections), **Coaching**, **Infrastructure**, and **IT Concerns**.
+- **Admins** have access to four tabs: **Attendance** (with Enhanced Analytics), **Presence Insights** (with Campaign sections), **Coaching**, and **Infrastructure**.
+- **Super Admins** have access to five tabs: the four above plus **IT Concerns**.
+- *Neither role has a "My Dashboard" tab. **IT Concerns** is available only to Super Admin (and IT) — not to Admin.*
 
 ### Sidebar Widgets
 
-You see all seven widgets: **Notifications**, **Pending Leave Approvals**, **Coaching Overview**, **Coaching Follow-ups**, **User Account Stats**, **Recent Activity**, and **Biometric Anomaly**.
+Both roles see six widgets: **Notifications**, **Pending Leave Approvals**, **Coaching Follow-ups**, **User Account Stats**, **Recent Activity**, and **Biometric Anomaly**.
 
 ### My Dashboard Tab
 
-Same as Agent view (see above).
+*Not available to Admins or Super Admins.*
 
 ### Attendance Tab (with Enhanced Analytics)
 
@@ -280,6 +283,8 @@ All dialogs have a **Back** button for drill-down navigation.
 
 ### IT Concerns Tab
 
+*Super Admin only. Admins do not see this tab.*
+
 [Insert Screenshot: 'IT Concerns' Tab]
 
 **Stat Cards**
@@ -296,7 +301,6 @@ All dialogs have a **Back** button for drill-down navigation.
 
 - **Notifications** — Same as Agent view.
 - **Pending Leave Approvals** — Same as Team Lead view.
-- **Coaching Overview** — Same as Team Lead view.
 - **Coaching Follow-ups** — Same as Team Lead view.
 - **User Account Stats** — Shows total user count, breakdown by role, pending approvals, resigned count, deactivated count. *Informational only.*
 - **Recent Activity** — Up to 10 recent activity entries with event type, description, person name, time. Click **View All** to go to Activity Logs.
@@ -308,7 +312,39 @@ All dialogs have a **Back** button for drill-down navigation.
 
 ### Tabs
 
-You have access to four tabs: **My Dashboard**, **Attendance**, **Infrastructure**, and **IT Concerns**.
+You have access to three tabs, in this order: **Infrastructure**, **IT Concerns**, and **Attendance**. *(No "My Dashboard" tab and no "Coaching" tab.)*
+
+### Sidebar Widgets
+
+You see one widget: **Notifications**.
+
+### My Dashboard Tab
+
+*Not available to IT.*
+
+### Attendance Tab
+
+Same base content as Agent/Team Lead view. Because IT is a non-restricted role, the **Leave Conflicts Alert** is also shown when conflicts exist. (No Enhanced Analytics section.)
+
+### Infrastructure Tab
+
+Same as Admin/Super Admin view (see above).
+
+### IT Concerns Tab
+
+Same as Super Admin view (see above).
+
+### Notifications Widget
+
+Same as Agent view (see above).
+
+---
+
+## What Utility Sees
+
+### Tabs
+
+You have access to two tabs: **My Dashboard** and **Attendance**.
 
 ### Sidebar Widgets
 
@@ -320,15 +356,7 @@ Same as Agent view (see above).
 
 ### Attendance Tab
 
-Same as Agent/Team Lead view (base content only — no Enhanced Analytics). See Agent section for details.
-
-### Infrastructure Tab
-
-Same as Admin/Super Admin view (see above).
-
-### IT Concerns Tab
-
-Same as Admin/Super Admin view (see above).
+Same base content as Agent view — no Enhanced Analytics and no Leave Conflicts Alert (Utility is a restricted role and sees only their own records).
 
 ### Notifications Widget
 

@@ -223,6 +223,7 @@ php artisan view:cache
 
 # Restart queue to pick up code changes
 php artisan queue:restart
+php artisan reverb:restart
 ```
 
 ### Full Deployment (With Migrations)
@@ -318,6 +319,7 @@ php artisan view:cache
 
 # Restart queue workers to pick up changes
 php artisan queue:restart
+php artisan reverb:restart
 
 # Restart PHP-FPM to clear opcache
 sudo systemctl restart php8.4-fpm

@@ -29,7 +29,9 @@ Built for simplicity without sacrificing depth, PrimeHub Systems replaces scatte
 - **Break Timer** — Start, pause, and end break sessions with a live countdown. Supervisors can monitor all agents, enforce policies, and generate reports.
 - **Coaching** — Create and track one-on-one coaching sessions between team leads and agents. Includes escalation checks, draft support, and compliance dashboards.
 - **Form Requests** — Submit and approve leave applications, IT support tickets, and medication requests — each with its own multi-step workflow.
-- **IT Assets** — Full PC specification tracking (processor, RAM, disk, monitor), station management, PC transfers, maintenance logs, and QR code generation.
+- **Proccessor Specs** — Central catalog of processor specifications used across all computer and station records.
+- **Computer** — Full PC specification tracking (processor, RAM, disk, monitor type, ports), PC maintenance records, and hardware issue tracking.
+- **Station** — Workstation management with site and campaign assignments, QR code generation, PC transfers, and monitor configuration.
 - **Account** — User profiles, role assignment, activity logs, two-factor authentication, and account settings.
 
 ---
@@ -55,9 +57,11 @@ Each module has its own page. Open the page for the feature you need help with:
 | Attendance | [Attendance.md](./Attendance.md) |
 | Break Timer | [BreakTimer.md](./BreakTimer.md) |
 | Coaching | [Coaching.md](./Coaching.md) |
+| Computer | [Computer.md](./Computer.md) |
 | Dashboard | [Dashboard.md](./Dashboard.md) |
 | Form Requests | [FormRequest.md](./FormRequest.md) |
-| Processor Specs | [ProcessorSpecs.md](./ProcessorSpecs.md) |
+| Proccessor Specs | [Proccessor Specs.md](./Proccessor%20Specs.md) |
+| Station | [Station.md](./Station.md) |
 
 Every guide follows the same structure — screens from top to bottom, filters and search first, then action buttons, then the data table, and finally row-level actions. Look for **bold** labels to identify buttons, fields, and menus. *Italic text* explains what the system does in response.
 

@@ -25,14 +25,14 @@ A row of controls at the top:
 - **Clear Filters** button — Appears when any filter is active. Click to reset everything.
 - **Refresh** button — Click to reload the list manually. The spinning icon means it is loading.
 - **Auto-refresh (30s)** button — Click the **Play** icon to turn on automatic refreshing every 30 seconds. Click the **Pause** icon to turn it off.
-- **Stale Accounts** button — Click to open a window listing accounts of employees who resigned 2 or more years ago. The button shows a red badge with the count. *You cannot undo permanent deletion from this window.*
+- **Stale Accounts** button — Only **Super Admin**, **Admin**, and **IT** see this button. Click to open a window listing inactive employees whose **Resigned** date is **2 or more years** in the past. The button shows a red badge with the count (up to **99+**). *You cannot undo permanent deletion from this window.*
 
 ### Stale Accounts Window
 
 Inside this window:
-- Each entry shows the person's **Name**, **Email**, **Role**, and **Resigned** date.
+- Each entry shows the person's **Name**, **Email**, **Role**, **Hired Date**, and **Resigned** date.
 - Click an entry or its checkbox to mark it, or click **Select All** / **Deselect All**.
-- Click **Delete Selected** to permanently remove the checked accounts, or click **Delete All** to remove every stale account. *Permanent deletion cannot be undone.*
+- Click **Delete Selected** to permanently remove the checked accounts, or click **Delete All** to remove every stale account. *Permanent deletion cannot be undone and also removes all of their schedules.*
 - Click **Close** to exit without deleting.
 
 ### Action Buttons
@@ -44,13 +44,15 @@ Inside this window:
 
 ### Desktop Table
 
-Seven columns:
+Nine columns:
 
-- **Checkbox column** — Two rows of checkboxes: a green one for selecting all Pending accounts, and a yellow one for selecting all Approved accounts. Click a checkbox to select or deselect everyone in that status.
+- **Checkbox column** — Two stacked checkboxes appear in the header: a **green** one for selecting all Pending accounts on the page, and a **yellow** one for selecting all Approved accounts on the page. Each row also shows either a green or yellow checkbox depending on whether the account is Pending or Approved. Click a checkbox to select or deselect that account. *You cannot select your own account.*
 - **Name** — Shows the profile picture (or initials as a colored circle), first name, middle initial if any, and last name.
 - **Email** — The person's email address.
-- **Role** — Colored label: **Super Admin** (purple), **Admin** (blue), **HR** (green), **Agent** (gray).
-- **Employee Status** — A toggle switch that shows **Active** (green check icon) or **Inactive** (gray X icon). Click the switch to change the status. *Switching from Active to Inactive opens a warning — the person loses system access and all schedules are removed.*
+- **Role** — Colored label: **Super Admin** (purple), **Admin** (blue), **HR** (green). All other roles — **Team Lead**, **Agent**, **IT**, and **Utility** — display in gray.
+- **Employee Status** — A toggle switch next to an icon badge that shows **Active** (green check icon) or **Inactive** (gray person-X icon). Click the switch to change the status.
+  - *Switching from **Active to Inactive** opens a **Deactivate Employee?** warning — the person loses system access and all their schedules are deactivated.*
+  - *Switching from **Inactive to Active** opens a **Re-hire Employee** dialog (see below).*
 - **Account Status** — One of five badges:
   - **Approved** (green) – account is active.
   - **Pending** (yellow) – registered but not yet approved.
@@ -75,13 +77,32 @@ For **Deleted** accounts:
   - **Restore** (green rewind icon) — **Super Admin**, **Admin**, **HR**, and **IT** can click this to restore the account.
   - **Permanent Delete** (red X icon) — Only **Super Admin**, **Admin**, and **IT** can click this. A confirmation box appears warning that all data will be lost forever. *This cannot be undone.*
 
+### Re-hire Employee Dialog
+
+Opens when you switch an inactive employee's toggle back to **Active**.
+
+- Displays the employee's previous hire date for reference.
+- **New Hired Date** — Pick the date you are re-hiring them on. *Required; the dialog cannot be confirmed until a date is set.*
+- Click **Confirm Re-hire** to restore access and record the new hire date. Click **Cancel** to abort.
+- After confirming, the **Schedule Assignment** dialog opens automatically.
+
+### Schedule Assignment Dialog
+
+Opens automatically right after a successful re-hire so you can assign a working schedule without leaving the page.
+
+- Lists any existing schedules for the employee. Each schedule shows the **Campaign**, **Site**, **Shift Type**, scheduled times (in 12-hour format), and work days.
+- Each schedule has an **Edit** link and either an **Active** badge or an **Activate** button. Click **Activate** to make that schedule the active one.
+- If no schedules exist, the dialog shows a placeholder message.
+- **Create new schedule for this employee** link — Opens the employee schedule create form with the user and effective date pre-filled.
+- Click **Done** to close the dialog.
+
 ### Mobile Cards
 
 On narrow screens, each account appears as a stacked card instead of a table row. Every action listed above is also available inside each card.
 
 ### Pagination
 
-At the bottom, page numbers appear when there are many accounts. Click a number to jump to that page. The text below shows how many accounts are on the current page versus the total.
+At the bottom, page numbers appear when there are many accounts. Click a number to jump to that page. The text above shows how many accounts are on the current page versus the total.
 
 ---
 
@@ -102,8 +123,8 @@ Opens when you click **Create Account** on the list page.
 ### Account Information section
 
 - **Email Address** — Type the company email. Only addresses ending in **@primehubmail.com** or **@prmhubsolutions.com** are accepted. *Any other email domain will cause a system rejection.*
-- **Role** — Click the dropdown and select **Super Admin**, **Admin**, **Team Lead**, **Agent**, **HR**, **IT**, or **Utility**.
-- **Hired Date** — Click the calendar icon and pick the first day of employment.
+- **Role** — Click the dropdown and select from the available roles (**Super Admin**, **Admin**, **Team Lead**, **Agent**, **HR**, **IT**, **Utility**). The list of selectable roles is supplied by the backend. The default is **Agent**.
+- **Hired Date** — Click the calendar icon and pick the first day of employment. *Optional; leave blank for non-employee accounts.*
 
 ### Security section
 
@@ -112,7 +133,7 @@ Opens when you click **Create Account** on the list page.
 
 ### Bottom buttons
 
-- **Create Account** — Click to save. The button shows **Creating...** while saving. *If any required field is empty or invalid, an error message appears in red above the field.*
+- **Create Account** — Click to save. The button shows **Creating...** while saving. *If any required field is empty or invalid, an error message appears in red below the field and a toast also shows the first error.*
 - **Cancel** — Click to go back to the account list without saving.
 
 ---
@@ -135,17 +156,17 @@ Same fields as Create: **Email Address**, **Role**, **Hired Date**.
 
 ### Employee Status section (only shown when editing someone else's account)
 
-- **Active Status** — Shows **Active** (green) or **Inactive** (gray). A switch lets you toggle. Switching from Active to Inactive opens a warning: "Deactivate Employee?" with a note that all schedules will be deactivated too. *Deactivating blocks the person from logging in.*
-- **Solo Parent** — Shows **Solo Parent** (blue) or **Not Solo Parent** (gray). Click the switch to turn it on or off. Enabling this grants the person Solo Parent Leave credits. *Turning it on does not affect any other leave balances.*
+- **Active Status** — Shows **Active** (green) or **Inactive** (gray). A switch lets you toggle. Switching from Active to Inactive opens a warning: "Deactivate Employee?" with a note that all their active schedules will be deactivated too. *Deactivating blocks the person from logging in.* Switching from Inactive to Active activates the employee immediately without opening the re-hire/schedule dialog you see on the list page.
+- **Solo Parent** — Shows **Solo Parent** (blue) or **Not Solo Parent** (gray). Click the switch to turn it on or off. Enabling this makes the person eligible for Solo Parent Leave (SPL) credits. *Turning it on does not affect any other leave balances.*
 
-### Security section
+### Change Password section
 
 - **New Password** — Type a new password if you want to change it. *Leave blank to keep the current password unchanged.*
 - **Confirm New Password** — Type the same password. *Only needed if you entered a new password above.*
 
 ### Bottom buttons
 
-- **Update Account** — Click to save changes. The button shows **Updating...** while saving. *Any invalid field causes a red error message.*
+- **Update Account** — Click to save changes. The button shows **Updating...** while saving. *Any invalid field causes a red error message below the field and a toast also shows the first error.*
 - **Cancel** — Click to go back to the account list without saving.
 
 ---
@@ -160,28 +181,28 @@ A record of every action people take in the system.
 
 ### Search & Filter
 
-- **Search logs** box — Type any keyword to filter log entries. Results update as you type.
+- **Search logs** box — Type any keyword to filter log entries. Results update automatically a short moment after you stop typing (debounced).
 - **Filter by Event** dropdown — Select **All Events**, **Created**, **Updated**, **Deleted**, **Login**, or **Logout**.
-- **Filter by User** dropdown — Select **All Users** or a specific person's name.
+- **Filter by User** dropdown — Select **All Users** or any user who has previously generated activity. The list is built from people who actually appear in the log.
 - **Clear filters** (X icon) — Appears when any filter is active. Click to reset.
 
 ### Top-right buttons
 
-- **Refresh** — Click to reload the list.
-- **Auto-refresh (30s)** — Click **Play** to turn on automatic refresh; click **Pause** to stop.
-- **Export CSV** — Click to download the current filtered list as a spreadsheet file.
+- **Refresh** (circular arrow icon) — Click to reload the list manually.
+- **Auto-refresh (30s)** — Click **Play** to turn on automatic refresh every 30 seconds; click **Pause** to stop. The button changes color to indicate the current state.
+- **Export CSV** (download icon) — Click to download the current filtered list as a CSV file.
 
 ### Event Table
 
 Seven columns:
 
 - **User** — Name of the person who performed the action.
-- **Event** — Colored badge: **Created** (green), **Updated** (blue), **Deleted** (red), **Login** (purple), **Logout** (gray).
-- **Subject** — The type of item affected and its ID number.
+- **Event** — Colored badge: **created** (green), **updated** (blue), **deleted** (red), **login** (purple), **logout** (gray).
+- **Subject** — The type of item affected and its ID number (e.g., `User #12`).
 - **Description** — A short sentence describing what happened.
 - **Changes** — Shows the number of fields that changed, or a dash if no changes were recorded.
 - **Date** — The date and time, plus a "time ago" label (e.g., "2 hours ago").
-- **Eye icon** — Click any row to open a detail panel sliding in from the right.
+- **Eye icon** — Click any row (or the eye icon) to open a detail panel sliding in from the right.
 
 ### Detail Slide-in Panel
 
@@ -220,7 +241,7 @@ Shows how many of the total results are displayed. Page number links appear belo
 
 **Profile Picture:**
 - Shows your current profile photo or initials in a circle.
-- Click the **camera icon** (bottom-right of the photo) or **Change Photo** to upload a new one. The system opens a crop window where you can adjust the image before saving. Accepted formats: JPG, JPEG, PNG, WebP. Maximum size: 2MB.
+- Click the **camera icon** (bottom-right of the photo) or **Change Photo** to pick a new one. The system opens a **crop window** where you can adjust and crop the image before saving. Accepted formats: **JPG, JPEG, PNG, WebP**. Maximum size: **2MB**.
 - Click **Remove** (only appears if you already have a photo) to delete it.
 - *Uploading a file larger than 2MB or in the wrong format will cause a system rejection.*
 
@@ -230,13 +251,13 @@ Shows how many of the total results are displayed. Page number links appear belo
 - *Required fields cannot be emptied. Only @primehubmail.com and @prmhubsolutions.com emails are accepted.*
 
 **Email Verification:**
-- Shows **Email Verified** (green check icon) or **Email Not Verified** (amber X icon).
-- If unverified, an amber warning box appears with a link to resend the verification email. *You may not be able to use certain features until your email is verified.*
+- Shows a panel labeled **Email Verified** (green check icon, **Verified** badge) or **Email Not Verified** (amber X icon, **Unverified** badge).
+- If unverified, an amber warning box appears with a link to resend the verification email. A green confirmation message appears after the link is sent. *You may not be able to use certain features until your email is verified.*
 
 **Delete Account:**
 - Click **Delete Account** to open a confirmation dialog.
-- An amber box warns: "Account deletion requires admin confirmation." After requesting deletion, the account is marked **Pending Deletion** and an administrator must confirm before it is fully removed. Until then, you can reactivate by logging in and setting a new password.
-- In the dialog, type your password and click **Delete Account**. *Wrong password causes a system rejection.*
+- An amber box warns: "Account deletion requires admin confirmation." After requesting deletion, the account is marked **Pending Deletion** and an **Admin** or **IT** user must confirm before it is fully removed. Until then, you can reactivate by logging in and setting a new password.
+- In the dialog, type your password and click **Delete Account**. The button shows **Deleting...** while processing. *Wrong password causes a system rejection.*
 - Click **Cancel** to close the dialog without deleting.
 
 ### Password
@@ -290,12 +311,13 @@ Click **Save Preferences** at the bottom. A green "Preferences saved successfull
 [Insert Screenshot: 'Two-Factor Authentication' Screen Layout]
 
 When **Disabled** (red badge):
-- Click **Enable 2FA**. A setup window appears with a QR code and a manual setup key. Scan the QR code with an authenticator app (like Google Authenticator or Microsoft Authenticator) or type the key manually.
-- After scanning, enter a code from the app to confirm it works.
+- Click **Enable 2FA**. A setup window opens with a **QR code** and a **manual setup key**. Scan the QR code with an authenticator app (like Google Authenticator or Microsoft Authenticator) or type the manual key.
+- After scanning, enter a code from the app to confirm setup.
+- If you close the window mid-setup, a **Continue Setup** button appears so you can resume.
 
 When **Enabled** (green badge):
 - **Recovery Codes** — Click to view or regenerate your backup codes. Store these in a safe place; each code can be used once to log in if you lose access to your authenticator app.
-- **Disable 2FA** — Click to turn off two-factor authentication. *You will no longer be prompted for a code during login.*
+- **Disable 2FA** (red button with shield icon) — Click to turn off two-factor authentication. *You will no longer be prompted for a code during login.*
 
 ---
 
@@ -350,9 +372,9 @@ You reach this page by clicking the link from the reset email.
 
 Shown after registering or when your account access has been disabled.
 
-- A yellow **Clock** icon means your account is waiting for administrator approval. A message explains that an admin will review and approve it, and you will receive an email when approved.
-- A red **Clock** icon means your account has been disabled because you are no longer employed. Contact HR or your system administrator if you believe this is a mistake.
-- The page automatically checks every 15 seconds to see if your status changed.
+- A **yellow Clock** icon and the heading **Account Created Successfully!** mean your account is waiting for administrator approval. A message explains that an admin will review and approve it, and you will receive an email when approved.
+- A **red Clock** icon and the heading **Account Access Disabled** mean your account has been disabled because you are no longer employed and an administrator revoked your access. Contact HR or your system administrator if you believe this is a mistake.
+- The page automatically rechecks your status every **15 seconds** and redirects you in once you are approved.
 - **Log Out** — Click to sign out.
 - **try logging in again** — Click to return to the login page.
 

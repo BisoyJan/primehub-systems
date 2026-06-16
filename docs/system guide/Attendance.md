@@ -213,22 +213,25 @@ A full-month grid showing every employee x every day of the month. Color-coded c
 At the top, a bar shows what each color means:
 
 | Label | Meaning |
-|---|---|---|
-| **Hours** | Verified attendance with hours |
-| **Tardy** | Late arrival |
+|---|---|
+| **Hours (On-time)** | Verified attendance with hours — employee was on time |
+| **Hours (Tardy)** | Verified attendance with hours — employee was tardy |
 | **ABS** | Absent / Half-day / NCNS / Advised |
 | **OFF** | Non-work day / Day off |
 | **BIO** | Unverified biometric — needs review |
 | **PART** | Partially verified — time-out pending |
 | **VL** | Vacation Leave |
 | **SL** | Sick Leave |
-| **P-SL** | Partial-day Absence (SL with Undertime) — worked hours counted |
+| **P-SL** | Partial-day Absence (SL with Undertime) — absence portion |
+| **P-SL Hours** | Partial-day Absence (SL with Undertime) — worked hours portion |
 | **ML** | Maternity / Paternity Leave |
 | **LOA** | Leave of Absence |
 | **UPTO** | Unpaid Time Off |
 | **BL** | Bereavement Leave |
 | **SPL** | Special Leave |
-| **NMR** | Needs Manual Review |
+| **LDV** | Leave Due to Violation |
+| **Other** | Other leave type |
+| **Review** | Needs Manual Review |
 
 ### Grid
 
@@ -292,13 +295,12 @@ Create attendance records manually, one at a time or in bulk.
 
 1. **Employee** — Click the search field, type a name, and select an employee. Their schedule info appears below.
 2. **Shift Date** — Pick the date. *Required. If left blank, the system shows an error.*
-3. **Status** — The system suggests a status (shown in a green or amber box). You can override it from the dropdown. Options: On Time, Tardy, Half Day Absence, Advised Absence, NCNS (No Call No Show), Undertime (<1hr), Undertime (>1hr), Failed Bio In, Failed Bio Out, Present (No Bio), Non-Work Day, On Leave.
+3. **Status** — Marked **(Optional - Auto-calculated from times)**. The system suggests a status (shown in a green or amber box) based on the times you enter. You can override it from the dropdown. Options: On Time, Tardy, Half Day Absence, Advised Absence, NCNS (No Call No Show), Undertime (<1hr), Undertime (>1hr), Failed Bio In, Failed Bio Out, Present (No Bio), Non-Work Day, On Leave.
    - *If you override the suggested status, a **Use Suggested** button appears to revert.*
-   - *If you leave the status blank, the system shows an error.*
 4. **Time In** — Date and time. Auto-filled from the shift. *If the time is invalid, the system shows an error.*
 5. **Time Out** — Date and time. Auto-filled for night shifts (next day). *If hour 24 on the same date, the system rejects it.*
-6. **Set Home** (for undertime over 30 min) — Toggle on if the employee was sent home early.
-7. **Undertime Approval** (if Set Home is off) — Choose **Generate Points**, **Lunch Used**, or **Clear**.
+6. **Set Home** (only appears when detected undertime is more than 30 min) — Toggle on if the employee was sent home early.
+7. **Undertime Approval** (shown when Set Home is off and undertime > 30 min) — Choose **Generate Points**, **Lunch Used**, or **Clear**.
    - *This section only appears if you have approve undertime permission.*
 8. **Notes** — Type a reason (500 characters max).
 9. Click **Create Attendance Record** to save.
@@ -338,7 +340,7 @@ A dialog opens showing:
 - Per-file stats: **Total Records**, **Within Range**, **Outside Range**.
 - **Outside Range** warning (orange) — Lists dates outside the selected range.
 - **Duplicates** warning — Lists existing records that match (first 5 shown).
-- **Import ALL records** checkbox — Check this to ignore the date range filter and import everything.
+- **Import ALL records** checkbox — *Only appears when at least one file contains records outside the selected date range.* Check this to ignore the date range filter and import everything.
 
 Click **Confirm & Upload** to proceed. Click **Cancel** to go back.
 
@@ -347,7 +349,7 @@ Click **Confirm & Upload** to proceed. Click **Cancel** to go back.
 The right panel explains:
 - The system detects shifts automatically based on time-in.
 - Attendance status rules are applied.
-- Morning, afternoon, night, and graveyard shifts are supported.
+- Morning, afternoon, and night shifts are supported. (Time-ins between 00:00 and 04:59 are treated as overnight "graveyard" arrivals under the night-shift bucket.)
 
 ### Recent Uploads
 
@@ -365,7 +367,7 @@ Review, verify, and manage attendance records that need attention.
 
 ### Status Summary
 
-A collapsible card at the top shows:
+A collapsible card at the top, *collapsed by default — click the header to expand*. When expanded it shows:
 - Counts by status (On Time, Tardy, Half Day, NCNS, etc.).
 - Counts by verification status: **Pending** (yellow), **Verified** (green), **Partially Verified** (amber).
 
@@ -398,20 +400,20 @@ A collapsible card at the top shows:
 7. **Time In** and **Time Out** — Date and time inputs.
 8. **Overtime Approval** (blue, shown if OT &gt; 30 min).
 9. **Set Home & Undertime** (amber, for undertime over 30 min).
-   - *Admin/HR: Click **Generate Points** or **Lunch Used**, then Approve/Reject.*
-   - *Team Lead: Click **Generate Points** or **Lunch Used**, then **Request Approval**.*
+   - *Admin/HR: Click **Generate Points** or **Lunch Used**, then **Verify & Save** to approve directly.*
+   - *Team Lead: Click **Generate Points** or **Lunch Used** as a suggestion, then **Verify & Save** to send it for Admin/HR review.*
 10. **Notes** textarea (500 char max).
-11. **Verification Notes** — Type notes. Click any quick-phrase button: **Verified**, **Corrected**, **Manual entry**, etc.
+11. **Verification Notes** — Type notes. Quick-phrase buttons fill the field for you. Available phrases: **Verified**, **Corrected**, **Manual entry**, **Bio scanner issue**, **Network delay**, **Shift adjustment**, **Approved by supervisor**, **System error**.
 12. Click **Verify & Save** (or **Edit & Save**). For on-leave employees with biometrics, click **Flag as Reported & Save** (orange).
 
 ### Batch Verify
 
 1. Select multiple records using checkboxes. *Only records with the same primary and secondary status can be selected together.*
 2. Click **Verify N Records**. A dialog opens.
-3. **Common Status** — Pick a status to apply to all selected records.
+3. **Status (Applied to All)** — Pick a status to apply to all selected records.
 4. **Approve Overtime for All** — Check if applicable.
 5. **Mark as "Set Home" for All** — Toggle for undertime.
-6. **Verification Notes** — Type notes. Quick-phrase buttons available.
+6. **Verification Notes** — Type notes. Batch quick-phrase buttons available: **Verified as accurate**, **Supervisor confirmed**, **Policy adjustment**, **System anomaly**.
 7. Click **Verify N Records** to save.
 
 ### Warnings
@@ -438,11 +440,10 @@ Four cards at the top: **Total Records**, **This Month** (with today/this-week c
 
 ### Filters
 
-1. **Search** — Type an employee name and press Enter.
-2. **Employee** — Click to open a searchable list. Select one or more.
-3. **Site** — Select a site from the dropdown.
-4. **From** and **To** — Pick a date range.
-5. Click **Apply Filters**. Click **Clear Filters** to reset.
+1. **Employee** — Click to open a searchable dropdown with autocomplete. Select one or more employees.
+2. **Site** — Select a site from the dropdown.
+3. **From** and **To** — Pick a date range.
+4. Click **Apply Filters**. Click **Clear Filters** to reset.
 
 ### Records Table
 
@@ -571,9 +572,9 @@ Click **Add Policy** (requires retention permission). A dialog opens:
 
 1. **Policy Name** — Type a name. *Required.*
 2. **Description** — Optional.
-3. **Record Type** — Choose **All Records**, **Biometric Records Only**, or **Attendance Points Only**.
+3. **Record Type** — Choose **All Record Types**, **Biometric Records Only**, or **Attendance Points Only**.
 4. **Retention Period** — Type the number of months. *Required.*
-5. **Applies To** — Choose **Global** or a specific **Site**.
+5. **Applies To** — Choose **All Sites (Global)** or a specific **Site**.
 6. **Priority** — Type a number (higher numbers override lower ones).
 7. **Active** — Toggle on or off.
 8. Click **Create** to save.
@@ -616,10 +617,10 @@ If available, two cards show the age breakdown of biometric records and attendan
 #### Actions
 
 - Click **Add Employee Schedule** to create a new schedule. *(Requires create permission.)*
-- Click **Employees No Schedules** to see a dialog listing:
+- Click **Employees No Schedules** to see a dialog. The button shows a red badge with the count of employees who have no schedule. The dialog has three tabs:
   - **No Schedule** tab — Employees without schedules. Click **Add Schedule** to create one.
   - **Inactive** tab — Employees with inactive schedules. Click **View Schedules** or **Add New**.
-  - **Multiple Schedules** tab — Employees with multiple schedules. Click **View All** or **Add New**.
+  - **Multiple** tab — Employees with multiple schedules. Click **View All** or **Add New**.
 
 #### Schedule Table
 
@@ -636,20 +637,25 @@ Columns: **Employee**, **Campaign**, **Site**, **Shift Type** (colored badge), *
 
 [Insert Screenshot: 'Create Employee Schedule' Form]
 
-1. **Employee** — Search and select. *(For first-time setup, this may be auto-filled.)*
-2. **Campaign** — Select a campaign.
-3. **Site** — Select a site.
-4. **Shift Type** — Choose **Morning**, **Afternoon**, **Night**, **Graveyard**, or **Utility 24h**. The system auto-fills the default time in/out. *If the times you enter don't match the recommended range, an amber notice appears.*
-5. **Time In** and **Time Out** — Set the times. *Required.*
-6. **Work Days** — Check the boxes for Monday through Sunday. *At least one must be selected.*
-7. **Grace Period** — Type the grace period in minutes (0–60). *Default is 15.*
-8. **Effective Date** — Pick the start date. *Required.*
-9. **End Date** — Optional.
-10. Click **Create Schedule** (or **Update Schedule**) to save.
+1. **Employee** — Search and select. *(For first-time setup, this may be auto-filled. In the Edit form this field is read-only with the note "Employee cannot be changed after schedule creation.")*
+2. **Campaign** — Select a campaign. *(Required for agents and team leads; optional for admins.)*
+3. **Site** — Select a site. *(Required for agents and team leads; optional for admins.)*
+4. **Time In** and **Time Out** — Set the times. *Required.* The shift type is derived automatically from Time In and shown as a read-only "Detected shift" badge below the inputs:
+   - **🌅 Morning Shift** — Time In 05:00–11:59
+   - **🌤️ Afternoon Shift** — Time In 12:00–17:59
+   - **🌙 Night Shift** — Time In 18:00–04:59 (includes overnight/graveyard arrivals)
+   - **🔄 24-Hour Utility** — enable via the "24-Hour Utility Schedule" toggle (admins only); not derivable from a clock.
+5. **Work Days** — Check the boxes for Monday through Sunday. *At least one must be selected.*
+6. **Grace Period** — Type the grace period in minutes (0–60). *Default is 0. This field is hidden for restricted roles (agents and team leads) — only administrators can change it.*
+7. **Hired Date** — Pick the start date. *Required.* In the Edit form this may be read-only depending on your role; the field then shows the note "Hired date cannot be changed after creation."
+8. **End Date (Optional)** — Hidden for restricted roles.
+9. Click **Create Schedule** (or **Update Schedule**) to save.
 
 *For Team Leads: A **Managed Campaigns** section appears instead of Campaign. Check the campaigns you manage.*
 
-*During first-time setup, a confirmation dialog reviews all entered info before final submission.*
+*During first-time setup the page title becomes "Welcome! Let's Set Up Your Schedule", the breadcrumbs simplify to "Schedule Setup", and an amber notice reminds you that the data cannot be changed after submission. A confirmation dialog reviews all entered info before the final save.*
+
+*In the Edit form, if you flip the schedule from Inactive to Active an amber warning appears below the toggle: "⚠️ Activating this schedule will deactivate any other active schedule for this employee."*
 
 ---
 
@@ -712,7 +718,7 @@ Columns: **Employee**, **Date**, **Type** (colored badge), **Points**, **Status*
 
 1. **Employee** — Search and select. *Required.*
 2. **Violation Date** — Pick the date. *Required.*
-3. **Violation Type** — Choose from: Whole Day Absence (1.0 pt), Half-Day Absence (0.5 pt), Tardy (0.25 pt), Undertime ≤60 min (0.25 pt), Undertime 61+ min (0.50 pt). *Required.*
+3. **Violation Type** — Choose from: **Whole Day Absence** (1.00 pt), **Half-Day Absence** (0.50 pt), **Tardy** (0.25 pt), **Undertime (≤60 min)** (0.25 pt), **Undertime (61+ min)** (0.50 pt). *Required.*
 4. **Advised absence** — Check if applicable (for Whole Day only).
 5. **Tardy Minutes** / **Undertime Minutes** — Input as needed.
 6. **Violation Details** and **Notes** — Optional text.
@@ -813,11 +819,15 @@ Ranking of employees with the longest tardy-free streaks.
 
 ### Badge Tiers
 
-- **Starter** — 7 days
-- **Bronze** — 30 days
-- **Silver** — 90 days
-- **Gold** — 180 days
-- **Platinum** — 365 days
+Five tiers, displayed with distinct colors (starter / bronze / silver / gold / platinum gradient):
+
+- **Week Warrior** — 7 days
+- **Month Master** — 30 days
+- **Quarter Champion** — 90 days
+- **Half-Year Hero** — 180 days
+- **Year-Round Legend** — 365 days
+
+Click the **?** help icon next to the page title to see this list together with the rules for streak resets and exclusions.
 
 ### Exclude Employees (Admin only)
 
@@ -911,7 +921,7 @@ Click any card to navigate:
 #### Filters
 
 1. **Search** — Type a filename.
-2. **Status** — Choose **All**, **Pending**, **Processing**, **Completed**, or **Failed**.
+2. **Status** — Leave blank to view all statuses, or pick **Pending**, **Processing**, **Completed**, or **Failed**.
 3. **From** and **To** — Pick a date range.
 4. Click **Filter** or **Reset**.
 

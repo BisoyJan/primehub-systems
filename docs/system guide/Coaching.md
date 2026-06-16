@@ -164,7 +164,7 @@ The form auto-saves a draft 5 seconds after your last change. Status indicators:
 
 ### Draft Banner
 
-If the session is still a draft, an amber banner shows: **"Draft — not submitted yet"** and an **Edit & Submit** button.
+If the session is still a draft, an amber banner shows a **Draft** label and the message: *"This coaching session has not been submitted yet. The coachee will not see it until it is submitted."* An **Edit & Submit** button appears beside it.
 
 ### Status Bar
 
@@ -191,8 +191,8 @@ If the session is still a draft, an amber banner shows: **"Draft — not submitt
 - **Print** — Opens a printer-friendly view.
 - **Acknowledge Session** (green) — For Agents. Opens a dialog with optional comment and response textareas. Click **Acknowledge** to confirm.
 - **Review Session** (blue) — For Admins. Opens a dialog:
-  - **Compliance Status** — Choose **Verify** or **Reject**. *Required.*
-  - **Notes** (optional) — Type notes. *Required if rejecting.*
+  - **Decision** — Choose **Verify** or **Reject**. *Required.*
+  - **Notes (optional)** — Type notes to clarify your decision.
   - Click **Submit Review**.
 
 ---
@@ -224,11 +224,11 @@ If the session is still a draft, an amber banner shows: **"Draft — not submitt
 
 ### Summary Cards
 
-Six cards showing: total agents, coaching status breakdowns.
+Eight cards in total: a **Total Agents** card plus one card for each coaching status — **Coaching Done** (green), **Needs Coaching** (yellow), **Badly Needs Coaching** (orange), **Please Coach ASAP** (red), **No Record** (gray), **Draft** (blue), **Excluded** (slate).
 
 ### Follow-up Compliance Rate
 
-A card showing the completion rate percentage, completion count, and a progress bar (green ≥ target, amber near target, red below target).
+A card showing the completion rate percentage, completion count, and a progress bar. Color thresholds: **green** (≥80%), **amber** (50–79%), **red** (<50%).
 
 ### Tabs
 
@@ -268,13 +268,13 @@ Click **Export** to download coaching data as a CSV file. A progress indicator s
 
 [Insert Screenshot: 'Coaching Compliance Dashboard' Screen]
 
-### Toggle
+### Coachee Role Toggle
 
-Switch between **Agent** and **Team Lead** view.
+Use the **Coachee Role** dropdown (in the filter row) to switch the dashboard between **Agent** and **Team Lead** views.
 
 ### Summary Cards
 
-Shows total agents (or Team Leads) and status breakdowns.
+Eight cards: a **Total** card (labeled "Total Agents" or "Total Team Leads" depending on the selected view) plus one card per coaching status — **Coaching Done**, **Needs Coaching**, **Badly Needs Coaching**, **Please Coach ASAP**, **No Record**, **Draft**, **Excluded**.
 
 ### Filters
 
@@ -347,8 +347,8 @@ Columns: **Name + Email**, **Role**, **Campaign**, **Status** (Excluded / Active
 1. Click **Exclude** on a user row, or select multiple users via checkboxes and click **Bulk Exclude**.
 2. In the dialog:
    - **Reason** — Select from the predefined list. *Required.*
-   - **Start Date** — Pick the start date.
-   - **End Date** — Optional. Use date presets: **This month**, **Next month**, **30 days**, **60 days**, **Forever**.
+   - **Start Date** — Pick the start date. *(Defaults to today.)*
+   - **End Date** — Leave blank for no expiry, or use presets: **This month**, **Next month**, **30 days**, **60 days**, or **Forever** (indefinite).
    - **Notes** — Optional.
 3. Click **Exclude** (or **Bulk Exclude X user(s)**).
 
@@ -360,7 +360,7 @@ Columns: **Name + Email**, **Role**, **Campaign**, **Status** (Excluded / Active
 
 ### Exclusion History
 
-Click the **History** icon on any row to view all past exclusion records for that user. Shows reason, status, dates, who excluded/revoked, and notes.
+Click the **History** icon on any row to view all past exclusion records for that user. The history table shows: **Reason**, **Status** (Active / Ended badge), **Excluded At**, **Expires**, **Revoked At**, **Excluded By**, **Revoked By**, and **Notes** (both the original exclusion notes and any revoke notes).
 
 ---
 
