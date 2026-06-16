@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Head, router, useForm } from '@inertiajs/react';
-import { format, parseISO, addDays, isWeekend as isWeekendDateFns, isBefore, startOfDay } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { toast } from 'sonner';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -19,7 +19,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { AlertCircle, Calendar, CreditCard, AlertTriangle, Info, Check, FileImage, Eye, Upload, X, Users, Lightbulb, ArrowRight, ChevronDown } from 'lucide-react';
+import { AlertCircle, Calendar, CreditCard, AlertTriangle, Info, FileImage, Eye, Upload, X, Users, ChevronDown } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
@@ -30,7 +30,6 @@ import {
     type AttendanceViolation,
     type ExistingLeaveRequest,
     type CampaignConflict,
-    type DateSuggestion,
     isWeekend,
     getDayName,
     getSlMinDate,
@@ -97,7 +96,6 @@ export default function Edit({
     attendanceViolations,
     hasRecentAbsence,
     nextEligibleLeaveDate,
-    lastAbsenceDate,
     campaigns,
     twoWeeksFromNow,
     isAdmin = false,
@@ -123,11 +121,9 @@ export default function Edit({
     const [creditError, setCreditError] = useState<string | null>(null);
     const [weekendError, setWeekendError] = useState<{ start: string | null; end: string | null }>({ start: null, end: null });
     const [slCreditInfo, setSlCreditInfo] = useState<string | null>(null);
-    const [absenceWindowInfo, setAbsenceWindowInfo] = useState<string | null>(null);
     const [medicalCertPreview, setMedicalCertPreview] = useState<string | null>(null);
     const [isPdfFile, setIsPdfFile] = useState<boolean>(false);
     const [campaignConflicts, setCampaignConflicts] = useState<CampaignConflict[]>([]);
-    const [suggestedDates, setSuggestedDates] = useState<DateSuggestion[]>([]);
     const [futureCredits, setFutureCredits] = useState<number>(0);
     const getInitials = useInitials();
 
@@ -333,10 +329,17 @@ export default function Edit({
         }
 
         // Check recent absence for VL only (BL/SL/ML are exempt)
-        if (data.leave_type === 'VL' && hasRecentAbsence && nextEligibleLeaveDate) {
-            warnings.push(
-                `You had an absence in the last 30 days. Next eligible date: ${format(parseISO(nextEligibleLeaveDate), 'MMMM d, yyyy')}`
-            );
+        // Only warn when the requested start date is still within the 30-day window.
+        if (data.leave_type === 'VL' && hasRecentAbsence && nextEligibleLeaveDate && data.start_date) {
+            const start = parseISO(data.start_date);
+            const eligible = parseISO(nextEligibleLeaveDate);
+            start.setHours(0, 0, 0, 0);
+            eligible.setHours(0, 0, 0, 0);
+            if (start.getTime() < eligible.getTime()) {
+                warnings.push(
+                    `You had an absence in the last 30 days. Next eligible date: ${format(eligible, 'MMMM d, yyyy')}`
+                );
+            }
         }
 
         // Check leave credits balance for VL only (blocks submission)
@@ -430,7 +433,6 @@ export default function Edit({
             // Only check for VL and UPTO
             if (!['VL', 'UPTO'].includes(data.leave_type) || !data.start_date || !data.end_date || !data.campaign_department) {
                 setCampaignConflicts([]);
-                setSuggestedDates([]);
                 return;
             }
 
@@ -455,13 +457,6 @@ export default function Edit({
                 if (response.ok) {
                     const conflicts = await response.json();
                     setCampaignConflicts(conflicts);
-
-                    // Calculate date suggestions if there are conflicts
-                    if (conflicts.length > 0) {
-                        calculateDateSuggestions(conflicts, data.start_date, data.end_date, data.campaign_department);
-                    } else {
-                        setSuggestedDates([]);
-                    }
                 }
             } catch (error) {
                 console.error('Failed to check campaign conflicts:', error);
@@ -471,160 +466,7 @@ export default function Edit({
         // Debounce the API call
         const timeoutId = setTimeout(checkConflicts, 500);
         return () => clearTimeout(timeoutId);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [data.leave_type, data.start_date, data.end_date, data.campaign_department, leaveRequest.user_id, leaveRequest.id]);
-
-    // Calculate date suggestions with fewer or no conflicts
-    const calculateDateSuggestions = async (currentConflicts: CampaignConflict[], startDate: string, endDate: string, campaign: string) => {
-        const suggestions: DateSuggestion[] = [];
-        const start = parseISO(startDate);
-        const end = parseISO(endDate);
-        const today = startOfDay(new Date());
-        const twoWeeksFromToday = addDays(today, 14);
-
-        // Calculate the number of working days requested
-        let requestedDays = 0;
-        const currentDate = new Date(start);
-        while (currentDate <= end) {
-            if (!isWeekendDateFns(currentDate)) {
-                requestedDays++;
-            }
-            currentDate.setDate(currentDate.getDate() + 1);
-        }
-
-        // Helper to check conflicts for a date range
-        const checkConflictsForRange = async (checkStart: string, checkEnd: string): Promise<number> => {
-            try {
-                const response = await fetch('/form-requests/leave-requests/api/check-campaign-conflicts', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                    body: JSON.stringify({
-                        campaign_department: campaign,
-                        start_date: checkStart,
-                        end_date: checkEnd,
-                        exclude_user_id: leaveRequest.user_id,
-                        exclude_leave_id: leaveRequest.id,
-                    }),
-                });
-                if (response.ok) {
-                    const conflicts = await response.json();
-                    return conflicts.length;
-                }
-            } catch {
-                // Ignore errors
-            }
-            return 999; // High number to indicate error
-        };
-
-        // Helper to calculate end date for given working days
-        const calculateEndDate = (startDate: Date, workingDays: number): Date => {
-            let count = 0;
-            const current = new Date(startDate);
-            while (count < workingDays) {
-                if (!isWeekendDateFns(current)) {
-                    count++;
-                }
-                if (count < workingDays) {
-                    current.setDate(current.getDate() + 1);
-                }
-            }
-            return current;
-        };
-
-        // Helper to find next weekday
-        const findNextWeekday = (date: Date): Date => {
-            const next = new Date(date);
-            while (isWeekendDateFns(next)) {
-                next.setDate(next.getDate() + 1);
-            }
-            return next;
-        };
-
-        // Generate candidate dates to check
-        const candidates: { start: Date; end: Date; label: string }[] = [];
-
-        // Option 1: Two weeks after (minimum required advance notice)
-        const twoWeeksAfter = addDays(start, 14);
-        const twoWeeksAfterStart = findNextWeekday(twoWeeksAfter);
-        // Ensure it's at least 2 weeks from today
-        const minStartDate = findNextWeekday(twoWeeksFromToday);
-        const actualTwoWeeksStart = isBefore(twoWeeksAfterStart, minStartDate) ? minStartDate : twoWeeksAfterStart;
-        const twoWeeksAfterEnd = calculateEndDate(actualTwoWeeksStart, requestedDays);
-        candidates.push({ start: actualTwoWeeksStart, end: twoWeeksAfterEnd, label: '2 weeks later' });
-
-        // Option 2: Three weeks after
-        const threeWeeksAfter = addDays(start, 21);
-        const threeWeeksAfterStart = findNextWeekday(threeWeeksAfter);
-        const actualThreeWeeksStart = isBefore(threeWeeksAfterStart, minStartDate) ? minStartDate : threeWeeksAfterStart;
-        const threeWeeksAfterEnd = calculateEndDate(actualThreeWeeksStart, requestedDays);
-        candidates.push({ start: actualThreeWeeksStart, end: threeWeeksAfterEnd, label: '3 weeks later' });
-
-        // Option 3: Day after current conflicts end (if at least 2 weeks from today)
-        const dayAfterEnd = addDays(end, 1);
-        const nextStart = findNextWeekday(dayAfterEnd);
-        // Only add if it's at least 2 weeks from today
-        if (!isBefore(nextStart, minStartDate)) {
-            const nextEnd = calculateEndDate(nextStart, requestedDays);
-            candidates.push({ start: nextStart, end: nextEnd, label: 'After current conflicts' });
-        }
-
-        // Check each candidate for conflicts
-        for (const candidate of candidates) {
-            const startStr = format(candidate.start, 'yyyy-MM-dd');
-            const endStr = format(candidate.end, 'yyyy-MM-dd');
-
-            // Skip if same as current dates
-            if (startStr === startDate && endStr === endDate) continue;
-
-            // Skip if start date is in the past
-            if (isBefore(candidate.start, today)) continue;
-
-            const conflictCount = await checkConflictsForRange(startStr, endStr);
-
-            // Only suggest if fewer conflicts than current
-            if (conflictCount < currentConflicts.length) {
-                suggestions.push({
-                    start_date: startStr,
-                    end_date: endStr,
-                    conflicts: conflictCount,
-                    label: candidate.label,
-                });
-            }
-        }
-
-        // Sort by conflicts (ascending) and limit to 3 suggestions
-        suggestions.sort((a, b) => a.conflicts - b.conflicts);
-        setSuggestedDates(suggestions.slice(0, 3));
-    };
-
-    // Check 30-day absence window for VL
-    useEffect(() => {
-        if (data.leave_type !== 'VL' || !data.start_date || !lastAbsenceDate) {
-            setAbsenceWindowInfo(null);
-            return;
-        }
-
-        const startDate = parseISO(data.start_date);
-        const absenceDate = parseISO(lastAbsenceDate);
-        const windowEndDate = addDays(absenceDate, 30);
-
-        if (startDate <= windowEndDate) {
-            const absenceDateStr = format(absenceDate, 'MMMM d, yyyy');
-            const windowEndStr = format(windowEndDate, 'MMMM d, yyyy');
-            setAbsenceWindowInfo(
-                `Your last recorded absence was on ${absenceDateStr}. ` +
-                `The 30-day restriction window ends on ${windowEndStr}. ` +
-                `Dates before this may result in denial of your VL request.`
-            );
-        } else {
-            setAbsenceWindowInfo(null);
-        }
-    }, [data.leave_type, data.start_date, lastAbsenceDate]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -1226,17 +1068,6 @@ export default function Edit({
 
                             {/* Date-Related Warnings — positioned near the date fields that trigger them */}
 
-                            {/* 30-Day Absence Window Notice (VL only) — muted severity tier */}
-                            {absenceWindowInfo && (
-                                <Alert className="border-muted bg-muted/50">
-                                    <Info className="h-4 w-4 text-muted-foreground" />
-                                    <AlertTitle className="text-muted-foreground">30-Day Absence Window Notice</AlertTitle>
-                                    <AlertDescription className="text-muted-foreground">
-                                        {absenceWindowInfo}
-                                    </AlertDescription>
-                                </Alert>
-                            )}
-
                             {/* Campaign Conflicts Warning (VL and UPTO) — collapsed by default */}
                             {campaignConflicts.length > 0 && ['VL', 'UPTO'].includes(data.leave_type) && (
                                 <Collapsible>
@@ -1296,73 +1127,6 @@ export default function Edit({
                                 </Collapsible>
                             )}
 
-                            {/* Date Suggestions - shown below campaign conflicts */}
-                            {campaignConflicts.length > 0 && suggestedDates.length > 0 && (
-                                <div className="p-4 bg-green-50 dark:bg-green-950/50 rounded-lg border border-green-200 dark:border-green-800">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <Lightbulb className="h-4 w-4 text-green-600" />
-                                        <span className="font-semibold text-green-800 dark:text-green-200 text-sm">Suggested Alternative Dates</span>
-                                    </div>
-                                    <p className="text-xs text-green-700 dark:text-green-300 mb-3">
-                                        These dates have fewer or no conflicts with employees in <span className="font-medium">{data.campaign_department}</span>:
-                                    </p>
-                                    <div className="space-y-2">
-                                        {[...suggestedDates].sort((a, b) => a.conflicts - b.conflicts).map((suggestion, index) => (
-                                            <div
-                                                key={index}
-                                                className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-3 bg-white dark:bg-green-900/30 rounded-lg border border-green-200 dark:border-green-700 hover:border-green-400 dark:hover:border-green-500 transition-colors"
-                                            >
-                                                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-                                                    <div className="flex items-center gap-2">
-                                                        <Badge
-                                                            variant="outline"
-                                                            className={`text-xs shrink-0 ${suggestion.conflicts === 0
-                                                                ? 'bg-green-100 text-green-700 border-green-400 dark:bg-green-900 dark:text-green-300 dark:border-green-600'
-                                                                : 'bg-yellow-100 text-yellow-700 border-yellow-400 dark:bg-yellow-900 dark:text-yellow-300 dark:border-yellow-600'
-                                                                }`}
-                                                        >
-                                                            {suggestion.conflicts === 0 ? (
-                                                                <span className="flex items-center gap-1">
-                                                                    <Check className="h-3 w-3" />
-                                                                    No conflicts
-                                                                </span>
-                                                            ) : (
-                                                                `${suggestion.conflicts} conflict${suggestion.conflicts !== 1 ? 's' : ''}`
-                                                            )}
-                                                        </Badge>
-                                                        <span className="text-xs text-muted-foreground">•</span>
-                                                        <span className="text-xs text-green-600 dark:text-green-400 whitespace-nowrap">
-                                                            {suggestion.label}
-                                                        </span>
-                                                    </div>
-                                                    <div className="flex items-center gap-1.5 text-sm">
-                                                        <Calendar className="h-3.5 w-3.5 text-green-600 shrink-0" />
-                                                        <span className="font-medium text-green-800 dark:text-green-200 whitespace-nowrap">
-                                                            {format(parseISO(suggestion.start_date), 'MMM d')} - {format(parseISO(suggestion.end_date), 'MMM d, yyyy')}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                                <Button
-                                                    type="button"
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="text-xs h-8 px-3 border-green-400 text-green-700 hover:bg-green-100 dark:border-green-600 dark:text-green-300 dark:hover:bg-green-900 w-full sm:w-auto"
-                                                    onClick={() => {
-                                                        setData('start_date', suggestion.start_date);
-                                                        setData('end_date', suggestion.end_date);
-                                                        toast.success('Dates updated', {
-                                                            description: `Changed to ${format(parseISO(suggestion.start_date), 'MMM d')} - ${format(parseISO(suggestion.end_date), 'MMM d, yyyy')}`,
-                                                        });
-                                                    }}
-                                                >
-                                                    Use these dates
-                                                    <ArrowRight className="h-3 w-3 ml-1" />
-                                                </Button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
 
                             {/* Calculated Days Display */}
                             {calculatedDays > 0 && (

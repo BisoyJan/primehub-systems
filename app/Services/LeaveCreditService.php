@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Models\Attendance;
 use App\Models\AttendancePoint;
 use App\Models\LeaveCredit;
 use App\Models\LeaveCreditCarryover;
@@ -979,58 +978,58 @@ class LeaveCreditService
     }
 
     /**
-     * Absence statuses that count for the 30-day rule.
-     * Includes: absent, ncns (No Call No Show), half_day_absence, advised_absence
+     * AttendancePoint point_types that count as an "absence" for the 30-day rule.
      */
-    const ABSENCE_STATUSES = ['absent', 'ncns', 'half_day_absence', 'advised_absence'];
+    const ABSENCE_POINT_TYPES = ['whole_day_absence', 'half_day_absence'];
 
     /**
-     * Check if user had any absences in the last 30 days.
+     * Check if user had any absence-type attendance point in the last 30 days.
+     * Only active (not expired) points are considered; excused points are included.
      */
     public function hasRecentAbsence(User $user, ?Carbon $fromDate = null): bool
     {
         $fromDate = $fromDate ?? now();
         $thirtyDaysAgo = $fromDate->copy()->subDays(30);
 
-        return Attendance::where('user_id', $user->id)
+        return AttendancePoint::where('user_id', $user->id)
+            ->where('is_expired', false)
+            ->whereIn('point_type', self::ABSENCE_POINT_TYPES)
             ->where('shift_date', '>=', $thirtyDaysAgo)
             ->where('shift_date', '<=', $fromDate)
-            ->whereIn('status', self::ABSENCE_STATUSES)
             ->exists();
     }
 
     /**
-     * Get date when user can apply for leave (30 days after last absence).
+     * Get date when user can apply for leave (30 days after last absence-type point).
      */
     public function getNextEligibleLeaveDate(User $user): ?Carbon
     {
-        $lastAbsence = Attendance::where('user_id', $user->id)
-            ->whereIn('status', self::ABSENCE_STATUSES)
-            ->orderBy('shift_date', 'desc')
-            ->first();
+        $lastAbsenceDate = $this->getLastAbsenceDate($user);
 
-        if (! $lastAbsence) {
+        if (! $lastAbsenceDate) {
             return now(); // No absences, can apply anytime
         }
 
-        return Carbon::parse($lastAbsence->shift_date)->addDays(30);
+        return $lastAbsenceDate->copy()->addDays(30);
     }
 
     /**
-     * Get the last absence date for a user.
+     * Get the most recent absence-type attendance point date for a user.
+     * Only active (not expired) points are considered; excused points are included.
      */
     public function getLastAbsenceDate(User $user): ?Carbon
     {
-        $lastAbsence = Attendance::where('user_id', $user->id)
-            ->whereIn('status', self::ABSENCE_STATUSES)
+        $lastPoint = AttendancePoint::where('user_id', $user->id)
+            ->where('is_expired', false)
+            ->whereIn('point_type', self::ABSENCE_POINT_TYPES)
             ->orderBy('shift_date', 'desc')
             ->first();
 
-        if (! $lastAbsence) {
+        if (! $lastPoint) {
             return null;
         }
 
-        return Carbon::parse($lastAbsence->shift_date);
+        return Carbon::parse($lastPoint->shift_date);
     }
 
     /**
