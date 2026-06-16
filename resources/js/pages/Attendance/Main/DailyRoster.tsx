@@ -611,8 +611,7 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
             // only evaluates tardiness from the actual time-in.
             let timeOutForCalc = data.actual_time_out;
             if (partialOnly && selectedEmployee.schedule && data.actual_time_in) {
-                const isNight = selectedEmployee.schedule.shift_type === 'night_shift'
-                    || selectedEmployee.schedule.shift_type === 'graveyard_shift';
+                const isNight = selectedEmployee.schedule.shift_type === 'night_shift';
                 const outDate = isNight
                     ? new Date(new Date(selectedDate).getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]
                     : selectedDate;
@@ -663,8 +662,7 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
 
         // Suggested time-out: schedule's time-out on the day after shift_date for night shifts,
         // or same day for other shifts.
-        const isNight = pending.schedule.shift_type === 'night_shift'
-            || pending.schedule.shift_type === 'graveyard_shift';
+        const isNight = pending.schedule.shift_type === 'night_shift';
         const suggestedDate = isNight
             ? new Date(new Date(pending.shift_date).getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]
             : pending.shift_date;
@@ -1859,8 +1857,8 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
                         {/* Live violations preview */}
                         {pendingTimeOutSuggestion && timeOutValue && (
                             <div className={`p-3 rounded-lg border text-sm ${pendingTimeOutSuggestion.violations.length > 0 && pendingTimeOutSuggestion.status !== 'on_time'
-                                    ? 'bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800'
-                                    : 'bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800'
+                                ? 'bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800'
+                                : 'bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800'
                                 }`}>
                                 {pendingTimeOutSuggestion.violations.length > 0 && pendingTimeOutSuggestion.status !== 'on_time' ? (
                                     <>
@@ -1872,8 +1870,8 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
                                             {pendingTimeOutSuggestion.violations.map((violation, index) => (
                                                 <div key={violation} className="flex justify-between items-center">
                                                     <span className={`${index === 0
-                                                            ? 'font-medium text-red-700 dark:text-red-400'
-                                                            : 'text-red-600 dark:text-red-500'
+                                                        ? 'font-medium text-red-700 dark:text-red-400'
+                                                        : 'text-red-600 dark:text-red-500'
                                                         }`}>
                                                         {index === 0 ? '▶ ' : '  '}
                                                         {violation.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}

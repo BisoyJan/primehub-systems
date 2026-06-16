@@ -9,7 +9,6 @@ export const SHIFT_TYPE_CONFIG: Record<string, { label: string; className: strin
     night_shift: { label: 'Night Shift', className: 'bg-indigo-500' },
     mid_shift: { label: 'Mid Shift', className: 'bg-violet-500' },
     afternoon_shift: { label: 'Afternoon Shift', className: 'bg-amber-500' },
-    graveyard_shift: { label: 'Graveyard Shift', className: 'bg-slate-600' },
     morning_shift: { label: 'Morning Shift', className: 'bg-yellow-500' },
     utility_24h: { label: '24H Utility', className: 'bg-purple-500' },
 };

@@ -241,7 +241,7 @@ class EmployeeScheduleController extends Controller
 
         $rules = [
             'user_id' => 'required|exists:users,id',
-            'shift_type' => 'required|in:graveyard_shift,night_shift,morning_shift,afternoon_shift,utility_24h',
+            'is_utility' => 'sometimes|boolean',
             'scheduled_time_in' => 'required|date_format:H:i',
             'scheduled_time_out' => 'required|date_format:H:i',
             'work_days' => 'required|array',
@@ -272,6 +272,12 @@ class EmployeeScheduleController extends Controller
         }
 
         $validated = $request->validate($rules);
+
+        $validated['shift_type'] = $this->deriveShiftType(
+            $validated['scheduled_time_in'],
+            (bool) ($validated['is_utility'] ?? false)
+        );
+        unset($validated['is_utility']);
 
         // For Team Leads, derive the schedule's primary campaign_id from the
         // first item in campaign_ids so the legacy single-FK column stays
@@ -375,7 +381,7 @@ class EmployeeScheduleController extends Controller
             'campaign_ids' => $isTeamLeadTarget ? 'required|array|min:1' : 'nullable|array',
             'campaign_ids.*' => 'exists:campaigns,id',
             'site_id' => 'nullable|exists:sites,id',
-            'shift_type' => 'required|in:graveyard_shift,night_shift,morning_shift,afternoon_shift,utility_24h',
+            'is_utility' => 'sometimes|boolean',
             'scheduled_time_in' => 'required|date_format:H:i',
             'scheduled_time_out' => 'required|date_format:H:i',
             'work_days' => 'required|array',
@@ -391,6 +397,12 @@ class EmployeeScheduleController extends Controller
         }
 
         $validated = $request->validate($rules);
+
+        $validated['shift_type'] = $this->deriveShiftType(
+            $validated['scheduled_time_in'],
+            (bool) ($validated['is_utility'] ?? false)
+        );
+        unset($validated['is_utility']);
 
         // For Team Leads, derive the schedule's primary campaign_id from the
         // first item in campaign_ids so the legacy single-FK column stays
@@ -561,7 +573,7 @@ class EmployeeScheduleController extends Controller
         $validated = $request->validate([
             'campaign_id' => 'required|exists:campaigns,id',
             'site_id' => 'required|exists:sites,id',
-            'shift_type' => 'required|in:graveyard_shift,night_shift,morning_shift,afternoon_shift,utility_24h',
+            'is_utility' => 'sometimes|boolean',
             'scheduled_time_in' => 'required|date_format:H:i',
             'scheduled_time_out' => 'required|date_format:H:i',
             'work_days' => 'required|array',
@@ -571,8 +583,13 @@ class EmployeeScheduleController extends Controller
 
         // Force the user_id to be the current user
         $validated['user_id'] = $currentUser->id;
-        $validated['grace_period_minutes'] = 15; // Default grace period
+        $validated['grace_period_minutes'] = 0; // Default grace period for first-time setup
         $validated['is_active'] = true;
+        $validated['shift_type'] = $this->deriveShiftType(
+            $validated['scheduled_time_in'],
+            (bool) ($validated['is_utility'] ?? false)
+        );
+        unset($validated['is_utility']);
 
         // Check for duplicate schedule (same site, shift type, time in, time out) - safeguard
         $duplicateQuery = EmployeeSchedule::where('user_id', $validated['user_id'])
@@ -601,5 +618,29 @@ class EmployeeScheduleController extends Controller
         EmployeeSchedule::create($validated);
 
         return $this->redirectWithFlash('dashboard', 'Your schedule has been set up successfully. Welcome!');
+    }
+
+    /**
+     * Derive the canonical shift_type from a scheduled time-in.
+     *
+     * 24-hour utility shifts are flagged explicitly because they cannot be
+     * inferred from a clock. Everything else maps from the time-in hour:
+     *   05:00–11:59 → morning_shift
+     *   12:00–17:59 → afternoon_shift
+     *   otherwise   → night_shift  (absorbs the former graveyard 00:00–04:59)
+     */
+    private function deriveShiftType(string $timeIn, bool $isUtility): string
+    {
+        if ($isUtility) {
+            return 'utility_24h';
+        }
+
+        $hour = (int) substr($timeIn, 0, 2);
+
+        return match (true) {
+            $hour >= 5 && $hour < 12 => 'morning_shift',
+            $hour >= 12 && $hour < 18 => 'afternoon_shift',
+            default => 'night_shift',
+        };
     }
 }

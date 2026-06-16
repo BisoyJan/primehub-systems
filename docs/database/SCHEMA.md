@@ -284,28 +284,27 @@ Work schedules for employees with shift type classification.
 | user_id | bigint | Foreign key to users |
 | campaign_id | bigint | Foreign key to campaigns (nullable) |
 | site_id | bigint | Foreign key to sites (nullable) |
-| shift_type | enum | morning_shift, afternoon_shift, night_shift, graveyard_shift, utility_24h |
+| shift_type | enum | morning_shift, afternoon_shift, night_shift, utility_24h — derived server-side from `scheduled_time_in` (00:00–04:59 → night_shift, 05:00–11:59 → morning_shift, 12:00–17:59 → afternoon_shift, 18:00–23:59 → night_shift). `utility_24h` requires the explicit `is_utility` flag. |
 | scheduled_time_in | time | Scheduled start time |
 | scheduled_time_out | time | Scheduled end time |
 | work_days | json | Array of work days (e.g., ["monday", "tuesday", ...]) |
-| grace_period_minutes | integer | Minutes before considered tardy (default: 15) |
+| grace_period_minutes | integer | Minutes before considered tardy (default: 0) |
 | effective_date | date | Schedule start date (hired date) |
 | end_date | date | Schedule end date (nullable) |
 | is_active | boolean | Currently active schedule |
 | created_at | timestamp | Created timestamp |
 | updated_at | timestamp | Updated timestamp |
 
-**Shift Types & Recommended Time Ranges:**
+**Shift Types (derived from `scheduled_time_in`):**
 
-| Shift Type | Time In Range | Time Out Range | Crosses Midnight |
-|------------|---------------|----------------|------------------|
-| morning_shift | 04:00-09:00 (4AM-9AM) | 12:00-17:00 (12PM-5PM) | No |
-| afternoon_shift | 11:00-16:00 (11AM-4PM) | 19:00-00:00 (7PM-12AM) | No |
-| night_shift | 18:00-23:00 (6PM-11PM) | 04:00-10:00 (4AM-10AM) | Yes |
-| graveyard_shift | 22:00-02:00 (10PM-2AM) | 05:00-11:00 (5AM-11AM) | Yes |
-| utility_24h | Any | Any | Depends |
+| Shift Type | Time-In Window | Typical Time Out | Crosses Midnight |
+|------------|----------------|------------------|------------------|
+| morning_shift | 05:00–11:59 | Same-day afternoon | No |
+| afternoon_shift | 12:00–17:59 | Same-day evening | No |
+| night_shift | 18:00–04:59 (absorbs former graveyard) | Next morning | Yes |
+| utility_24h | Any (requires `is_utility` flag) | Hours-based | Varies |
 
-**Note:** Time ranges are recommendations for UI validation only. The attendance algorithm uses the actual `scheduled_time_in` and `scheduled_time_out` values stored in the database.
+**Note:** `shift_type` is derived server-side on every `store`/`update` from `scheduled_time_in` (and the `is_utility` flag for the only non-derivable value). The attendance algorithm uses the actual `scheduled_time_in` and `scheduled_time_out` values — `shift_type` is only used as a coarse-grained label.
 
 ### attendances
 Attendance records.

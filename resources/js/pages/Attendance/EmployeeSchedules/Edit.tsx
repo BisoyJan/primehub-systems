@@ -16,18 +16,10 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 
 import { toast } from "sonner";
-import { AlertTriangle, HelpCircle } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from "@/components/ui/dialog";
+import { deriveShiftType, SHIFT_META } from "@/lib/shift-type";
 import {
     index as employeeSchedulesIndex,
     edit as employeeSchedulesEdit,
@@ -89,62 +81,6 @@ const DAYS_OF_WEEK = [
     { value: "sunday", label: "Sunday" },
 ];
 
-// Define shift type default times (for auto-fill when shift type changes)
-const SHIFT_DEFAULTS: Record<string, { timeIn: string; timeOut: string }> = {
-    morning_shift: { timeIn: '05:00', timeOut: '14:00' },
-    afternoon_shift: { timeIn: '14:00', timeOut: '23:00' },
-    night_shift: { timeIn: '22:00', timeOut: '07:00' },
-    graveyard_shift: { timeIn: '00:00', timeOut: '09:00' },
-};
-
-// Define flexible time ranges for each shift type (more lenient validation)
-const SHIFT_TIME_RANGES: Record<string, {
-    timeInMin: number; timeInMax: number;
-    timeOutMin: number; timeOutMax: number;
-    label: string; hint: string;
-}> = {
-    // Morning: starts 04:00-09:00, ends 12:00-17:00
-    morning_shift: { timeInMin: 4, timeInMax: 9, timeOutMin: 12, timeOutMax: 17, label: 'Morning Shift', hint: 'Time In: 04:00-09:00 (4AM-9AM), Time Out: 12:00-17:00 (12PM-5PM)' },
-    // Afternoon: starts 11:00-16:00, ends 19:00-24:00
-    afternoon_shift: { timeInMin: 11, timeInMax: 16, timeOutMin: 19, timeOutMax: 24, label: 'Afternoon Shift', hint: 'Time In: 11:00-16:00 (11AM-4PM), Time Out: 19:00-00:00 (7PM-12AM)' },
-    // Night: starts 18:00-23:00, ends 04:00-10:00 (next day)
-    night_shift: { timeInMin: 18, timeInMax: 23, timeOutMin: 4, timeOutMax: 10, label: 'Night Shift', hint: 'Time In: 18:00-23:00 (6PM-11PM), Time Out: 04:00-10:00 (4AM-10AM next day)' },
-    // Graveyard: starts 22:00-02:00, ends 05:00-11:00
-    graveyard_shift: { timeInMin: 22, timeInMax: 26, timeOutMin: 5, timeOutMax: 11, label: 'Graveyard Shift', hint: 'Time In: 22:00-02:00 (10PM-2AM), Time Out: 05:00-11:00 (5AM-11AM)' },
-};
-
-// Helper to get hour from time string
-const getHour = (time: string): number => {
-    const [h] = time.split(':');
-    return parseInt(h);
-};
-
-// Check if hour is within range (handles overnight ranges)
-const isHourInRange = (hour: number, min: number, max: number): boolean => {
-    if (max > 24) {
-        // Handle ranges that cross midnight (e.g., 22-26 means 22:00-02:00)
-        return hour >= min || hour <= (max - 24);
-    }
-    return hour >= min && hour <= max;
-};
-
-// Get warning message if time is outside the expected range for shift type
-const getShiftTimeWarning = (shiftType: string, timeIn: string, timeOut: string): string | null => {
-    const range = SHIFT_TIME_RANGES[shiftType];
-    if (!range) return null; // utility_24h has no range restriction
-
-    const timeInHour = getHour(timeIn);
-    const timeOutHour = getHour(timeOut);
-
-    const timeInValid = isHourInRange(timeInHour, range.timeInMin, range.timeInMax);
-    const timeOutValid = isHourInRange(timeOutHour, range.timeOutMin, range.timeOutMax);
-
-    if (!timeInValid || !timeOutValid) {
-        return `Time may not align with ${range.label}. Recommended: ${range.hint}`;
-    }
-    return null;
-};
-
 export default function EmployeeScheduleEdit() {
     const { schedule, users, campaigns, sites, canEditEffectiveDate, userCampaignIds } = usePage<PageProps>().props;
 
@@ -163,7 +99,7 @@ export default function EmployeeScheduleEdit() {
         campaign_id: schedule.campaign_id || null,
         campaign_ids: userCampaignIds || [],
         site_id: schedule.site_id || null,
-        shift_type: schedule.shift_type,
+        is_utility: schedule.shift_type === 'utility_24h',
         scheduled_time_in: schedule.scheduled_time_in,
         scheduled_time_out: schedule.scheduled_time_out,
         work_days: schedule.work_days,
@@ -173,8 +109,9 @@ export default function EmployeeScheduleEdit() {
         end_date: schedule.end_date || "",
     });
 
-    // Calculate shift time warning in real-time
-    const shiftTimeWarning = getShiftTimeWarning(data.shift_type, data.scheduled_time_in, data.scheduled_time_out);
+    // Derived shift type from current Time In + utility toggle.
+    const derivedShiftType = deriveShiftType(data.scheduled_time_in, data.is_utility);
+    const derivedShiftMeta = SHIFT_META[derivedShiftType];
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -185,20 +122,6 @@ export default function EmployeeScheduleEdit() {
                 toast.error(firstError || "Failed to update employee schedule");
             },
         });
-    };
-
-    // Auto-fill times when shift type changes
-    const handleShiftTypeChange = (shiftType: string) => {
-        setData("shift_type", shiftType);
-        const defaults = SHIFT_DEFAULTS[shiftType];
-        if (defaults) {
-            setData(prev => ({
-                ...prev,
-                shift_type: shiftType,
-                scheduled_time_in: defaults.timeIn,
-                scheduled_time_out: defaults.timeOut,
-            }));
-        }
     };
 
     const toggleWorkDay = (day: string) => {
@@ -234,66 +157,13 @@ export default function EmployeeScheduleEdit() {
                     description="Update employee work schedule"
                 />
                 <div className="max-w-2xl mx-auto w-full">
-                    {/* Shift Time Warning Alert */}
-                    {shiftTimeWarning && (
-                        <Alert className="mb-6 border-amber-500 bg-amber-50 dark:bg-amber-950/20">
-                            <AlertTriangle className="h-4 w-4 text-amber-600" />
-                            <AlertTitle className="text-amber-800 dark:text-amber-200">Shift Time Notice</AlertTitle>
-                            <AlertDescription className="text-amber-700 dark:text-amber-300">
-                                {shiftTimeWarning}
-                            </AlertDescription>
-                        </Alert>
-                    )}
                     <Card>
                         <CardHeader>
-                            <div className="flex items-start justify-between">
-                                <div>
-                                    <CardTitle>Schedule Details</CardTitle>
-                                    <CardDescription>
-                                        Configure the employee's shift times, work days, and assignments
-                                    </CardDescription>
-                                </div>
-                                <Dialog>
-                                    <DialogTrigger asChild>
-                                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                                            <HelpCircle className="h-5 w-5 text-muted-foreground" />
-                                        </Button>
-                                    </DialogTrigger>
-                                    <DialogContent className="sm:max-w-md">
-                                        <DialogHeader>
-                                            <DialogTitle>Shift Time Guide</DialogTitle>
-                                            <DialogDescription>
-                                                Recommended time ranges for each shift type
-                                            </DialogDescription>
-                                        </DialogHeader>
-                                        <div className="space-y-4 py-4">
-                                            <div className="rounded-lg border p-3 space-y-1">
-                                                <h4 className="font-medium text-sm">🌅 Morning Shift</h4>
-                                                <p className="text-sm text-muted-foreground">Time In: 04:00 - 09:00 (4AM - 9AM)</p>
-                                                <p className="text-sm text-muted-foreground">Time Out: 12:00 - 17:00 (12PM - 5PM)</p>
-                                            </div>
-                                            <div className="rounded-lg border p-3 space-y-1">
-                                                <h4 className="font-medium text-sm">🌤️ Afternoon Shift</h4>
-                                                <p className="text-sm text-muted-foreground">Time In: 11:00 - 16:00 (11AM - 4PM)</p>
-                                                <p className="text-sm text-muted-foreground">Time Out: 19:00 - 00:00 (7PM - 12AM)</p>
-                                            </div>
-                                            <div className="rounded-lg border p-3 space-y-1">
-                                                <h4 className="font-medium text-sm">🌙 Night Shift</h4>
-                                                <p className="text-sm text-muted-foreground">Time In: 18:00 - 23:00 (6PM - 11PM)</p>
-                                                <p className="text-sm text-muted-foreground">Time Out: 04:00 - 10:00 (4AM - 10AM next day)</p>
-                                            </div>
-                                            <div className="rounded-lg border p-3 space-y-1">
-                                                <h4 className="font-medium text-sm">🌃 Graveyard Shift</h4>
-                                                <p className="text-sm text-muted-foreground">Time In: 22:00 - 02:00 (10PM - 2AM)</p>
-                                                <p className="text-sm text-muted-foreground">Time Out: 05:00 - 11:00 (5AM - 11AM)</p>
-                                            </div>
-                                            <div className="rounded-lg border p-3 space-y-1">
-                                                <h4 className="font-medium text-sm">🔄 24H Utility</h4>
-                                                <p className="text-sm text-muted-foreground">No time restrictions</p>
-                                            </div>
-                                        </div>
-                                    </DialogContent>
-                                </Dialog>
+                            <div>
+                                <CardTitle>Schedule Details</CardTitle>
+                                <CardDescription>
+                                    Configure the employee's shift times, work days, and assignments
+                                </CardDescription>
                             </div>
                         </CardHeader>
                         <CardContent>
@@ -395,37 +265,21 @@ export default function EmployeeScheduleEdit() {
                                     </div>
                                 )}
 
-                                {/* Shift Type */}
-                                <div className="space-y-2">
-                                    <Label htmlFor="shift_type">
-                                        Shift Type <span className="text-red-500">*</span>
-                                    </Label>
-                                    <Select
-                                        value={data.shift_type}
-                                        onValueChange={handleShiftTypeChange}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="morning_shift">
-                                                🌅 Morning Shift (04:00-17:00) 4:00 AM - 5:00 PM
-                                            </SelectItem>
-                                            <SelectItem value="afternoon_shift">
-                                                🌤️ Afternoon Shift (11:00-00:00) 11:00 AM - 12:00 AM
-                                            </SelectItem>
-                                            <SelectItem value="night_shift">
-                                                🌙 Night Shift (18:00-10:00) 6:00 PM - 10:00 AM
-                                            </SelectItem>
-                                            <SelectItem value="graveyard_shift">
-                                                🌃 Graveyard Shift (22:00-11:00) 10:00 PM - 11:00 AM
-                                            </SelectItem>
-                                            <SelectItem value="utility_24h">🔄 24H Utility</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                    {errors.shift_type && (
-                                        <p className="text-sm text-red-500">{errors.shift_type}</p>
-                                    )}
+                                {/* 24-Hour Utility Toggle */}
+                                <div className="flex items-center justify-between rounded-md border p-3">
+                                    <div className="space-y-0.5">
+                                        <Label htmlFor="is_utility" className="text-sm font-medium cursor-pointer">
+                                            24-Hour Utility Schedule
+                                        </Label>
+                                        <p className="text-xs text-muted-foreground">
+                                            Enable for roles without a fixed shift window (e.g. utility staff). Hours are tracked by total time worked.
+                                        </p>
+                                    </div>
+                                    <Switch
+                                        id="is_utility"
+                                        checked={data.is_utility}
+                                        onCheckedChange={(checked) => setData("is_utility", checked)}
+                                    />
                                 </div>
 
                                 {/* Shift Times */}
@@ -456,6 +310,19 @@ export default function EmployeeScheduleEdit() {
                                         {errors.scheduled_time_out && (
                                             <p className="text-sm text-red-500">{errors.scheduled_time_out}</p>
                                         )}
+                                    </div>
+                                </div>
+
+                                {/* Derived Shift Type (read-only badge) */}
+                                <div className="rounded-md border border-dashed bg-muted/40 p-3 flex items-center gap-3">
+                                    <span className="text-2xl leading-none" aria-hidden="true">{derivedShiftMeta.icon}</span>
+                                    <div className="flex-1">
+                                        <p className="text-sm font-medium">
+                                            Detected shift: {derivedShiftMeta.label}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground">
+                                            {derivedShiftMeta.description}
+                                        </p>
                                     </div>
                                 </div>
 

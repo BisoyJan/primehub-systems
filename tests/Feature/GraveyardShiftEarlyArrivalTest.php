@@ -68,7 +68,7 @@ class GraveyardShiftEarlyArrivalTest extends TestCase
 
         EmployeeSchedule::factory()->create([
             'user_id' => $user->id,
-            'shift_type' => 'graveyard_shift',
+            'shift_type' => 'night_shift',
             'scheduled_time_in' => '00:30:00',
             'scheduled_time_out' => '09:30:00',
             'work_days' => ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
@@ -114,7 +114,7 @@ class GraveyardShiftEarlyArrivalTest extends TestCase
 
         EmployeeSchedule::factory()->create([
             'user_id' => $user->id,
-            'shift_type' => 'graveyard_shift',
+            'shift_type' => 'night_shift',
             'scheduled_time_in' => '00:30:00',
             'scheduled_time_out' => '09:30:00',
             'work_days' => ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
@@ -145,7 +145,7 @@ class GraveyardShiftEarlyArrivalTest extends TestCase
 
         $schedule = EmployeeSchedule::factory()->create([
             'user_id' => $user->id,
-            'shift_type' => 'graveyard_shift',
+            'shift_type' => 'night_shift',
             'scheduled_time_in' => '00:30:00',
             'scheduled_time_out' => '09:30:00',
             'work_days' => ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
@@ -189,7 +189,7 @@ class GraveyardShiftEarlyArrivalTest extends TestCase
 
         $schedule = EmployeeSchedule::factory()->create([
             'user_id' => $user->id,
-            'shift_type' => 'graveyard_shift',
+            'shift_type' => 'night_shift',
             'scheduled_time_in' => '00:30:00',
             'scheduled_time_out' => '09:30:00',
             'work_days' => ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
@@ -233,7 +233,7 @@ class GraveyardShiftEarlyArrivalTest extends TestCase
 
         EmployeeSchedule::factory()->create([
             'user_id' => $user->id,
-            'shift_type' => 'graveyard_shift',
+            'shift_type' => 'night_shift',
             'scheduled_time_in' => '00:30:00',
             'scheduled_time_out' => '09:30:00',
             'work_days' => ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
@@ -268,7 +268,7 @@ class GraveyardShiftEarlyArrivalTest extends TestCase
 
         $schedule = EmployeeSchedule::factory()->create([
             'user_id' => $user->id,
-            'shift_type' => 'graveyard_shift',
+            'shift_type' => 'night_shift',
             'scheduled_time_in' => '00:00:00',
             'scheduled_time_out' => '09:00:00',
             'work_days' => ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],

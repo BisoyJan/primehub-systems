@@ -417,7 +417,7 @@ export default function AttendanceReview() {
         } else {
             setData('undertime_approval_reason', 'lunch_used');
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedRecord]);
 
     // Helper to display notes - show dialog with both notes and verification notes
@@ -667,7 +667,6 @@ export default function AttendanceReview() {
         const [schedOutHour, schedOutMin] = schedule.scheduled_time_out.slice(0, 5).split(':').map(Number);
         const isNightShift =
             schedule.shift_type === 'night_shift' ||
-            schedule.shift_type === 'graveyard_shift' ||
             schedOutHour < schedInHour ||
             (schedOutHour === schedInHour && schedOutMin <= schedInMin);
 

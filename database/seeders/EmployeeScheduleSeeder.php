@@ -68,20 +68,18 @@ class EmployeeScheduleSeeder extends Seeder
             ]
         );
 
-        // Determine shift type based on time
-        // Graveyard: 12 AM - 4:59 AM (00:00:00 - 04:59:59)
+        // Determine shift type based on time.
+        // graveyard_shift was retired — the 00:00–04:59 window now falls under
+        // night_shift; AttendanceProcessor still treats it as graveyard at
+        // runtime via the time-based isGraveyardShift() check.
         // Morning: 5 AM - 11:59 AM (05:00:00 - 11:59:59)
         // Afternoon: 12 PM - 5:59 PM (12:00:00 - 17:59:59)
-        // Night: 6 PM - 11:59 PM (18:00:00 - 23:59:59)
+        // Night: 6 PM - 4:59 AM next day (18:00:00 - 04:59:59)
         $shiftType = 'night_shift';
-        if ($timeIn >= '00:00:00' && $timeIn < '05:00:00') {
-            $shiftType = 'graveyard_shift';
-        } elseif ($timeIn >= '05:00:00' && $timeIn < '12:00:00') {
+        if ($timeIn >= '05:00:00' && $timeIn < '12:00:00') {
             $shiftType = 'morning_shift';
         } elseif ($timeIn >= '12:00:00' && $timeIn < '18:00:00') {
             $shiftType = 'afternoon_shift';
-        } elseif ($timeIn >= '18:00:00') {
-            $shiftType = 'night_shift';
         }
 
         EmployeeSchedule::firstOrCreate(

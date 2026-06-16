@@ -8,6 +8,7 @@ use App\Models\Site;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class EmployeeScheduleControllerTest extends TestCase
@@ -130,7 +131,6 @@ class EmployeeScheduleControllerTest extends TestCase
             'user_id' => $this->employee->id,
             'campaign_id' => $campaign->id,
             'site_id' => $site->id,
-            'shift_type' => 'morning_shift',
             'scheduled_time_in' => '08:00',
             'scheduled_time_out' => '17:00',
             'work_days' => ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
@@ -160,7 +160,6 @@ class EmployeeScheduleControllerTest extends TestCase
 
         $scheduleData = [
             'user_id' => $this->employee->id,
-            'shift_type' => 'afternoon_shift',
             'scheduled_time_in' => '14:00',
             'scheduled_time_out' => '23:00',
             'work_days' => ['monday', 'tuesday', 'wednesday'],
@@ -184,7 +183,6 @@ class EmployeeScheduleControllerTest extends TestCase
 
         $response->assertSessionHasErrors([
             'user_id',
-            'shift_type',
             'scheduled_time_in',
             'scheduled_time_out',
             'work_days',
@@ -216,7 +214,6 @@ class EmployeeScheduleControllerTest extends TestCase
         ]);
 
         $updateData = [
-            'shift_type' => 'night_shift',
             'scheduled_time_in' => '22:00',
             'scheduled_time_out' => '06:00',
             'work_days' => ['sunday', 'monday', 'tuesday', 'wednesday'],
@@ -409,5 +406,48 @@ class EmployeeScheduleControllerTest extends TestCase
                 ->has('schedules.data', 1) // Should be visible (no hired_date)
                 ->where('schedules.data.0.user.id', $notHiredEmployee->id)
             );
+    }
+
+    /**
+     * @dataProvider shiftDerivationProvider
+     */
+    #[DataProvider('shiftDerivationProvider')]
+    public function test_store_derives_shift_type_from_time_in(string $timeIn, bool $isUtility, string $expectedShiftType): void
+    {
+        $campaign = Campaign::factory()->create();
+        $site = Site::factory()->create();
+
+        $payload = [
+            'user_id' => $this->employee->id,
+            'campaign_id' => $campaign->id,
+            'site_id' => $site->id,
+            'is_utility' => $isUtility,
+            'scheduled_time_in' => $timeIn,
+            'scheduled_time_out' => '17:00',
+            'work_days' => ['monday'],
+            'grace_period_minutes' => 0,
+            'effective_date' => '2024-01-01',
+        ];
+
+        $this->actingAs($this->user)
+            ->post(route('employee-schedules.store'), $payload)
+            ->assertRedirect(route('employee-schedules.index'));
+
+        $this->assertDatabaseHas('employee_schedules', [
+            'user_id' => $this->employee->id,
+            'shift_type' => $expectedShiftType,
+            'scheduled_time_in' => $timeIn.':00',
+        ]);
+    }
+
+    public static function shiftDerivationProvider(): array
+    {
+        return [
+            'graveyard window maps to night_shift' => ['02:00', false, 'night_shift'],
+            'morning window' => ['06:00', false, 'morning_shift'],
+            'afternoon window' => ['14:00', false, 'afternoon_shift'],
+            'late-night window maps to night_shift' => ['22:00', false, 'night_shift'],
+            'is_utility flag overrides time-based derivation' => ['09:00', true, 'utility_24h'],
+        ];
     }
 }

@@ -19,27 +19,30 @@ Employee schedules define when employees are expected to work. Each schedule inc
 
 ### Available Shift Types
 
-| Shift Type | Label | Default Times | Crosses Midnight |
-|------------|-------|---------------|------------------|
-| `morning_shift` | 🌅 Morning Shift | 05:00 - 14:00 | No |
-| `afternoon_shift` | 🌤️ Afternoon Shift | 14:00 - 23:00 | No |
-| `night_shift` | 🌙 Night Shift | 22:00 - 07:00 | Yes |
-| `graveyard_shift` | 🌃 Graveyard Shift | 00:00 - 09:00 | Yes |
-| `utility_24h` | 🔄 24H Utility | Any | Varies |
+`shift_type` is derived server-side from `scheduled_time_in` (and the `is_utility` flag); admins do not pick it manually.
 
-### Recommended Time Ranges
+| Shift Type | Label | Time-In Window | Crosses Midnight |
+|------------|-------|----------------|------------------|
+| `morning_shift` | 🌅 Morning Shift | 05:00–11:59 | No |
+| `afternoon_shift` | 🌤️ Afternoon Shift | 12:00–17:59 | No |
+| `night_shift` | 🌙 Night Shift | 18:00–04:59 (absorbs former graveyard window) | Yes |
+| `utility_24h` | 🔄 24H Utility | Any (requires the `is_utility` flag) | Varies |
 
-These are flexible ranges for UI validation guidance. Custom times within these ranges are valid:
+### Derivation Rule
 
-| Shift Type | Time In Range | Time Out Range |
-|------------|---------------|----------------|
-| Morning | 04:00-09:00 (4AM-9AM) | 12:00-17:00 (12PM-5PM) |
-| Afternoon | 11:00-16:00 (11AM-4PM) | 19:00-00:00 (7PM-12AM) |
-| Night | 18:00-23:00 (6PM-11PM) | 04:00-10:00 (4AM-10AM next day) |
-| Graveyard | 22:00-02:00 (10PM-2AM) | 05:00-11:00 (5AM-11AM) |
-| 24H Utility | No restrictions | No restrictions |
+The canonical rule lives in two mirrored places — keep them in sync:
 
-**Note:** Ranges may overlap between shift types. This is intentional to allow flexibility.
+- PHP: `EmployeeScheduleController::deriveShiftType()` — [app/Http/Controllers/EmployeeScheduleController.php](../../app/Http/Controllers/EmployeeScheduleController.php)
+- TypeScript: `deriveShiftType()` in [resources/js/lib/shift-type.ts](../../resources/js/lib/shift-type.ts)
+
+```
+is_utility = true        → utility_24h
+else hour(time_in) ∈ 5..11  → morning_shift
+else hour(time_in) ∈ 12..17 → afternoon_shift
+else                       → night_shift
+```
+
+There is no UI time-range warning anymore — the time itself decides the bucket.
 
 ---
 
@@ -86,25 +89,25 @@ Located at:
 - `resources/js/pages/Attendance/EmployeeSchedules/Edit.tsx`
 
 Features:
-- **Auto-fill times** - Selecting a shift type auto-fills default times
-- **Time range warning** - Shows informational warning if times are outside recommended range (doesn't block submission)
-- **Help dialog** - Click ❓ icon to see recommended time ranges
-- **12h/24h format** - Respects user's time format preference
+- **Time-first entry** — admins enter Time In / Time Out; `shift_type` is derived live and shown as a read-only "Detected shift" badge.
+- **24-Hour Utility toggle** — a `<Switch>` (hidden on first-time setup) sends `is_utility` to the backend; this is the only shift not derivable from a clock.
+- **12h/24h format** — respects user's time format preference.
 
-### Time Range Validation
+### Frontend Helper
 
-The frontend validates times against flexible ranges:
+The shared derivation helper lives at `resources/js/lib/shift-type.ts` and mirrors the PHP `deriveShiftType()` exactly:
 
 ```typescript
-const SHIFT_TIME_RANGES = {
-    morning_shift: { timeInMin: 4, timeInMax: 9, timeOutMin: 12, timeOutMax: 17 },
-    afternoon_shift: { timeInMin: 11, timeInMax: 16, timeOutMin: 19, timeOutMax: 24 },
-    night_shift: { timeInMin: 18, timeInMax: 23, timeOutMin: 4, timeOutMax: 10 },
-    graveyard_shift: { timeInMin: 22, timeInMax: 26, timeOutMin: 5, timeOutMax: 11 },
-};
+export function deriveShiftType(timeIn: string, isUtility: boolean): ShiftType {
+    if (isUtility) return 'utility_24h';
+    const hour = parseInt(timeIn.slice(0, 2), 10);
+    if (hour >= 5 && hour < 12)  return 'morning_shift';
+    if (hour >= 12 && hour < 18) return 'afternoon_shift';
+    return 'night_shift'; // 18:00–04:59 (absorbs former graveyard)
+}
 ```
 
-**Important:** This is UI guidance only. Any valid time can be saved and will be processed correctly by the attendance algorithm.
+**Important:** The backend re-derives `shift_type` on every `store`/`update` — the frontend value is for display only.
 
 ---
 
@@ -116,11 +119,11 @@ CREATE TABLE employee_schedules (
     user_id BIGINT NOT NULL,
     campaign_id BIGINT NULL,
     site_id BIGINT NULL,
-    shift_type ENUM('morning_shift', 'afternoon_shift', 'night_shift', 'graveyard_shift', 'utility_24h'),
+    shift_type ENUM('morning_shift', 'afternoon_shift', 'night_shift', 'utility_24h'),
     scheduled_time_in TIME NOT NULL,
     scheduled_time_out TIME NOT NULL,
     work_days JSON NOT NULL,  -- e.g., ["monday", "tuesday", "wednesday", "thursday", "friday"]
-    grace_period_minutes INTEGER DEFAULT 15,
+    grace_period_minutes INTEGER DEFAULT 0,
     effective_date DATE NOT NULL,
     end_date DATE NULL,
     is_active BOOLEAN DEFAULT TRUE,

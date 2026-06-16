@@ -26,7 +26,7 @@ class EmployeeScheduleFactory extends Factory
             'user_id' => User::factory(),
             'campaign_id' => Campaign::factory(),
             'site_id' => Site::factory(),
-            'shift_type' => fake()->randomElement(['morning_shift', 'afternoon_shift', 'night_shift', 'graveyard_shift', 'utility_24h']),
+            'shift_type' => 'night_shift',
             'scheduled_time_in' => '09:00:00',
             'scheduled_time_out' => '18:00:00',
             'work_days' => ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
@@ -74,12 +74,14 @@ class EmployeeScheduleFactory extends Factory
     }
 
     /**
-     * Graveyard shift (00:00-09:00).
+     * Graveyard-window schedule (00:00-09:00) — stored as night_shift since
+     * the graveyard_shift enum value was retired in favor of time-based
+     * derivation. Kept as a named state for test readability.
      */
     public function graveyardShift(): static
     {
         return $this->state([
-            'shift_type' => 'graveyard_shift',
+            'shift_type' => 'night_shift',
             'scheduled_time_in' => '00:00:00',
             'scheduled_time_out' => '09:00:00',
         ]);
