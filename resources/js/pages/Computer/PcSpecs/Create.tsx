@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
-import { ArrowLeft, Check, ChevronsUpDown, Plus } from 'lucide-react';
+import { ArrowLeft, Check, ChevronsUpDown, Loader2, Plus, X } from 'lucide-react';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -88,39 +88,75 @@ export default function Create() {
         _page: returnPage,
     });
 
-    // Normalize PC number for display (pure digits → PC{n}, otherwise uppercase)
-    const normalizePcNumber = (value: string): string => {
-        if (/^\d+$/.test(value)) return 'PC' + value;
-        return value.toUpperCase();
-    };
-
-    const isValidPcFormat = (value: string) => /^(?:PC)?\d+$/i.test(value);
-
-    // Generate sequential preview of PC numbers using normalized form
+    // Generate sequential preview of digit-only PC numbers
     const sequentialPreview = (() => {
         const { pc_number, quantity } = form.data;
-        if (!pc_number || !isValidPcFormat(pc_number)) return [];
-        const normalized = normalizePcNumber(pc_number);
-        if (quantity <= 1) return [];
-        const match = normalized.match(/^(.*?)(\d+)$/);
-        if (match) {
-            const prefix = match[1];
-            const startNum = parseInt(match[2], 10);
-            const padLen = match[2].length;
-            return Array.from({ length: quantity }, (_, i) => {
-                const n = startNum + i;
-                const str = String(n);
-                return prefix + (str.length <= padLen ? str.padStart(padLen, '0') : str);
-            });
-        }
-        return [normalized];
+        if (!pc_number || !/^\d+$/.test(pc_number) || quantity <= 1) return [];
+        const startNum = parseInt(pc_number, 10);
+        const padLen = pc_number.length;
+        return Array.from({ length: quantity }, (_, i) => {
+            const str = String(startNum + i);
+            return str.length <= padLen ? str.padStart(padLen, '0') : str;
+        });
     })();
 
-    const pcNumberNormalized = form.data.pc_number && isValidPcFormat(form.data.pc_number)
-        ? normalizePcNumber(form.data.pc_number)
-        : null;
-
     const [processorOpen, setProcessorOpen] = useState(false);
+    const [availability, setAvailability] = useState<{
+        state: 'idle' | 'checking' | 'available' | 'taken' | 'error';
+        message?: string;
+        taken?: string[];
+    }>({ state: 'idle' });
+
+    useEffect(() => {
+        const value = form.data.pc_number.trim();
+        const qty = Math.max(1, Number(form.data.quantity) || 1);
+
+        if (!value || !/^\d+$/.test(value)) {
+            setAvailability({ state: 'idle' });
+            return;
+        }
+
+        setAvailability({ state: 'checking' });
+        const controller = new AbortController();
+        const timer = setTimeout(async () => {
+            try {
+                const params = new URLSearchParams({
+                    pc_number: value,
+                    quantity: String(qty),
+                });
+                const res = await fetch(`/pcspecs/check-availability?${params.toString()}`, {
+                    headers: { Accept: 'application/json' },
+                    credentials: 'same-origin',
+                    signal: controller.signal,
+                });
+                if (!res.ok) throw new Error('Request failed');
+                const data = (await res.json()) as { available: boolean; taken: string[] };
+                if (data.available) {
+                    setAvailability({
+                        state: 'available',
+                        message: qty > 1 ? 'All QR Numbers are available' : 'QR Number is available',
+                    });
+                } else {
+                    setAvailability({
+                        state: 'taken',
+                        message:
+                            qty > 1
+                                ? `Already taken: ${data.taken.join(', ')}`
+                                : 'This QR Number is already taken',
+                        taken: data.taken,
+                    });
+                }
+            } catch (err) {
+                if ((err as Error).name === 'AbortError') return;
+                setAvailability({ state: 'error', message: 'Could not verify availability' });
+            }
+        }, 350);
+
+        return () => {
+            controller.abort();
+            clearTimeout(timer);
+        };
+    }, [form.data.pc_number, form.data.quantity]);
 
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
@@ -162,17 +198,39 @@ export default function Create() {
                                 <Label htmlFor="pc_number">QR Number <span className="text-red-500">*</span></Label>
                                 <Input
                                     id="pc_number"
+                                    type="text"
+                                    inputMode="numeric"
+                                    pattern="\d*"
                                     value={form.data.pc_number}
-                                    onChange={(e) => form.setData('pc_number', e.target.value)}
-                                    placeholder="e.g., 1 or PC1"
+                                    onChange={(e) => form.setData('pc_number', e.target.value.replace(/\D/g, ''))}
+                                    onBlur={(e) => {
+                                        const v = e.target.value.replace(/\D/g, '');
+                                        if (v && v.length < 4) form.setData('pc_number', v.padStart(4, '0'));
+                                    }}
+                                    placeholder="e.g., 0042"
                                     required
                                 />
                                 {form.errors.pc_number && <p className="text-sm text-red-600">{form.errors.pc_number}</p>}
-                                {!form.errors.pc_number && form.data.pc_number && !isValidPcFormat(form.data.pc_number) && (
-                                    <p className="text-sm text-red-500">Only a number (e.g. 1) or PC + number (e.g. PC1) is allowed.</p>
+                                {!form.errors.pc_number && availability.state === 'checking' && (
+                                    <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                        Checking availability...
+                                    </p>
                                 )}
-                                {pcNumberNormalized && pcNumberNormalized !== form.data.pc_number.toUpperCase() && (
-                                    <p className="text-xs text-muted-foreground mt-1">Will be saved as: <strong>{pcNumberNormalized}</strong></p>
+                                {!form.errors.pc_number && availability.state === 'available' && (
+                                    <p className="mt-1 flex items-center gap-1 text-xs text-green-600">
+                                        <Check className="h-3 w-3" />
+                                        {availability.message}
+                                    </p>
+                                )}
+                                {!form.errors.pc_number && availability.state === 'taken' && (
+                                    <p className="mt-1 flex items-start gap-1 text-xs text-red-600">
+                                        <X className="mt-0.5 h-3 w-3 shrink-0" />
+                                        <span>{availability.message}</span>
+                                    </p>
+                                )}
+                                {!form.errors.pc_number && availability.state === 'error' && (
+                                    <p className="mt-1 text-xs text-amber-600">{availability.message}</p>
                                 )}
                                 {sequentialPreview.length > 1 && (
                                     <p className="text-xs text-muted-foreground mt-1">

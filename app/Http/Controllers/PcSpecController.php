@@ -168,7 +168,7 @@ class PcSpecController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'pc_number' => ['nullable', 'string', 'max:100'],
+            'pc_number' => ['required', 'string', 'regex:/^\d+$/', 'max:50'],
             'manufacturer' => 'required|string|max:255',
             'notes' => 'nullable|string',
             'memory_type' => 'required|string|max:10',
@@ -185,29 +185,25 @@ class PcSpecController extends Controller
             'processor_boost_clock_ghz' => 'nullable|numeric|min:0',
             'bios_release_date' => 'nullable|date',
             'quantity' => 'nullable|integer|min:1|max:100',
+        ], [
+            'pc_number.required' => 'The QR Number is required.',
+            'pc_number.regex' => 'The QR Number must contain digits only.',
         ]);
 
-        // Normalize: pure digits → prefix with PC (e.g. "1" → "PC1")
-        $pcNumber = $data['pc_number'] ?? null;
-        if (! empty($pcNumber)) {
-            $pcNumber = preg_match('/^\d+$/', $pcNumber) ? 'PC'.$pcNumber : strtoupper($pcNumber);
-        }
+        // Normalize: pad to 4 digits, no prefix (e.g. "27" → "0027")
+        $pcNumber = $this->normalizePcNumber($data['pc_number']);
         $data['pc_number'] = $pcNumber;
 
         $quantity = max(1, (int) ($data['quantity'] ?? 1));
 
-        if ($pcNumber !== null) {
-            $pcNumbers = $this->generateSequentialPcNumbers($pcNumber, $quantity);
+        $pcNumbers = $this->generateSequentialPcNumbers($pcNumber, $quantity);
 
-            // Validate that none of the generated PC numbers are already taken
-            $takenNumbers = PcSpec::whereIn('pc_number', $pcNumbers)->pluck('pc_number')->toArray();
-            if (! empty($takenNumbers)) {
-                return back()->withErrors([
-                    'pc_number' => 'The following PC number(s) are already taken: '.implode(', ', $takenNumbers),
-                ])->withInput();
-            }
-        } else {
-            $pcNumbers = array_fill(0, $quantity, null);
+        // Validate that none of the generated PC numbers are already taken
+        $takenNumbers = PcSpec::whereIn('pc_number', $pcNumbers)->pluck('pc_number')->toArray();
+        if (! empty($takenNumbers)) {
+            return back()->withErrors([
+                'pc_number' => 'The following QR Number(s) are already taken: '.implode(', ', $takenNumbers),
+            ])->withInput();
         }
 
         $processorFields = [
@@ -282,7 +278,7 @@ class PcSpecController extends Controller
     public function update(Request $request, PcSpec $pcspec)
     {
         $data = $request->validate([
-            'pc_number' => ['nullable', 'string', 'max:100'],
+            'pc_number' => ['required', 'string', 'regex:/^\d+$/', 'max:50'],
             'manufacturer' => 'required|string|max:255',
             'notes' => 'nullable|string',
             'memory_type' => 'required|string|max:10',
@@ -298,16 +294,13 @@ class PcSpecController extends Controller
             'processor_base_clock_ghz' => 'nullable|numeric|min:0',
             'processor_boost_clock_ghz' => 'nullable|numeric|min:0',
             'bios_release_date' => 'nullable|date',
+        ], [
+            'pc_number.required' => 'The QR Number is required.',
+            'pc_number.regex' => 'The QR Number must contain digits only.',
         ]);
 
-        // Normalize: keep existing if not provided; pure digits → prefix with PC (e.g. "1" → "PC1")
-        if (empty($data['pc_number'])) {
-            $data['pc_number'] = $pcspec->pc_number;
-        } else {
-            $data['pc_number'] = preg_match('/^\d+$/', $data['pc_number'])
-                ? 'PC'.$data['pc_number']
-                : strtoupper($data['pc_number']);
-        }
+        // Normalize: pad to 4 digits, no prefix (e.g. "27" → "0027")
+        $data['pc_number'] = $this->normalizePcNumber($data['pc_number']);
 
         // Check uniqueness (excluding current record) after normalization
         $duplicate = PcSpec::where('pc_number', $data['pc_number'])
@@ -315,7 +308,7 @@ class PcSpecController extends Controller
             ->exists();
 
         if ($duplicate) {
-            return back()->withErrors(['pc_number' => 'The PC number '.$data['pc_number'].' is already taken.'])->withInput();
+            return back()->withErrors(['pc_number' => 'This QR Number is already taken.'])->withInput();
         }
 
         $processorFields = [
@@ -374,6 +367,39 @@ class PcSpecController extends Controller
     }
 
     /**
+     * GET /pcspecs/check-availability
+     * Live-check whether a QR Number (digits only) is available.
+     * Optional `quantity` validates a sequential range starting at pc_number.
+     */
+    public function checkAvailability(Request $request)
+    {
+        $data = $request->validate([
+            'pc_number' => ['required', 'string', 'regex:/^\d+$/', 'max:50'],
+            'exclude_id' => ['nullable', 'integer'],
+            'quantity' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $startNormalized = $this->normalizePcNumber($data['pc_number']);
+        $quantity = max(1, (int) ($data['quantity'] ?? 1));
+
+        $candidates = $this->generateSequentialPcNumbers($startNormalized, $quantity);
+
+        $query = PcSpec::whereIn('pc_number', $candidates);
+        if (! empty($data['exclude_id'])) {
+            $query->where('id', '!=', (int) $data['exclude_id']);
+        }
+
+        $takenNormalized = $query->pluck('pc_number')->toArray();
+
+        return response()->json([
+            'available' => count($takenNormalized) === 0,
+            'normalized' => $startNormalized,
+            'pc_number' => $data['pc_number'],
+            'taken' => $takenNormalized,
+        ]);
+    }
+
+    /**
      * Build redirect parameters preserving pagination page from request.
      *
      * @return array<string, mixed>
@@ -383,6 +409,15 @@ class PcSpecController extends Controller
         $page = $request->input('_page');
 
         return $page ? ['page' => (int) $page] : [];
+    }
+
+    /**
+     * Normalize a user-entered QR Number (digits only) into the storage form:
+     * pad to minimum 4 digits, no prefix. e.g. "27" → "0027", "12345" → "12345".
+     */
+    private function normalizePcNumber(string $digits): string
+    {
+        return strlen($digits) < 4 ? str_pad($digits, 4, '0', STR_PAD_LEFT) : $digits;
     }
 
     /**
