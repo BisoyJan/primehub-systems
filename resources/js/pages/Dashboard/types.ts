@@ -11,10 +11,10 @@ export type TabType =
     | 'coaching';
 
 export const ROLE_TABS: Record<UserRole, TabType[]> = {
-    'Super Admin': ['attendance', 'presence-insights', 'coaching', 'infrastructure', 'it-concerns'],
-    'Admin': ['attendance', 'presence-insights', 'coaching', 'infrastructure'],
+    'Super Admin': ['attendance', 'personal', 'presence-insights', 'coaching', 'infrastructure', 'it-concerns'],
+    'Admin': ['personal', 'attendance', 'presence-insights', 'coaching', 'infrastructure'],
     'HR': ['attendance', 'presence-insights', 'coaching'],
-    'IT': ['infrastructure', 'it-concerns', 'attendance'],
+    'IT': ['personal', 'infrastructure', 'it-concerns', 'attendance'],
     'Team Lead': ['attendance', 'presence-insights', 'coaching'],
     'Agent': ['personal', 'attendance', 'presence-insights', 'coaching'],
     'Utility': ['personal', 'attendance'],
@@ -111,6 +111,7 @@ export interface PersonalAttendanceSummary {
         point_type: string;
         points: number;
         expires_at: string;
+        expiration_type: 'sro' | 'gbro';
     }>;
 }
 

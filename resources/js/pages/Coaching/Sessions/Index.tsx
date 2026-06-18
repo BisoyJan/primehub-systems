@@ -111,6 +111,21 @@ const purposes: CoachingPurposeLabels = {
     recognition_appreciation: 'Recognition/Appreciation',
 };
 
+const getAgingLabel = (dateStr: string): { text: string; className: string } => {
+    const days = Math.floor((Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24));
+    if (days <= 2) return { text: `${days}d ago`, className: 'text-green-600' };
+    if (days <= 5) return { text: `${days}d ago`, className: 'text-amber-600' };
+    return { text: `${days}d ago`, className: 'text-red-600 font-semibold' };
+};
+
+const getReviewAgingClass = (session: CoachingSession): string => {
+    if (session.compliance_status !== 'For_Review') return '';
+    const days = Math.floor((Date.now() - new Date(session.session_date).getTime()) / (1000 * 60 * 60 * 24));
+    if (days > 5) return 'bg-red-50/50 dark:bg-red-950/20 border-l-2 border-l-red-400';
+    if (days > 2) return 'bg-amber-50/50 dark:bg-amber-950/20 border-l-2 border-l-amber-400';
+    return 'border-l-2 border-l-transparent';
+};
+
 export default function CoachingSessionsIndex() {
     const {
         sessions,
@@ -713,7 +728,7 @@ export default function CoachingSessionsIndex() {
                 {/* Desktop Table */}
                 <div className="hidden overflow-hidden rounded-md shadow md:block">
                     {isLoading ? (
-                        <TableSkeleton columns={8} rows={8} />
+                        <TableSkeleton columns={9} rows={8} />
                     ) : (
                         <div className="overflow-x-auto">
                             <Table>
@@ -726,20 +741,21 @@ export default function CoachingSessionsIndex() {
                                         <TableHead>Severity</TableHead>
                                         <TableHead>Ack Status</TableHead>
                                         <TableHead>Compliance</TableHead>
+                                        <TableHead>Age</TableHead>
                                         <TableHead className="text-center">Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {sessions.data.length === 0 ? (
                                         <TableRow>
-                                            <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
+                                            <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
                                                 <FileText className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
                                                 No coaching sessions found.
                                             </TableCell>
                                         </TableRow>
                                     ) : (
                                         sessions.data.map((session) => (
-                                            <TableRow key={session.id}>
+                                            <TableRow key={session.id} className={getReviewAgingClass(session)}>
                                                 <TableCell className="whitespace-nowrap">
                                                     {new Date(session.session_date).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
                                                     {session.is_draft && (
@@ -765,6 +781,15 @@ export default function CoachingSessionsIndex() {
                                                 </TableCell>
                                                 <TableCell>
                                                     <ComplianceStatusBadge status={session.compliance_status} />
+                                                </TableCell>
+                                                <TableCell>
+                                                    {session.compliance_status === 'For_Review' ? (
+                                                        <span className={`text-xs font-medium ${getAgingLabel(session.session_date).className}`}>
+                                                            {getAgingLabel(session.session_date).text}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-xs text-muted-foreground">—</span>
+                                                    )}
                                                 </TableCell>
                                                 <TableCell>
                                                     <div className="flex items-center justify-center gap-1">

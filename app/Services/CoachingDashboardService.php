@@ -296,6 +296,14 @@ class CoachingDashboardService
             ->groupBy('coachee_id')
             ->pluck('cnt', 'coachee_id');
 
+        // Batch query: session days in period per coachee (for weekly coaching indicator)
+        $sessionDaysInPeriod = CoachingSession::submitted()
+            ->whereIn('coachee_id', $coacheeIds)
+            ->whereBetween('session_date', [$sessionPeriodFrom, $sessionPeriodTo])
+            ->get(['coachee_id', 'session_date'])
+            ->groupBy('coachee_id')
+            ->map(fn ($rows) => $rows->map(fn ($r) => Carbon::parse($r->session_date)->day)->unique()->values()->toArray());
+
         // Batch query: last session date per coachee (for status calculation)
         $lastSessionDates = CoachingSession::submitted()
             ->whereIn('coachee_id', $coacheeIds)
@@ -337,6 +345,11 @@ class CoachingDashboardService
                 $statusCounts[self::STATUS_EXCLUDED] = ($statusCounts[self::STATUS_EXCLUDED] ?? 0) + 1;
                 $dates = $recentSessions->get($coacheeId, []);
 
+                $weeklyBreakdown = [1 => false, 2 => false, 3 => false, 4 => false];
+                foreach ($sessionDaysInPeriod->get($coacheeId, []) as $day) {
+                    $weeklyBreakdown[min((int) ceil($day / 7), 4)] = true;
+                }
+
                 $agents->push([
                     'id' => $user->id,
                     'name' => $user->name,
@@ -355,6 +368,7 @@ class CoachingDashboardService
                     'is_coaching_excluded' => true,
                     'coaching_exclusion_reason' => $exclusion->reason,
                     'exclusion_expires_at' => $exclusion->expires_at?->toDateString(),
+                    'coached_weeks' => $weeklyBreakdown,
                 ]);
 
                 continue;
@@ -410,6 +424,11 @@ class CoachingDashboardService
                 }
             }
 
+            $weeklyBreakdown = [1 => false, 2 => false, 3 => false, 4 => false];
+            foreach ($sessionDaysInPeriod->get($coacheeId, []) as $day) {
+                $weeklyBreakdown[min((int) ceil($day / 7), 4)] = true;
+            }
+
             $statusCounts[$summary['coaching_status']] = ($statusCounts[$summary['coaching_status']] ?? 0) + 1;
 
             $agents->push([
@@ -430,6 +449,7 @@ class CoachingDashboardService
                 'is_coaching_excluded' => false,
                 'coaching_exclusion_reason' => null,
                 'exclusion_expires_at' => null,
+                'coached_weeks' => $weeklyBreakdown,
             ]);
         }
 

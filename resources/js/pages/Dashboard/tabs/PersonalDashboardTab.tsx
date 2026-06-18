@@ -38,6 +38,7 @@ export interface PersonalDashboardTabProps {
     personalRequests?: PersonalRequests;
     personalAttendanceSummary?: PersonalAttendanceSummary;
     leaveCredits?: LeaveCredits;
+    userRole?: string;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -93,6 +94,7 @@ export const PersonalDashboardTab: React.FC<PersonalDashboardTabProps> = ({
     personalRequests,
     personalAttendanceSummary,
     leaveCredits,
+    userRole,
 }) => {
     const [requestTab, setRequestTab] = useState<string>('leaves');
 
@@ -394,7 +396,16 @@ export const PersonalDashboardTab: React.FC<PersonalDashboardTabProps> = ({
                                                     key={i}
                                                     className="flex items-center justify-between text-xs rounded px-2 py-1 bg-muted/50"
                                                 >
+                                                    <span className="flex items-center gap-1.5">
                                                     <span>{exp.point_type.replace(/_/g, ' ')}</span>
+                                                    <span className={`text-[10px] px-1 rounded font-medium ${
+                                                        exp.expiration_type === 'gbro'
+                                                            ? 'bg-blue-500/10 text-blue-600'
+                                                            : 'bg-gray-500/10 text-gray-600'
+                                                    }`}>
+                                                        {exp.expiration_type === 'gbro' ? 'GBRO' : 'SRO'}
+                                                    </span>
+                                                </span>
                                                     <span className="text-muted-foreground">
                                                         {exp.points}pt · expires {formatDate(exp.expires_at)}
                                                     </span>
@@ -428,116 +439,142 @@ export const PersonalDashboardTab: React.FC<PersonalDashboardTabProps> = ({
                             </CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <Tabs value={requestTab} onValueChange={setRequestTab}>
-                                <TabsList className="grid w-full grid-cols-3">
-                                    <TabsTrigger value="leaves" className="text-xs sm:text-sm">
-                                        Leaves
+                            {userRole === 'IT' ? (
+                                personalRequests?.leaves?.length ? (
+                                    <div className="space-y-2">
+                                        {personalRequests.leaves.slice(0, 5).map((leave) => (
+                                            <div
+                                                key={leave.id}
+                                                className="flex items-center justify-between rounded-lg border p-3"
+                                            >
+                                                <div className="space-y-0.5">
+                                                    <p className="text-sm font-medium">{leave.leave_type}</p>
+                                                    <p className="text-xs text-muted-foreground">
+                                                        {formatDate(leave.start_date)} — {formatDate(leave.end_date)} ·{' '}
+                                                        {leave.days_requested}d
+                                                    </p>
+                                                </div>
+                                                <Badge variant="outline" className={STATUS_COLORS[leave.status.toLowerCase()] ?? ''}>
+                                                    {leave.status}
+                                                </Badge>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-sm text-muted-foreground py-4 text-center">No leave requests.</p>
+                                )
+                            ) : (
+                                <Tabs value={requestTab} onValueChange={setRequestTab}>
+                                    <TabsList className="grid w-full grid-cols-3">
+                                        <TabsTrigger value="leaves" className="text-xs sm:text-sm">
+                                            Leaves
+                                            {personalRequests?.leaves?.length ? (
+                                                <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5">
+                                                    {personalRequests.leaves.length}
+                                                </Badge>
+                                            ) : null}
+                                        </TabsTrigger>
+                                        <TabsTrigger value="it_concerns" className="text-xs sm:text-sm">
+                                            IT Concerns
+                                            {personalRequests?.it_concerns?.length ? (
+                                                <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5">
+                                                    {personalRequests.it_concerns.length}
+                                                </Badge>
+                                            ) : null}
+                                        </TabsTrigger>
+                                        <TabsTrigger value="medication" className="text-xs sm:text-sm">
+                                            Medication
+                                            {personalRequests?.medication_requests?.length ? (
+                                                <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5">
+                                                    {personalRequests.medication_requests.length}
+                                                </Badge>
+                                            ) : null}
+                                        </TabsTrigger>
+                                    </TabsList>
+
+                                    {/* Leaves Tab */}
+                                    <TabsContent value="leaves" className="mt-3">
                                         {personalRequests?.leaves?.length ? (
-                                            <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5">
-                                                {personalRequests.leaves.length}
-                                            </Badge>
-                                        ) : null}
-                                    </TabsTrigger>
-                                    <TabsTrigger value="it_concerns" className="text-xs sm:text-sm">
-                                        IT Concerns
+                                            <div className="space-y-2">
+                                                {personalRequests.leaves.slice(0, 5).map((leave) => (
+                                                    <div
+                                                        key={leave.id}
+                                                        className="flex items-center justify-between rounded-lg border p-3"
+                                                    >
+                                                        <div className="space-y-0.5">
+                                                            <p className="text-sm font-medium">{leave.leave_type}</p>
+                                                            <p className="text-xs text-muted-foreground">
+                                                                {formatDate(leave.start_date)} — {formatDate(leave.end_date)} ·{' '}
+                                                                {leave.days_requested}d
+                                                            </p>
+                                                        </div>
+                                                        <Badge variant="outline" className={STATUS_COLORS[leave.status.toLowerCase()] ?? ''}>
+                                                            {leave.status}
+                                                        </Badge>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <p className="text-sm text-muted-foreground py-4 text-center">No leave requests.</p>
+                                        )}
+                                    </TabsContent>
+
+                                    {/* IT Concerns Tab */}
+                                    <TabsContent value="it_concerns" className="mt-3">
                                         {personalRequests?.it_concerns?.length ? (
-                                            <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5">
-                                                {personalRequests.it_concerns.length}
-                                            </Badge>
-                                        ) : null}
-                                    </TabsTrigger>
-                                    <TabsTrigger value="medication" className="text-xs sm:text-sm">
-                                        Medication
+                                            <div className="space-y-2">
+                                                {personalRequests.it_concerns.slice(0, 5).map((concern) => (
+                                                    <div
+                                                        key={concern.id}
+                                                        className="flex items-center justify-between rounded-lg border p-3"
+                                                    >
+                                                        <div className="space-y-0.5 flex-1 min-w-0 mr-3">
+                                                            <p className="text-sm font-medium">{concern.category}</p>
+                                                            <p className="text-xs text-muted-foreground truncate">
+                                                                {concern.description}
+                                                            </p>
+                                                        </div>
+                                                        <div className="flex items-center gap-1.5 shrink-0">
+                                                            <Badge variant="outline" className={PRIORITY_COLORS[concern.priority.toLowerCase()] ?? ''}>
+                                                                {concern.priority}
+                                                            </Badge>
+                                                            <Badge variant="outline" className={STATUS_COLORS[concern.status.toLowerCase()] ?? ''}>
+                                                                {concern.status}
+                                                            </Badge>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <p className="text-sm text-muted-foreground py-4 text-center">No IT concerns.</p>
+                                        )}
+                                    </TabsContent>
+
+                                    {/* Medication Tab */}
+                                    <TabsContent value="medication" className="mt-3">
                                         {personalRequests?.medication_requests?.length ? (
-                                            <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5">
-                                                {personalRequests.medication_requests.length}
-                                            </Badge>
-                                        ) : null}
-                                    </TabsTrigger>
-                                </TabsList>
-
-                                {/* Leaves Tab */}
-                                <TabsContent value="leaves" className="mt-3">
-                                    {personalRequests?.leaves?.length ? (
-                                        <div className="space-y-2">
-                                            {personalRequests.leaves.slice(0, 5).map((leave) => (
-                                                <div
-                                                    key={leave.id}
-                                                    className="flex items-center justify-between rounded-lg border p-3"
-                                                >
-                                                    <div className="space-y-0.5">
-                                                        <p className="text-sm font-medium">{leave.leave_type}</p>
-                                                        <p className="text-xs text-muted-foreground">
-                                                            {formatDate(leave.start_date)} — {formatDate(leave.end_date)} ·{' '}
-                                                            {leave.days_requested}d
-                                                        </p>
-                                                    </div>
-                                                    <Badge variant="outline" className={STATUS_COLORS[leave.status.toLowerCase()] ?? ''}>
-                                                        {leave.status}
-                                                    </Badge>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <p className="text-sm text-muted-foreground py-4 text-center">No leave requests.</p>
-                                    )}
-                                </TabsContent>
-
-                                {/* IT Concerns Tab */}
-                                <TabsContent value="it_concerns" className="mt-3">
-                                    {personalRequests?.it_concerns?.length ? (
-                                        <div className="space-y-2">
-                                            {personalRequests.it_concerns.slice(0, 5).map((concern) => (
-                                                <div
-                                                    key={concern.id}
-                                                    className="flex items-center justify-between rounded-lg border p-3"
-                                                >
-                                                    <div className="space-y-0.5 flex-1 min-w-0 mr-3">
-                                                        <p className="text-sm font-medium">{concern.category}</p>
-                                                        <p className="text-xs text-muted-foreground truncate">
-                                                            {concern.description}
-                                                        </p>
-                                                    </div>
-                                                    <div className="flex items-center gap-1.5 shrink-0">
-                                                        <Badge variant="outline" className={PRIORITY_COLORS[concern.priority.toLowerCase()] ?? ''}>
-                                                            {concern.priority}
-                                                        </Badge>
-                                                        <Badge variant="outline" className={STATUS_COLORS[concern.status.toLowerCase()] ?? ''}>
-                                                            {concern.status}
+                                            <div className="space-y-2">
+                                                {personalRequests.medication_requests.slice(0, 5).map((med) => (
+                                                    <div
+                                                        key={med.id}
+                                                        className="flex items-center justify-between rounded-lg border p-3"
+                                                    >
+                                                        <div className="space-y-0.5">
+                                                            <p className="text-sm font-medium">{med.name}</p>
+                                                            <p className="text-xs text-muted-foreground">{med.medication_type}</p>
+                                                        </div>
+                                                        <Badge variant="outline" className={STATUS_COLORS[med.status.toLowerCase()] ?? ''}>
+                                                            {med.status}
                                                         </Badge>
                                                     </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <p className="text-sm text-muted-foreground py-4 text-center">No IT concerns.</p>
-                                    )}
-                                </TabsContent>
-
-                                {/* Medication Tab */}
-                                <TabsContent value="medication" className="mt-3">
-                                    {personalRequests?.medication_requests?.length ? (
-                                        <div className="space-y-2">
-                                            {personalRequests.medication_requests.slice(0, 5).map((med) => (
-                                                <div
-                                                    key={med.id}
-                                                    className="flex items-center justify-between rounded-lg border p-3"
-                                                >
-                                                    <div className="space-y-0.5">
-                                                        <p className="text-sm font-medium">{med.name}</p>
-                                                        <p className="text-xs text-muted-foreground">{med.medication_type}</p>
-                                                    </div>
-                                                    <Badge variant="outline" className={STATUS_COLORS[med.status.toLowerCase()] ?? ''}>
-                                                        {med.status}
-                                                    </Badge>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <p className="text-sm text-muted-foreground py-4 text-center">No medication requests.</p>
-                                    )}
-                                </TabsContent>
-                            </Tabs>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <p className="text-sm text-muted-foreground py-4 text-center">No medication requests.</p>
+                                        )}
+                                    </TabsContent>
+                                </Tabs>
+                            )}
                         </CardContent>
                     </Card>
                 </motion.div>

@@ -40,6 +40,7 @@ class DashboardController extends Controller
         $user = $request->user();
         $role = $user->role;
         $isRestrictedRole = in_array($role, ['Agent', 'Utility']);
+        $showPersonalDashboard = in_array($role, ['Super Admin', 'Admin', 'Agent', 'Utility', 'IT']);
 
         // Get user's active campaign ID for leave calendar filtering (Agents can see same-campaign leaves)
         $leaveCalendarCampaignId = null;
@@ -197,9 +198,9 @@ class DashboardController extends Controller
             ];
         }
 
-        // Personal data for Agent/Utility (cached per-user, short TTL)
+        // Personal data for roles with personal dashboard (cached per-user, short TTL)
         $personalData = [];
-        if ($isRestrictedRole) {
+        if ($showPersonalDashboard) {
             $personalData = Cache::remember("dashboard_personal_{$user->id}", 120, fn () => [
                 'personalSchedule' => $this->dashboardService->getPersonalSchedule($user->id),
                 'personalRequests' => $this->dashboardService->getPersonalRequestsSummary($user->id),

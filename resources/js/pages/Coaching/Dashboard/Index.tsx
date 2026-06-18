@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Head, Link, usePage, router } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
-import { Calendar as CalendarIcon, CalendarClock, Eye, Plus, Filter, Users, AlertTriangle, ArrowUpDown, ChevronUp, ChevronDown, ClipboardList, TrendingUp, TrendingDown, Download, Loader2, ChevronsUpDown } from 'lucide-react';
+import { Calendar as CalendarIcon, CalendarClock, Eye, Plus, Filter, Users, AlertTriangle, ArrowUpDown, ChevronUp, ChevronDown, ClipboardList, TrendingUp, TrendingDown, Download, Loader2, ChevronsUpDown, X } from 'lucide-react';
 import PaginationNav, { type PaginationLink } from '@/components/pagination-nav';
 
 import AppLayout from '@/layouts/app-layout';
@@ -30,6 +30,8 @@ import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { usePageMeta, useFlashMessage, usePageLoading } from '@/hooks';
 import { CoachingStatusBadge, AckStatusBadge, SeverityBadge } from '@/components/coaching/CoachingStatusBadge';
 import { CoachingSummaryCards } from '@/components/coaching/CoachingSummaryCards';
+import { WeekIndicator } from '@/components/coaching/WeekIndicator';
+import { getCurrentWeekOfMonth } from '@/lib/coaching';
 import { Badge } from '@/components/ui/badge';
 import { Calendar } from '@/components/ui/calendar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -57,6 +59,7 @@ interface AgentRow {
     is_coaching_excluded?: boolean;
     coaching_exclusion_reason?: string | null;
     exclusion_expires_at?: string | null;
+    coached_weeks?: Record<number, boolean>;
 }
 
 interface DashboardData {
@@ -95,6 +98,8 @@ interface Props extends InertiaPageProps {
     filters: Filters;
     statusColors: CoachingStatusColors;
     purposes: CoachingPurposeLabels;
+    coachedThisWeekIds?: number[];
+    draftedThisWeekIds?: number[];
 }
 
 function daysUntil(dateStr: string): number {
@@ -112,14 +117,14 @@ function getUrgencyStyles(days: number) {
 }
 
 const TrendIndicator = ({ trend }: { trend?: number }) => {
-    if (!trend || trend === 0) return <span className="text-muted-foreground">—</span>;
+    if (!trend || trend === 0) return <span className="text-muted-foreground" title="Last 30d vs previous 30d">—</span>;
     if (trend > 0) return (
-        <span className="inline-flex items-center gap-0.5 text-xs font-medium text-green-600">
+        <span className="inline-flex items-center gap-0.5 text-xs font-medium text-green-600" title="Sessions increased in last 30d vs prior 30d">
             <TrendingUp className="h-3.5 w-3.5" /> +{trend}
         </span>
     );
     return (
-        <span className="inline-flex items-center gap-0.5 text-xs font-medium text-red-600">
+        <span className="inline-flex items-center gap-0.5 text-xs font-medium text-red-600" title="Sessions decreased in last 30d vs prior 30d">
             <TrendingDown className="h-3.5 w-3.5" /> {trend}
         </span>
     );
@@ -148,7 +153,7 @@ function getStatusRowClass(status: string): string {
 }
 
 export default function CoachingDashboardIndex() {
-    const { dashboardData, recentSessions, campaignName, upcomingFollowUps, overdueFollowUps, followUpComplianceRate, filters: initialFilters, purposes } = usePage<Props>().props;
+    const { dashboardData, recentSessions, campaignName, upcomingFollowUps, overdueFollowUps, followUpComplianceRate, filters: initialFilters, purposes, coachedThisWeekIds = [], draftedThisWeekIds = [] } = usePage<Props>().props;
 
     const { title, breadcrumbs } = usePageMeta({
         title: 'Coaching Dashboard',
@@ -169,6 +174,17 @@ export default function CoachingDashboardIndex() {
     const [selectedFilterAgentIds, setSelectedFilterAgentIds] = useState<number[]>([]);
     const [isAgentPopoverOpen, setIsAgentPopoverOpen] = useState(false);
     const [agentSearchQuery, setAgentSearchQuery] = useState('');
+    const [savedQueue, setSavedQueue] = useState<Array<{id: number; name: string; coaching_status?: string; done?: boolean; status?: string}>>(() => {
+        try {
+            const raw = sessionStorage.getItem('coaching_queue');
+            return raw ? JSON.parse(raw) : [];
+        } catch { return []; }
+    });
+
+    const dismissQueue = () => {
+        sessionStorage.removeItem('coaching_queue');
+        setSavedQueue([]);
+    };
 
     const sortedAgents = useMemo(() => {
         let agents = [...dashboardData.agents];
@@ -363,6 +379,23 @@ export default function CoachingDashboardIndex() {
                         )}
                     </Button>
                 </div>
+
+                {savedQueue.length > 0 && (
+                    <div className="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800/50 dark:bg-blue-950/30">
+                        <ClipboardList className="h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
+                        <p className="flex-1 text-sm text-blue-800 dark:text-blue-200">
+                            You have <strong>{savedQueue.length} agent{savedQueue.length > 1 ? 's' : ''}</strong> in your coaching queue.
+                        </p>
+                        <div className="flex items-center gap-2">
+                            <Button size="sm" variant="default" onClick={() => router.get(sessionsCreate().url)}>
+                                Resume
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={dismissQueue}>
+                                <X className="mr-1 h-4 w-4" /> Dismiss
+                            </Button>
+                        </div>
+                    </div>
+                )}
 
                 {/* Summary Cards */}
                 {isLoading ? (
@@ -592,7 +625,8 @@ export default function CoachingDashboardIndex() {
                                             <TableHead className="cursor-pointer select-none" onClick={() => handleSort('coaching_status')}>Status <SortIcon field="coaching_status" /></TableHead>
                                             <TableHead className="cursor-pointer select-none" onClick={() => handleSort('last_coached_date')}>Last Coached <SortIcon field="last_coached_date" /></TableHead>
                                             <TableHead className="cursor-pointer select-none" onClick={() => handleSort('total_sessions')}>Sessions <SortIcon field="total_sessions" /></TableHead>
-                                            <TableHead className="cursor-pointer select-none" onClick={() => handleSort('trend')}>Trend <SortIcon field="trend" /></TableHead>
+                                             <TableHead className="text-center" title="Weekly coaching breakdown">Wk</TableHead>
+                                             <TableHead className="cursor-pointer select-none" onClick={() => handleSort('trend')}>Trend <SortIcon field="trend" /></TableHead>
                                             <TableHead className="cursor-pointer select-none" onClick={() => handleSort('pending_acknowledgements')}>Pending Ack <SortIcon field="pending_acknowledgements" /></TableHead>
                                             <TableHead className="text-center">Actions</TableHead>
                                         </TableRow>
@@ -600,7 +634,7 @@ export default function CoachingDashboardIndex() {
                                     <TableBody>
                                         {sortedAgents.length === 0 ? (
                                             <TableRow>
-                                                <TableCell colSpan={9} className="py-12 text-center">
+                                                <TableCell colSpan={10} className="py-12 text-center">
                                                     <Users className="mx-auto h-8 w-8 text-muted-foreground/40" />
                                                     <p className="mt-2 text-sm font-medium text-muted-foreground">No agents found</p>
                                                     <p className="text-xs text-muted-foreground/70">Try adjusting your filters or date range</p>
@@ -626,7 +660,19 @@ export default function CoachingDashboardIndex() {
                                                     </TableCell>
                                                     <TableCell className="font-medium">
                                                         <div className="flex flex-col">
-                                                            <span>{agent.name}</span>
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span>{agent.name}</span>
+                                                                {coachedThisWeekIds.includes(agent.id) && (
+                                                                    <Badge className="bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 text-[10px] px-1.5 py-0 font-medium leading-none">
+                                                                        Wk {getCurrentWeekOfMonth()}
+                                                                    </Badge>
+                                                                )}
+                                                                {draftedThisWeekIds.includes(agent.id) && !coachedThisWeekIds.includes(agent.id) && (
+                                                                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-medium leading-none">
+                                                                        Draft
+                                                                    </Badge>
+                                                                )}
+                                                            </div>
                                                             {agent.is_coaching_excluded && (
                                                                 <span className="text-[10px] text-slate-500">
                                                                     {agent.exclusion_expires_at
@@ -644,6 +690,7 @@ export default function CoachingDashboardIndex() {
                                                         {agent.last_coached_date ? new Date(agent.last_coached_date).toLocaleDateString() : 'Never'}
                                                     </TableCell>
                                                     <TableCell>{agent.total_sessions}</TableCell>
+                                                    <TableCell className="text-center"><WeekIndicator coachedWeeks={agent.coached_weeks} /></TableCell>
                                                     <TableCell><TrendIndicator trend={agent.trend} /></TableCell>
                                                     <TableCell>
                                                         {agent.pending_acknowledgements > 0 ? (
@@ -696,7 +743,19 @@ export default function CoachingDashboardIndex() {
                                                     }}
                                                 />
                                                 <div>
-                                                    <p className="font-medium">{agent.name}</p>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <p className="font-medium">{agent.name}</p>
+                                                        {coachedThisWeekIds.includes(agent.id) && (
+                                                            <Badge className="bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 text-[10px] px-1.5 py-0 font-medium leading-none">
+                                                                Wk {getCurrentWeekOfMonth()}
+                                                            </Badge>
+                                                        )}
+                                                        {draftedThisWeekIds.includes(agent.id) && !coachedThisWeekIds.includes(agent.id) && (
+                                                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-medium leading-none">
+                                                                Draft
+                                                            </Badge>
+                                                        )}
+                                                    </div>
                                                     <p className="text-xs text-muted-foreground">{agent.account}</p>
                                                     {agent.is_coaching_excluded && (
                                                         <p className="text-[10px] text-slate-500">
@@ -711,7 +770,7 @@ export default function CoachingDashboardIndex() {
                                         </div>
                                         <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
                                             <span>Last: {agent.last_coached_date ? new Date(agent.last_coached_date).toLocaleDateString() : 'Never'}</span>
-                                            <span>Sessions: {agent.total_sessions}</span>
+                                            <span className="flex items-center gap-1.5">Sessions: {agent.total_sessions} <WeekIndicator coachedWeeks={agent.coached_weeks} /></span>
                                             {agent.trend !== undefined && agent.trend !== 0 && (
                                                 <TrendIndicator trend={agent.trend} />
                                             )}

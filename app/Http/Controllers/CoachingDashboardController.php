@@ -121,6 +121,18 @@ class CoachingDashboardController extends Controller
             ->paginate(15)
             ->withQueryString();
 
+        $coachedThisWeekIds = CoachingSession::whereBetween('session_date', [now()->startOfWeek(), now()->endOfWeek()])
+            ->where('is_draft', false)
+            ->whereIn('coachee_id', $dashboardData['agents']->pluck('id'))
+            ->pluck('coachee_id')
+            ->unique()->values()->all();
+
+        $draftedThisWeekIds = CoachingSession::whereBetween('session_date', [now()->startOfWeek(), now()->endOfWeek()])
+            ->where('is_draft', true)
+            ->whereIn('coachee_id', $dashboardData['agents']->pluck('id'))
+            ->pluck('coachee_id')
+            ->unique()->values()->all();
+
         $campaignNames = $user->campaigns()
             ->orderBy('name')
             ->pluck('name')
@@ -139,6 +151,8 @@ class CoachingDashboardController extends Controller
             'filters' => $request->only(['coaching_status', 'date_from', 'date_to']),
             'statusColors' => CoachingDashboardService::STATUS_COLORS,
             'purposes' => CoachingSession::PURPOSE_LABELS,
+            'coachedThisWeekIds' => $coachedThisWeekIds,
+            'draftedThisWeekIds' => $draftedThisWeekIds,
         ]);
     }
 
@@ -195,6 +209,22 @@ class CoachingDashboardController extends Controller
 
         $followUpCampaignIds = $this->parseCampaignIds($request->input('campaign_id'));
 
+        $allAgentIds = collect($dashboardData['agents'] ?? [])->pluck('id')
+            ->concat(collect($teamLeadCoachingData['agents'] ?? [])->pluck('id'))
+            ->unique();
+
+        $coachedThisWeekIds = CoachingSession::whereBetween('session_date', [now()->startOfWeek(), now()->endOfWeek()])
+            ->where('is_draft', false)
+            ->whereIn('coachee_id', $allAgentIds)
+            ->pluck('coachee_id')
+            ->unique()->values()->all();
+
+        $draftedThisWeekIds = CoachingSession::whereBetween('session_date', [now()->startOfWeek(), now()->endOfWeek()])
+            ->where('is_draft', true)
+            ->whereIn('coachee_id', $allAgentIds)
+            ->pluck('coachee_id')
+            ->unique()->values()->all();
+
         return Inertia::render('Coaching/Admin/Index', [
             'dashboardData' => $dashboardData,
             'teamLeadCoachingData' => $teamLeadCoachingData,
@@ -212,6 +242,8 @@ class CoachingDashboardController extends Controller
             'purposes' => CoachingSession::PURPOSE_LABELS,
             'monthlySessionTarget' => CoachingStatusSetting::getThreshold('monthly_session_target'),
             'campaignCompletion' => $campaignCompletion,
+            'coachedThisWeekIds' => $coachedThisWeekIds,
+            'draftedThisWeekIds' => $draftedThisWeekIds,
         ]);
     }
 

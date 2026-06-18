@@ -925,16 +925,29 @@ class DashboardService
             $pointsByType[$type] = round($activePoints->where('point_type', $type)->sum('points'), 2);
         }
 
-        // Upcoming expirations (next 30 days)
-        $upcomingExpirations = $activePoints
-            ->whereBetween('expires_at', [now()->format('Y-m-d'), now()->addDays(30)->format('Y-m-d')])
-            ->sortBy('expires_at')
-            ->take(5)
+        // Upcoming expirations (next 30 days) — includes both SRO and GBRO dates
+        $sroUpcoming = $activePoints
+            ->whereBetween('expires_at', [now(), now()->addDays(30)])
             ->map(fn ($p) => [
                 'point_type' => $p->point_type,
                 'points' => $p->points,
-                'expires_at' => $p->expires_at,
-            ])
+                'expires_at' => $p->expires_at->format('Y-m-d'),
+                'expiration_type' => 'sro',
+            ]);
+
+        $gbroUpcoming = $activePoints
+            ->whereNotNull('gbro_expires_at')
+            ->whereBetween('gbro_expires_at', [now(), now()->addDays(30)])
+            ->map(fn ($p) => [
+                'point_type' => $p->point_type,
+                'points' => $p->points,
+                'expires_at' => $p->gbro_expires_at->format('Y-m-d'),
+                'expiration_type' => 'gbro',
+            ]);
+
+        $upcomingExpirations = collect(array_merge($sroUpcoming->toArray(), $gbroUpcoming->toArray()))
+            ->sortBy('expires_at')
+            ->take(5)
             ->values()
             ->toArray();
 

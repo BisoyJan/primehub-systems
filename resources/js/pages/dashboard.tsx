@@ -276,6 +276,7 @@ export default function Dashboard({
                                             personalRequests={personalRequests}
                                             personalAttendanceSummary={personalAttendanceSummary}
                                             leaveCredits={leaveCredits}
+                                            userRole={userRole}
                                         />
                                     </Suspense>
                                 </TabsContent>

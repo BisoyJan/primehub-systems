@@ -25,6 +25,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Calendar } from '@/components/ui/calendar';
+
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
     Select,
@@ -55,6 +56,8 @@ import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { usePageMeta, useFlashMessage, usePageLoading } from '@/hooks';
 import { CoachingStatusBadge, SeverityBadge } from '@/components/coaching/CoachingStatusBadge';
 import { CoachingSummaryCards } from '@/components/coaching/CoachingSummaryCards';
+import { WeekIndicator } from '@/components/coaching/WeekIndicator';
+import { getCurrentWeekOfMonth } from '@/lib/coaching';
 import { MultiSelectFilter } from '@/components/multi-select-filter';
 
 import { dashboard as coachingDashboard } from '@/routes/coaching';
@@ -89,6 +92,7 @@ interface AgentRow {
     is_coaching_excluded?: boolean;
     coaching_exclusion_reason?: string | null;
     exclusion_expires_at?: string | null;
+    coached_weeks?: Record<number, boolean>;
 }
 
 interface DashboardData {
@@ -135,6 +139,8 @@ interface Props extends InertiaPageProps {
     purposes: CoachingPurposeLabels;
     monthlySessionTarget: number;
     campaignCompletion: CampaignCompletionData | null;
+    coachedThisWeekIds?: number[];
+    draftedThisWeekIds?: number[];
 }
 
 interface CampaignCompletionRow {
@@ -199,7 +205,7 @@ const getStatusRowClass = (status: string): string => {
 };
 
 export default function CoachingAdminIndex() {
-    const { dashboardData, teamLeadCoachingData, queueData, upcomingFollowUps, overdueFollowUps, followUpComplianceRate, campaigns, teamLeads, filters: initialFilters, purposes, monthlySessionTarget, campaignCompletion } = usePage<Props>().props;
+    const { dashboardData, teamLeadCoachingData, queueData, upcomingFollowUps, overdueFollowUps, followUpComplianceRate, campaigns, teamLeads, filters: initialFilters, purposes, monthlySessionTarget, campaignCompletion, coachedThisWeekIds = [], draftedThisWeekIds = [] } = usePage<Props>().props;
     const sessionTarget = monthlySessionTarget ?? 4;
 
     const { title, breadcrumbs } = usePageMeta({
@@ -236,7 +242,10 @@ export default function CoachingAdminIndex() {
 
     const selectedDateFollowUps = useMemo(() => {
         if (!calendarSelectedDate) return allFollowUps;
-        const dateStr = calendarSelectedDate.toISOString().split('T')[0];
+        const y = calendarSelectedDate.getFullYear();
+        const m = String(calendarSelectedDate.getMonth() + 1).padStart(2, '0');
+        const d = String(calendarSelectedDate.getDate()).padStart(2, '0');
+        const dateStr = `${y}-${m}-${d}`;
         return allFollowUps.filter((item) => item.follow_up_date === dateStr);
     }, [calendarSelectedDate, allFollowUps]);
 
@@ -636,7 +645,8 @@ export default function CoachingAdminIndex() {
                                             <TableHead>Status</TableHead>
                                             <TableHead>Last Coached</TableHead>
                                             <TableHead>Sessions</TableHead>
-                                            <TableHead>Pending Ack</TableHead>
+                                             <TableHead className="text-center" title="Weekly coaching breakdown">Wk</TableHead>
+                                             <TableHead>Pending Ack</TableHead>
                                             {coacheeRole === 'Team Lead' && (
                                                 <TableHead className="text-center">Actions</TableHead>
                                             )}
@@ -645,7 +655,7 @@ export default function CoachingAdminIndex() {
                                     <TableBody>
                                         {activeData.agents.length === 0 ? (
                                             <TableRow>
-                                                <TableCell colSpan={coacheeRole === 'Team Lead' ? 6 : 5} className="py-8 text-center text-muted-foreground">
+                                                <TableCell colSpan={coacheeRole === 'Team Lead' ? 7 : 6} className="py-8 text-center text-muted-foreground">
                                                     No {coacheeRole === 'Team Lead' ? 'team leads' : 'agents'} found.
                                                 </TableCell>
                                             </TableRow>
@@ -653,7 +663,7 @@ export default function CoachingAdminIndex() {
                                             groupedAgents.map(([account, agents]) => (
                                                 <Fragment key={account}>
                                                     <TableRow className="bg-muted/30">
-                                                        <TableCell colSpan={coacheeRole === 'Team Lead' ? 6 : 5} className="py-2">
+                                                        <TableCell colSpan={coacheeRole === 'Team Lead' ? 7 : 6} className="py-2">
                                                             <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                                                                 {account} ({agents.length})
                                                             </span>
@@ -663,7 +673,19 @@ export default function CoachingAdminIndex() {
                                                         <TableRow key={agent.id} className={getStatusRowClass(agent.coaching_status)}>
                                                             <TableCell className="pl-6 font-medium">
                                                                 <div className="flex flex-col">
-                                                                    <span>{agent.name}</span>
+                                                                    <div className="flex items-center gap-1.5">
+                                                                        <span>{agent.name}</span>
+                                                                        {coachedThisWeekIds.includes(agent.id) && (
+                                                                            <Badge className="bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 text-[10px] px-1.5 py-0 font-medium leading-none">
+                                                                                Wk {getCurrentWeekOfMonth()}
+                                                                            </Badge>
+                                                                        )}
+                                                                        {draftedThisWeekIds.includes(agent.id) && !coachedThisWeekIds.includes(agent.id) && (
+                                                                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-medium leading-none">
+                                                                                Draft
+                                                                            </Badge>
+                                                                        )}
+                                                                    </div>
                                                                     {agent.is_coaching_excluded && (
                                                                         <span className="text-[10px] text-slate-500">
                                                                             {agent.exclusion_expires_at
@@ -680,6 +702,7 @@ export default function CoachingAdminIndex() {
                                                                 {agent.last_coached_date ? new Date(agent.last_coached_date).toLocaleDateString() : 'Never'}
                                                             </TableCell>
                                                             <TableCell>{agent.total_sessions}</TableCell>
+                                                            <TableCell className="text-center"><WeekIndicator coachedWeeks={agent.coached_weeks} /></TableCell>
                                                             <TableCell>
                                                                 {agent.pending_acknowledgements > 0 ? (
                                                                     <span className="font-medium text-amber-600">{agent.pending_acknowledgements}</span>
@@ -722,7 +745,19 @@ export default function CoachingAdminIndex() {
                                             <div key={agent.id} className={`rounded-lg border bg-card p-4 shadow-sm space-y-2 ${getStatusRowClass(agent.coaching_status)}`}>
                                                 <div className="flex items-start justify-between">
                                                     <div>
-                                                        <p className="font-medium">{agent.name}</p>
+                                                        <div className="flex items-center gap-1.5">
+                                                            <p className="font-medium">{agent.name}</p>
+                                                            {coachedThisWeekIds.includes(agent.id) && (
+                                                                <Badge className="bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 text-[10px] px-1.5 py-0 font-medium leading-none">
+                                                                    Wk {getCurrentWeekOfMonth()}
+                                                                </Badge>
+                                                            )}
+                                                            {draftedThisWeekIds.includes(agent.id) && !coachedThisWeekIds.includes(agent.id) && (
+                                                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-medium leading-none">
+                                                                    Draft
+                                                                </Badge>
+                                                            )}
+                                                        </div>
                                                         {agent.is_coaching_excluded && (
                                                             <p className="text-[10px] text-slate-500">
                                                                 Excluded {agent.exclusion_expires_at
@@ -735,7 +770,7 @@ export default function CoachingAdminIndex() {
                                                 </div>
                                                 <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
                                                     <span>Last: {agent.last_coached_date ? new Date(agent.last_coached_date).toLocaleDateString() : 'Never'}</span>
-                                                    <span>Sessions: {agent.total_sessions}</span>
+                                                    <span className="flex items-center gap-1.5">Sessions: {agent.total_sessions} <WeekIndicator coachedWeeks={agent.coached_weeks} /></span>
                                                     {agent.pending_acknowledgements > 0 && (
                                                         <span className="font-medium text-amber-600">{agent.pending_acknowledgements} Pending</span>
                                                     )}
@@ -942,7 +977,21 @@ export default function CoachingAdminIndex() {
                                         ) : (
                                             queueData.at_risk_agents.map((agent) => (
                                                 <TableRow key={agent.id} className={getStatusRowClass(agent.coaching_status)}>
-                                                    <TableCell className="font-medium">{agent.name}</TableCell>
+                                                    <TableCell className="font-medium">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span>{agent.name}</span>
+                                                            {coachedThisWeekIds.includes(agent.id) && (
+                                                                <Badge className="bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 text-[10px] px-1.5 py-0 font-medium leading-none">
+                                                                    Wk {getCurrentWeekOfMonth()}
+                                                                </Badge>
+                                                            )}
+                                                            {draftedThisWeekIds.includes(agent.id) && !coachedThisWeekIds.includes(agent.id) && (
+                                                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-medium leading-none">
+                                                                    Draft
+                                                                </Badge>
+                                                            )}
+                                                        </div>
+                                                    </TableCell>
                                                     <TableCell>{agent.account}</TableCell>
                                                     <TableCell>
                                                         <CoachingStatusBadge status={agent.coaching_status} />
@@ -962,11 +1011,23 @@ export default function CoachingAdminIndex() {
                             ) : (
                                 queueData.at_risk_agents.map((agent) => (
                                     <div key={agent.id} className={`flex items-center justify-between rounded-lg border bg-card p-4 shadow-sm ${getStatusRowClass(agent.coaching_status)}`}>
-                                        <div>
-                                            <p className="font-medium">{agent.name}</p>
-                                            <p className="text-xs text-muted-foreground">{agent.account}</p>
-                                        </div>
-                                        <CoachingStatusBadge status={agent.coaching_status} />
+                                                    <div>
+                                                        <div className="flex items-center gap-1.5">
+                                                            <p className="font-medium">{agent.name}</p>
+                                                            {coachedThisWeekIds.includes(agent.id) && (
+                                                                <Badge className="bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 text-[10px] px-1.5 py-0 font-medium leading-none">
+                                                                    Wk {getCurrentWeekOfMonth()}
+                                                                </Badge>
+                                                            )}
+                                                            {draftedThisWeekIds.includes(agent.id) && !coachedThisWeekIds.includes(agent.id) && (
+                                                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-medium leading-none">
+                                                                    Draft
+                                                                </Badge>
+                                                            )}
+                                                        </div>
+                                                        <p className="text-xs text-muted-foreground">{agent.account}</p>
+                                                    </div>
+                                                    <CoachingStatusBadge status={agent.coaching_status} />
                                     </div>
                                 ))
                             )}
@@ -1010,37 +1071,37 @@ export default function CoachingAdminIndex() {
                         </TabsContent>
 
                         <TabsContent value="calendar">
-                            <div className="flex flex-col gap-4 lg:flex-row">
-                                <div className="rounded-lg border bg-card p-2 shadow-sm">
-                                    <Calendar
-                                        mode="single"
-                                        selected={calendarSelectedDate}
-                                        onSelect={setCalendarSelectedDate}
-                                        modifiers={{
-                                            upcoming: upcomingFollowUps.map(f => new Date(f.follow_up_date + 'T00:00:00')),
-                                            overdue: overdueFollowUps.map(f => new Date(f.follow_up_date + 'T00:00:00')),
-                                        }}
-                                        modifiersClassNames={{
-                                            upcoming: 'ring-2 ring-green-400/60 ring-offset-1',
-                                            overdue: 'ring-2 ring-red-400/60 ring-offset-1',
-                                        }}
-                                    />
-                                    <div className="flex items-center gap-4 border-t px-3 pt-2 text-[10px] text-muted-foreground">
-                                        <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full ring-2 ring-green-400/60" /> Upcoming</span>
-                                        <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full ring-2 ring-red-400/60" /> Overdue</span>
-                                        {calendarSelectedDate && (
-                                            <button onClick={() => setCalendarSelectedDate(undefined)} className="text-primary hover:underline">Clear selection</button>
-                                        )}
+                            <div className="flex flex-col gap-4">
+                                <div className="flex flex-col items-start gap-4 lg:flex-row">
+                                    <div className="w-full max-w-sm rounded-lg border bg-card p-2 shadow-sm">
+                                        <Calendar
+                                            mode="single"
+                                            selected={calendarSelectedDate}
+                                            onSelect={setCalendarSelectedDate}
+                                            modifiers={{
+                                                upcoming: upcomingFollowUps.map(f => new Date(f.follow_up_date + 'T00:00:00')),
+                                                overdue: overdueFollowUps.map(f => new Date(f.follow_up_date + 'T00:00:00')),
+                                            }}
+                                            modifiersClassNames={{
+                                                upcoming: 'ring-2 ring-green-400/60 ring-offset-1',
+                                                overdue: 'ring-2 ring-red-400/60 ring-offset-1',
+                                            }}
+                                        />
+                                        <div className="flex items-center gap-4 border-t px-3 pt-2 text-[10px] text-muted-foreground">
+                                            <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full ring-2 ring-green-400/60" /> Upcoming</span>
+                                            <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full ring-2 ring-red-400/60" /> Overdue</span>
+                                            {calendarSelectedDate && (
+                                                <button onClick={() => setCalendarSelectedDate(undefined)} className="text-primary hover:underline">Clear selection</button>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
-                                <div className="flex-1">
-                                    <FollowUpTable
-                                        items={selectedDateFollowUps}
-                                        emptyMessage={calendarSelectedDate ? 'No follow-ups on this date.' : 'No follow-ups scheduled.'}
-                                        emptyDescription={calendarSelectedDate ? `${calendarSelectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}` : undefined}
-                                        compact
-                                    />
-                                </div>
+                                <FollowUpTable
+                                    items={selectedDateFollowUps}
+                                    emptyMessage={calendarSelectedDate ? 'No follow-ups on this date.' : 'No follow-ups scheduled.'}
+                                    emptyDescription={calendarSelectedDate ? `${calendarSelectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}` : undefined}
+                                    compact
+                                />
                             </div>
                         </TabsContent>
                     </Tabs>
