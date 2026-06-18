@@ -11,6 +11,17 @@ class DatabaseSeeder extends Seeder
      * Seed the application's database.
      *
      * All seeders now utilize factories for generating realistic test data.
+     *
+     * ─────────────────────────────────────────────────────────────
+     * TestingAccountsSeeder (NOT called automatically)
+     *
+     * Run manually to seed dummy data for existing users whose
+     * first_name or last_name contains "Testing" (case-insensitive):
+     *
+     *   php artisan db:seed --class=TestingAccountsSeeder
+     *
+     * Idempotent — safe to re-run.
+     * ─────────────────────────────────────────────────────────────
      */
     public function run(): void
     {

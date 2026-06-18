@@ -4,9 +4,21 @@
 
 The Dashboard is your main landing screen after logging in. What you see changes based on your role. The sections below are organized by role so you can quickly find what applies to you.
 
-[Insert Screenshot: 'Dashboard' Full Screen Layout]
+!['Dashboard' Full Screen Layout - Super Admin](<system screenshots/super admin/dashboard/'Dashboard' Full Screen Layout super admin.png>)
+## Super Admin Dashboard
 
----
+!['Dashboard' Full Screen Layout - Admin](<system screenshots/admin/dashboard/'Dashboard' Full Screen Layout admin.png>)
+## Admin Dashboard
+
+!['Dashboard' Full Screen Layout - Agent](<system screenshots/agent/dashboard/'Dashboard' Full Screen Layout agent.png>)
+## Agent Dashboard
+
+!['Dashboard' Full Screen Layout - HR](<system screenshots/hr/dashboard/'Dashboard' Full Screen Layout hr.png>)
+## HR Dashboard  
+
+!['Dashboard' Full Screen Layout - Team Lead](<system screenshots/team lead/dashboard/'Dashboard' Full Screen Layout team lead.png>)
+## Team Lead Dashboard
+
 
 ## What Agents See
 
@@ -19,8 +31,6 @@ You have access to four tabs: **My Dashboard**, **Attendance**, **Presence Insig
 You see two widgets: **Notifications** and **Coaching Follow-ups**.
 
 ### My Dashboard Tab
-
-[Insert Screenshot: 'My Dashboard' Tab - Agent View]
 
 **My Schedule Card**
 - Displays your **Shift Type**, **Grace Period**, **Time-In / Time-Out**, **Work Days**, **Campaign**, and **Site**.
