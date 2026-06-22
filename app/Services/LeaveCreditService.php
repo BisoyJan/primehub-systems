@@ -980,7 +980,7 @@ class LeaveCreditService
     /**
      * AttendancePoint point_types that count as an "absence" for the 30-day rule.
      */
-    const ABSENCE_POINT_TYPES = ['whole_day_absence', 'half_day_absence'];
+    const ABSENCE_POINT_TYPES = ['whole_day_absence'];
 
     /**
      * Check if user had any absence-type attendance point in the last 30 days.
