@@ -607,6 +607,7 @@ export default function CoachingSessionsIndex() {
                                 <SelectItem value="For_Review">For Review</SelectItem>
                                 <SelectItem value="Verified">Verified</SelectItem>
                                 <SelectItem value="Rejected">Rejected</SelectItem>
+                                <SelectItem value="Archived">Archived</SelectItem>
                             </SelectContent>
                         </Select>
                         <Select value={purpose} onValueChange={setPurpose}>
@@ -653,6 +654,7 @@ export default function CoachingSessionsIndex() {
                                     <SelectItem value="Pending">Pending</SelectItem>
                                     <SelectItem value="Acknowledged">Acknowledged</SelectItem>
                                     <SelectItem value="Disputed">Disputed</SelectItem>
+                                    <SelectItem value="Archived">Archived</SelectItem>
                                 </SelectContent>
                             </Select>
                         )}
@@ -665,6 +667,7 @@ export default function CoachingSessionsIndex() {
                                     <SelectItem value="Pending">Pending</SelectItem>
                                     <SelectItem value="Acknowledged">Acknowledged</SelectItem>
                                     <SelectItem value="Disputed">Disputed</SelectItem>
+                                    <SelectItem value="Archived">Archived</SelectItem>
                                 </SelectContent>
                             </Select>
                         )}

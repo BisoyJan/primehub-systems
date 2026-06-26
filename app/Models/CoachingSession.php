@@ -128,6 +128,7 @@ class CoachingSession extends Model
         'Pending',
         'Acknowledged',
         'Disputed',
+        'Archived',
     ];
 
     /**
@@ -138,6 +139,7 @@ class CoachingSession extends Model
         'For_Review',
         'Verified',
         'Rejected',
+        'Archived',
     ];
 
     /**
@@ -254,6 +256,14 @@ class CoachingSession extends Model
     public function scopePending(Builder $query): Builder
     {
         return $query->where('ack_status', 'Pending');
+    }
+
+    /**
+     * Scope to archived sessions.
+     */
+    public function scopeArchived(Builder $query): Builder
+    {
+        return $query->where('ack_status', 'Archived');
     }
 
     /**

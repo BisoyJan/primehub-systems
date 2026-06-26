@@ -143,6 +143,22 @@ class CoachingSessionPolicy
     }
 
     /**
+     * Determine whether the user can archive a coaching session.
+     */
+    public function archive(User $user, CoachingSession $coachingSession): bool
+    {
+        if ($coachingSession->is_draft) {
+            return false;
+        }
+
+        if ($coachingSession->ack_status !== 'Pending') {
+            return false;
+        }
+
+        return $this->permissionService->userHasPermission($user, 'coaching.review');
+    }
+
+    /**
      * Determine whether the user can review (verify/reject) the coaching session.
      */
     public function review(User $user, CoachingSession $coachingSession): bool

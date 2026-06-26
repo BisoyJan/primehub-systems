@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\AcknowledgeCoachingSessionRequest;
+use App\Http\Requests\ArchiveCoachingSessionRequest;
 use App\Http\Requests\ReviewCoachingSessionRequest;
 use App\Http\Requests\StoreCoachingSessionRequest;
 use App\Http\Requests\StoreDraftCoachingSessionRequest;
@@ -773,6 +774,7 @@ class CoachingSessionController extends Controller
         $canAcknowledge = $user->can('acknowledge', $session);
         $canReview = $user->can('review', $session);
         $canEdit = $user->can('update', $session);
+        $canArchive = $user->can('archive', $session);
 
         // Load all coaching sessions for the same coachee (excluding current, submitted only)
         $coachingHistory = CoachingSession::where('coachee_id', $session->coachee_id)
@@ -793,6 +795,7 @@ class CoachingSessionController extends Controller
             'canAcknowledge' => $canAcknowledge,
             'canReview' => $canReview,
             'canEdit' => $canEdit,
+            'canArchive' => $canArchive,
             'canSubmitDraft' => $canSubmitDraft,
             'purposes' => CoachingSession::PURPOSE_LABELS,
             'coacheeExclusion' => $coacheeExclusion ? [
@@ -982,6 +985,50 @@ class CoachingSessionController extends Controller
             Log::error('CoachingSessionController@acknowledge Error: '.$e->getMessage());
 
             return $this->backWithFlash('Failed to acknowledge coaching session.', 'error');
+        }
+    }
+
+    /**
+     * Archive a coaching session (e.g., agent resigned before acknowledging).
+     */
+    public function archive(ArchiveCoachingSessionRequest $request, CoachingSession $session)
+    {
+        $this->authorize('archive', $session);
+
+        if ($session->ack_status !== 'Pending') {
+            return $this->backWithFlash('Only sessions with pending acknowledgement can be archived.', 'error');
+        }
+
+        try {
+            DB::transaction(function () use ($request, $session) {
+                $affected = CoachingSession::where('id', $session->id)
+                    ->where('ack_status', 'Pending')
+                    ->update([
+                        'ack_status' => 'Archived',
+                        'compliance_status' => 'Archived',
+                        'ack_timestamp' => Carbon::now(),
+                        'ack_comment' => $request->validated('reason') ?? 'Manually archived',
+                    ]);
+
+                if ($affected === 0) {
+                    throw new \RuntimeException('ALREADY_ARCHIVED');
+                }
+
+                $session->refresh();
+            });
+
+            return redirect()->route('coaching.sessions.show', $session)
+                ->with('message', 'Coaching session archived successfully.')
+                ->with('type', 'success');
+        } catch (\RuntimeException $e) {
+            if ($e->getMessage() === 'ALREADY_ARCHIVED') {
+                return $this->backWithFlash('This session has already been archived.', 'error');
+            }
+            throw $e;
+        } catch (\Exception $e) {
+            Log::error('CoachingSessionController@archive Error: '.$e->getMessage());
+
+            return $this->backWithFlash('Failed to archive coaching session.', 'error');
         }
     }
 

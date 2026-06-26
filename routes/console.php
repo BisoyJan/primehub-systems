@@ -175,6 +175,13 @@ Schedule::command('coaching:check-escalations')
     ->withoutOverlapping()
     ->onOneServer();
 
+// Archive orphan coaching sessions where the agent resigned while ack was pending
+// Runs after escalation checks at 8:49 AM — low priority, idempotent
+Schedule::command('coaching:archive-orphan-sessions')
+    ->dailyAt('08:49')
+    ->withoutOverlapping()
+    ->onOneServer();
+
 // ============================================================================
 // BACKUP MONITORING (8:55 AM)
 // ============================================================================

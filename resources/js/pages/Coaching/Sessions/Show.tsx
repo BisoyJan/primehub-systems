@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
-import { ArrowLeft, Pencil, Printer, CheckCircle2, ShieldCheck, ShieldX, ZoomIn, ZoomOut, RotateCcw, History, SendHorizonal } from 'lucide-react';
+import { ArrowLeft, Pencil, Printer, CheckCircle2, ShieldCheck, ShieldX, Archive, ZoomIn, ZoomOut, RotateCcw, History, SendHorizonal } from 'lucide-react';
 import DOMPurify from 'dompurify';
 
 import AppLayout from '@/layouts/app-layout';
@@ -39,6 +39,7 @@ import {
     edit as sessionsEdit,
     acknowledge as sessionsAcknowledge,
     review as sessionsReview,
+    archive as sessionsArchive,
     attachment as sessionsAttachment,
 } from '@/routes/coaching/sessions';
 
@@ -67,6 +68,7 @@ interface Props extends InertiaPageProps {
     canAcknowledge: boolean;
     canReview: boolean;
     canEdit: boolean;
+    canArchive: boolean;
     canSubmitDraft: boolean;
     purposes: CoachingPurposeLabels;
     coaching_history: CoachingHistoryItem[];
@@ -109,7 +111,7 @@ function SectionCard({ title, children }: { title: string; children: React.React
 }
 
 export default function CoachingSessionsShow() {
-    const { session, canAcknowledge, canReview, canEdit, canSubmitDraft, purposes, coaching_history, coacheeExclusion } = usePage<Props>().props;
+    const { session, canAcknowledge, canReview, canEdit, canArchive, canSubmitDraft, purposes, coaching_history, coacheeExclusion } = usePage<Props>().props;
 
     const { title, breadcrumbs } = usePageMeta({
         title: 'Coaching Session Details',
@@ -124,6 +126,7 @@ export default function CoachingSessionsShow() {
     // Dialog open states
     const [ackDialogOpen, setAckDialogOpen] = useState(false);
     const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
+    const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
 
     // Attachment lightbox
     const [selectedAttachment, setSelectedAttachment] = useState<{
@@ -184,6 +187,12 @@ export default function CoachingSessionsShow() {
     const reviewForm = useForm({ compliance_status: '' as string, compliance_notes: '' });
     const handleReview = () => {
         reviewForm.patch(sessionsReview(session.id).url);
+    };
+
+    // Archive form
+    const archiveForm = useForm({ reason: '' });
+    const handleArchive = () => {
+        archiveForm.patch(sessionsArchive(session.id).url);
     };
 
     const formatName = (user?: { first_name: string; last_name: string } | null) => {
@@ -663,6 +672,53 @@ export default function CoachingSessionsShow() {
                                         className="bg-blue-600 hover:bg-blue-700"
                                     >
                                         {reviewForm.processing ? 'Submitting...' : 'Submit Review'}
+                                    </Button>
+                                </DialogFooter>
+                            </DialogContent>
+                        </Dialog>
+                    )}
+
+                    {/* Archive Dialog */}
+                    {canArchive && session.ack_status === 'Pending' && (
+                        <Dialog open={archiveDialogOpen} onOpenChange={setArchiveDialogOpen}>
+                            <DialogTrigger asChild>
+                                <Button variant="outline" className="flex-1 sm:flex-none text-slate-600 border-slate-300 hover:bg-slate-100">
+                                    <Archive className="mr-2 h-4 w-4" />
+                                    Archive Session
+                                </Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-[90vw] sm:max-w-md">
+                                <DialogHeader>
+                                    <DialogTitle>Archive Coaching Session</DialogTitle>
+                                    <DialogDescription>
+                                        This will mark the session as Archived. Use this when the agent has resigned or
+                                        can no longer acknowledge the session. This action cannot be undone.
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <div className="space-y-3 py-2">
+                                    <Label htmlFor="archive_reason">Reason (optional)</Label>
+                                    <Textarea
+                                        id="archive_reason"
+                                        value={archiveForm.data.reason}
+                                        onChange={(e) => archiveForm.setData('reason', e.target.value)}
+                                        placeholder="e.g., Agent resigned before acknowledging..."
+                                        rows={3}
+                                    />
+                                    {archiveForm.errors.reason && (
+                                        <p className="text-sm text-red-600">{archiveForm.errors.reason}</p>
+                                    )}
+                                </div>
+                                <DialogFooter>
+                                    <Button variant="outline" onClick={() => setArchiveDialogOpen(false)}>
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        onClick={handleArchive}
+                                        disabled={archiveForm.processing}
+                                        variant="outline"
+                                        className="bg-slate-600 hover:bg-slate-700 text-white"
+                                    >
+                                        {archiveForm.processing ? 'Archiving...' : 'Archive Session'}
                                     </Button>
                                 </DialogFooter>
                             </DialogContent>

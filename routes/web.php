@@ -590,6 +590,11 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
             ->middleware('permission:coaching.review')
             ->name('sessions.review');
 
+        // Archive session (agent resigned before acknowledging)
+        Route::patch('/sessions/{session}/archive', [CoachingSessionController::class, 'archive'])
+            ->middleware('permission:coaching.review')
+            ->name('sessions.archive');
+
         // Export
         Route::post('/export/start', [CoachingDashboardController::class, 'startExport'])
             ->middleware('permission:coaching.export')
