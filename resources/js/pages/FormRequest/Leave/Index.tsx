@@ -30,13 +30,8 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from '@/components/ui/popover';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Plus, Eye, Ban, RefreshCw, Filter, Trash2, Pencil, CheckCircle, Play, Pause, Download, ChevronsUpDown, Check, Calendar, FileImage, ExternalLink, ZoomIn, ZoomOut, RotateCcw, AlertTriangle, List, Clock, XCircle } from 'lucide-react';
+
+import { Plus, Eye, Ban, RefreshCw, Filter, Trash2, Pencil, CheckCircle, Play, Pause, Download, Calendar, FileImage, ExternalLink, ZoomIn, ZoomOut, RotateCcw, AlertTriangle, List, Clock, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
 import { usePermission } from '@/hooks/use-permission';
@@ -561,8 +556,7 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
                                     value={selectedUserIds}
                                     onChange={setSelectedUserIds}
                                     placeholder="All Employees"
-                                    searchPlaceholder="Search employee..."
-                                    emptyText="No employee found."
+                                    emptyMessage="No employee found."
                                     multipleSelectionLabel={(n) => `${n} employees selected`}
                                 />
                             )}
@@ -581,8 +575,7 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
                                 value={selectedTypes}
                                 onChange={setSelectedTypes}
                                 placeholder="All Types"
-                                searchPlaceholder="Search type..."
-                                emptyText="No type found."
+                                emptyMessage="No type found."
                                 multipleSelectionLabel={(n) => `${n} types selected`}
                             />
 
@@ -591,8 +584,7 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
                                 value={selectedCampaigns}
                                 onChange={setSelectedCampaigns}
                                 placeholder="All Campaigns"
-                                searchPlaceholder="Search campaign..."
-                                emptyText="No campaign found."
+                                emptyMessage="No campaign found."
                                 multipleSelectionLabel={(n) => `${n} campaigns selected`}
                             />
 

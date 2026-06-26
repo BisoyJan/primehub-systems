@@ -96,7 +96,7 @@ class LeaveRequestController extends Controller
                 ? $request->type
                 : array_filter(explode(',', (string) $request->type));
             if (count($types) > 0) {
-                $query->whereIn('type', $types);
+                $query->whereIn('leave_type', $types);
             }
         }
 

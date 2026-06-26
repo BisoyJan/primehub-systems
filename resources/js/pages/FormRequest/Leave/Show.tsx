@@ -319,7 +319,7 @@ export default function Show({
     const adminCancelForm = useForm({ cancellation_reason: '' });
     const adjustForWorkForm = useForm({
         work_date: '',
-        adjustment_type: 'end_early' as 'end_early' | 'start_late' | 'remove_day',
+        adjustment_type: 'start_late' as 'end_early' | 'start_late' | 'remove_day',
         notes: ''
     });
 
@@ -2617,11 +2617,11 @@ export default function Show({
                                     <SelectValue placeholder="Select adjustment type" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="end_early">
-                                        End leave early (reported on work date, worked remaining days)
-                                    </SelectItem>
                                     <SelectItem value="start_late">
                                         Start leave later (reported on work date, on leave after)
+                                    </SelectItem>
+                                    <SelectItem value="end_early">
+                                        End leave early (reported on work date, worked remaining days)
                                     </SelectItem>
                                 </SelectContent>
                             </Select>
