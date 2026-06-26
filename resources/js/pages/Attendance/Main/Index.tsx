@@ -50,7 +50,6 @@ import {
     index as attendanceIndex,
     hub as attendanceHub,
     calendar as attendanceCalendar,
-    create as attendanceCreate,
     importMethod as attendanceImport,
     review as attendanceReview,
     dailyRoster as attendanceDailyRoster,
@@ -740,16 +739,6 @@ export default function AttendanceIndex() {
                             <CalendarIcon className="mr-2 h-4 w-4" />
                             Calendar View
                         </Button>
-                        <Can permission="attendance.create">
-                            <Button
-                                onClick={() => router.get(attendanceCreate().url)}
-                                size="sm"
-                                variant="outline"
-                            >
-                                <Edit className="mr-2 h-4 w-4" />
-                                Manual Attendance
-                            </Button>
-                        </Can>
                         <Can permission="attendance.import">
                             <Button
                                 onClick={() => router.get(attendanceImport().url)}

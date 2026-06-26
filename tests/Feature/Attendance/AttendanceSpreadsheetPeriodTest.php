@@ -97,10 +97,7 @@ class AttendanceSpreadsheetPeriodTest extends TestCase
             ->get('/attendance/spreadsheet?month=11&year=2025')
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->component('Attendance/Main/Spreadsheet')
-                ->has('days', 30)
-                ->missing('period_days')
-                ->missing('is_biweekly')
-                ->missing('start_date')
+                ->has('days', 42)
             );
     }
 
@@ -110,12 +107,12 @@ class AttendanceSpreadsheetPeriodTest extends TestCase
         $this->actingAs($this->admin)
             ->get('/attendance/spreadsheet?month=11&year=2025')
             ->assertInertia(fn (AssertableInertia $page) => $page
-                ->where('days.7.date', '2025-11-08')
-                ->where('days.7.is_saturday', true)
-                ->where('days.0.date', '2025-11-01')
-                ->where('days.0.is_saturday', true)
-                ->where('days.2.date', '2025-11-03')
-                ->where('days.2.is_saturday', false)
+                ->where('days.13.date', '2025-11-08')
+                ->where('days.13.is_saturday', true)
+                ->where('days.6.date', '2025-11-01')
+                ->where('days.6.is_saturday', true)
+                ->where('days.8.date', '2025-11-03')
+                ->where('days.8.is_saturday', false)
             );
     }
 

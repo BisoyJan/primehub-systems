@@ -12,15 +12,11 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * Recommendation #9 — Cross-surface harmony tests.
+ * Cross-surface harmony tests.
  *
  * Asserts that the same business scenario produces the same Attendance
- * row regardless of which admin surface (Manual, Daily Roster,
- * Spreadsheet, Review/Verify) created it.
- *
- * Some of these tests are EXPECTED TO FAIL on the current codebase —
- * that failure is the audit's safety net. They will turn green once the
- * unification work in recommendations #1-#3 is complete.
+ * row regardless of which admin surface (Daily Roster, Spreadsheet,
+ * Review/Verify) created it.
  */
 class AttendanceCrossSurfaceHarmonyTest extends TestCase
 {
@@ -65,20 +61,6 @@ class AttendanceCrossSurfaceHarmonyTest extends TestCase
             'effective_date' => '2025-01-01',
             'is_active' => true,
         ]);
-    }
-
-    private function createViaManual(string $shiftDate, string $timeIn, string $timeOut): Attendance
-    {
-        $this->actingAs($this->admin)->post('/attendance', [
-            'user_id' => $this->employee->id,
-            'shift_date' => $shiftDate,
-            'actual_time_in' => $shiftDate.'T'.$timeIn,
-            'actual_time_out' => $shiftDate.'T'.$timeOut,
-        ]);
-
-        return Attendance::where('user_id', $this->employee->id)
-            ->where('shift_date', $shiftDate)
-            ->firstOrFail();
     }
 
     private function createViaRoster(string $shiftDate, string $timeIn, string $timeOut): Attendance
@@ -143,31 +125,28 @@ class AttendanceCrossSurfaceHarmonyTest extends TestCase
     // ---------------------------------------------------------------------
 
     #[Test]
-    public function same_late_arrival_produces_same_status_and_tardy_minutes_across_all_four_surfaces(): void
+    public function same_late_arrival_produces_same_status_and_tardy_minutes_across_all_surfaces(): void
     {
         $this->morningSchedule(gracePeriod: 0);
         $schedule = $this->employee->employeeSchedules()->first();
 
-        $manual = $this->createViaManual('2025-11-03', '09:10', '18:00');
         $roster = $this->createViaRoster('2025-11-04', '09:10', '18:00');
         $sheet = $this->createViaSpreadsheet('2025-11-05', '09:10', '18:00');
         $verify = $this->createViaVerify('2025-11-06', '09:10', '18:00', $schedule, 'tardy');
 
         $statuses = [
-            'manual' => $manual->status,
             'roster' => $roster->status,
             'sheet' => $sheet->status,
             'verify' => $verify->status,
         ];
         $tardies = [
-            'manual' => (int) $manual->tardy_minutes,
             'roster' => (int) $roster->tardy_minutes,
             'sheet' => (int) $sheet->tardy_minutes,
             'verify' => (int) $verify->tardy_minutes,
         ];
 
-        $this->assertCount(1, array_unique($statuses), 'All four surfaces must agree on status. Got: '.json_encode($statuses));
-        $this->assertCount(1, array_unique($tardies), 'All four surfaces must agree on tardy_minutes. Got: '.json_encode($tardies));
+        $this->assertCount(1, array_unique($statuses), 'All surfaces must agree on status. Got: '.json_encode($statuses));
+        $this->assertCount(1, array_unique($tardies), 'All surfaces must agree on tardy_minutes. Got: '.json_encode($tardies));
     }
 
     // ---------------------------------------------------------------------
@@ -179,18 +158,16 @@ class AttendanceCrossSurfaceHarmonyTest extends TestCase
     // ---------------------------------------------------------------------
 
     #[Test]
-    public function same_slight_overtime_produces_same_overtime_minutes_across_all_four_surfaces(): void
+    public function same_slight_overtime_produces_same_overtime_minutes_across_all_surfaces(): void
     {
         $this->morningSchedule(gracePeriod: 0);
         $schedule = $this->employee->employeeSchedules()->first();
 
-        $manual = $this->createViaManual('2025-11-03', '09:00', '18:15');
         $roster = $this->createViaRoster('2025-11-04', '09:00', '18:15');
         $sheet = $this->createViaSpreadsheet('2025-11-05', '09:00', '18:15');
         $verify = $this->createViaVerify('2025-11-06', '09:00', '18:15', $schedule, 'on_time');
 
         $overtimes = [
-            'manual' => (int) $manual->overtime_minutes,
             'roster' => (int) $roster->overtime_minutes,
             'sheet' => (int) $sheet->overtime_minutes,
             'verify' => (int) $verify->overtime_minutes,
@@ -199,7 +176,7 @@ class AttendanceCrossSurfaceHarmonyTest extends TestCase
         $this->assertCount(
             1,
             array_unique($overtimes),
-            'All four surfaces must agree on overtime_minutes for a 15-min late time-out. Got: '.json_encode($overtimes)
+            'All surfaces must agree on overtime_minutes for a 15-min late time-out. Got: '.json_encode($overtimes)
         );
     }
 
@@ -215,7 +192,7 @@ class AttendanceCrossSurfaceHarmonyTest extends TestCase
     {
         $this->morningSchedule(gracePeriod: 0);
 
-        // Seed an approved leave that covers all three test dates.
+        // Seed an approved leave that covers both test dates.
         LeaveRequest::factory()->create([
             'user_id' => $this->employee->id,
             'leave_type' => 'VL',
@@ -224,11 +201,10 @@ class AttendanceCrossSurfaceHarmonyTest extends TestCase
             'status' => 'approved',
         ]);
 
-        $manual = $this->createViaManual('2025-11-03', '09:00', '18:00');
         $roster = $this->createViaRoster('2025-11-04', '09:00', '18:00');
         $sheet = $this->createViaSpreadsheet('2025-11-05', '09:00', '18:00');
 
-        $rows = compact('manual', 'roster', 'sheet');
+        $rows = compact('roster', 'sheet');
 
         foreach ($rows as $surface => $row) {
             $this->assertFalse(
@@ -245,17 +221,16 @@ class AttendanceCrossSurfaceHarmonyTest extends TestCase
     // ---------------------------------------------------------------------
 
     #[Test]
-    public function clean_on_time_attendance_produces_identical_baseline_across_all_four_surfaces(): void
+    public function clean_on_time_attendance_produces_identical_baseline_across_all_surfaces(): void
     {
         $this->morningSchedule(gracePeriod: 0);
         $schedule = $this->employee->employeeSchedules()->first();
 
-        $manual = $this->createViaManual('2025-11-03', '09:00', '18:00');
         $roster = $this->createViaRoster('2025-11-04', '09:00', '18:00');
         $sheet = $this->createViaSpreadsheet('2025-11-05', '09:00', '18:00');
         $verify = $this->createViaVerify('2025-11-06', '09:00', '18:00', $schedule, 'on_time');
 
-        $rows = compact('manual', 'roster', 'sheet', 'verify');
+        $rows = compact('roster', 'sheet', 'verify');
 
         foreach ($rows as $surface => $row) {
             $this->assertSame('on_time', $row->status, "[$surface] status should be 'on_time'");

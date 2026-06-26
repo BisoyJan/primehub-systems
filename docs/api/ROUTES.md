@@ -255,9 +255,6 @@ Routes are organized across multiple files:
 |--------|-----|------------|------|------------|
 | GET | /attendance | AttendanceController@index | attendance.index | attendance.view |
 | GET | /attendance/calendar/{user?} | AttendanceController@calendar | attendance.calendar | attendance.view |
-| GET | /attendance/create | AttendanceController@create | attendance.create | attendance.create |
-| POST | /attendance | AttendanceController@store | attendance.store | attendance.create |
-| POST | /attendance/bulk | AttendanceController@bulkStore | attendance.bulkStore | attendance.create |
 | GET | /attendance/import | AttendanceController@import | attendance.import | attendance.import |
 | POST | /attendance/upload | AttendanceController@upload | attendance.upload | attendance.import |
 | GET | /attendance/review | AttendanceController@review | attendance.review | attendance.review |

@@ -211,9 +211,6 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
             Route::get('/', [AttendanceController::class, 'hub'])->name('hub');
             Route::get('/records', [AttendanceController::class, 'index'])->name('index');
             Route::get('/calendar/{user?}', [AttendanceController::class, 'calendar'])->name('calendar');
-            Route::get('/create', [AttendanceController::class, 'create'])->name('create')->middleware('permission:attendance.create');
-            Route::post('/', [AttendanceController::class, 'store'])->name('store')->middleware('permission:attendance.create');
-            Route::post('/bulk', [AttendanceController::class, 'bulkStore'])->name('bulkStore')->middleware(['permission:attendance.create', 'throttle:10,1']);
             Route::get('import', [AttendanceController::class, 'import'])->name('import')->middleware('permission:attendance.import');
             Route::post('preview-upload', [AttendanceController::class, 'previewUpload'])->name('previewUpload')->middleware(['permission:attendance.import', 'throttle:10,1']);
             Route::post('upload', [AttendanceController::class, 'upload'])->name('upload')->middleware(['permission:attendance.import', 'throttle:10,1']);

@@ -585,14 +585,6 @@ This document defines which roles can access which pages and features.
 - [ ] IT
 - [ ] Utility
 
-**Create Manual Attendance:**
-- [X] Super Admin
-- [X] Admin
-- [X] Team Lead
-- [ ] Agent
-- [X] HR
-- [ ] IT
-- [ ] Utility
 
 **Import Attendance Data:**
 - [X] Super Admin

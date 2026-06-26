@@ -139,9 +139,6 @@ employee_schedules
 # Attendance
 GET    /attendance                      - List records
 GET    /attendance/calendar/{user?}     - Calendar view
-GET    /attendance/create               - Create form
-POST   /attendance                      - Store record
-POST   /attendance/bulk                 - Bulk store
 GET    /attendance/import               - Import page
 POST   /attendance/upload               - Process upload
 GET    /attendance/review               - Review page

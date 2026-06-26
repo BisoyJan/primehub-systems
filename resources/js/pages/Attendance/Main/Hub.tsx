@@ -8,7 +8,6 @@ import { Can } from "@/components/authorization";
 import {
     index as attendanceIndex,
     calendar as attendanceCalendar,
-    create as attendanceCreate,
     importMethod as attendanceImport,
     dailyRoster as attendanceDailyRoster,
     review as attendanceReview,
@@ -17,7 +16,6 @@ import {
 import {
     CalendarDays,
     ClipboardList,
-    Edit,
     Upload,
     AlertCircle,
     Calendar,
@@ -103,14 +101,6 @@ export default function AttendanceHub() {
                         variant="primary"
                     />
 
-                    <Can permission="attendance.create">
-                        <ActionCard
-                            title="Manual Attendance"
-                            description="Create attendance records manually for employees"
-                            icon={Edit}
-                            href={attendanceCreate().url}
-                        />
-                    </Can>
 
                     <Can permission="attendance.import">
                         <ActionCard
