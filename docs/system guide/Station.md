@@ -58,19 +58,19 @@ The Station List page shows all workstations in the system. You can filter, sele
 
 **Add Station:**
 - Click the **Add Station** button to create a new station (see "Create Station")
-- *Requires `stations.create` permission*
+- *(Only IT and Super Admin can add stations.)*
 
 **Bulk Assign:**
 - Click **Bulk Assign** to open a window where you can assign campaigns, statuses, or monitor types to multiple stations at once (see "Bulk Assignment")
-- *Requires `stations.edit` permission*
+- *(Only IT and Super Admin can bulk-assign/edit stations.)*
 
 **Sites Button:**
 - Click **Sites** to go to the Site Management page
-- *Requires `sites.view` permission*
+- *(Only Admin, IT, and Super Admin can view Sites.)*
 
 **Campaigns Button:**
 - Click **Campaigns** to go to the Campaign Management page
-- *Requires `campaigns.view` permission*
+- *(Only Admin, IT, and Super Admin can view Campaigns.)*
 
 ### Selecting Stations for Actions
 
@@ -534,3 +534,102 @@ This page shows a complete log of all PC transfers (assignments, swaps, and remo
 - Click a page number to go to that page
 
 [Insert Screenshot: 'PC Transfer History Page' Screen Layout]
+
+---
+
+## PC Maintenance
+
+### Maintenance List
+
+*resources/js/pages/Computer/PcMaintenance/Index.tsx*
+
+[Insert Screenshot: 'PC Maintenance List' Screen Layout]
+
+Tracks when each PC received maintenance and when the next maintenance is due.
+
+#### Filters Row
+
+- **Search PC** box — Type a PC number and press **Enter** to search.
+- **Station range** — Two small boxes labeled **From** and **To**. Type station numbers to show only PCs within that station range.
+- **Assignment** dropdown — Select **Assigned**, **Unassigned**, or **All PCs**.
+- **All sites** dropdown — Select a specific site or keep **All sites**.
+- **All statuses** dropdown — Select **All statuses**, **Completed**, **Pending**, or **Overdue**.
+- **Filter** button — Click to apply.
+- **Reset** button — Click to clear all filters.
+- **Refresh** button — Click to reload.
+- **Auto-refresh (30s)** — Click **Play**/**Pause** to toggle.
+- **Add Record** button — Click to open the create form.
+
+#### Status Badges
+
+Each record shows a colored badge:
+- **Completed** (green) — Maintenance was done.
+- **Overdue** (red) — The next due date has passed.
+- **Due Soon** (yellow) — Due within 7 days.
+- **Pending** (outline) — No urgent action needed.
+
+The **Days Until Due** column shows text like "5 days left", "Due today", or "3 days overdue" with red or yellow coloring when urgent.
+
+#### Bulk Selection & Update
+
+Checkboxes persist across page navigation for up to 15 minutes.
+
+- Click the header checkbox to select all on the current page.
+- After selecting, a bulk action bar appears showing the count. If there are more records across pages, click **Select all X records** to select everything matching the current filters.
+- **Bulk Update Maintenance** — Opens a dialog where you can set common values for all selected records:
+  - **Last Maintenance Date** and **Next Due Date** (next due auto-calculates to 4 months after the last date).
+  - **Maintenance Type** (e.g., Quarterly, Annual).
+  - **Performed By** — Type the technician name.
+  - **Status** — Select **Completed**, **Pending**, or **Overdue**.
+  - **Notes** — Optional notes apply to all.
+  - Click **Update {count} Records** to save. *Clicking Cancel discards all changes.*
+- **Clear Selection** — Deselects all.
+
+#### Desktop Table
+
+Columns: **Stock Number**, **Current Station**, **Site**, **Maintenance Type**, **Maintenance Date** (last + next due on two lines), **Days Until Due** (with color), **Performed By**, **Status** (badge), **Actions** (Edit pencil icon, Delete with confirmation).
+
+#### Mobile Cards
+
+On narrow screens, each maintenance entry appears as a stacked card showing all fields and actions.
+
+#### Pagination
+
+Page number links appear below the table. Count shows "Showing X-Y of Z maintenance records".
+
+### Create Maintenance Record
+
+*resources/js/pages/Computer/PcMaintenance/Create.tsx*
+
+Opens when you click **Add Record**. Has two sections:
+
+**Step 1 — Select PCs for Maintenance:**
+- **Assignment Status** dropdown — Select **Assigned**, **Not Assigned**, or **All PCs**. *(The list page uses the label "Unassigned" for the same option.)*
+- **Filter by Site** dropdown — Select a site or keep **All sites**.
+- **Station Range** (From/To boxes).
+- A table lists matching PCs with checkboxes. Each row shows **PC Number**, **Model**, **Current Station**, and **Site**.
+- Use the header checkbox to select/deselect all filtered PCs.
+- The selected count updates in real time.
+
+*You must select at least one PC; the Create button stays disabled until you do.*
+
+**Step 2 — Maintenance Details (applies to all selected PCs):**
+- **Last Maintenance Date** — Pick the date maintenance was performed. Defaults to today.
+- **Next Due Date** — Auto-calculated to 4 months after the last date. You can override it.
+- **Maintenance Type** — Defaults to **Routine Maintenance**. Type a different type if needed.
+- **Performed By** — Type the name of the technician.
+- **Status** — Defaults to **Completed**. Can be changed to **Pending** or **Overdue**.
+- **Notes** — Optional notes.
+
+Click **Create ({count})** at the bottom. The button shows **Creating...** while processing. *Any missing required date fields cause a red error.*
+
+### Edit Maintenance Record
+
+*resources/js/pages/Computer/PcMaintenance/Edit.tsx*
+
+Pre-filled form for a single maintenance record:
+
+- **PC** dropdown — Change the PC if needed. Each option shows the PC number, current station, and site.
+- Current station info is displayed below the dropdown.
+- Same fields as Create: **Last Maintenance Date**, **Next Due Date**, **Maintenance Type**, **Performed By**, **Status**, **Notes**.
+- Click **Update** to save or **Cancel** to return to the list.

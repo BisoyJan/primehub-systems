@@ -19,7 +19,6 @@ This is the main entry point. Click any action card to navigate:
 | **Calendar View** | View attendance in a monthly calendar | Everyone |
 | **View All Records** | Browse and filter all records in a table | Everyone |
 | **Spreadsheet View** | Per-employee x per-day grid of hours and leave codes | Everyone |
-| **Manual Attendance** | Create attendance records by hand | Users with create permission |
 | **Import Biometric** | Upload and process biometric TXT files | Users with import permission |
 | **Daily Roster** | Generate attendance for scheduled employees | Users with create permission |
 | **Review Flagged** | Review and verify records needing attention | Users with review permission |
@@ -56,7 +55,6 @@ The main records table with search, filtering, multi-select, and quick actions.
 - **Refresh** icon — Manually reload the list.
 - **Play** / **Pause** — Turn auto-refresh on or off (updates every 30 seconds).
 - **Calendar View** — Switch to the calendar view.
-- **Manual Attendance** — Go to create a manual entry.
 - **Import Biometric** — Go to upload biometric files.
 - **Daily Roster** — Go to the daily roster.
 - **Review Flagged** — Go to review records.
@@ -275,46 +273,6 @@ At the top, a bar shows what each color means:
 
 - Click the **Pts** value to recalculate GBRO (if you have manage points permission). A loading spinner appears during processing.
 - Points appear in **red** if 1 or more, **amber** if greater than 0.
-
----
-
-## Manual Attendance (Create)
-
-*resources/js/pages/Attendance/Main/Create.tsx*
-
-[Insert Screenshot: 'Manual Attendance' Form]
-
-Create attendance records manually, one at a time or in bulk.
-
-### Create Multiple Records Toggle
-
-- Turn on **Create Multiple Records** to stay on this page after saving (for entering several records in a row).
-- The session counter shows **"Records created this session: N"**.
-
-### Single Entry Mode
-
-1. **Employee** — Click the search field, type a name, and select an employee. Their schedule info appears below.
-2. **Shift Date** — Pick the date. *Required. If left blank, the system shows an error.*
-3. **Status** — Marked **(Optional - Auto-calculated from times)**. The system suggests a status (shown in a green or amber box) based on the times you enter. You can override it from the dropdown. Options: On Time, Tardy, Half Day Absence, Advised Absence, NCNS (No Call No Show), Undertime (<1hr), Undertime (>1hr), Failed Bio In, Failed Bio Out, Present (No Bio), Non-Work Day, On Leave.
-   - *If you override the suggested status, a **Use Suggested** button appears to revert.*
-4. **Time In** — Date and time. Auto-filled from the shift. *If the time is invalid, the system shows an error.*
-5. **Time Out** — Date and time. Auto-filled for night shifts (next day). *If hour 24 on the same date, the system rejects it.*
-6. **Set Home** (only appears when detected undertime is more than 30 min) — Toggle on if the employee was sent home early.
-7. **Undertime Approval** (shown when Set Home is off and undertime > 30 min) — Choose **Generate Points**, **Lunch Used**, or **Clear**.
-   - *This section only appears if you have approve undertime permission.*
-8. **Notes** — Type a reason (500 characters max).
-9. Click **Create Attendance Record** to save.
-
-### Bulk Entry Mode
-
-1. Click **Bulk Entry** to switch.
-2. **Campaign** — Quick-select a campaign.
-3. **Shift Schedule** — Quick-select a shift type.
-4. Use **Select All** or **Clear All** buttons, or select individual employees.
-5. Fill in the **Shift Date**, **Status**, **Time In**, **Time Out**, and **Notes** — these apply to all selected employees.
-6. Click **Create N Records** to save. *The system checks all fields. Anything missing shows an error.*
-
----
 
 ## Import Biometric
 
@@ -604,58 +562,112 @@ If available, two cards show the age breakdown of biometric records and attendan
 
 [Insert Screenshot: 'Employee Schedules' Screen]
 
+#### Toolbar
+
+- **Refresh** icon — Manually reload the list.
+- **Play** / **Pause** — Turn auto-refresh on or off (updates every 30 seconds).
+- **Last updated** timestamp shown next to the refresh controls.
+- **Showing X of Y schedules** counter displayed, with "(filtered)" suffix when filters are active.
+
 #### Filters
 
-1. **Employee** — Search and select an employee.
-2. **Role** — Select a role.
-3. **Campaign** — Select a campaign.
-4. **Status** — Choose **All**, **Active**, or **Inactive**.
+All filter dropdowns support **multi-select**:
+
+1. **Employee** — Click to search and select one or more employees.
+2. **Role** — Select one or more roles.
+3. **Campaign** — Select one or more campaigns. *(Filtered to managed campaigns for Team Leads.)*
+4. **Status** — Select **Active** and/or **Inactive**. *(Clearing both shows all. No explicit "All" option.)*
 5. **Active Only** — Toggle to show only active schedules.
 6. **Show Resigned** — Toggle to include resigned employees.
 7. Click **Apply Filters** or **Clear Filters**.
 
 #### Actions
 
-- Click **Add Employee Schedule** to create a new schedule. *(Requires create permission.)*
-- Click **Employees No Schedules** to see a dialog. The button shows a red badge with the count of employees who have no schedule. The dialog has three tabs:
+- **Add Employee Schedule** — Create a new schedule. *(Requires `schedules.create` permission.)*
+- **Employees No Schedules** — Shows a red badge with the count of employees who have no schedule. Click to open a dialog with three tabs:
   - **No Schedule** tab — Employees without schedules. Click **Add Schedule** to create one.
   - **Inactive** tab — Employees with inactive schedules. Click **View Schedules** or **Add New**.
   - **Multiple** tab — Employees with multiple schedules. Click **View All** or **Add New**.
+  - *Each tab has a search input when the list exceeds 15 employees.*
 
-#### Schedule Table
+#### Schedule Table (desktop) / Cards (mobile)
 
-Columns: **Employee**, **Campaign**, **Site**, **Shift Type** (colored badge), **Time IN/OUT**, **Work Days**, **Status** (toggle switch + Active/Inactive badge), **Actions**.
+On desktop the data renders as a table; on mobile it switches to a card layout (`md:hidden`).
 
+**Columns:** **Employee** (with schedule count badge when the employee has multiple schedules), **Campaign**, **Site**, **Shift Type** (colored badge), **Time IN/OUT**, **Work Days** (first 3 days shown, "+N" for more), **Status** (toggle switch + Active/Inactive badge), **Actions**.
+
+**Shift Type Badge Colors:**
+| Shift | Badge Color |
+|-------|------------|
+| Morning | `bg-yellow-500` |
+| Afternoon | `bg-orange-500` |
+| Night | `bg-blue-500` |
+| 24-Hour Utility | `bg-purple-500` |
+| Unknown | `bg-gray-500` |
+
+**Row Behaviors:**
 - Toggle the switch to activate or deactivate a schedule. *Activating will deactivate other schedules for that employee. A confirmation dialog warns about this.*
-- Click **Edit** (pencil) to modify the schedule.
-- Click **Delete** (trash) to remove. A confirmation dialog appears: *"This action cannot be undone."*
+- Click **Edit** (pencil) to modify. *(Requires `schedules.edit` permission.)*
+- Click **Delete** (trash) to remove. Confirmation: *"This action cannot be undone. This will permanently delete the employee schedule."* *(Requires `schedules.delete` permission.)*
+- Rows with employees who have multiple schedules alternate between blue-50 and amber-50 backgrounds.
+- Click an employee name to open the **Schedule Details Dialog** — a popup listing all schedules for that employee with inline toggle/edit/delete actions and active-schedule highlighting.
 
-### Create / Edit Schedule
+#### Pagination
 
-*resources/js/pages/Attendance/EmployeeSchedules/Create.tsx*  
-*resources/js/pages/Attendance/EmployeeSchedules/Edit.tsx*
+Page navigation at the bottom of the list.
+
+### Create Schedule
+
+*resources/js/pages/Attendance/EmployeeSchedules/Create.tsx*
 
 [Insert Screenshot: 'Create Employee Schedule' Form]
 
-1. **Employee** — Search and select. *(For first-time setup, this may be auto-filled. In the Edit form this field is read-only with the note "Employee cannot be changed after schedule creation.")*
-2. **Campaign** — Select a campaign. *(Required for agents and team leads; optional for admins.)*
+*Accepts optional URL params: `?user_id=X` and `?effective_date=YYYY-MM-DD` to pre-fill fields.*
+
+1. **Employee** — Search and select. *(For first-time setup / restricted roles, this is auto-filled and disabled with the note "Your account is automatically selected." For admins, a searchable popover shows name, email, and a "Has Schedule" badge if the employee already has one.)*
+2. **Campaign** — Select a campaign. *(Required for agents and team leads; optional for admins with "(optional)" placeholder. Hidden for Team Leads — see Managed Campaigns below.)*
 3. **Site** — Select a site. *(Required for agents and team leads; optional for admins.)*
-4. **Time In** and **Time Out** — Set the times. *Required.* The shift type is derived automatically from Time In and shown as a read-only "Detected shift" badge below the inputs:
+4. **Time In** and **Time Out** — Set the times. *Required.* The shift type is derived automatically from Time In and shown in a dashed-border info box with icon, label, and description:
    - **🌅 Morning Shift** — Time In 05:00–11:59
    - **🌤️ Afternoon Shift** — Time In 12:00–17:59
    - **🌙 Night Shift** — Time In 18:00–04:59 (includes overnight/graveyard arrivals)
-   - **🔄 24-Hour Utility** — enable via the "24-Hour Utility Schedule" toggle (admins only); not derivable from a clock.
-5. **Work Days** — Check the boxes for Monday through Sunday. *At least one must be selected.*
-6. **Grace Period** — Type the grace period in minutes (0–60). *Default is 0. This field is hidden for restricted roles (agents and team leads) — only administrators can change it.*
-7. **Hired Date** — Pick the start date. *Required.* In the Edit form this may be read-only depending on your role; the field then shows the note "Hired date cannot be changed after creation."
-8. **End Date (Optional)** — Hidden for restricted roles.
-9. Click **Create Schedule** (or **Update Schedule**) to save.
+   - **🔄 24-Hour Utility** — enable via the "24-Hour Utility Schedule" toggle; not derivable from a clock.
+5. **24-Hour Utility Schedule** toggle — *Visible to admins only. Hidden for agents and team leads (restricted roles).*
+6. **Work Days** — Check the boxes for Monday through Sunday. *At least one must be selected.*
+7. **Grace Period** — Type the grace period in minutes (0–60). *Default is 0. Helper: "Minutes late before considered tardy." Hidden for restricted roles — only administrators can change it.*
+8. **Hired Date** — Pick the start date. *Required. For restricted roles a warning says: "Please make sure this is your actual hired date... It cannot be changed after submission."*
+9. **End Date (Optional)** — Pick an end date. *Hidden for restricted roles. Helper: "Leave blank for indefinite schedule."*
+10. Click **Create Schedule** to save. *(Processing shows "Creating..." / "Submitting...")* A **Cancel** button is available (non-first-time only).
 
-*For Team Leads: A **Managed Campaigns** section appears instead of Campaign. Check the campaigns you manage.*
+**For Team Leads:** A **Managed Campaigns** section appears instead of the Campaign field. Check the campaigns you manage (coaching and leave-approval scope). The first checked campaign becomes the primary campaign.
 
-*During first-time setup the page title becomes "Welcome! Let's Set Up Your Schedule", the breadcrumbs simplify to "Schedule Setup", and an amber notice reminds you that the data cannot be changed after submission. A confirmation dialog reviews all entered info before the final save.*
+**First-Time Setup:** If the logged-in user has no schedule yet, the page adapts:
+- Title: "Welcome! Let's Set Up Your Schedule"
+- Breadcrumbs simplify to "Schedule Setup"
+- Amber notice: "Important Notice — once submitted, this data cannot be changed"
+- Confirmation dialog reviews all entered info before final save. Click **Confirm & Submit**.
 
-*In the Edit form, if you flip the schedule from Inactive to Active an amber warning appears below the toggle: "⚠️ Activating this schedule will deactivate any other active schedule for this employee."*
+### Edit Schedule
+
+*resources/js/pages/Attendance/EmployeeSchedules/Edit.tsx*
+
+[Insert Screenshot: 'Edit Employee Schedule' Form]
+
+1. **Employee** — Read-only. Note: *"Employee cannot be changed after schedule creation."*
+2. **Campaign** — Select a campaign (optional).
+3. **Site** — Select a site (optional).
+4. **Time In** and **Time Out** — Editable time inputs. Shift type derived automatically (same rules as Create).
+5. **24-Hour Utility Schedule** toggle — *Always visible.*
+6. **Work Days** — Checkboxes for Monday through Sunday.
+7. **Grace Period** — Number input (0–60). *Always visible.*
+8. **Active Schedule** — Checkbox to mark the schedule as active. When checked, an amber warning appears: *"⚠️ Activating this schedule will deactivate any other active schedule for this employee."*
+9. **Hired Date** — Pick the start date. Disabled when the employee already has a schedule. Shows "Hired date cannot be changed after creation" or "can be updated by admins."
+10. **End Date (Optional)** — Pick an end date. *Always visible. Helper: "Leave blank for indefinite schedule."*
+11. Click **Update Schedule** to save *(shows "Updating..." during processing)*.
+
+**For Team Leads:** A **Managed Campaigns** checkbox grid appears instead of the Campaign field.
+
+*Note: Edit shows all fields regardless of user role (no restricted-role hiding like the Create form).*
 
 ---
 
