@@ -60,9 +60,9 @@ export type CoachingPurpose =
     | 'reinforce_positive_behavior_growth'
     | 'recognition_appreciation';
 
-export type AckStatus = 'Pending' | 'Acknowledged' | 'Disputed';
+export type AckStatus = 'Pending' | 'Acknowledged' | 'Disputed' | 'Archived';
 
-export type ComplianceStatus = 'Awaiting_Agent_Ack' | 'For_Review' | 'Verified' | 'Rejected';
+export type ComplianceStatus = 'Awaiting_Agent_Ack' | 'For_Review' | 'Verified' | 'Rejected' | 'Archived';
 
 export type SeverityFlag = 'Normal' | 'Critical';
 

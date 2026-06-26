@@ -12,17 +12,8 @@ import {
     edit as stationsEditRoute,
 } from "@/routes/stations";
 import { transferPage } from "@/routes/pc-transfers";
-import { Monitor, Cpu, MapPin, Megaphone, Pencil, ArrowLeftRight, ArrowLeft, AlertTriangle, Layers } from "lucide-react";
+import { Monitor, Cpu, MapPin, Megaphone, Pencil, ArrowLeftRight, ArrowLeft, AlertTriangle } from "lucide-react";
 
-interface MonitorSpec {
-    id: number;
-    brand: string;
-    model: string;
-    screen_size: number;
-    resolution: string;
-    panel_type: string;
-    quantity: number;
-}
 interface Site { id: number; name: string; }
 interface Campaign { id: number; name: string; }
 interface ProcessorSpec {
@@ -56,13 +47,12 @@ interface Station {
     status: string;
     monitor_type: string;
     pcSpec?: PcSpec;
-    monitors?: MonitorSpec[];
     created_at?: string;
     updated_at?: string;
 }
 
-const statusColor = (status: string) => {
-    switch (status.toLowerCase()) {
+const statusColor = (status: string | null | undefined) => {
+    switch (status?.toLowerCase()) {
         case 'active': return 'default';
         case 'inactive': return 'secondary';
         case 'maintenance': return 'destructive';
@@ -149,7 +139,9 @@ export default function ScanResult({ stationId, station: initialStation, error: 
                                     </div>
                                     <div>
                                         <CardTitle className="text-xl sm:text-2xl">Station #{station.station_number}</CardTitle>
-                                        <p className="text-sm text-muted-foreground">{station.monitor_type} monitor setup</p>
+                                        <Badge variant={station.monitor_type === 'dual' ? 'default' : 'outline'}>
+    {station.monitor_type === 'dual' ? 'Dual Monitor' : station.monitor_type === 'none' ? 'No Monitor' : 'Single Monitor'}
+</Badge>
                                     </div>
                                 </div>
                                 <Badge variant={statusColor(station.status)}>
@@ -256,34 +248,6 @@ export default function ScanResult({ stationId, station: initialStation, error: 
                                 </div>
                             ) : (
                                 <p className="text-sm text-muted-foreground">No PC assigned to this station</p>
-                            )}
-                        </CardContent>
-                    </Card>
-
-                    {/* Monitors */}
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardTitle className="flex items-center gap-2 text-base">
-                                <Layers className="h-4 w-4" /> Monitors
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            {station.monitors && station.monitors.length > 0 ? (
-                                <div className="space-y-2">
-                                    {station.monitors.map(m => (
-                                        <div key={m.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 rounded-md border px-3 py-2">
-                                            <span className="font-medium">{m.brand} {m.model}</span>
-                                            <div className="flex flex-wrap gap-1.5">
-                                                <Badge variant="outline">{m.screen_size}"</Badge>
-                                                <Badge variant="outline">{m.resolution}</Badge>
-                                                <Badge variant="outline">{m.panel_type}</Badge>
-                                                <Badge variant="secondary">x{m.quantity}</Badge>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <p className="text-sm text-muted-foreground">No monitors assigned</p>
                             )}
                         </CardContent>
                     </Card>

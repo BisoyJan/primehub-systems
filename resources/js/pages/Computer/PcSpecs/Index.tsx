@@ -53,7 +53,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
-import { RefreshCw, Filter, Plus, Play, Pause, ChevronsUpDown, Check, X } from 'lucide-react';
+import { RefreshCw, Filter, Plus, Play, Pause, ChevronsUpDown, X } from 'lucide-react';
 
 // New reusable components and hooks
 import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
@@ -781,9 +781,9 @@ export default function Index() {
 
                 {/* QR Code Selection Actions */}
                 {selectedPcIds.length > 0 && (
-                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                            <span className="font-medium text-blue-900 dark:text-blue-100">
+                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-0 sm:justify-between">
+                        <div className="flex items-center gap-4 flex-wrap">
+                            <span className="font-medium text-blue-900 dark:text-blue-100 whitespace-nowrap">
                                 {selectedPcIds.length} PC{selectedPcIds.length !== 1 ? 's' : ''} selected
                             </span>
                             <Button
@@ -794,7 +794,7 @@ export default function Index() {
                                 Clear Selection
                             </Button>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                             <Button
                                 onClick={handleDownloadSelectedQRCodes}
                                 variant="outline"
