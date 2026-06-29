@@ -258,7 +258,7 @@ export default function BulkCreatePage({ users }: PageProps) {
     }, [users, userSearch]);
 
     const totalPoints = useMemo(
-        () => entries.reduce((sum, e) => sum + (e.point_type ? POINT_VALUES[e.point_type] ?? 0 : 0), 0),
+        () => entries.reduce((sum, e) => sum + (e.point_type ? (POINT_VALUES[e.point_type] ?? 0) * (e.is_critical_day ? 2 : 1) : 0), 0),
         [entries],
     );
 
