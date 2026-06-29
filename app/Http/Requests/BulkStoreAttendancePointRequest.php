@@ -30,6 +30,7 @@ class BulkStoreAttendancePointRequest extends FormRequest
             'entries.*.shift_date' => ['required', 'date', 'before_or_equal:today'],
             'entries.*.point_type' => ['required', Rule::in(['whole_day_absence', 'half_day_absence', 'undertime', 'undertime_more_than_hour', 'tardy'])],
             'entries.*.is_advised' => ['boolean'],
+            'entries.*.is_critical_day' => ['boolean'],
             'entries.*.violation_details' => ['nullable', 'string', 'max:1000'],
             'entries.*.notes' => ['nullable', 'string', 'max:1000'],
             'entries.*.tardy_minutes' => ['nullable', 'integer', 'min:0'],

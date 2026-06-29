@@ -22,6 +22,7 @@ class CreateSpreadsheetCellAttendanceRequest extends FormRequest
             'overtime_approved' => ['nullable', 'boolean'],
             'undertime_approval_reason' => ['nullable', 'in:generate_points,skip_points,lunch_used'],
             'is_set_home' => ['nullable', 'boolean'],
+            'is_critical_day' => ['nullable', 'boolean'],
             'notes' => ['nullable', 'string', 'max:1000'],
         ];
     }

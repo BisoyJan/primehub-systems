@@ -102,7 +102,8 @@ class AttendanceController extends Controller
         ?string $oldStatus,
         ?string $oldSecondaryStatus,
         bool $oldIsSetHome,
-        bool $oldIsAdvised
+        bool $oldIsAdvised,
+        bool $oldIsCriticalDay = false
     ): bool {
         // Statuses that generate points
         $pointableStatuses = ['ncns', 'half_day_absence', 'tardy', 'undertime', 'undertime_more_than_hour', 'advised_absence'];
@@ -111,6 +112,7 @@ class AttendanceController extends Controller
         $newSecondaryStatus = $attendance->secondary_status;
         $newIsSetHome = $attendance->is_set_home ?? false;
         $newIsAdvised = $attendance->is_advised ?? false;
+        $newIsCriticalDay = $attendance->is_critical_day ?? false;
 
         // Check if old or new status generates points
         $oldGeneratesPoints = in_array($oldStatus, $pointableStatuses) || in_array($oldSecondaryStatus, $pointableStatuses);
@@ -157,6 +159,11 @@ class AttendanceController extends Controller
             return true;
         }
 
+        // is_critical_day changes require point regeneration (multiplier change)
+        if ($oldIsCriticalDay !== $newIsCriticalDay) {
+            return true;
+        }
+
         // No changes that affect points
         return false;
     }
@@ -179,7 +186,8 @@ class AttendanceController extends Controller
         ?string $oldSecondaryStatus = null,
         bool $oldIsSetHome = false,
         bool $oldIsAdvised = false,
-        bool $forceRegenerate = false
+        bool $forceRegenerate = false,
+        bool $oldIsCriticalDay = false
     ): bool {
         $pointableStatuses = ['ncns', 'half_day_absence', 'tardy', 'undertime', 'undertime_more_than_hour', 'advised_absence'];
 
@@ -192,7 +200,8 @@ class AttendanceController extends Controller
             $oldStatus,
             $oldSecondaryStatus,
             $oldIsSetHome,
-            $oldIsAdvised
+            $oldIsAdvised,
+            $oldIsCriticalDay
         );
 
         if (! $needsRegeneration) {
@@ -1126,6 +1135,7 @@ class AttendanceController extends Controller
         $oldSecondaryStatus = $attendance->secondary_status;
         $oldIsSetHome = $attendance->is_set_home ?? false;
         $oldIsAdvised = $attendance->is_advised ?? false;
+        $oldIsCriticalDay = $attendance->is_critical_day ?? false;
 
         $leaveAdjusted = false;
         $leaveAdjustmentMessage = '';
@@ -1144,7 +1154,8 @@ class AttendanceController extends Controller
                 $oldStatus,
                 $oldSecondaryStatus,
                 $oldIsSetHome,
-                $oldIsAdvised
+                $oldIsAdvised,
+                $oldIsCriticalDay
             ) {
                 // Check if this attendance conflicts with an approved leave
                 // If status is not 'on_leave' (meaning they actually worked), handle leave adjustment
@@ -1168,6 +1179,10 @@ class AttendanceController extends Controller
                     'notes' => $request->notes,
                     'is_set_home' => $request->boolean('is_set_home'),
                 ];
+
+                if ($request->has('is_critical_day')) {
+                    $updates['is_critical_day'] = $request->boolean('is_critical_day');
+                }
 
                 // If this was a partially verified record and now has time out, mark as fully verified
                 if ($attendance->is_partially_verified) {
@@ -1242,7 +1257,8 @@ class AttendanceController extends Controller
                     $oldSecondaryStatus,
                     $oldIsSetHome,
                     $oldIsAdvised,
-                    $forceUndertimeRegen
+                    $forceUndertimeRegen,
+                    $oldIsCriticalDay
                 );
             });
         } catch (\Throwable $e) {
@@ -1421,6 +1437,7 @@ class AttendanceController extends Controller
             $oldSecondaryStatus = $attendance->secondary_status;
             $oldIsSetHome = $attendance->is_set_home ?? false;
             $oldIsAdvised = $attendance->is_advised ?? false;
+            $oldIsCriticalDay = $attendance->is_critical_day ?? false;
 
             $updates = [
                 'status' => $validated['status'],
@@ -1461,7 +1478,9 @@ class AttendanceController extends Controller
                 $oldStatus,
                 $oldSecondaryStatus,
                 $oldIsSetHome,
-                $oldIsAdvised
+                $oldIsAdvised,
+                false,
+                $oldIsCriticalDay
             );
 
             // Fetch points if any
@@ -2386,6 +2405,7 @@ class AttendanceController extends Controller
         $oldSecondaryStatus = $attendance->secondary_status;
         $oldIsSetHome = $attendance->is_set_home ?? false;
         $oldIsAdvised = $attendance->is_advised ?? false;
+        $oldIsCriticalDay = $attendance->is_critical_day ?? false;
 
         $validated = $request->validate([
             'status' => 'nullable|in:on_time,tardy,half_day_absence,undertime,undertime_more_than_hour,failed_bio_out',
@@ -2443,7 +2463,9 @@ class AttendanceController extends Controller
             $oldStatus,
             $oldSecondaryStatus,
             $oldIsSetHome,
-            $oldIsAdvised
+            $oldIsAdvised,
+            false,
+            $oldIsCriticalDay
         );
 
         // Fetch points if any
@@ -2500,6 +2522,7 @@ class AttendanceController extends Controller
             $oldSecondaryStatus = $attendance->secondary_status;
             $oldIsSetHome = $attendance->is_set_home ?? false;
             $oldIsAdvised = $attendance->is_advised ?? false;
+            $oldIsCriticalDay = $attendance->is_critical_day ?? false;
 
             // Determine status - preserve tardy if applicable (forgiveness window).
             $status = $attendance->status;
@@ -2527,7 +2550,9 @@ class AttendanceController extends Controller
                 $oldStatus,
                 $oldSecondaryStatus,
                 $oldIsSetHome,
-                $oldIsAdvised
+                $oldIsAdvised,
+                false,
+                $oldIsCriticalDay
             );
 
             // Notify user if status generates points
@@ -2687,7 +2712,9 @@ class AttendanceController extends Controller
                             $attendance->status,
                             $attendance->secondary_status,
                             $attendance->is_set_home ?? false,
-                            $attendance->is_advised ?? false
+                            $attendance->is_advised ?? false,
+                            false,
+                            $attendance->is_critical_day ?? false
                         );
                     } elseif ($validated['reason'] === 'skip_points' || $validated['reason'] === 'lunch_used') {
                         // Points already deleted above; recalculate GBRO
@@ -2700,7 +2727,9 @@ class AttendanceController extends Controller
                                 $attendance->status,
                                 $attendance->secondary_status,
                                 $attendance->is_set_home ?? false,
-                                $attendance->is_advised ?? false
+                                $attendance->is_advised ?? false,
+                                false,
+                                $attendance->is_critical_day ?? false
                             );
                         }
                     }
@@ -2882,7 +2911,7 @@ class AttendanceController extends Controller
                 'total_minutes_worked', 'leave_request_id', 'admin_verified', 'is_advised',
                 'actual_time_in', 'actual_time_out',
                 'tardy_minutes', 'undertime_minutes', 'overtime_minutes',
-                'overtime_approved', 'is_set_home', 'is_partially_verified',
+                'overtime_approved', 'is_set_home', 'is_critical_day', 'is_partially_verified',
                 'undertime_approval_status', 'undertime_approval_reason',
                 'employee_schedule_id', 'scheduled_time_in', 'scheduled_time_out',
                 'warnings', 'notes', 'verification_notes',
@@ -3351,6 +3380,7 @@ class AttendanceController extends Controller
             'overtime_minutes' => (int) ($row->overtime_minutes ?? 0),
             'overtime_approved' => (bool) $row->overtime_approved,
             'is_set_home' => (bool) $row->is_set_home,
+            'is_critical_day' => (bool) $row->is_critical_day,
             'is_partially_verified' => (bool) $row->is_partially_verified,
             'undertime_approval_status' => $row->undertime_approval_status,
             'undertime_approval_reason' => $row->undertime_approval_reason,
@@ -3383,6 +3413,7 @@ class AttendanceController extends Controller
             'is_set_home' => ['nullable', 'boolean'],
             'undertime_approval_action' => ['nullable', 'in:approve,reject,request'],
             'undertime_approval_reason' => ['nullable', 'in:generate_points,skip_points,lunch_used'],
+            'is_critical_day' => ['nullable', 'boolean'],
             'notes' => ['nullable', 'string', 'max:1000'],
             'verification_notes' => ['nullable', 'string', 'max:1000'],
         ]);
@@ -3408,6 +3439,7 @@ class AttendanceController extends Controller
                 $oldSecondary = $attendance->secondary_status;
                 $oldIsSetHome = (bool) $attendance->is_set_home;
                 $oldIsAdvised = (bool) $attendance->is_advised;
+                $oldIsCriticalDay = (bool) $attendance->is_critical_day;
 
                 if (array_key_exists('hours', $validated) && $validated['hours'] !== null) {
                     $attendance->total_minutes_worked = (int) round(((float) $validated['hours']) * 60);
@@ -3469,6 +3501,11 @@ class AttendanceController extends Controller
                 // Handle sent-home toggle
                 if (array_key_exists('is_set_home', $validated) && $validated['is_set_home'] !== null) {
                     $attendance->is_set_home = (bool) $validated['is_set_home'];
+                }
+
+                // Handle critical working day toggle
+                if (array_key_exists('is_critical_day', $validated) && $validated['is_critical_day'] !== null) {
+                    $attendance->is_critical_day = (bool) $validated['is_critical_day'];
                 }
 
                 // Handle notes
@@ -3551,7 +3588,8 @@ class AttendanceController extends Controller
                     $oldSecondary,
                     $oldIsSetHome,
                     $oldIsAdvised,
-                    $forceUndertimeRegen
+                    $forceUndertimeRegen,
+                    $oldIsCriticalDay
                 );
 
                 // Partial-day SL: any newly-generated attendance points for this
@@ -3698,6 +3736,7 @@ class AttendanceController extends Controller
                     'undertime_approved_by' => ! empty($validated['undertime_approval_reason']) ? auth()->id() : null,
                     'undertime_approved_at' => ! empty($validated['undertime_approval_reason']) ? now() : null,
                     'is_set_home' => ! empty($validated['is_set_home']),
+                    'is_critical_day' => ! empty($validated['is_critical_day']),
                     'admin_verified' => ! $hasLeaveConflict,
                     'is_partially_verified' => $isPartial && ! $hasLeaveConflict,
                     'leave_request_id' => $approvedLeave?->id,

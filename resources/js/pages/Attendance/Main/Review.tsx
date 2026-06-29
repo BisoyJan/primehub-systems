@@ -114,6 +114,7 @@ interface AttendanceRecord {
     notes?: string;
     warnings?: { type: string; message: string; severity: string; raised_at: string }[];
     is_set_home?: boolean;
+    is_critical_day?: boolean;
     // Undertime approval fields
     undertime_approval_status?: 'pending' | 'approved' | 'rejected' | null;
     undertime_approval_reason?: 'generate_points' | 'skip_points' | 'lunch_used' | null;
@@ -469,6 +470,7 @@ export default function AttendanceReview() {
         verification_notes: "",
         overtime_approved: false,
         is_set_home: false,
+        is_critical_day: false,
         undertime_approval_action: null as 'approve' | 'reject' | 'request' | null,
         undertime_approval_reason: 'lunch_used' as 'generate_points' | 'skip_points' | 'lunch_used',
     });
@@ -480,6 +482,7 @@ export default function AttendanceReview() {
         verification_notes: "",
         overtime_approved: false,
         is_set_home: false,
+        is_critical_day: false,
     });
 
     // Partial approval dialog state (for night shift completion)
@@ -653,6 +656,7 @@ export default function AttendanceReview() {
             verification_notes: record.verification_notes || "",
             overtime_approved: record.overtime_approved || false,
             is_set_home: record.is_set_home || false,
+            is_critical_day: record.is_critical_day || false,
         });
         setIsDialogOpen(true);
     };
@@ -1662,6 +1666,27 @@ export default function AttendanceReview() {
                             </div>
                         )}
 
+                        {/* Critical Working Day — batch mode */}
+                        {hasUndertimeRecords() && (
+                            <div className="space-y-2 p-4 bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg">
+                                <div className="flex items-center gap-2">
+                                    <Switch
+                                        id="batch_is_critical_day"
+                                        checked={batchData.is_critical_day}
+                                        onCheckedChange={(checked) => setBatchData("is_critical_day", checked)}
+                                    />
+                                    <Label htmlFor="batch_is_critical_day" className="text-sm font-medium cursor-pointer">
+                                        Critical Working Day
+                                    </Label>
+                                </div>
+                                <p className="text-xs text-purple-700 dark:text-purple-400">
+                                    {batchData.is_critical_day
+                                        ? "×2 point multiplier active — all violations doubled for selected records"
+                                        : "Enable to apply ×2 point multiplier to all violations on selected records"}
+                                </p>
+                            </div>
+                        )}
+
                         {/* Common Verification Notes */}
                         <div className="space-y-2">
                             <Label htmlFor="batch_verification_notes">
@@ -2054,6 +2079,33 @@ export default function AttendanceReview() {
                                 )}
                             </div>
                         )}
+
+                        {/* Critical Working Day — individual record */}
+                        {selectedRecord && (() => {
+                            const pointableViolations = ['ncns', 'half_day_absence', 'tardy', 'undertime', 'undertime_more_than_hour', 'advised_absence'];
+                            const hasTardy = (selectedRecord.tardy_minutes ?? 0) > 0 || (suggestedStatus?.status === 'tardy');
+                            const hasUndertime = (selectedRecord.undertime_minutes ?? 0) > 0 || (suggestedStatus?.undertimeMinutes ?? 0) > 0;
+                            const hasStatusViolation = pointableViolations.includes(selectedRecord.status) || (suggestedStatus?.status && pointableViolations.includes(suggestedStatus.status));
+                            return (hasTardy || hasUndertime || hasStatusViolation) ? (
+                                <div className="space-y-2 p-4 bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg">
+                                    <div className="flex items-center gap-2">
+                                        <Checkbox
+                                            id="is_critical_day"
+                                            checked={data.is_critical_day}
+                                            onCheckedChange={(checked) => setData("is_critical_day", checked === true)}
+                                        />
+                                        <Label htmlFor="is_critical_day" className="text-sm font-medium cursor-pointer">
+                                            Critical Working Day
+                                        </Label>
+                                    </div>
+                                    <p className="text-xs text-purple-700 dark:text-purple-400">
+                                        {data.is_critical_day
+                                            ? "×2 point multiplier active — all violations doubled"
+                                            : "Enable to apply ×2 point multiplier to all violations"}
+                                    </p>
+                                </div>
+                            ) : null;
+                        })()}
 
                         {/* Set Home & Undertime Approval Section - for undertime > 30 minutes */}
                         {selectedRecord && ((selectedRecord.undertime_minutes && selectedRecord.undertime_minutes > 30) || (suggestedStatus?.undertimeMinutes && suggestedStatus.undertimeMinutes > 30)) && (

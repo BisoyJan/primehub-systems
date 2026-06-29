@@ -45,6 +45,8 @@ class AttendancePointModelTest extends TestCase
             'eligible_for_gbro',
             'gbro_applied_at',
             'gbro_batch_id',
+            'multiplier',
+            'is_critical_day',
         ];
 
         $this->assertEquals($expected, $point->getFillable());

@@ -49,6 +49,7 @@ class UpdateAttendancePointRequest extends FormRequest
             ],
             'point_type' => ['required', Rule::in(['whole_day_absence', 'half_day_absence', 'undertime', 'undertime_more_than_hour', 'tardy'])],
             'is_advised' => ['boolean'],
+            'is_critical_day' => ['boolean'],
             'violation_details' => ['nullable', 'string', 'max:1000'],
             'notes' => ['nullable', 'string', 'max:1000'],
             'tardy_minutes' => ['nullable', 'integer', 'min:0'],

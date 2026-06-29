@@ -47,6 +47,8 @@ class AttendancePoint extends Model
         'eligible_for_gbro',
         'gbro_applied_at',
         'gbro_batch_id',
+        'multiplier',
+        'is_critical_day',
     ];
 
     protected function casts(): array
@@ -66,6 +68,8 @@ class AttendancePoint extends Model
             'expired_at' => 'datetime',
             'eligible_for_gbro' => 'boolean',
             'gbro_applied_at' => 'datetime',
+            'multiplier' => 'decimal:2',
+            'is_critical_day' => 'boolean',
         ];
     }
 

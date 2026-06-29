@@ -130,6 +130,8 @@ interface AttendancePoint {
     undertime_minutes: number | null;
     eligible_for_gbro: boolean;
     gbro_applied_at: string | null;
+    multiplier: number;
+    is_critical_day: boolean;
 }
 
 interface PointsPayload {
@@ -286,6 +288,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
     const [isManualSubmitting, setIsManualSubmitting] = useState(false);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [pointToDelete, setPointToDelete] = useState<AttendancePoint | null>(null);
+    const [manualIsCriticalDay, setManualIsCriticalDay] = useState(false);
 
     // High points employees dialog state
     const [isHighPointsDialogOpen, setIsHighPointsDialogOpen] = useState(false);
@@ -832,6 +835,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
         setManualNotes("");
         setManualTardyMinutes("");
         setManualUndertimeMinutes("");
+        setManualIsCriticalDay(false);
         setIsEditMode(false);
         setEditingPoint(null);
     };
@@ -852,6 +856,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
         setManualShiftDate(formattedDate);
         setManualPointType(point.point_type);
         setManualIsAdvised(point.is_advised);
+        setManualIsCriticalDay(point.is_critical_day);
         setManualViolationDetails(point.violation_details || "");
         setManualNotes(point.notes || "");
         setManualTardyMinutes(point.tardy_minutes ? String(point.tardy_minutes) : "");
@@ -885,6 +890,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
             shift_date: manualShiftDate,
             point_type: manualPointType,
             is_advised: manualIsAdvised,
+            is_critical_day: manualIsCriticalDay,
             violation_details: manualViolationDetails || null,
             notes: manualNotes || null,
             tardy_minutes: manualTardyMinutes ? parseInt(manualTardyMinutes) : null,
@@ -1339,6 +1345,11 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                             <TableCell>{getPointTypeBadge(point.point_type)}</TableCell>
                                             <TableCell className="text-right font-bold text-red-600 dark:text-red-400">
                                                 {Number(point.points).toFixed(2)}
+                                                {point.is_critical_day && (
+                                                    <Badge className="ml-1 bg-purple-100 text-purple-800 border-purple-200 text-xs">
+                                                        ×2
+                                                    </Badge>
+                                                )}
                                             </TableCell>
                                             <TableCell>
                                                 <div className="flex flex-col gap-1">
@@ -1561,7 +1572,14 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                     </div>
                                     <div>
                                         <span className="text-muted-foreground">Points:</span>
-                                        <p className="font-bold text-red-600 dark:text-red-400">{Number(point.points).toFixed(2)}</p>
+                                        <p className="font-bold text-red-600 dark:text-red-400">
+                                            {Number(point.points).toFixed(2)}
+                                            {point.is_critical_day && (
+                                                <Badge className="ml-1 bg-purple-100 text-purple-800 border-purple-200 text-xs">
+                                                    ×2
+                                                </Badge>
+                                            )}
+                                        </p>
                                     </div>
                                 </div>
 
@@ -2257,6 +2275,22 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                             </div>
                         )}
 
+                        {/* Critical Working Day */}
+                        <div className="flex items-center space-x-2">
+                            <Checkbox
+                                id="manual_is_critical"
+                                checked={manualIsCriticalDay}
+                                onCheckedChange={(checked) => setManualIsCriticalDay(checked as boolean)}
+                                disabled={isManualSubmitting}
+                            />
+                            <label
+                                htmlFor="manual_is_critical"
+                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                            >
+                                Critical Working Day (×2 points)
+                            </label>
+                        </div>
+
                         {/* Tardy Minutes (only for tardy type) */}
                         {manualPointType === 'tardy' && (
                             <div className="grid gap-2">
@@ -2334,8 +2368,16 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                 <div className="flex items-center justify-between">
                                     <span className="text-sm text-muted-foreground">Point Value:</span>
                                     <span className="text-lg font-bold text-red-600 dark:text-red-400">
-                                        {manualPointType === 'whole_day_absence' ? '1.00' :
-                                            (manualPointType === 'half_day_absence' || manualPointType === 'undertime_more_than_hour') ? '0.50' : '0.25'} pts
+                                        {(() => {
+                                            const base = manualPointType === 'whole_day_absence' ? 1.00 :
+                                                (manualPointType === 'half_day_absence' || manualPointType === 'undertime_more_than_hour') ? 0.50 : 0.25;
+                                            return manualIsCriticalDay ? (base * 2).toFixed(2) : base.toFixed(2);
+                                        })()} pts
+                                        {manualIsCriticalDay && (
+                                            <Badge className="ml-2 bg-purple-100 text-purple-800 border-purple-200 text-xs">
+                                                ×2 Critical Day
+                                            </Badge>
+                                        )}
                                     </span>
                                 </div>
                                 <div className="flex items-center justify-between mt-2">

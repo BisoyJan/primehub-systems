@@ -2559,13 +2559,19 @@ class AttendanceProcessor
             $secondaryPointType
         );
 
+        // Apply ×2 multiplier when flagged as a critical working day
+        $multiplier = $attendance->is_critical_day ? 2.00 : 1.00;
+        $finalPoints = $pointValue * $multiplier;
+
         // Create the attendance point (only ONE per shift - the higher value)
         AttendancePoint::create([
             'user_id' => $attendance->user_id,
             'attendance_id' => $attendance->id,
             'shift_date' => $attendance->shift_date,
             'point_type' => $pointType,
-            'points' => $pointValue,
+            'points' => $finalPoints,
+            'multiplier' => $multiplier,
+            'is_critical_day' => $attendance->is_critical_day ?? false,
             'status' => $usedStatus,
             'is_advised' => $attendance->is_advised ?? false,
             'is_excused' => false,
@@ -2581,9 +2587,11 @@ class AttendanceProcessor
         Log::info('Attendance point created (higher value applied)', [
             'attendance_id' => $attendance->id,
             'point_type' => $pointType,
-            'points' => $pointValue,
+            'points' => $finalPoints,
+            'multiplier' => $multiplier,
             'used_status' => $usedStatus,
             'had_secondary' => ! empty($secondaryPointType),
+            'is_critical_day' => $attendance->is_critical_day,
         ]);
     }
 

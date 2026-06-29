@@ -59,6 +59,7 @@ class Attendance extends Model
         'undertime_approved_by',
         'undertime_approved_at',
         'undertime_approval_notes',
+        'is_critical_day',
     ];
 
     protected function casts(): array
@@ -81,6 +82,7 @@ class Attendance extends Model
             'undertime_minutes' => 'integer',
             'overtime_minutes' => 'integer',
             'warnings' => 'array',
+            'is_critical_day' => 'boolean',
         ];
     }
 

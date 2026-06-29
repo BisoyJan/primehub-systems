@@ -23,6 +23,7 @@ class VerifyAttendanceRequest extends FormRequest
             'verification_notes' => ['nullable', 'string', 'max:1000'],
             'overtime_approved' => ['nullable', 'boolean'],
             'is_set_home' => ['nullable', 'boolean'],
+            'is_critical_day' => ['nullable', 'boolean'],
             'notes' => ['nullable', 'string', 'max:500'],
             'adjust_leave' => ['nullable', 'boolean'],
             'undertime_approval_action' => ['nullable', 'in:approve,reject,request'],

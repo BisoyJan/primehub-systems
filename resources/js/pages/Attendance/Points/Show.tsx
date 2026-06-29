@@ -98,6 +98,8 @@ interface AttendancePoint {
     eligible_for_gbro: boolean;
     gbro_applied_at: string | null;
     gbro_batch_id: string | null;
+    multiplier: number;
+    is_critical_day: boolean;
 }
 
 interface Totals {
@@ -817,6 +819,11 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, gbroS
                                                     <TableCell>{getPointTypeBadge(point.point_type)}</TableCell>
                                                     <TableCell className="text-right font-bold text-red-600 dark:text-red-400">
                                                         {Number(point.points).toFixed(2)}
+                                                        {point.is_critical_day && (
+                                                            <Badge className="ml-1 bg-purple-100 text-purple-800 border-purple-200 text-xs">
+                                                                ×2
+                                                            </Badge>
+                                                        )}
                                                     </TableCell>
                                                     <TableCell>
                                                         {point.is_expired ? (

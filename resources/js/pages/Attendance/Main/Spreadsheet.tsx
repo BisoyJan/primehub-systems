@@ -100,6 +100,7 @@ interface Cell {
     overtime_minutes: number;
     overtime_approved: boolean;
     is_set_home: boolean;
+    is_critical_day: boolean;
     is_partially_verified: boolean;
     undertime_approval_status: 'pending' | 'approved' | 'rejected' | null;
     undertime_approval_reason: 'generate_points' | 'skip_points' | 'lunch_used' | null;
@@ -1559,6 +1560,7 @@ function CellEditor({
         actual_time_out: cell?.actual_time_out ?? "",
         verify: false,
         overtime_approved: cell?.overtime_approved ?? false,
+        is_critical_day: cell?.is_critical_day ?? false,
         undertime_approval_reason: (cell?.undertime_approval_reason ?? null) as 'generate_points' | 'skip_points' | 'lunch_used' | null,
         undertime_approval_action: null as 'approve' | 'reject' | 'request' | null,
         is_set_home: cell?.is_set_home ?? false,
@@ -1726,6 +1728,8 @@ function CellEditor({
         return { status, detail, overtimeMins, undertimeMins, violations };
     }, [schedule, form.data.actual_time_in, form.data.actual_time_out, isCreate, halfDayThreshold]);
 
+    const hasViolation = violations.length > 0 || (previewStatus?.violations.length ?? 0) > 0;
+
     // In edit mode: auto-sync form status whenever time fields change.
     // Skip the first render so we don't override the existing saved status on open.
     const isFirstStatusSync = useRef(true);
@@ -1767,6 +1771,7 @@ function CellEditor({
                 actual_time_out: data.actual_time_out,
                 hours: data.hours,
                 overtime_approved: data.overtime_approved,
+                is_critical_day: data.is_critical_day,
                 undertime_approval_reason: data.undertime_approval_reason,
                 is_set_home: data.is_set_home,
                 notes: data.notes,
@@ -1979,6 +1984,30 @@ function CellEditor({
                                 <span className={`font-mono font-semibold ${v.cls}`}>{v.value}</span>
                             </>
                         ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Critical Working Day — only shown when violations are detected */}
+            {hasViolation && (
+                <div className="rounded border border-purple-200 bg-purple-50 dark:border-purple-400/40 dark:bg-purple-950/20 p-2 text-[11px]">
+                    <div className="flex items-start gap-2">
+                        <Checkbox
+                            id="cell-critical-day"
+                            checked={form.data.is_critical_day}
+                            onCheckedChange={(checked) => form.setData("is_critical_day", checked === true)}
+                            className="mt-0.5"
+                        />
+                        <div className="space-y-0.5">
+                            <label htmlFor="cell-critical-day" className="cursor-pointer font-medium leading-tight text-purple-900 dark:text-purple-200">
+                                Critical Working Day
+                            </label>
+                            <p className="text-[10px] text-purple-600/70 dark:text-purple-400/70">
+                                {form.data.is_critical_day
+                                    ? "×2 point multiplier active — all violations doubled"
+                                    : "Enable to apply ×2 point multiplier to all violations"}
+                            </p>
+                        </div>
                     </div>
                 </div>
             )}

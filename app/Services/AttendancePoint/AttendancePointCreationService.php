@@ -55,6 +55,10 @@ class AttendancePointCreationService
         $expiresAt = $isNcns ? $shiftDate->copy()->addYear() : $shiftDate->copy()->addMonths(6);
         $isGbroEligible = ! $isNcns;
 
+        $isCriticalDay = $data['is_critical_day'] ?? false;
+        $multiplier = $isCriticalDay ? 2.00 : 1.00;
+        $basePoints = AttendancePoint::POINT_VALUES[$pointType] ?? 0;
+
         $violationDetails = $data['violation_details'] ?? null;
         if (empty($violationDetails)) {
             $violationDetails = $this->generateManualViolationDetails(
@@ -70,7 +74,9 @@ class AttendancePointCreationService
             'attendance_id' => null,
             'shift_date' => $data['shift_date'],
             'point_type' => $pointType,
-            'points' => AttendancePoint::POINT_VALUES[$pointType] ?? 0,
+            'points' => $basePoints * $multiplier,
+            'multiplier' => $multiplier,
+            'is_critical_day' => $isCriticalDay,
             'status' => null,
             'is_advised' => $isAdvised,
             'is_manual' => true,
@@ -113,6 +119,10 @@ class AttendancePointCreationService
         $isNcns = $pointType === 'whole_day_absence' && ! $isAdvised;
         $expiresAt = $isNcns ? $shiftDate->copy()->addYear() : $shiftDate->copy()->addMonths(6);
 
+        $isCriticalDay = $data['is_critical_day'] ?? false;
+        $multiplier = $isCriticalDay ? 2.00 : 1.00;
+        $basePoints = AttendancePoint::POINT_VALUES[$pointType] ?? 0;
+
         $violationDetails = $data['violation_details'] ?? null;
         if (empty($violationDetails)) {
             $violationDetails = $this->generateManualViolationDetails(
@@ -127,7 +137,9 @@ class AttendancePointCreationService
             'user_id' => $userId,
             'shift_date' => $data['shift_date'],
             'point_type' => $pointType,
-            'points' => AttendancePoint::POINT_VALUES[$pointType] ?? 0,
+            'points' => $basePoints * $multiplier,
+            'multiplier' => $multiplier,
+            'is_critical_day' => $isCriticalDay,
             'is_advised' => $isAdvised,
             'notes' => $data['notes'] ?? null,
             'violation_details' => $violationDetails,

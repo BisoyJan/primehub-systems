@@ -87,6 +87,7 @@ interface EntryRow {
     shift_date: string;
     point_type: PointType | '';
     is_advised: boolean;
+    is_critical_day: boolean;
     violation_details: string;
     notes: string;
     tardy_minutes: string;
@@ -118,12 +119,13 @@ const formatUserName = (user: User) => {
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
-const blankRow = (shared?: { shift_date: string; point_type: PointType | ''; is_advised: boolean; tardy_minutes: string }): EntryRow => ({
+const blankRow = (shared?: { shift_date: string; point_type: PointType | ''; is_advised: boolean; is_critical_day: boolean; tardy_minutes: string }): EntryRow => ({
     id: uid(),
     user_id: '',
     shift_date: shared?.shift_date ?? '',
     point_type: shared?.point_type ?? '',
     is_advised: shared?.is_advised ?? false,
+    is_critical_day: shared?.is_critical_day ?? false,
     violation_details: '',
     notes: '',
     tardy_minutes: shared?.tardy_minutes ?? '',
@@ -230,6 +232,7 @@ export default function BulkCreatePage({ users }: PageProps) {
     const [sharedDate, setSharedDate] = useState('');
     const [sharedType, setSharedType] = useState<PointType | ''>('');
     const [sharedIsAdvised, setSharedIsAdvised] = useState(false);
+    const [sharedIsCriticalDay, setSharedIsCriticalDay] = useState(false);
     const [sharedTardyMinutes, setSharedTardyMinutes] = useState('');
 
     // ── Rows ──────────────────────────────────────────────────────────────────
@@ -264,8 +267,8 @@ export default function BulkCreatePage({ users }: PageProps) {
     // ─── Row helpers ───────────────────────────────────────────────────────────
 
     const addRow = useCallback(() => {
-        setEntries((prev) => [...prev, blankRow({ shift_date: sharedDate, point_type: sharedType, is_advised: sharedIsAdvised, tardy_minutes: sharedTardyMinutes })]);
-    }, [sharedDate, sharedType, sharedIsAdvised, sharedTardyMinutes]);
+        setEntries((prev) => [...prev, blankRow({ shift_date: sharedDate, point_type: sharedType, is_advised: sharedIsAdvised, is_critical_day: sharedIsCriticalDay, tardy_minutes: sharedTardyMinutes })]);
+    }, [sharedDate, sharedType, sharedIsAdvised, sharedIsCriticalDay, sharedTardyMinutes]);
 
     const addUserRow = useCallback(
         (userId: string) => {
@@ -273,18 +276,18 @@ export default function BulkCreatePage({ users }: PageProps) {
                 toast.warning('This employee is already in the list.');
                 return;
             }
-            const row = blankRow({ shift_date: sharedDate, point_type: sharedType, is_advised: sharedIsAdvised, tardy_minutes: sharedTardyMinutes });
+            const row = blankRow({ shift_date: sharedDate, point_type: sharedType, is_advised: sharedIsAdvised, is_critical_day: sharedIsCriticalDay, tardy_minutes: sharedTardyMinutes });
             row.user_id = userId;
             setEntries((prev) => [...prev, row]);
             setUserPickerOpen(false);
             setUserSearch('');
         },
-        [sharedDate, sharedType, sharedIsAdvised, sharedTardyMinutes, userIdsInEntries],
+        [sharedDate, sharedType, sharedIsAdvised, sharedIsCriticalDay, sharedTardyMinutes, userIdsInEntries],
     );
 
     // Apply shared values to ALL existing rows
     const applySharedToAll = useCallback(
-        (field: 'shift_date' | 'point_type' | 'is_advised' | 'tardy_minutes', value: string | boolean) => {
+        (field: 'shift_date' | 'point_type' | 'is_advised' | 'is_critical_day' | 'tardy_minutes', value: string | boolean) => {
             setEntries((prev) => prev.map((r) => ({ ...r, [field]: value })));
         },
         [],
@@ -389,6 +392,7 @@ export default function BulkCreatePage({ users }: PageProps) {
                 shift_date: row.shift_date,
                 point_type: row.point_type,
                 is_advised: row.is_advised,
+                is_critical_day: row.is_critical_day,
                 violation_details: row.violation_details || null,
                 notes: row.notes || null,
                 tardy_minutes: row.tardy_minutes ? parseInt(row.tardy_minutes) : null,
@@ -485,6 +489,17 @@ export default function BulkCreatePage({ users }: PageProps) {
                                     </Label>
                                 </div>
 
+                                <div className="flex items-center gap-2">
+                                    <Checkbox
+                                        id="shared-critical"
+                                        checked={sharedIsCriticalDay}
+                                        onCheckedChange={(v) => setSharedIsCriticalDay(Boolean(v))}
+                                    />
+                                    <Label htmlFor="shared-critical" className="text-sm cursor-pointer">
+                                        Critical Working Day (×2 points)
+                                    </Label>
+                                </div>
+
                                 {entries.length > 0 && (
                                     <Button
                                         variant="secondary"
@@ -494,6 +509,7 @@ export default function BulkCreatePage({ users }: PageProps) {
                                             applySharedToAll('shift_date', sharedDate);
                                             applySharedToAll('point_type', sharedType);
                                             applySharedToAll('is_advised', sharedIsAdvised);
+                                            applySharedToAll('is_critical_day', sharedIsCriticalDay);
                                             if (sharedType === 'tardy') applySharedToAll('tardy_minutes', sharedTardyMinutes);
                                         }}
                                     >
@@ -635,6 +651,7 @@ export default function BulkCreatePage({ users }: PageProps) {
                                                 <TableHead className="w-44">Date</TableHead>
                                                 <TableHead>Type</TableHead>
                                                 <TableHead className="w-20 text-center">Advised</TableHead>
+                                                <TableHead className="w-20 text-center">Critical</TableHead>
                                                 <TableHead className="w-20 text-center">Actions</TableHead>
                                             </TableRow>
                                         </TableHeader>
@@ -691,6 +708,13 @@ export default function BulkCreatePage({ users }: PageProps) {
                                                                     checked={row.is_advised}
                                                                     onCheckedChange={(v) => updateRow(row.id, 'is_advised', Boolean(v))}
                                                                     aria-label="Advised"
+                                                                />
+                                                            </TableCell>
+                                                            <TableCell className="text-center">
+                                                                <Checkbox
+                                                                    checked={row.is_critical_day}
+                                                                    onCheckedChange={(v) => updateRow(row.id, 'is_critical_day', Boolean(v))}
+                                                                    aria-label="Critical Working Day"
                                                                 />
                                                             </TableCell>
                                                             <TableCell>
@@ -898,6 +922,17 @@ export default function BulkCreatePage({ users }: PageProps) {
                                                         )}
                                                     </div>
 
+                                                    <div className="flex items-center gap-2">
+                                                        <Checkbox
+                                                            id={`mob-critical-${row.id}`}
+                                                            checked={row.is_critical_day}
+                                                            onCheckedChange={(v) => updateRow(row.id, 'is_critical_day', Boolean(v))}
+                                                        />
+                                                        <Label htmlFor={`mob-critical-${row.id}`} className="text-sm cursor-pointer">
+                                                            Critical Working Day (×2)
+                                                        </Label>
+                                                    </div>
+
                                                     {hasError && (
                                                         <div className="flex items-start gap-1.5 bg-red-50 dark:bg-red-950/20 p-2 rounded">
                                                             <AlertCircle className="h-3.5 w-3.5 text-red-500 mt-0.5 shrink-0" />
@@ -1025,7 +1060,7 @@ export default function BulkCreatePage({ users }: PageProps) {
                                                     {user ? formatUserName(user) : 'Unknown'}
                                                 </span>
                                                 <span className="text-muted-foreground shrink-0">
-                                                    {row.shift_date} · {label}{row.is_advised ? ' · Advised' : ''}
+                                                    {row.shift_date} · {label}{row.is_advised ? ' · Advised' : ''}{row.is_critical_day ? ' · ×2 Critical' : ''}
                                                 </span>
                                             </div>
                                         );
