@@ -867,6 +867,7 @@ export default function Edit({
                                             Unpaid Personal Time Off (UPTO)
                                         </SelectItem>
                                         <SelectItem value="ML">Maternity Leave (ML)</SelectItem>
+                                        <SelectItem value="IW">Incomplete Workday (IW)</SelectItem>
                                     </SelectContent>
                                 </Select>
                                 {errors.leave_type && (
@@ -1296,7 +1297,7 @@ export default function Edit({
                                             >
                                                 <Upload className="h-8 w-8 text-muted-foreground" />
                                                 <span className="text-sm font-medium">
-                                                    Click to upload {data.leave_type === 'SL' ? 'medical certificate' : 'death certificate'}
+                                                    Click to upload {data.leave_type === 'SL' ? 'medical certificate' : data.leave_type === 'BL' ? 'death certificate' : 'supporting document'}
                                                 </span>
                                                 <span className="text-xs text-muted-foreground">
                                                     JPEG, PNG, GIF, WebP or PDF (max 4MB)
