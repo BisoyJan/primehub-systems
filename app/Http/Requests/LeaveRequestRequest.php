@@ -50,7 +50,7 @@ class LeaveRequestRequest extends FormRequest
         }
 
         $rules = [
-            'leave_type' => ['required', Rule::in(['VL', 'SL', 'BL', 'SPL', 'LOA', 'LDV', 'UPTO', 'ML'])],
+            'leave_type' => ['required', Rule::in(['VL', 'SL', 'BL', 'SPL', 'LOA', 'LDV', 'UPTO', 'ML', 'IW'])],
             'start_date' => $startDateRule,
             'end_date' => $endDateRule,
             'reason' => ['required', 'string', 'min:10', 'max:1000'],

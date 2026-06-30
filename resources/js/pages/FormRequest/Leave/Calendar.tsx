@@ -61,6 +61,7 @@ const leaveTypes = [
     { value: 'LDV', label: 'Leave due to Domestic Violence' },
     { value: 'UPTO', label: 'Unpaid Time Off' },
     { value: 'ML', label: 'Maternity Leave' },
+    { value: 'IW', label: 'Incomplete Workday' },
 ];
 
 const leaveTypeColors: Record<string, string> = {
@@ -72,6 +73,7 @@ const leaveTypeColors: Record<string, string> = {
     'LDV': 'bg-indigo-500',
     'UPTO': 'bg-orange-500',
     'ML': 'bg-pink-500',
+    'IW': 'bg-lime-500',
 };
 
 export default function LeaveCalendar() {

@@ -968,6 +968,7 @@ export default function Create({
                                         <SelectItem value="UPTO">
                                             Unpaid Personal Time Off (UPTO)
                                         </SelectItem>
+                                        <SelectItem value="IW">Incomplete Workday (IW)</SelectItem>
                                         <SelectItem value="ML">Maternity Leave (ML)</SelectItem>
                                     </SelectContent>
                                 </Select>
@@ -1341,8 +1342,8 @@ export default function Create({
                                 </div>
                             )}
 
-                            {/* Medical/Supporting Document (for SL, BL, and UPTO) */}
-                            {(data.leave_type === 'SL' || data.leave_type === 'BL' || data.leave_type === 'UPTO') && (
+                            {/* Medical/Supporting Document (for SL, BL, UPTO, and IW) */}
+                            {(data.leave_type === 'SL' || data.leave_type === 'BL' || data.leave_type === 'UPTO' || data.leave_type === 'IW') && (
                                 <div className="space-y-4">
                                     <div>
                                         <Label className="text-base font-medium">
@@ -1353,7 +1354,9 @@ export default function Create({
                                                 ? 'Upload your medical certificate to have leave credits deducted. Without a certificate, the leave will be recorded as unpaid.'
                                                 : data.leave_type === 'BL'
                                                     ? 'Upload a death certificate to support your bereavement leave request.'
-                                                    : 'Upload any supporting document for your unpaid time off request.'}
+                                                    : data.leave_type === 'IW'
+                                                        ? 'Upload a supporting document (e.g., appointment slip, event proof) to auto-excuse attendance points.'
+                                                        : 'Upload any supporting document for your unpaid time off request.'}
                                         </p>
                                     </div>
 

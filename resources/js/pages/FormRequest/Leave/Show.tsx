@@ -1105,11 +1105,11 @@ export default function Show({
                             </Alert>
                         )}
 
-                        {/* Document (for SL, BL, UPTO) */}
-                        {(leaveRequest.leave_type === 'SL' || leaveRequest.leave_type === 'BL' || leaveRequest.leave_type === 'UPTO') && (
+                        {/* Document (for SL, BL, UPTO, IW) */}
+                        {(leaveRequest.leave_type === 'SL' || leaveRequest.leave_type === 'BL' || leaveRequest.leave_type === 'UPTO' || leaveRequest.leave_type === 'IW') && (
                             <div className="space-y-2">
                                 <p className="text-sm font-medium text-muted-foreground">
-                                    {leaveRequest.leave_type === 'SL' ? 'Medical Certificate' : leaveRequest.leave_type === 'BL' ? 'Death Certificate' : 'Supporting Document'}
+                                    {leaveRequest.leave_type === 'SL' ? 'Medical Certificate' : leaveRequest.leave_type === 'BL' ? 'Death Certificate' : leaveRequest.leave_type === 'IW' ? 'Supporting Document' : 'Supporting Document'}
                                 </p>
                                 {leaveRequest.medical_cert_path && canViewMedicalCert ? (
                                     <div className="flex items-center gap-2">

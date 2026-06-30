@@ -19,6 +19,7 @@ const LEAVE_TYPE_LABELS: Record<string, string> = {
     LDV: 'LDV',
     UPTO: 'UPTO',
     ML: 'Maternity',
+    IW: 'Incomplete',
 };
 
 function formatDate(dateStr: string): string {

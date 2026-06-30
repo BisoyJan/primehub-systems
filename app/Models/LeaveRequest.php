@@ -125,7 +125,7 @@ class LeaveRequest extends Model
      * Leave types that don't require credits.
      * BL = Bereavement Leave, ML = Maternity Leave
      */
-    const NON_CREDITED_LEAVE_TYPES = ['BL', 'SPL', 'LOA', 'LDV', 'UPTO', 'ML'];
+    const NON_CREDITED_LEAVE_TYPES = ['BL', 'SPL', 'LOA', 'LDV', 'UPTO', 'ML', 'IW'];
 
     /**
      * Get the user who submitted the leave request.

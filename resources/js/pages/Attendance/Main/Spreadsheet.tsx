@@ -214,6 +214,12 @@ const cellClass = (cell: Cell | undefined, isWeekend: boolean): string => {
             // Worked hours under a Partial-day SL day: keep the numeric label visible
             // but tint the background cyan so reviewers can tell the day is P-SL.
             return "bg-cyan-50 text-cyan-900 dark:bg-cyan-950/40 dark:text-cyan-100 ring-1 ring-cyan-300 dark:ring-cyan-700";
+        case "leave-iw":
+            return "bg-lime-500 text-white font-semibold";
+        case "leave-iw-hours":
+            // Worked hours under an Incomplete Workday: keep hours visible
+            // but tint the background lime so reviewers can tell it's IW.
+            return "bg-lime-50 text-lime-900 dark:bg-lime-950/40 dark:text-lime-100 ring-1 ring-lime-300 dark:ring-lime-700";
         case "review":
             return "bg-amber-400 text-white font-semibold";
         default:
@@ -1751,6 +1757,7 @@ function CellEditor({
         half_day_absence: { label: "Half Day Absence", cls: "text-red-600 dark:text-red-400" },
         failed_bio_in: { label: "Failed Bio In", cls: "text-purple-600 dark:text-purple-400" },
         failed_bio_out: { label: "Failed Bio Out", cls: "text-purple-600 dark:text-purple-400" },
+        present_no_bio: { label: "Present (No Bio)", cls: "text-slate-600 dark:text-slate-400" },
         ncns: { label: "NCNS (Absent)", cls: "text-red-600 dark:text-red-500" },
     };
 

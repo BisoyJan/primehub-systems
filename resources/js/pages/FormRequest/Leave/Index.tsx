@@ -571,6 +571,7 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
                                     { label: 'Leave due to Domestic Violence', value: 'LDV' },
                                     { label: 'Unpaid Time Off', value: 'UPTO' },
                                     { label: 'Maternity Leave', value: 'ML' },
+                                    { label: 'Incomplete Workday', value: 'IW' },
                                 ]}
                                 value={selectedTypes}
                                 onChange={setSelectedTypes}
@@ -770,8 +771,8 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
                                                                     <Eye className="h-4 w-4" />
                                                                 </Button>
                                                             </Link>
-                                                            {/* Medical/Supporting Document Button - For SL, BL, and UPTO with uploaded cert */}
-                                                            {(request.leave_type === 'SL' || request.leave_type === 'BL' || request.leave_type === 'UPTO') && request.medical_cert_path && (auth.user.id === request.user.id || isAdmin) && (
+                                                            {/* Medical/Supporting Document Button - For SL, BL, UPTO, and IW with uploaded cert */}
+                                                            {(request.leave_type === 'SL' || request.leave_type === 'BL' || request.leave_type === 'UPTO' || request.leave_type === 'IW') && request.medical_cert_path && (auth.user.id === request.user.id || isAdmin) && (
                                                                 <Button
                                                                     size="icon"
                                                                     variant="outline"
@@ -903,7 +904,7 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
                                         </Button>
                                     </Link>
                                     {/* Medical/Supporting Document Button - Mobile */}
-                                    {(request.leave_type === 'SL' || request.leave_type === 'BL' || request.leave_type === 'UPTO') && request.medical_cert_path && (auth.user.id === request.user.id || isAdmin) && (
+                                    {(request.leave_type === 'SL' || request.leave_type === 'BL' || request.leave_type === 'UPTO' || request.leave_type === 'IW') && request.medical_cert_path && (auth.user.id === request.user.id || isAdmin) && (
                                         <Button
                                             size="sm"
                                             variant="outline"

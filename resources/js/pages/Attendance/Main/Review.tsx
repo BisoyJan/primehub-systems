@@ -1037,6 +1037,7 @@ export default function AttendanceReview() {
                                             { label: "Undertime (>1hr)", value: "undertime_more_than_hour" },
                                             { label: "Failed Bio In", value: "failed_bio_in" },
                                             { label: "Failed Bio Out", value: "failed_bio_out" },
+                                            { label: "Present (No Bio)", value: "present_no_bio" },
                                             { label: "Needs Review", value: "needs_manual_review" },
                                             { label: "On Leave", value: "on_leave" },
                                         ]}

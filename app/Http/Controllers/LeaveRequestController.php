@@ -708,9 +708,9 @@ class LeaveRequestController extends Controller
                 }
             }
 
-            // Handle medical certificate/document file upload for Sick Leave, Bereavement Leave, and UPTO
+            // Handle medical certificate/document file upload for Sick Leave, Bereavement Leave, UPTO, and Incomplete Workday
             $medicalCertPath = null;
-            if (in_array($request->leave_type, ['SL', 'BL', 'UPTO']) && $request->hasFile('medical_cert_file')) {
+            if (in_array($request->leave_type, ['SL', 'BL', 'UPTO', 'IW']) && $request->hasFile('medical_cert_file')) {
                 $file = $request->file('medical_cert_file');
                 $filename = 'medcert_'.$targetUser->id.'_'.time().'.'.$file->getClientOriginalExtension();
                 $medicalCertPath = $file->storeAs('medical_certificates', $filename, 'local');
@@ -1310,9 +1310,9 @@ class LeaveRequestController extends Controller
 
         DB::beginTransaction();
         try {
-            // Handle medical certificate/document file upload for Sick Leave, Bereavement Leave, and UPTO
+            // Handle medical certificate/document file upload for Sick Leave, Bereavement Leave, UPTO, and Incomplete Workday
             $medicalCertPath = $leaveRequest->medical_cert_path; // Keep existing if not replaced
-            if (in_array($request->leave_type, ['SL', 'BL', 'UPTO']) && $request->hasFile('medical_cert_file')) {
+            if (in_array($request->leave_type, ['SL', 'BL', 'UPTO', 'IW']) && $request->hasFile('medical_cert_file')) {
                 // Delete old file if exists
                 if ($leaveRequest->medical_cert_path && Storage::disk('local')->exists($leaveRequest->medical_cert_path)) {
                     Storage::disk('local')->delete($leaveRequest->medical_cert_path);
@@ -1826,32 +1826,36 @@ class LeaveRequestController extends Controller
                         LeaveRequestDay::where('leave_request_id', $leaveRequest->id)->delete();
                     }
                     $this->handleVlApproval($leaveRequest, $leaveCreditService, $vlDayStatuses);
-                } elseif ($leaveRequest->leave_type === 'SPL') {
-                    // Solo Parent Leave - auto-FIFO credit allocation with optional half-day overrides
-                    $splHalfDayOverrides = $request->input('spl_half_day_overrides', []);
-                    $this->handleSplApproval($leaveRequest, $splHalfDayOverrides);
-                } elseif ($leaveRequest->requiresCredits()) {
-                    // Other credited leave types - normal deduction
-                    $year = $request->input('credits_year', $leaveRequest->created_at->year);
+            } elseif ($leaveRequest->leave_type === 'SPL') {
+                // Solo Parent Leave - auto-FIFO credit allocation with optional half-day overrides
+                $splHalfDayOverrides = $request->input('spl_half_day_overrides', []);
+                $this->handleSplApproval($leaveRequest, $splHalfDayOverrides);
+            } elseif ($leaveRequest->leave_type === 'IW') {
+                // Incomplete Workday - employee reported to office but left early
+                // No credit deduction, preserve biometric data, auto-excuse attendance points
+                $this->handleIwApproval($leaveRequest);
+            } elseif ($leaveRequest->requiresCredits()) {
+                // Other credited leave types - normal deduction
+                $year = $request->input('credits_year', $leaveRequest->created_at->year);
 
-                    if ($leaveRequest->has_partial_denial && $leaveRequest->approved_days !== null) {
-                        $originalDays = $leaveRequest->days_requested;
-                        $leaveRequest->days_requested = $leaveRequest->approved_days;
-                        $leaveCreditService->deductCredits($leaveRequest, $year);
-                        $leaveRequest->days_requested = $originalDays;
-                        $leaveRequest->update(['credits_deducted' => $leaveRequest->approved_days]);
-                    } else {
-                        $leaveCreditService->deductCredits($leaveRequest, $year);
-                    }
-
-                    $this->updateAttendanceForApprovedLeave($leaveRequest);
+                if ($leaveRequest->has_partial_denial && $leaveRequest->approved_days !== null) {
+                    $originalDays = $leaveRequest->days_requested;
+                    $leaveRequest->days_requested = $leaveRequest->approved_days;
+                    $leaveCreditService->deductCredits($leaveRequest, $year);
+                    $leaveRequest->days_requested = $originalDays;
+                    $leaveRequest->update(['credits_deducted' => $leaveRequest->approved_days]);
                 } else {
-                    // Non-credited leave types (UPTO, LOA, BL, LDV, ML) - no credit deduction, but still update attendance
-                    $this->updateAttendanceForApprovedLeave($leaveRequest);
+                    $leaveCreditService->deductCredits($leaveRequest, $year);
                 }
 
-                // Notify the employee about full approval
-                $this->notificationService->notifyLeaveRequestFullyApproved(
+                $this->updateAttendanceForApprovedLeave($leaveRequest);
+            } else {
+                // Non-credited leave types (UPTO, LOA, BL, LDV, ML) - no credit deduction, but still update attendance
+                $this->updateAttendanceForApprovedLeave($leaveRequest);
+            }
+
+            // Notify the employee about full approval
+            $this->notificationService->notifyLeaveRequestFullyApproved(
                     $leaveRequest->user_id,
                     $leaveRequest->leave_type,
                     $leaveRequest->id
@@ -3613,6 +3617,38 @@ class LeaveRequestController extends Controller
     }
 
     /**
+     * Handle Incomplete Workday (IW) approval.
+     *
+     * Employee reported to office but left early for an important personal matter.
+     * No leave credits deducted — preserves biometric worked-hours data on attendance
+     * records. Auto-excuses attendance points if a supporting document is on file.
+     */
+    protected function handleIwApproval(LeaveRequest $leaveRequest): void
+    {
+        $user = $leaveRequest->user;
+        $startDate = Carbon::parse($leaveRequest->start_date);
+        $endDate = Carbon::parse($leaveRequest->end_date);
+        $currentDate = $startDate->copy();
+
+        while ($currentDate->lte($endDate)) {
+            $dateStr = $currentDate->format('Y-m-d');
+            $this->linkAttendanceForPartialDayAbsence(
+                $user,
+                $dateStr,
+                "Incomplete Workday - Leave Request #{$leaveRequest->id}"
+                    .($leaveRequest->reason ? " - {$leaveRequest->reason}" : ''),
+                $leaveRequest->id
+            );
+            $currentDate->addDay();
+        }
+
+        // Auto-excuse attendance points if supporting document submitted
+        if ($leaveRequest->medical_cert_submitted) {
+            $this->autoExcuseAttendancePoints($leaveRequest);
+        }
+    }
+
+    /**
      * Handle Sick Leave approval with per-day status assignment.
      *
      * Each day in the SL request can be assigned one of:
@@ -4240,8 +4276,8 @@ class LeaveRequestController extends Controller
      */
     protected function rollbackExcusedAttendancePoints(LeaveRequest $leaveRequest): int
     {
-        // Only SL, UPTO, and BL with medical/death cert had auto-excused points
-        if (! in_array($leaveRequest->leave_type, ['SL', 'UPTO', 'BL'])) {
+        // Only SL, UPTO, BL, and IW with supporting docs had auto-excused points
+        if (! in_array($leaveRequest->leave_type, ['SL', 'UPTO', 'BL', 'IW'])) {
             return 0;
         }
 
@@ -4304,8 +4340,8 @@ class LeaveRequestController extends Controller
             return 0;
         }
 
-        // Only for SL, UPTO, and BL leave types
-        if (! in_array($leaveRequest->leave_type, ['SL', 'UPTO', 'BL'])) {
+        // Only for SL, UPTO, BL, and IW leave types
+        if (! in_array($leaveRequest->leave_type, ['SL', 'UPTO', 'BL', 'IW'])) {
             return 0;
         }
 
@@ -4326,6 +4362,7 @@ class LeaveRequestController extends Controller
         $certificateType = match ($leaveRequest->leave_type) {
             'SL' => 'medical certificate',
             'BL' => 'death certificate',
+            'IW' => 'supporting document',
             default => 'supporting certificate',
         };
         $defaultReason = "Auto-excused: Approved {$leaveRequest->leave_type} with {$certificateType} - Leave Request #{$leaveRequest->id}";
@@ -4450,9 +4487,10 @@ class LeaveRequestController extends Controller
             $currentDate->addDay();
         }
 
-        // Auto-excuse attendance points for UPTO/BL with certificate
-        // (SL is handled in handleSlApproval, but UPTO and BL submitted directly also need this)
-        if (in_array($leaveRequest->leave_type, ['UPTO', 'BL']) && $leaveRequest->medical_cert_submitted) {
+        // Auto-excuse attendance points for UPTO/BL/IW with certificate
+        // (SL is handled in handleSlApproval, IW is handled in handleIwApproval,
+        // but UPTO and BL submitted directly also need this)
+        if (in_array($leaveRequest->leave_type, ['UPTO', 'BL', 'IW']) && $leaveRequest->medical_cert_submitted) {
             $this->autoExcuseAttendancePoints($leaveRequest);
         }
     }

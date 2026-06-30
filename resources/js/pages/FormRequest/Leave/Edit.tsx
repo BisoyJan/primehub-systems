@@ -1206,8 +1206,8 @@ export default function Edit({
                                 )}
                             </div>
 
-                            {/* Medical/Supporting Document (for SL, BL, and UPTO) */}
-                            {(data.leave_type === 'SL' || data.leave_type === 'BL' || data.leave_type === 'UPTO') && (
+                            {/* Medical/Supporting Document (for SL, BL, UPTO, and IW) */}
+                            {(data.leave_type === 'SL' || data.leave_type === 'BL' || data.leave_type === 'UPTO' || data.leave_type === 'IW') && (
                                 <div className="space-y-3">
                                     <Label>
                                         {data.leave_type === 'SL' ? 'Medical Certificate' : data.leave_type === 'BL' ? 'Death Certificate' : 'Supporting Document'} (Optional)

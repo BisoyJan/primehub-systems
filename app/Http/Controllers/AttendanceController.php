@@ -3335,12 +3335,21 @@ class AttendanceController extends Controller
             $code = 'P-SL';
             $kind = 'leave';
             $color = 'leave-partial-sl';
+        } elseif ($leaveType === 'IW') {
+            // Incomplete Workday — employee worked partial day, not on_leave.
+            // Show IW code when no worked hours; hours with tint when present.
+            $code = 'IW';
+            $kind = 'leave';
+            $color = 'leave-iw';
         }
 
         // When the day has actual worked hours, keep the hours number visible —
-        // the cyan-tinted background (set below) signals it is a Partial-day SL day.
+        // the tinted background signals it is a Partial-day SL / IW day.
         if ($isPartialDaySl && $kind === 'hours') {
             $color = 'leave-partial-sl-hours';
+        }
+        if ($leaveType === 'IW' && $kind === 'hours') {
+            $color = 'leave-iw-hours';
         }
 
         // `warnings` is JSON in the DB; with raw queries we must decode manually.
