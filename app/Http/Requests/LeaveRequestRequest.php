@@ -56,7 +56,12 @@ class LeaveRequestRequest extends FormRequest
             'reason' => ['required', 'string', 'min:10', 'max:1000'],
             'campaign_department' => ['required', 'string', 'max:255'],
             'medical_cert_submitted' => ['sometimes', 'boolean'],
-            'medical_cert_file' => ['nullable', 'file', 'mimes:jpeg,jpg,png,gif,webp,pdf', 'max:4096'], // 4MB max - Accept images and PDF
+            // Supporting documents: up to 10 files (images or PDF), 4MB each
+            'medical_cert_files' => ['nullable', 'array', 'max:10'],
+            'medical_cert_files.*' => ['file', 'mimes:jpeg,jpg,png,gif,webp,pdf', 'max:4096'],
+            // IDs of existing documents to remove (used on update)
+            'removed_documents' => ['nullable', 'array'],
+            'removed_documents.*' => ['integer'],
             'sl_with_undertime' => ['sometimes', 'boolean'],
         ];
 
@@ -98,9 +103,10 @@ class LeaveRequestRequest extends FormRequest
             'reason.min' => 'Reason must be at least 10 characters.',
             'reason.max' => 'Reason cannot exceed 1000 characters.',
             'campaign_department.required' => 'Campaign/Department is required.',
-            'medical_cert_file.file' => 'Medical certificate must be a valid file.',
-            'medical_cert_file.mimes' => 'Medical certificate must be a JPEG, PNG, GIF, WebP image or PDF file.',
-            'medical_cert_file.max' => 'Medical certificate file size must not exceed 4MB.',
+            'medical_cert_files.max' => 'You can upload a maximum of 10 documents.',
+            'medical_cert_files.*.file' => 'Each document must be a valid file.',
+            'medical_cert_files.*.mimes' => 'Each document must be a JPEG, PNG, GIF, WebP image or PDF file.',
+            'medical_cert_files.*.max' => 'Each document must not exceed 4MB.',
         ];
     }
 

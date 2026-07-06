@@ -232,6 +232,14 @@ class LeaveRequest extends Model
     }
 
     /**
+     * Get the uploaded supporting documents for this leave request.
+     */
+    public function documents(): HasMany
+    {
+        return $this->hasMany(LeaveRequestDocument::class);
+    }
+
+    /**
      * Check if this leave request has per-day status tracking.
      */
     public function hasPerDayStatuses(): bool

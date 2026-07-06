@@ -19,12 +19,12 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { AlertCircle, Calendar, CreditCard, Check, ChevronsUpDown, AlertTriangle, Upload, X, FileImage, Eye, Users, Info, ChevronDown } from 'lucide-react';
+import { AlertCircle, Calendar, CreditCard, Check, ChevronsUpDown, AlertTriangle, Users, Info, ChevronDown } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
+import { LeaveDocumentsUpload } from '@/components/leave/LeaveDocumentsUpload';
 import { index as leaveIndexRoute, create as leaveCreateRoute, store as leaveStoreRoute } from '@/routes/leave-requests';
 import {
     type CreditsSummary,
@@ -93,7 +93,7 @@ export default function Create({
         reason: '',
         campaign_department: selectedCampaign || '',
         medical_cert_submitted: false,
-        medical_cert_file: null as File | null,
+        medical_cert_files: [] as File[],
         sl_with_undertime: false,
         spl_day_settings: [] as { date: string; is_half_day: boolean }[],
     });
@@ -101,8 +101,6 @@ export default function Create({
     const [selectedEmployee, setSelectedEmployee] = useState<number>(selectedEmployeeId);
     const [searchQuery, setSearchQuery] = useState<string>('');
     const [isEmployeePopoverOpen, setIsEmployeePopoverOpen] = useState(false);
-    const [medicalCertPreview, setMedicalCertPreview] = useState<string | null>(null);
-    const [isPdfFile, setIsPdfFile] = useState<boolean>(false);
     const [campaignConflicts, setCampaignConflicts] = useState<CampaignConflict[]>([]);
 
     const [calculatedDays, setCalculatedDays] = useState<number>(0);
@@ -414,66 +412,6 @@ export default function Create({
         return () => clearTimeout(timeoutId);
     }, [data.leave_type, data.start_date, data.end_date, data.campaign_department, selectedEmployeeId]);
 
-    // Handle medical certificate file selection
-    const handleMedicalCertChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            // Validate file size (4MB max)
-            if (file.size > 4 * 1024 * 1024) {
-                toast.error('File too large', {
-                    description: 'Medical certificate must be less than 4MB.',
-                });
-                e.target.value = '';
-                return;
-            }
-
-            // Validate file type
-            const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
-            if (!allowedTypes.includes(file.type)) {
-                toast.error('Invalid file type', {
-                    description: 'Please upload a JPEG, PNG, GIF, WebP image or PDF file.',
-                });
-                e.target.value = '';
-                return;
-            }
-
-            setData('medical_cert_file', file);
-            setData('medical_cert_submitted', true);
-
-            // Revoke previous object URL if any
-            if (isPdfFile && medicalCertPreview) {
-                URL.revokeObjectURL(medicalCertPreview);
-            }
-
-            // Create preview
-            if (file.type.startsWith('image/')) {
-                setIsPdfFile(false);
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    setMedicalCertPreview(reader.result as string);
-                };
-                reader.readAsDataURL(file);
-            } else {
-                // For PDFs, create an object URL for embedded preview
-                setIsPdfFile(true);
-                const objectUrl = URL.createObjectURL(file);
-                setMedicalCertPreview(objectUrl);
-            }
-        }
-    };
-
-    // Clear medical certificate
-    const clearMedicalCert = () => {
-        // Revoke object URL if it was a PDF
-        if (isPdfFile && medicalCertPreview) {
-            URL.revokeObjectURL(medicalCertPreview);
-        }
-        setData('medical_cert_file', null);
-        setData('medical_cert_submitted', false);
-        setMedicalCertPreview(null);
-        setIsPdfFile(false);
-    };
-
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -493,9 +431,9 @@ export default function Create({
                     toast.error('Validation failed', {
                         description: 'Please check the form for errors.',
                     });
-                } else if (errors.medical_cert_file) {
-                    toast.error('Medical certificate error', {
-                        description: errors.medical_cert_file as string,
+                } else if (errors.medical_cert_files) {
+                    toast.error('Supporting document error', {
+                        description: errors.medical_cert_files as string,
                     });
                 } else {
                     toast.error('Failed to submit leave request', {
@@ -1345,117 +1283,16 @@ export default function Create({
                             {/* Medical/Supporting Document (for SL, BL, UPTO, and IW) */}
                             {(data.leave_type === 'SL' || data.leave_type === 'BL' || data.leave_type === 'UPTO' || data.leave_type === 'IW') && (
                                 <div className="space-y-4">
-                                    <div>
-                                        <Label className="text-base font-medium">
-                                            {data.leave_type === 'SL' ? 'Medical Certificate' : data.leave_type === 'BL' ? 'Death Certificate' : 'Supporting Document'} (Optional)
-                                        </Label>
-                                        <p className="text-sm text-muted-foreground mt-1">
-                                            {data.leave_type === 'SL'
-                                                ? 'Upload your medical certificate to have leave credits deducted. Without a certificate, the leave will be recorded as unpaid.'
-                                                : data.leave_type === 'BL'
-                                                    ? 'Upload a death certificate to support your bereavement leave request.'
-                                                    : data.leave_type === 'IW'
-                                                        ? 'Upload a supporting document (e.g., appointment slip, event proof) to auto-excuse attendance points.'
-                                                        : 'Upload any supporting document for your unpaid time off request.'}
-                                        </p>
-                                    </div>
-
-                                    {!medicalCertPreview ? (
-                                        <div className="border-2 border-dashed rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
-                                            <input
-                                                type="file"
-                                                id="medical_cert_file"
-                                                accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,application/pdf"
-                                                onChange={handleMedicalCertChange}
-                                                className="hidden"
-                                            />
-                                            <label
-                                                htmlFor="medical_cert_file"
-                                                className="cursor-pointer flex flex-col items-center gap-2"
-                                            >
-                                                <div className="p-3 bg-muted rounded-full">
-                                                    <Upload className="h-6 w-6 text-muted-foreground" />
-                                                </div>
-                                                <div>
-                                                    <p className="font-medium">
-                                                        Click to upload {data.leave_type === 'SL' ? 'medical certificate' : data.leave_type === 'BL' ? 'death certificate' : 'supporting document'}
-                                                    </p>
-                                                    <p className="text-xs text-muted-foreground mt-1">
-                                                        JPEG, PNG, GIF, WebP or PDF (max 4MB)
-                                                    </p>
-                                                </div>
-                                            </label>
-                                        </div>
-                                    ) : (
-                                        <div className="border rounded-lg p-4 space-y-3">
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <FileImage className="h-5 w-5 text-green-600" />
-                                                    <span className="text-sm font-medium text-green-600">
-                                                        {data.leave_type === 'SL' ? 'Medical certificate' : data.leave_type === 'BL' ? 'Death certificate' : 'Supporting document'} attached
-                                                    </span>
-                                                </div>
-                                                <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={clearMedicalCert}
-                                                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                                >
-                                                    <X className="h-4 w-4 mr-1" />
-                                                    Remove
-                                                </Button>
-                                            </div>
-                                            {medicalCertPreview && !isPdfFile ? (
-                                                <div className="relative aspect-video max-h-48 overflow-hidden rounded-md bg-muted">
-                                                    <img
-                                                        src={medicalCertPreview}
-                                                        alt="Medical certificate preview"
-                                                        className="object-contain w-full h-full"
-                                                    />
-                                                </div>
-                                            ) : medicalCertPreview && isPdfFile ? (
-                                                <div className="space-y-2">
-                                                    <div className="relative rounded-md overflow-hidden border bg-muted h-50">
-                                                        <iframe
-                                                            src={medicalCertPreview}
-                                                            title="PDF preview"
-                                                            className="w-full h-full"
-                                                        />
-                                                    </div>
-                                                    <Button
-                                                        type="button"
-                                                        variant="outline"
-                                                        size="sm"
-                                                        onClick={() => window.open(medicalCertPreview!, '_blank')}
-                                                        className="w-full"
-                                                    >
-                                                        <Eye className="h-4 w-4 mr-1" />
-                                                        View Full Document
-                                                    </Button>
-                                                </div>
-                                            ) : null}
-                                            {data.medical_cert_file && (
-                                                <p className="text-xs text-muted-foreground">
-                                                    {data.medical_cert_file.name} ({(data.medical_cert_file.size / 1024 / 1024).toFixed(2)} MB)
-                                                </p>
-                                            )}
-                                        </div>
-                                    )}
-
-                                    {errors.medical_cert_file && (
-                                        <p className="text-sm text-red-500">{errors.medical_cert_file}</p>
-                                    )}
-
-                                    {/* Upload progress */}
-                                    {progress && (progress.percentage ?? 0) > 0 && (progress.percentage ?? 0) < 100 && (
-                                        <div className="space-y-2">
-                                            <Progress value={progress.percentage ?? 0} className="h-2" />
-                                            <p className="text-xs text-muted-foreground text-center">
-                                                Uploading... {progress.percentage ?? 0}%
-                                            </p>
-                                        </div>
-                                    )}
+                                    <LeaveDocumentsUpload
+                                        leaveType={data.leave_type}
+                                        files={data.medical_cert_files}
+                                        onFilesChange={(files) => {
+                                            setData('medical_cert_files', files);
+                                            setData('medical_cert_submitted', files.length > 0);
+                                        }}
+                                        errors={errors as Record<string, string>}
+                                        progress={progress}
+                                    />
 
                                     {slCreditInfo && (
                                         <Alert className={slCreditInfo.includes('converted to UPTO')

@@ -19,12 +19,13 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { AlertCircle, Calendar, CreditCard, AlertTriangle, Info, FileImage, Eye, Upload, X, Users, ChevronDown } from 'lucide-react';
+import { AlertCircle, Calendar, CreditCard, AlertTriangle, Info, Users, ChevronDown } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { show as leaveShowRoute, update as leaveUpdateRoute, medicalCert as leaveMedicalCertRoute } from '@/routes/leave-requests';
+import { LeaveDocumentsUpload } from '@/components/leave/LeaveDocumentsUpload';
+import type { LeaveRequestDocument } from '@/types';
+import { show as leaveShowRoute, update as leaveUpdateRoute, documents as leaveDocumentRoute } from '@/routes/leave-requests';
 import {
     type CreditsSummary,
     type AttendanceViolation,
@@ -54,6 +55,7 @@ interface LeaveRequest {
     campaign_department: string;
     medical_cert_submitted: boolean;
     medical_cert_path: string | null;
+    documents?: LeaveRequestDocument[];
     status: string;
     short_notice_override?: boolean;
     original_start_date?: string;
@@ -110,7 +112,8 @@ export default function Edit({
         reason: leaveRequest.reason,
         campaign_department: leaveRequest.campaign_department,
         medical_cert_submitted: leaveRequest.medical_cert_submitted,
-        medical_cert_file: null as File | null,
+        medical_cert_files: [] as File[],
+        removed_documents: [] as number[],
         date_modification_reason: '',
         spl_day_settings: splDaySettings as { date: string; is_half_day: boolean }[],
         _method: 'PUT', // For method spoofing
@@ -121,8 +124,6 @@ export default function Edit({
     const [creditError, setCreditError] = useState<string | null>(null);
     const [weekendError, setWeekendError] = useState<{ start: string | null; end: string | null }>({ start: null, end: null });
     const [slCreditInfo, setSlCreditInfo] = useState<string | null>(null);
-    const [medicalCertPreview, setMedicalCertPreview] = useState<string | null>(null);
-    const [isPdfFile, setIsPdfFile] = useState<boolean>(false);
     const [campaignConflicts, setCampaignConflicts] = useState<CampaignConflict[]>([]);
     const [futureCredits, setFutureCredits] = useState<number>(0);
     const getInitials = useInitials();
@@ -142,59 +143,9 @@ export default function Edit({
     const getProjectedBalance = () =>
         calcProjectedBalance(data.start_date, creditsSummary.eligibility_date, creditsSummary.monthly_rate, creditsSummary.pending_regularization_credits);
 
-    // Handle medical certificate file selection
-    const handleMedicalCertChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            // Validate file type
-            const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
-            if (!allowedTypes.includes(file.type)) {
-                toast.error('Invalid file type. Please upload a JPEG, JPG, PNG, GIF, WebP image or PDF file.');
-                return;
-            }
-            // Validate file size (4MB max)
-            if (file.size > 4 * 1024 * 1024) {
-                toast.error('File size exceeds 4MB limit.');
-                return;
-            }
-            setData('medical_cert_file', file);
-            setData('medical_cert_submitted', true);
-
-            // Revoke previous object URL if any
-            if (isPdfFile && medicalCertPreview) {
-                URL.revokeObjectURL(medicalCertPreview);
-            }
-
-            // Create preview
-            if (file.type.startsWith('image/')) {
-                setIsPdfFile(false);
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    setMedicalCertPreview(reader.result as string);
-                };
-                reader.readAsDataURL(file);
-            } else {
-                // For PDFs, create an object URL for embedded preview
-                setIsPdfFile(true);
-                const objectUrl = URL.createObjectURL(file);
-                setMedicalCertPreview(objectUrl);
-            }
-        }
-    };
-
-    // Clear selected medical certificate
-    const clearMedicalCert = () => {
-        // Revoke object URL if it was a PDF
-        if (isPdfFile && medicalCertPreview) {
-            URL.revokeObjectURL(medicalCertPreview);
-        }
-        setData('medical_cert_file', null);
-        setData('medical_cert_submitted', false);
-        setMedicalCertPreview(null);
-        setIsPdfFile(false);
-        // Reset file input
-        const fileInput = document.getElementById('medical_cert_file') as HTMLInputElement;
-        if (fileInput) fileInput.value = '';
+    // Mark an existing document for removal on save
+    const handleRemoveExistingDocument = (id: number) => {
+        setData('removed_documents', [...data.removed_documents, id]);
     };
 
     // Handle start date change with weekend validation
@@ -1210,115 +1161,25 @@ export default function Edit({
                             {/* Medical/Supporting Document (for SL, BL, UPTO, and IW) */}
                             {(data.leave_type === 'SL' || data.leave_type === 'BL' || data.leave_type === 'UPTO' || data.leave_type === 'IW') && (
                                 <div className="space-y-3">
-                                    <Label>
-                                        {data.leave_type === 'SL' ? 'Medical Certificate' : data.leave_type === 'BL' ? 'Death Certificate' : 'Supporting Document'} (Optional)
-                                    </Label>
-
-                                    {/* Show existing certificate if available */}
-                                    {leaveRequest.medical_cert_path && !medicalCertPreview && (
-                                        <div className="mb-4 p-4 border rounded-lg bg-muted/30">
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <FileImage className="h-5 w-5 text-green-600" />
-                                                    <span className="text-sm font-medium">
-                                                        Existing {data.leave_type === 'SL' ? 'Medical Certificate' : data.leave_type === 'BL' ? 'Death Certificate' : 'Supporting Document'}
-                                                    </span>
-                                                </div>
-                                                <a
-                                                    href={leaveMedicalCertRoute(leaveRequest.id).url}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="text-sm text-primary hover:underline"
-                                                >
-                                                    View Current
-                                                </a>
-                                            </div>
-                                            <p className="text-xs text-muted-foreground mt-2">
-                                                Upload a new file below to replace the existing certificate
-                                            </p>
-                                        </div>
-                                    )}
-
-                                    {/* Preview uploaded file */}
-                                    {medicalCertPreview ? (
-                                        <div className="relative">
-                                            {!isPdfFile ? (
-                                                <img
-                                                    src={medicalCertPreview}
-                                                    alt="Medical Certificate Preview"
-                                                    className="max-h-48 rounded-lg border object-contain"
-                                                />
-                                            ) : (
-                                                <div className="space-y-2">
-                                                    <div className="relative rounded-md overflow-hidden border bg-muted h-50">
-                                                        <iframe
-                                                            src={medicalCertPreview}
-                                                            title="PDF preview"
-                                                            className="w-full h-full"
-                                                        />
-                                                    </div>
-                                                    <Button
-                                                        type="button"
-                                                        variant="outline"
-                                                        size="sm"
-                                                        onClick={() => window.open(medicalCertPreview!, '_blank')}
-                                                        className="w-full"
-                                                    >
-                                                        <Eye className="h-4 w-4 mr-1" />
-                                                        View Full Document
-                                                    </Button>
-                                                </div>
-                                            )}
-                                            <Button
-                                                type="button"
-                                                variant="destructive"
-                                                size="icon"
-                                                className="absolute top-2 right-2 h-6 w-6"
-                                                onClick={clearMedicalCert}
-                                            >
-                                                <X className="h-4 w-4" />
-                                            </Button>
-                                            <p className="text-xs text-muted-foreground mt-2">
-                                                {data.medical_cert_file?.name} ({((data.medical_cert_file?.size || 0) / 1024 / 1024).toFixed(2)} MB)
-                                            </p>
-                                        </div>
-                                    ) : (
-                                        <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 text-center hover:border-muted-foreground/50 transition-colors">
-                                            <input
-                                                id="medical_cert_file"
-                                                type="file"
-                                                accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,application/pdf"
-                                                onChange={handleMedicalCertChange}
-                                                className="hidden"
-                                            />
-                                            <label
-                                                htmlFor="medical_cert_file"
-                                                className="cursor-pointer flex flex-col items-center gap-2"
-                                            >
-                                                <Upload className="h-8 w-8 text-muted-foreground" />
-                                                <span className="text-sm font-medium">
-                                                    Click to upload {data.leave_type === 'SL' ? 'medical certificate' : data.leave_type === 'BL' ? 'death certificate' : 'supporting document'}
-                                                </span>
-                                                <span className="text-xs text-muted-foreground">
-                                                    JPEG, PNG, GIF, WebP or PDF (max 4MB)
-                                                </span>
-                                            </label>
-                                        </div>
-                                    )}
-
-                                    {errors.medical_cert_file && (
-                                        <p className="text-sm text-red-500">{errors.medical_cert_file}</p>
-                                    )}
-
-                                    {/* Upload progress */}
-                                    {progress && (progress.percentage ?? 0) > 0 && (progress.percentage ?? 0) < 100 && (
-                                        <div className="space-y-2">
-                                            <Progress value={progress.percentage ?? 0} className="h-2" />
-                                            <p className="text-xs text-muted-foreground text-center">
-                                                Uploading... {progress.percentage ?? 0}%
-                                            </p>
-                                        </div>
-                                    )}
+                                    <LeaveDocumentsUpload
+                                        leaveType={data.leave_type}
+                                        files={data.medical_cert_files}
+                                        onFilesChange={(files) => {
+                                            setData('medical_cert_files', files);
+                                            const remainingExisting = (leaveRequest.documents || []).filter(
+                                                (doc) => !data.removed_documents.includes(doc.id),
+                                            ).length;
+                                            setData('medical_cert_submitted', files.length + remainingExisting > 0);
+                                        }}
+                                        errors={errors as Record<string, string>}
+                                        existingDocuments={leaveRequest.documents}
+                                        removedDocumentIds={data.removed_documents}
+                                        onRemoveExisting={handleRemoveExistingDocument}
+                                        documentViewUrl={(leaveRequestId, documentId) =>
+                                            leaveDocumentRoute({ leaveRequest: leaveRequestId, document: documentId }).url
+                                        }
+                                        progress={progress}
+                                    />
 
                                     {slCreditInfo && (
                                         <Alert className={slCreditInfo.includes('converted to UPTO')

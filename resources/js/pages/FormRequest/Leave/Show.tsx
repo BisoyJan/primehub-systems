@@ -13,6 +13,15 @@ import { Can } from '@/components/authorization';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import {
+    Attachment,
+    AttachmentAction,
+    AttachmentActions,
+    AttachmentContent,
+    AttachmentDescription,
+    AttachmentMedia,
+    AttachmentTitle,
+} from '@/components/ui/attachment';
 import { useInitials } from '@/hooks/use-initials';
 import {
     Dialog,
@@ -22,11 +31,38 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { ArrowLeft, Check, X, Ban, Info, Trash2, CheckCircle, Clock, UserCheck, XCircle, Shield, Edit, AlertTriangle, Calendar, FileImage, ExternalLink, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Check, X, Ban, Info, Trash2, CheckCircle, Clock, UserCheck, XCircle, Shield, Edit, AlertTriangle, Calendar, FileImage, FileText, Eye, ExternalLink, ZoomIn, ZoomOut, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePermission } from '@/hooks/use-permission';
-import { index as leaveIndexRoute, approve as leaveApproveRoute, deny as leaveDenyRoute, partialDeny as leavePartialDenyRoute, cancel as leaveCancelRoute, destroy as leaveDestroyRoute, edit as leaveEditRoute, medicalCert as leaveMedicalCertRoute, updateDayStatuses as leaveUpdateDayStatusesRoute } from '@/routes/leave-requests';
+import { index as leaveIndexRoute, approve as leaveApproveRoute, deny as leaveDenyRoute, partialDeny as leavePartialDenyRoute, cancel as leaveCancelRoute, destroy as leaveDestroyRoute, edit as leaveEditRoute, medicalCert as leaveMedicalCertRoute, documents as leaveDocumentRoute, updateDayStatuses as leaveUpdateDayStatusesRoute } from '@/routes/leave-requests';
+import type { LeaveRequestDocument } from '@/types';
 import DayStatusAssignment, { type DayStatus, VL_STATUS_OPTIONS, SL_STATUS_OPTIONS } from './Components/DayStatusAssignment';
+
+const isImageDocument = (document: LeaveRequestDocument): boolean => {
+    if (document.mime_type) {
+        return document.mime_type.startsWith('image/');
+    }
+    return /\.(jpe?g|png|gif|webp)$/i.test(document.original_filename);
+};
+
+const formatFileSize = (bytes: number | null): string | null => {
+    if (!bytes || bytes <= 0) {
+        return null;
+    }
+    if (bytes < 1024) {
+        return `${bytes} B`;
+    }
+    if (bytes < 1024 * 1024) {
+        return `${(bytes / 1024).toFixed(0)} KB`;
+    }
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+};
+
+const formatDocumentDescription = (document: LeaveRequestDocument): string => {
+    const extension = document.original_filename.split('.').pop()?.toUpperCase();
+    const size = formatFileSize(document.file_size);
+    return [extension, size].filter(Boolean).join(' · ') || 'Document';
+};
 
 interface User {
     id: number;
@@ -94,6 +130,7 @@ interface LeaveRequest {
     sl_credits_applied?: boolean;
     sl_no_credit_reason?: string;
     denied_dates?: DeniedDate[];
+    documents?: LeaveRequestDocument[];
 }
 
 interface AbsenceWindowInfo {
@@ -206,15 +243,33 @@ export default function Show({
     const [showPartialDenyDialog, setShowPartialDenyDialog] = useState(false);
     const [showMedicalCertDialog, setShowMedicalCertDialog] = useState(false);
     const [medicalCertZoom, setMedicalCertZoom] = useState(100);
+    const [selectedDocument, setSelectedDocument] = useState<LeaveRequestDocument | null>(null);
 
     // Zoom controls
     const handleZoomChange = (value: number) => setMedicalCertZoom(Math.min(300, Math.max(25, value)));
     const handleZoomReset = () => setMedicalCertZoom(100);
 
     // Reset zoom when dialog opens
-    const handleOpenMedicalCert = () => {
+    const handleOpenDocument = (document: LeaveRequestDocument) => {
+        setSelectedDocument(document);
         setMedicalCertZoom(100);
         setShowMedicalCertDialog(true);
+    };
+
+    // Navigate between documents in the viewer
+    const documentList = leaveRequest.documents ?? [];
+    const selectedDocumentIndex = selectedDocument
+        ? documentList.findIndex((doc) => doc.id === selectedDocument.id)
+        : -1;
+    const hasMultipleDocuments = documentList.length > 1;
+
+    const handleShowDocumentByOffset = (offset: number) => {
+        if (selectedDocumentIndex === -1 || documentList.length === 0) {
+            return;
+        }
+        const nextIndex = (selectedDocumentIndex + offset + documentList.length) % documentList.length;
+        setSelectedDocument(documentList[nextIndex]);
+        setMedicalCertZoom(100);
     };
     const [showCancelDialog, setShowCancelDialog] = useState(false);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -1109,30 +1164,75 @@ export default function Show({
                         {(leaveRequest.leave_type === 'SL' || leaveRequest.leave_type === 'BL' || leaveRequest.leave_type === 'UPTO' || leaveRequest.leave_type === 'IW') && (
                             <div className="space-y-2">
                                 <p className="text-sm font-medium text-muted-foreground">
-                                    {leaveRequest.leave_type === 'SL' ? 'Medical Certificate' : leaveRequest.leave_type === 'BL' ? 'Death Certificate' : leaveRequest.leave_type === 'IW' ? 'Supporting Document' : 'Supporting Document'}
+                                    {leaveRequest.leave_type === 'SL' ? 'Medical Certificate' : leaveRequest.leave_type === 'BL' ? 'Death Certificate' : 'Supporting Document'}
                                 </p>
-                                {leaveRequest.medical_cert_path && canViewMedicalCert ? (
+                                {(leaveRequest.documents && leaveRequest.documents.length > 0) && canViewMedicalCert ? (
+                                    <div className="space-y-2">
+                                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">
+                                            <FileImage className="h-3 w-3 mr-1" />
+                                            {leaveRequest.documents.length} file{leaveRequest.documents.length > 1 ? 's' : ''} uploaded
+                                        </Badge>
+                                        <div className="flex flex-wrap gap-3">
+                                            {leaveRequest.documents.map((document) => {
+                                                const url = leaveDocumentRoute({ leaveRequest: leaveRequest.id, document: document.id }).url;
+                                                const isImage = isImageDocument(document);
+                                                return (
+                                                    <Attachment key={document.id} className="w-full sm:w-72">
+                                                        {isImage ? (
+                                                            <AttachmentMedia variant="image">
+                                                                <img src={url} alt={document.original_filename} />
+                                                            </AttachmentMedia>
+                                                        ) : (
+                                                            <AttachmentMedia>
+                                                                <FileText />
+                                                            </AttachmentMedia>
+                                                        )}
+                                                        <AttachmentContent>
+                                                            <AttachmentTitle>{document.original_filename}</AttachmentTitle>
+                                                            <AttachmentDescription>{formatDocumentDescription(document)}</AttachmentDescription>
+                                                        </AttachmentContent>
+                                                        <AttachmentActions>
+                                                            <AttachmentAction
+                                                                aria-label={`View ${document.original_filename}`}
+                                                                title="View"
+                                                                onClick={() => handleOpenDocument(document)}
+                                                            >
+                                                                <Eye />
+                                                            </AttachmentAction>
+                                                            <AttachmentAction
+                                                                asChild
+                                                                title="Open in new tab"
+                                                            >
+                                                                <a
+                                                                    href={url}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    aria-label={`Open ${document.original_filename} in new tab`}
+                                                                >
+                                                                    <ExternalLink />
+                                                                </a>
+                                                            </AttachmentAction>
+                                                        </AttachmentActions>
+                                                    </Attachment>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                ) : leaveRequest.medical_cert_path && canViewMedicalCert ? (
                                     <div className="flex items-center gap-2">
                                         <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">
                                             <FileImage className="h-3 w-3 mr-1" />
                                             Uploaded
                                         </Badge>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={handleOpenMedicalCert}
-                                        >
-                                            <FileImage className="h-4 w-4 mr-1" />
-                                            View {leaveRequest.leave_type === 'SL' ? 'Certificate' : leaveRequest.leave_type === 'BL' ? 'Certificate' : 'Document'}
-                                        </Button>
                                         <a
                                             href={leaveMedicalCertRoute(leaveRequest.id).url}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            title={`Open ${leaveRequest.leave_type === 'SL' ? 'medical certificate' : leaveRequest.leave_type === 'BL' ? 'death certificate' : 'supporting document'} in new tab`}
+                                            title="Open in new tab"
                                         >
-                                            <Button variant="ghost" size="sm">
-                                                <ExternalLink className="h-4 w-4" />
+                                            <Button variant="outline" size="sm">
+                                                <FileImage className="h-4 w-4 mr-1" />
+                                                View Document
                                             </Button>
                                         </a>
                                     </div>
@@ -2666,25 +2766,56 @@ export default function Show({
 
             {/* Medical Certificate Dialog */}
             <Dialog open={showMedicalCertDialog} onOpenChange={setShowMedicalCertDialog}>
-                <DialogContent className="max-w-[90vw] sm:max-w-2xl max-h-[90vh] overflow-auto">
+                <DialogContent className="max-w-[92vw] sm:max-w-3xl lg:max-w-4xl max-h-[90vh] overflow-auto">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <FileImage className="h-5 w-5" />
                             {leaveRequest.leave_type === 'SL' ? 'Medical Certificate' : 'Supporting Document'}
+                            {hasMultipleDocuments && selectedDocumentIndex !== -1 && (
+                                <span className="text-sm font-normal text-muted-foreground">
+                                    ({selectedDocumentIndex + 1} of {documentList.length})
+                                </span>
+                            )}
                         </DialogTitle>
                         <DialogDescription>
-                            Leave Request #{leaveRequest.id} - {leaveRequest.user.name}
+                            {selectedDocument?.original_filename
+                                ? selectedDocument.original_filename
+                                : `Leave Request #${leaveRequest.id} - ${leaveRequest.user.name}`}
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="flex flex-col gap-4">
-                        {leaveRequest.medical_cert_path && leaveRequest.medical_cert_path.toLowerCase().endsWith('.pdf') ? (
+                    <div className="relative flex flex-col gap-4">
+                        {hasMultipleDocuments && (
+                            <>
+                                <Button
+                                    type="button"
+                                    variant="secondary"
+                                    size="icon"
+                                    onClick={() => handleShowDocumentByOffset(-1)}
+                                    className="absolute left-2 top-1/2 z-10 h-9 w-9 -translate-y-1/2 rounded-full opacity-80 shadow-md hover:opacity-100"
+                                    title="Previous document"
+                                >
+                                    <ChevronLeft className="h-5 w-5" />
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="secondary"
+                                    size="icon"
+                                    onClick={() => handleShowDocumentByOffset(1)}
+                                    className="absolute right-2 top-1/2 z-10 h-9 w-9 -translate-y-1/2 rounded-full opacity-80 shadow-md hover:opacity-100"
+                                    title="Next document"
+                                >
+                                    <ChevronRight className="h-5 w-5" />
+                                </Button>
+                            </>
+                        )}
+                        {selectedDocument && (selectedDocument.mime_type === 'application/pdf' || selectedDocument.original_filename.toLowerCase().endsWith('.pdf')) ? (
                             /* PDF Viewer */
                             <div className="overflow-hidden rounded-lg border">
                                 <iframe
-                                    src={leaveMedicalCertRoute(leaveRequest.id).url}
-                                    title={leaveRequest.leave_type === 'SL' ? 'Medical Certificate' : leaveRequest.leave_type === 'BL' ? 'Death Certificate' : 'Supporting Document'}
-                                    className="w-full h-[60vh]"
+                                    src={leaveDocumentRoute({ leaveRequest: leaveRequest.id, document: selectedDocument.id }).url}
+                                    title={selectedDocument.original_filename}
+                                    className="w-full h-[70vh]"
                                 />
                             </div>
                         ) : (
@@ -2715,12 +2846,12 @@ export default function Show({
                                     </Button>
                                 </div>
                                 {/* Image Container */}
-                                <div className="overflow-auto max-h-[60vh] rounded-lg bg-muted/30">
+                                <div className="overflow-auto max-h-[68vh] rounded-lg bg-muted/30">
                                     <div className="min-w-full min-h-full flex items-start p-4">
-                                        {leaveRequest.medical_cert_path && (
+                                        {selectedDocument && (
                                             <img
-                                                src={leaveMedicalCertRoute(leaveRequest.id).url}
-                                                alt={leaveRequest.leave_type === 'SL' ? 'Medical Certificate' : leaveRequest.leave_type === 'BL' ? 'Death Certificate' : 'Supporting Document'}
+                                                src={leaveDocumentRoute({ leaveRequest: leaveRequest.id, document: selectedDocument.id }).url}
+                                                alt={selectedDocument.original_filename}
                                                 className="object-contain rounded-lg border transition-transform duration-200 origin-top-left"
                                                 style={{ transform: `scale(${medicalCertZoom / 100})` }}
                                             />
@@ -2732,8 +2863,30 @@ export default function Show({
                     </div>
 
                     <DialogFooter>
+                        {hasMultipleDocuments && (
+                            <div className="mr-auto flex items-center gap-2">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleShowDocumentByOffset(-1)}
+                                >
+                                    <ChevronLeft className="h-4 w-4 mr-1" />
+                                    Previous
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleShowDocumentByOffset(1)}
+                                >
+                                    Next
+                                    <ChevronRight className="h-4 w-4 ml-1" />
+                                </Button>
+                            </div>
+                        )}
                         <a
-                            href={leaveMedicalCertRoute(leaveRequest.id).url}
+                            href={selectedDocument ? leaveDocumentRoute({ leaveRequest: leaveRequest.id, document: selectedDocument.id }).url : '#'}
                             target="_blank"
                             rel="noopener noreferrer"
                         >

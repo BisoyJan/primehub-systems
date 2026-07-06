@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\FormRequestRetentionPolicy;
 use App\Models\ItConcern;
 use App\Models\LeaveRequest;
+use App\Models\LeaveRequestDocument;
 use App\Models\MedicationRequest;
 use App\Models\Site;
 use Carbon\Carbon;
@@ -59,13 +60,14 @@ class CleanOldFormRequests extends Command
 
         if ($totalDeleted === 0) {
             $this->info('No old records found to delete.');
+
             return self::SUCCESS;
         }
 
         $action = $this->option('dry-run') ? 'would be deleted' : 'deleted';
         $this->info("Successfully {$action} {$totalDeleted} form request records in total.");
 
-        if (!$this->option('dry-run')) {
+        if (! $this->option('dry-run')) {
             \Log::info('Form request records cleanup completed', [
                 'total_records_deleted' => $totalDeleted,
                 'cleanup_date' => Carbon::now()->format('Y-m-d H:i:s'),
@@ -92,7 +94,7 @@ class CleanOldFormRequests extends Command
             default => null,
         };
 
-        if (!$query) {
+        if (! $query) {
             return 0;
         }
 
@@ -116,9 +118,9 @@ class CleanOldFormRequests extends Command
                 // For global/no-site, include users with no active schedule or no site in schedule
                 $query->where(function (Builder $q) {
                     $q->whereDoesntHave('user.activeSchedule')
-                      ->orWhereHas('user.activeSchedule', function (Builder $sq) {
-                          $sq->whereNull('site_id');
-                      });
+                        ->orWhereHas('user.activeSchedule', function (Builder $sq) {
+                            $sq->whereNull('site_id');
+                        });
                 });
             }
         }
@@ -133,11 +135,12 @@ class CleanOldFormRequests extends Command
 
         if ($this->option('dry-run')) {
             $this->info("  [DRY RUN] Would delete {$count} records.");
+
             return $count;
         }
 
         // Skip confirmation if --force flag is used or running in scheduled context
-        if ($this->option('force') || !$this->input->isInteractive()) {
+        if ($this->option('force') || ! $this->input->isInteractive()) {
             // Delete associated files before deleting records
             $filesDeleted = $this->deleteAssociatedFiles($query->clone(), $formType);
             if ($filesDeleted > 0) {
@@ -171,10 +174,25 @@ class CleanOldFormRequests extends Command
 
         // Only LeaveRequest has file attachments (medical certificates)
         if ($formType === 'leave_request') {
+            // Capture the IDs of records being removed before mutating the query
+            $recordIds = (clone $query)->pluck('id');
+
             $records = $query->whereNotNull('medical_cert_path')
                 ->pluck('medical_cert_path');
 
             foreach ($records as $filePath) {
+                if ($filePath && Storage::disk('local')->exists($filePath)) {
+                    Storage::disk('local')->delete($filePath);
+                    $filesDeleted++;
+                }
+            }
+
+            // Delete supporting document files attached to the records being removed
+            $documentPaths = LeaveRequestDocument::query()
+                ->whereIn('leave_request_id', $recordIds)
+                ->pluck('file_path');
+
+            foreach ($documentPaths as $filePath) {
                 if ($filePath && Storage::disk('local')->exists($filePath)) {
                     Storage::disk('local')->delete($filePath);
                     $filesDeleted++;

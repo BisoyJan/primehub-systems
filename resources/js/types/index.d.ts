@@ -86,6 +86,17 @@ export interface CoachingSessionAttachment {
     updated_at: string;
 }
 
+export interface LeaveRequestDocument {
+    id: number;
+    leave_request_id: number;
+    file_path: string;
+    original_filename: string;
+    mime_type: string | null;
+    file_size: number | null;
+    created_at: string;
+    updated_at: string;
+}
+
 export interface CoachingSession {
     id: number;
     coachee_id: number;

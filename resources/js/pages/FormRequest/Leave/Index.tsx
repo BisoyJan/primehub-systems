@@ -31,7 +31,7 @@ import {
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
-import { Plus, Eye, Ban, RefreshCw, Filter, Trash2, Pencil, CheckCircle, Play, Pause, Download, Calendar, FileImage, ExternalLink, ZoomIn, ZoomOut, RotateCcw, AlertTriangle, List, Clock, XCircle } from 'lucide-react';
+import { Plus, Eye, Ban, RefreshCw, Filter, Trash2, Pencil, CheckCircle, Play, Pause, Download, Calendar, FileImage, AlertTriangle, List, Clock, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
 import { usePermission } from '@/hooks/use-permission';
@@ -51,7 +51,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { index as leaveIndexRoute, create as leaveCreateRoute, show as leaveShowRoute, cancel as leaveCancelRoute, destroy as leaveDestroyRoute, edit as leaveEditRoute, medicalCert as leaveMedicalCertRoute } from '@/routes/leave-requests';
+import { index as leaveIndexRoute, create as leaveCreateRoute, show as leaveShowRoute, cancel as leaveCancelRoute, destroy as leaveDestroyRoute, edit as leaveEditRoute } from '@/routes/leave-requests';
 import { MultiSelectFilter, parseMultiSelectParam, multiSelectToParam } from '@/components/multi-select-filter';
 
 interface User {
@@ -78,6 +78,7 @@ interface LeaveRequest {
     created_at: string;
     medical_cert_path: string | null;
     medical_cert_submitted: boolean;
+    documents_count?: number;
 }
 
 interface PaginationLink {
@@ -175,12 +176,6 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
 
-    // Medical Certificate dialog state
-    const [showMedicalCertDialog, setShowMedicalCertDialog] = useState(false);
-    const [selectedMedicalCertLeaveId, setSelectedMedicalCertLeaveId] = useState<number | null>(null);
-    const [selectedMedicalCertUserName, setSelectedMedicalCertUserName] = useState<string>('');
-    const [medicalCertZoom, setMedicalCertZoom] = useState(100);
-
     // Export dialog state
     const [showExportDialog, setShowExportDialog] = useState(false);
     const [exportYear, setExportYear] = useState(new Date().getFullYear() - 1);
@@ -194,18 +189,6 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
         total: leaveRequests.data.length,
     };
     const paginationLinks = leaveRequests.links || [];
-
-    // Handle opening medical certificate dialog
-    const handleViewMedicalCert = (leaveId: number, userName: string) => {
-        setSelectedMedicalCertLeaveId(leaveId);
-        setSelectedMedicalCertUserName(userName);
-        setMedicalCertZoom(100);
-        setShowMedicalCertDialog(true);
-    };
-
-    // Zoom controls
-    const handleZoomChange = (value: number) => setMedicalCertZoom(Math.min(300, Math.max(25, value)));
-    const handleZoomReset = () => setMedicalCertZoom(100);
 
     // Filter employees based on search query (from all employees list)
     const showClearFilters = activeTab !== 'all' || selectedTypes.length > 0 || selectedUserIds.length > 0 || selectedCampaigns.length > 0 || filterPeriod !== 'all';
@@ -771,17 +754,18 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
                                                                     <Eye className="h-4 w-4" />
                                                                 </Button>
                                                             </Link>
-                                                            {/* Medical/Supporting Document Button - For SL, BL, UPTO, and IW with uploaded cert */}
-                                                            {(request.leave_type === 'SL' || request.leave_type === 'BL' || request.leave_type === 'UPTO' || request.leave_type === 'IW') && request.medical_cert_path && (auth.user.id === request.user.id || isAdmin) && (
-                                                                <Button
-                                                                    size="icon"
-                                                                    variant="outline"
-                                                                    onClick={() => handleViewMedicalCert(request.id, request.user.name)}
-                                                                    title={`View ${request.leave_type === 'SL' ? 'Medical Certificate' : request.leave_type === 'BL' ? 'Death Certificate' : 'Supporting Document'}`}
-                                                                    className="text-green-600 hover:text-green-700 border-green-300"
-                                                                >
-                                                                    <FileImage className="h-4 w-4" />
-                                                                </Button>
+                                                            {/* Medical/Supporting Document Button - For SL, BL, UPTO, and IW with uploaded document */}
+                                                            {(request.leave_type === 'SL' || request.leave_type === 'BL' || request.leave_type === 'UPTO' || request.leave_type === 'IW') && ((request.documents_count ?? 0) > 0 || request.medical_cert_path) && (auth.user.id === request.user.id || isAdmin) && (
+                                                                <Link href={leaveShowRoute(request.id).url}>
+                                                                    <Button
+                                                                        size="icon"
+                                                                        variant="outline"
+                                                                        title={`View ${request.leave_type === 'SL' ? 'Medical Certificate' : request.leave_type === 'BL' ? 'Death Certificate' : 'Supporting Document'}`}
+                                                                        className="text-green-600 hover:text-green-700 border-green-300"
+                                                                    >
+                                                                        <FileImage className="h-4 w-4" />
+                                                                    </Button>
+                                                                </Link>
                                                             )}
                                                             {request.status === 'pending' && (auth.user.id === request.user.id || can('leave.edit')) && (
                                                                 <Link href={leaveEditRoute({ leaveRequest: request.id }).url}>
@@ -904,16 +888,17 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
                                         </Button>
                                     </Link>
                                     {/* Medical/Supporting Document Button - Mobile */}
-                                    {(request.leave_type === 'SL' || request.leave_type === 'BL' || request.leave_type === 'UPTO' || request.leave_type === 'IW') && request.medical_cert_path && (auth.user.id === request.user.id || isAdmin) && (
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => handleViewMedicalCert(request.id, request.user.name)}
-                                            className="flex-1"
-                                        >
-                                            <FileImage className="mr-2 h-4 w-4 text-green-600" />
-                                            {request.leave_type === 'SL' ? 'Med Cert' : request.leave_type === 'BL' ? 'Death Cert' : 'Document'}
-                                        </Button>
+                                    {(request.leave_type === 'SL' || request.leave_type === 'BL' || request.leave_type === 'UPTO' || request.leave_type === 'IW') && ((request.documents_count ?? 0) > 0 || request.medical_cert_path) && (auth.user.id === request.user.id || isAdmin) && (
+                                        <Link href={leaveShowRoute(request.id).url} className="flex-1">
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="w-full"
+                                            >
+                                                <FileImage className="mr-2 h-4 w-4 text-green-600" />
+                                                {request.leave_type === 'SL' ? 'Med Cert' : request.leave_type === 'BL' ? 'Death Cert' : 'Document'}
+                                            </Button>
+                                        </Link>
                                     )}
                                     {request.status === 'pending' && (auth.user.id === request.user.id || can('leave.edit')) && (
                                         <Link href={leaveEditRoute({ leaveRequest: request.id }).url} className="flex-1">
@@ -1098,114 +1083,6 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
                                 Exporting...
                             </Button>
                         )}
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            {/* Medical Certificate Dialog */}
-            <Dialog open={showMedicalCertDialog} onOpenChange={setShowMedicalCertDialog}>
-                <DialogContent className="max-w-[90vw] sm:max-w-2xl max-h-[90vh] overflow-auto">
-                    <DialogHeader>
-                        <DialogTitle>
-                            {(() => {
-                                const leaveType = selectedMedicalCertLeaveId && leaveRequests.data.find(r => r.id === selectedMedicalCertLeaveId)?.leave_type;
-                                if (leaveType === 'SL') return 'Medical Certificate';
-                                if (leaveType === 'BL') return 'Death Certificate';
-                                return 'Supporting Document';
-                            })()}
-                        </DialogTitle>
-                        <DialogDescription>
-                            {(() => {
-                                const leaveType = selectedMedicalCertLeaveId && leaveRequests.data.find(r => r.id === selectedMedicalCertLeaveId)?.leave_type;
-                                if (leaveType === 'SL') return 'Medical certificate';
-                                if (leaveType === 'BL') return 'Death certificate';
-                                return 'Supporting document';
-                            })()} submitted by {selectedMedicalCertUserName}
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="flex flex-col gap-4">
-                        {(() => {
-                            const selectedRequest = selectedMedicalCertLeaveId && leaveRequests.data.find(r => r.id === selectedMedicalCertLeaveId);
-                            const isPdf = selectedRequest && selectedRequest.medical_cert_path?.toLowerCase().endsWith('.pdf');
-                            const docLabel = (() => {
-                                const leaveType = selectedRequest ? selectedRequest.leave_type : '';
-                                if (leaveType === 'SL') return 'Medical Certificate';
-                                if (leaveType === 'BL') return 'Death Certificate';
-                                return 'Supporting Document';
-                            })();
-
-                            if (isPdf) {
-                                return (
-                                    <div className="overflow-hidden rounded-lg border">
-                                        <iframe
-                                            src={leaveMedicalCertRoute(selectedMedicalCertLeaveId!).url}
-                                            title={docLabel}
-                                            className="w-full h-[60vh]"
-                                        />
-                                    </div>
-                                );
-                            }
-
-                            return (
-                                <>
-                                    {/* Zoom Slider */}
-                                    <div className="flex items-center gap-3 pb-2 border-b px-2">
-                                        <ZoomOut className="h-4 w-4 shrink-0 text-muted-foreground" />
-                                        <input
-                                            type="range"
-                                            min={25}
-                                            max={300}
-                                            step={5}
-                                            value={medicalCertZoom}
-                                            onChange={(e) => handleZoomChange(Number(e.target.value))}
-                                            className="w-full h-2 accent-primary cursor-pointer"
-                                            title="Zoom level"
-                                        />
-                                        <ZoomIn className="h-4 w-4 shrink-0 text-muted-foreground" />
-                                        <span className="text-sm font-medium min-w-[50px] text-center tabular-nums">{medicalCertZoom}%</span>
-                                        <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            onClick={handleZoomReset}
-                                            className="h-7 px-2"
-                                            title="Reset zoom"
-                                        >
-                                            <RotateCcw className="h-3.5 w-3.5" />
-                                        </Button>
-                                    </div>
-                                    {/* Image Container */}
-                                    <div className="overflow-auto max-h-[60vh] rounded-lg bg-muted/30">
-                                        <div className="min-w-full min-h-full flex items-start p-4">
-                                            {selectedMedicalCertLeaveId && (
-                                                <img
-                                                    src={leaveMedicalCertRoute(selectedMedicalCertLeaveId).url}
-                                                    alt={docLabel}
-                                                    className="object-contain rounded-lg shadow-lg transition-transform duration-200 origin-top-left"
-                                                    style={{ transform: `scale(${medicalCertZoom / 100})` }}
-                                                />
-                                            )}
-                                        </div>
-                                    </div>
-                                </>
-                            );
-                        })()}
-                    </div>
-                    <DialogFooter>
-                        {selectedMedicalCertLeaveId && (
-                            <a
-                                href={leaveMedicalCertRoute(selectedMedicalCertLeaveId).url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                            >
-                                <Button variant="outline">
-                                    <ExternalLink className="h-4 w-4 mr-2" />
-                                    Open in New Tab
-                                </Button>
-                            </a>
-                        )}
-                        <Button variant="outline" onClick={() => setShowMedicalCertDialog(false)}>
-                            Close
-                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

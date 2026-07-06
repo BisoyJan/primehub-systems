@@ -14,6 +14,7 @@ use App\Models\EmployeeSchedule;
 use App\Models\LeaveRequest;
 use App\Models\LeaveRequestDay;
 use App\Models\LeaveRequestDeniedDate;
+use App\Models\LeaveRequestDocument;
 use App\Models\User;
 use App\Services\AttendancePoint\GbroCalculationService;
 use App\Services\LeaveCreditService;
@@ -28,6 +29,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 class LeaveRequestController extends Controller
@@ -71,7 +73,8 @@ class LeaveRequestController extends Controller
             }
         }
 
-        $query = LeaveRequest::with(['user', 'reviewer', 'adminApprover', 'hrApprover', 'tlApprover']);
+        $query = LeaveRequest::with(['user', 'reviewer', 'adminApprover', 'hrApprover', 'tlApprover'])
+            ->withCount('documents');
 
         // Admins see all requests
         if ($isAdmin) {
@@ -708,12 +711,10 @@ class LeaveRequestController extends Controller
                 }
             }
 
-            // Handle medical certificate/document file upload for Sick Leave, Bereavement Leave, UPTO, and Incomplete Workday
-            $medicalCertPath = null;
-            if (in_array($request->leave_type, ['SL', 'BL', 'UPTO', 'IW']) && $request->hasFile('medical_cert_file')) {
-                $file = $request->file('medical_cert_file');
-                $filename = 'medcert_'.$targetUser->id.'_'.time().'.'.$file->getClientOriginalExtension();
-                $medicalCertPath = $file->storeAs('medical_certificates', $filename, 'local');
+            // Handle supporting document uploads for Sick Leave, Bereavement Leave, UPTO, and Incomplete Workday
+            $documentFiles = [];
+            if (in_array($request->leave_type, ['SL', 'BL', 'UPTO', 'IW']) && $request->hasFile('medical_cert_files')) {
+                $documentFiles = $request->file('medical_cert_files');
             }
 
             // Create leave request
@@ -726,14 +727,27 @@ class LeaveRequestController extends Controller
                 'days_requested' => $daysRequested,
                 'reason' => $request->reason,
                 'campaign_department' => $request->campaign_department,
-                'medical_cert_submitted' => $request->boolean('medical_cert_submitted', false),
-                'medical_cert_path' => $medicalCertPath,
+                'medical_cert_submitted' => count($documentFiles) > 0 || $request->boolean('medical_cert_submitted', false),
+                'medical_cert_path' => null,
                 'sl_with_undertime' => $request->leave_type === 'SL' ? $request->boolean('sl_with_undertime', false) : false,
                 'status' => 'pending',
                 'attendance_points_at_request' => $attendancePoints,
                 'requires_tl_approval' => $requiresTlApproval,
                 'credits_year' => now()->year,
             ]);
+
+            // Persist uploaded supporting documents
+            foreach ($documentFiles as $file) {
+                $filename = 'leavedoc_'.$targetUser->id.'_'.Str::uuid().'.'.$file->getClientOriginalExtension();
+                $path = $file->storeAs('leave_request_documents', $filename, 'local');
+
+                $leaveRequest->documents()->create([
+                    'file_path' => $path,
+                    'original_filename' => $file->getClientOriginalName(),
+                    'mime_type' => $file->getMimeType(),
+                    'file_size' => $file->getSize(),
+                ]);
+            }
 
             // For SPL: create per-day records at submission time with is_half_day setting
             if ($request->leave_type === 'SPL' && $request->has('spl_day_settings') && is_array($request->input('spl_day_settings'))) {
@@ -832,7 +846,7 @@ class LeaveRequestController extends Controller
         $isAdmin = in_array($user->role, ['Super Admin', 'Admin', 'HR']);
         $isTeamLead = $user->role === 'Team Lead';
 
-        $leaveRequest->load(['user', 'reviewer', 'adminApprover', 'hrApprover', 'tlApprover', 'shortNoticeOverrider', 'deniedDates.denier', 'days.assigner']);
+        $leaveRequest->load(['user', 'reviewer', 'adminApprover', 'hrApprover', 'tlApprover', 'shortNoticeOverrider', 'deniedDates.denier', 'days.assigner', 'documents']);
 
         // Check if current user has already approved
         $hasUserApproved = false;
@@ -1088,6 +1102,31 @@ class LeaveRequestController extends Controller
     }
 
     /**
+     * View a supporting document attached to a leave request.
+     * Only accessible by the request owner OR Admin/HR/Super Admin.
+     */
+    public function viewDocument(LeaveRequest $leaveRequest, LeaveRequestDocument $document)
+    {
+        $user = auth()->user();
+
+        // Only the request owner OR Admin/HR/Super Admin can view supporting documents
+        if ($leaveRequest->user_id !== $user->id && ! in_array($user->role, ['Super Admin', 'Admin', 'HR'])) {
+            abort(403, 'Unauthorized to view document.');
+        }
+
+        // Ensure the document belongs to this leave request
+        if ($document->leave_request_id !== $leaveRequest->id) {
+            abort(404, 'Document not found.');
+        }
+
+        if (! Storage::disk('local')->exists($document->file_path)) {
+            abort(404, 'Document file not found.');
+        }
+
+        return response()->file(Storage::disk('local')->path($document->file_path));
+    }
+
+    /**
      * Show the form for editing the specified leave request.
      */
     public function edit(LeaveRequest $leaveRequest)
@@ -1160,7 +1199,7 @@ class LeaveRequestController extends Controller
         // Check if user can override short notice (Admin/Super Admin only)
         $canOverrideShortNotice = in_array($user->role, ['Super Admin', 'Admin']);
 
-        $leaveRequest->load('user');
+        $leaveRequest->load(['user', 'documents']);
 
         // Format dates to prevent timezone issues
         $leaveRequestData = $leaveRequest->toArray();
@@ -1310,16 +1349,35 @@ class LeaveRequestController extends Controller
 
         DB::beginTransaction();
         try {
-            // Handle medical certificate/document file upload for Sick Leave, Bereavement Leave, UPTO, and Incomplete Workday
-            $medicalCertPath = $leaveRequest->medical_cert_path; // Keep existing if not replaced
-            if (in_array($request->leave_type, ['SL', 'BL', 'UPTO', 'IW']) && $request->hasFile('medical_cert_file')) {
-                // Delete old file if exists
-                if ($leaveRequest->medical_cert_path && Storage::disk('local')->exists($leaveRequest->medical_cert_path)) {
-                    Storage::disk('local')->delete($leaveRequest->medical_cert_path);
+            $documentsEnabled = in_array($request->leave_type, ['SL', 'BL', 'UPTO', 'IW']);
+
+            // Remove documents the user chose to delete
+            if ($documentsEnabled && $request->filled('removed_documents')) {
+                $documentsToRemove = $leaveRequest->documents()
+                    ->whereIn('id', (array) $request->input('removed_documents'))
+                    ->get();
+
+                foreach ($documentsToRemove as $document) {
+                    if (Storage::disk('local')->exists($document->file_path)) {
+                        Storage::disk('local')->delete($document->file_path);
+                    }
+                    $document->delete();
                 }
-                $file = $request->file('medical_cert_file');
-                $filename = 'medcert_'.$targetUser->id.'_'.time().'.'.$file->getClientOriginalExtension();
-                $medicalCertPath = $file->storeAs('medical_certificates', $filename, 'local');
+            }
+
+            // Add newly uploaded supporting documents
+            if ($documentsEnabled && $request->hasFile('medical_cert_files')) {
+                foreach ($request->file('medical_cert_files') as $file) {
+                    $filename = 'leavedoc_'.$targetUser->id.'_'.Str::uuid().'.'.$file->getClientOriginalExtension();
+                    $path = $file->storeAs('leave_request_documents', $filename, 'local');
+
+                    $leaveRequest->documents()->create([
+                        'file_path' => $path,
+                        'original_filename' => $file->getClientOriginalName(),
+                        'mime_type' => $file->getMimeType(),
+                        'file_size' => $file->getSize(),
+                    ]);
+                }
             }
 
             $updateData = [
@@ -1329,8 +1387,7 @@ class LeaveRequestController extends Controller
                 'days_requested' => $daysRequested,
                 'reason' => $request->reason,
                 'campaign_department' => $request->campaign_department,
-                'medical_cert_submitted' => $request->boolean('medical_cert_submitted', false),
-                'medical_cert_path' => $medicalCertPath,
+                'medical_cert_submitted' => $documentsEnabled && $leaveRequest->documents()->exists(),
                 'sl_with_undertime' => $request->leave_type === 'SL' ? $request->boolean('sl_with_undertime', false) : false,
                 'attendance_points_at_request' => $attendancePoints,
             ];
@@ -1826,36 +1883,36 @@ class LeaveRequestController extends Controller
                         LeaveRequestDay::where('leave_request_id', $leaveRequest->id)->delete();
                     }
                     $this->handleVlApproval($leaveRequest, $leaveCreditService, $vlDayStatuses);
-            } elseif ($leaveRequest->leave_type === 'SPL') {
-                // Solo Parent Leave - auto-FIFO credit allocation with optional half-day overrides
-                $splHalfDayOverrides = $request->input('spl_half_day_overrides', []);
-                $this->handleSplApproval($leaveRequest, $splHalfDayOverrides);
-            } elseif ($leaveRequest->leave_type === 'IW') {
-                // Incomplete Workday - employee reported to office but left early
-                // No credit deduction, preserve biometric data, auto-excuse attendance points
-                $this->handleIwApproval($leaveRequest);
-            } elseif ($leaveRequest->requiresCredits()) {
-                // Other credited leave types - normal deduction
-                $year = $request->input('credits_year', $leaveRequest->created_at->year);
+                } elseif ($leaveRequest->leave_type === 'SPL') {
+                    // Solo Parent Leave - auto-FIFO credit allocation with optional half-day overrides
+                    $splHalfDayOverrides = $request->input('spl_half_day_overrides', []);
+                    $this->handleSplApproval($leaveRequest, $splHalfDayOverrides);
+                } elseif ($leaveRequest->leave_type === 'IW') {
+                    // Incomplete Workday - employee reported to office but left early
+                    // No credit deduction, preserve biometric data, auto-excuse attendance points
+                    $this->handleIwApproval($leaveRequest);
+                } elseif ($leaveRequest->requiresCredits()) {
+                    // Other credited leave types - normal deduction
+                    $year = $request->input('credits_year', $leaveRequest->created_at->year);
 
-                if ($leaveRequest->has_partial_denial && $leaveRequest->approved_days !== null) {
-                    $originalDays = $leaveRequest->days_requested;
-                    $leaveRequest->days_requested = $leaveRequest->approved_days;
-                    $leaveCreditService->deductCredits($leaveRequest, $year);
-                    $leaveRequest->days_requested = $originalDays;
-                    $leaveRequest->update(['credits_deducted' => $leaveRequest->approved_days]);
+                    if ($leaveRequest->has_partial_denial && $leaveRequest->approved_days !== null) {
+                        $originalDays = $leaveRequest->days_requested;
+                        $leaveRequest->days_requested = $leaveRequest->approved_days;
+                        $leaveCreditService->deductCredits($leaveRequest, $year);
+                        $leaveRequest->days_requested = $originalDays;
+                        $leaveRequest->update(['credits_deducted' => $leaveRequest->approved_days]);
+                    } else {
+                        $leaveCreditService->deductCredits($leaveRequest, $year);
+                    }
+
+                    $this->updateAttendanceForApprovedLeave($leaveRequest);
                 } else {
-                    $leaveCreditService->deductCredits($leaveRequest, $year);
+                    // Non-credited leave types (UPTO, LOA, BL, LDV, ML) - no credit deduction, but still update attendance
+                    $this->updateAttendanceForApprovedLeave($leaveRequest);
                 }
 
-                $this->updateAttendanceForApprovedLeave($leaveRequest);
-            } else {
-                // Non-credited leave types (UPTO, LOA, BL, LDV, ML) - no credit deduction, but still update attendance
-                $this->updateAttendanceForApprovedLeave($leaveRequest);
-            }
-
-            // Notify the employee about full approval
-            $this->notificationService->notifyLeaveRequestFullyApproved(
+                // Notify the employee about full approval
+                $this->notificationService->notifyLeaveRequestFullyApproved(
                     $leaveRequest->user_id,
                     $leaveRequest->leave_type,
                     $leaveRequest->id
@@ -2996,6 +3053,13 @@ class LeaveRequestController extends Controller
             // Delete medical certificate file if exists
             if ($leaveRequest->medical_cert_path && Storage::disk('local')->exists($leaveRequest->medical_cert_path)) {
                 Storage::disk('local')->delete($leaveRequest->medical_cert_path);
+            }
+
+            // Delete supporting document files
+            foreach ($leaveRequest->documents as $document) {
+                if (Storage::disk('local')->exists($document->file_path)) {
+                    Storage::disk('local')->delete($document->file_path);
+                }
             }
 
             // Restore credits if it was approved and credits were deducted
