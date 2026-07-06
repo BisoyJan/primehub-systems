@@ -26,8 +26,8 @@ interface UseInactivityLogoutOptions {
  */
 export function useInactivityLogout(options: UseInactivityLogoutOptions = {}) {
     const { timeout = 15, enabled = true, showWarning = true } = options;
-    const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const warningTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const warningTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const resetTimer = useCallback(() => {
         // Clear existing timers

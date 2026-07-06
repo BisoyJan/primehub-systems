@@ -3,12 +3,14 @@
 namespace Tests\Feature\Controllers\FormRequests;
 
 use Tests\TestCase;
+use App\Events\ItConcernCreated;
 use App\Models\EmployeeSchedule;
 use App\Models\User;
 use App\Models\ItConcern;
 use App\Models\Site;
 use App\Services\NotificationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Event;
 use PHPUnit\Framework\Attributes\Test;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -87,6 +89,31 @@ class ItConcernControllerTest extends TestCase
             'description' => 'Mouse not working',
             'status' => 'pending',
         ]);
+    }
+
+    #[Test]
+    public function it_broadcasts_it_concern_created_event_on_store()
+    {
+        Event::fake([ItConcernCreated::class]);
+
+        $user = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create(['user_id' => $user->id]);
+        $site = Site::factory()->create();
+
+        $data = [
+            'site_id' => $site->id,
+            'station_number' => 'ST-002',
+            'category' => 'Network/Connectivity',
+            'priority' => 'urgent',
+            'description' => 'No internet connection',
+        ];
+
+        $this->actingAs($user)->post(route('it-concerns.store'), $data);
+
+        Event::assertDispatched(ItConcernCreated::class, function (ItConcernCreated $event) {
+            return $event->concern->station_number === 'ST-002'
+                && $event->concern->priority === 'urgent';
+        });
     }
 
     #[Test]

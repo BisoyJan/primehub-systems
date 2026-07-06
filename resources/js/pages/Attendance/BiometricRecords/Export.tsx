@@ -88,7 +88,7 @@ export default function Export() {
     const [exportProgress, setExportProgress] = useState(0);
     const [exportStatus, setExportStatus] = useState<string>('');
     const [exportJobId, setExportJobId] = useState<string | null>(null);
-    const exportIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
+    const exportIntervalRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const [isEmployeePopoverOpen, setIsEmployeePopoverOpen] = useState(false);
     const [isSitePopoverOpen, setIsSitePopoverOpen] = useState(false);
     const [isCampaignPopoverOpen, setIsCampaignPopoverOpen] = useState(false);
@@ -106,7 +106,7 @@ export default function Export() {
     const [pointsExportProgress, setPointsExportProgress] = useState(0);
     const [pointsExportStatus, setPointsExportStatus] = useState<string>('');
     const [pointsExportJobId, setPointsExportJobId] = useState<string | null>(null);
-    const pointsExportIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
+    const pointsExportIntervalRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const pointsDownloadStartedRef = React.useRef<boolean>(false);
     const [isPointsEmployeePopoverOpen, setIsPointsEmployeePopoverOpen] = useState(false);
     const [pointsEmployeeSearchQuery, setPointsEmployeeSearchQuery] = useState('');

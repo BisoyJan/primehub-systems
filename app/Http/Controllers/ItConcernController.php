@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\ItConcernCreated;
 use App\Http\Requests\ItConcernRequest;
 use App\Models\Campaign;
 use App\Models\ItConcern;
@@ -9,6 +10,7 @@ use App\Models\Site;
 use App\Models\User;
 use App\Services\NotificationService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
 class ItConcernController extends Controller
@@ -165,6 +167,15 @@ class ItConcernController extends Controller
             $itConcern->description,
             $itConcern->id
         );
+
+        // Push a real-time desktop notification to IT staff over Reverb so they
+        // are alerted even when the tab is unfocused. Never let a broadcast
+        // failure break the concern submission.
+        try {
+            broadcast(new ItConcernCreated($itConcern));
+        } catch (\Throwable $e) {
+            Log::warning('ItConcernCreated broadcast failed: '.$e->getMessage());
+        }
 
         return redirect()->route('it-concerns.index')
             ->with('flash', ['message' => 'IT concern submitted successfully', 'type' => 'success']);

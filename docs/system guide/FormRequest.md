@@ -119,20 +119,23 @@ Submit and manage leave requests (Vacation, Sick, Bereavement, Special, etc.).
 | **LDV** | Leave due to Domestic Violence |
 | **UPTO** | Undertime Pay Out |
 | **ML** | Maternity Leave |
+| **IW** | Incomplete Workday |
 
 ### Form Fields
 
 1. **Leave Type** — Select from the dropdown. *Required.*
    - *Each leave type has different date rules. For example, SL cannot be more than 3 weeks in the past or more than 1 month in the future.*
+   - **IW (Incomplete Workday)** — For employees who reported to the office but left early for personal reasons (not illness). Non-credited; biometric attendance hours for that day are preserved rather than replaced.
 2. **Start Date** and **End Date** — Click the date pickers to select. *Required.*
 3. **Reason** — Type your reason. *Required, 10–1000 characters.*
 4. **Campaign / Department** — Type the campaign or department. *Required.*
 5. **File for Someone Else** — Toggle on to submit on behalf of another employee. Search and select the employee. *(Available to Team Leads, Admin, HR, and Super Admin only.)*
-6. **Medical Certificate** (for SL) — Upload a file (JPEG, PNG, GIF, WebP, PDF, 4MB max). Or check **Medical Certificate Submitted** if you have already submitted it separately.
-7. **SL with Undertime** (for SL) — Check this if you are combining sick leave with undertime. *When checked, every day of the leave is treated as a **Partial-day Absence** during approval.*
+6. **Supporting Document** (for SL, BL, UPTO, and IW) — Upload a file (JPEG, PNG, GIF, WebP, PDF, 4MB max). The field label changes per leave type: **Medical Certificate** (SL), **Death Certificate** (BL), **Supporting Document** (UPTO/IW). Or check the box for already submitted separately instead of uploading. Approving a request with a supporting document automatically excuses any related attendance points; cancelling the request reverses the excuse.
+7. **SL with Undertime** (for SL) — Check this if you are combining sick leave with undertime because you reported to work but left early due to illness. *When checked, every day of the leave is treated as a **Partial-day Absence** during approval.* *(Distinct from **IW**, which is for personal, non-illness reasons.)*
 8. **SPL Half Days** (for SPL) — If applying for Solo Parent Leave, a day-by-day breakdown appears. Check **Half Day** for any days that are half-days only. *If your remaining SPL credits are not enough for a full day, the system automatically downgrades that day to a half-day.*
 9. **Credit Balances** — The system displays your remaining VL, SL, and SPL credits.
    - *If you have 6 or more attendance violation points, a warning appears.*
+   - *For VL only: if you had a recent absence (whole-day or half-day) within the last 30 days, a warning shows the next date you're eligible to file VL.*
    - *If you have campaign schedule conflicts, an alert appears.*
 10. Click **Submit** to send for approval. Click **Cancel** to go back.
 
@@ -146,7 +149,7 @@ Submit and manage leave requests (Vacation, Sick, Bereavement, Special, etc.).
 
 A row of status tabs across the top: **All**, **Upcoming**, **Pending**, **Approved**, **Denied**, **Cancelled**. Plus the following filter controls:
 
-1. **Leave Type** — Multi-select of all leave codes.
+1. **Leave Type** — Multi-select of all leave codes (including **IW** – Incomplete Workday).
 2. **Campaign** — Multi-select campaign filter.
 3. **Period** — Pick **All Periods**, **Upcoming**, **This Week**, **This Month**, or **Past**.
 4. **User** — Search and select an employee.
@@ -154,7 +157,7 @@ A row of status tabs across the top: **All**, **Upcoming**, **Pending**, **Appro
 
 ### Table
 
-Columns: **User**, **Leave Type** (colored badge), **Dates**, **Days**, **Status** badge, **Campaign**, **Reason**, **Created**, **Medical Cert** (eye icon if uploaded), **Actions**.
+Columns: **User**, **Leave Type** (colored badge), **Dates**, **Days**, **Status** badge, **Campaign**, **Reason**, **Created**, **Medical Cert** (eye icon — shown when a supporting document was uploaded for SL, BL, UPTO, or IW), **Actions**.
 
 **Row Actions:**
 - Click the row to view the full details.
@@ -162,7 +165,7 @@ Columns: **User**, **Leave Type** (colored badge), **Dates**, **Days**, **Status
 - **Cancel** (X) — Cancel the request. Opens a dialog — type the reason. *(Visible for pending requests if you are the owner.)*
 - **Delete** (trash icon) — Remove the request. *(Admin only.)*
 
-**Medical Certificate Viewer:** Click the eye icon to open a full-screen viewer with zoom in/out and rotate controls. Click **Download** to save the file.
+**Medical Certificate Viewer:** Click the eye icon to open a full-screen viewer with zoom in/out and rotate controls (supports image files and PDFs). Click **Download** to save the file.
 
 ## View Leave Request Details
 
@@ -194,7 +197,7 @@ A separate **Team Lead Approval** card on the page tracks the TL decision and sh
 
 When `canUserApprove` is true (Admin or HR on a pending request, after TL approval if required, and the current user has not yet approved), three buttons appear:
 
-- **Approve** — Opens the approval dialog with **Review Notes**, **Day Status Assignment** (SL/VL/SPL — choose SL credited, NCNS, advised absence, VL credited, UPTO, SPL credited, absent, or partial), and **SPL Half-Day Settings**. For SL with Undertime, all days are locked to **Partial-day Absence**.
+- **Approve** — Opens the approval dialog with **Review Notes**, **Day Status Assignment** (SL/VL/SPL — choose SL credited, NCNS, advised absence, VL credited, UPTO, SPL credited, absent, or Partial-day Absence), and **SPL Half-Day Settings** (toggle each SPL day between whole-day and half-day, overriding what the employee submitted). For SL with Undertime, all days are locked to **Partial-day Absence**.
 - **Deny** — Opens a notes dialog.
 - **Partial Approved** — Only shown for multi-day requests. Approves specific days only.
 
@@ -202,14 +205,20 @@ After you have approved, a **You've Approved** badge replaces the buttons until 
 
 #### Super Admin — Force Approve
 
-When a request is still pending and not fully approved by both Admin and HR, a **Force Approve** button (purple) appears for Super Admins. It bypasses the remaining required signers.
+When a request is still pending and not fully approved by both Admin and HR, a **Force Approve** button (purple) appears for Super Admins. It opens the **Force Approve Leave Request** dialog, which bypasses Team Lead, Admin, and HR approval entirely and immediately approves the request.
+
+- **Credit preview alerts** — For VL/SL, shows whether full credits are available, only partial credits are available (remaining days convert to UPTO), or no credits are available (all days convert to UPTO).
+- **SPL day-by-day coverage preview** — Shows which days are covered by the SPL credit balance and lets the Super Admin toggle each covered day between whole-day and half-day. Days without enough balance are automatically denied.
+- **Partial Approval (deny some dates)** — For multi-day requests, check this to open a date checklist and choose exactly which dates to approve; unselected dates are automatically denied.
+- **Review Notes**, and if partially approving, a **Denial Reason** for the auto-denied dates.
 
 #### Actions on Approved Leaves (Admin)
 
-Once the leave is fully approved, two extra buttons appear for admins (`canEditApproved`):
+Once the leave is fully approved, extra buttons appear for admins:
 
-- **Edit Dates** — Opens the edit page so the date range can be changed.
-- **Adjust for Work** — Opens a dialog to reassign one or more leave days back to worked days (with day-status overrides).
+- **Edit Dates** (`canEditApproved`) — Opens the edit page so the date range can be changed.
+- **Adjust for Work** (`canEditApproved`) — Opens a dialog to reassign one or more leave days back to worked days (with day-status overrides).
+- **Edit Day Statuses** (approved SL/VL requests only) — Opens the **Edit Per-Day Statuses** dialog to revise the per-day status assignment after approval (e.g. correct SL credited vs. NCNS vs. advised absence). Saving recalculates credits and attendance records. This is separate from the day-status picker shown during the initial Approve step.
 
 #### Cancellation
 
@@ -222,8 +231,8 @@ Once the leave is fully approved, two extra buttons appear for admins (`canEditA
 
 ### Day Status Assignment (Admin only)
 
-For each day in the leave range:
-- Select a status from the dropdown (SL credited, NCNS, advised absence, VL credited, UPTO, SPL credited, absent, partial).
+Used both in the initial Approve dialog and in the standalone **Edit Day Statuses** action for already-approved SL/VL requests. For each day in the leave range:
+- Select a status from the dropdown (SL credited, NCNS, advised absence, VL credited, UPTO, SPL credited, absent, Partial-day Absence).
 - Toggle **Half Day** if applicable.
 - Type notes if needed.
 
@@ -249,13 +258,21 @@ For each day in the leave range:
 
 [Insert Screenshot: 'Leave Credits' List]
 
-**Filters:** Year, Campaign, Role, Eligibility Status. Search by employee name.
+**Filters:** Year, Campaign, Role, **Eligibility Status** (All, Eligible, Not Yet Eligible, Pending Regularization). Search by employee name.
 
-**Table:** Each row shows an employee with VL, SL, and SPL totals (used / remaining), carryover badge, and regularization status.
+**Table:** Each row shows an employee with VL, SL, and SPL totals (used / remaining), a **carryover** badge, and regularization status.
 
 - Click the expand arrow to see a month-by-month breakdown (month name, credits earned, used, balance).
 - Click the **pencil** icon on any month to adjust credits (Admin only).
-- Click the **carryover** badge to open the carryover adjustment dialog.
+- Click the **carryover** badge to open the carryover adjustment dialog. Its tooltip shows one of: **Projected** (not yet processed), **Available until March** (processed, still usable), **Converted** (already cashed out), or **Expired** (past March 31, unused).
+- Click the **convert-to-cash** icon (⇄) next to an employee's carryover to convert their remaining carryover credits to cash. *(Only shown once carryover has been received, and it hasn't already been converted or come from a first regularization.)*
+- Click the **Download** icon to open **Export Leave Credits Summary** — pick a year and export all employees' leave credits to Excel. Runs as a background job with a progress bar; the file downloads automatically when finished.
+- Click the **Settings** icon to open **Leave Credits Management** *(Admin only)*. Pick a target year to see Pending Regularization / Total Eligible / Already Processed counts, then run:
+  - **Process Monthly Accruals** — Accrues the current month's credits for all users.
+  - **Process Year-End Carryovers** — Calculates and stores carryover credits from the previous year into the target year.
+  - **Convert Carryover to Cash** — Batch-converts all eligible carryover credits for the target year to cash.
+  - **Preview Transfer (Dry Run)** / **Process Regularization Transfers** — Preview or execute the first-time credit transfer for newly regularized employees (6 months after hire; all accrued credits transfer, no cap).
+- Click **Fix Credits Year Mismatch** *(Admin only)* to scan for approved leave requests where credits were deducted from the wrong year, review the affected users/requests, then confirm the fix to restore credits to the wrong year and re-deduct from the correct year.
 
 **Edit Monthly Credits (Admin):**
 1. Click the pencil icon on a month.
@@ -270,6 +287,8 @@ For each day in the leave range:
 4. **Reason** — Type the reason. *Required; max 500 characters is enforced server-side.*
 5. **Notes** — Optional.
 6. Click **Save**.
+
+*Regularization notes: during probation, credits accrue on the hire-date anniversary each month (the hire month itself does not accrue). Once regularized (6+ months), all accrued credits transfer to the regularization year with no cap. Afterward, regular employees can carry over a maximum of 4 credits to the next year, usable until March 31 before expiring.*
 
 ### Employee Credits Detail
 

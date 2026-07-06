@@ -10,6 +10,7 @@ import {
 import { toast } from 'sonner';
 import { NotificationDropdown } from './notification-dropdown';
 import { usePermission } from '@/hooks/use-permission';
+import { useItConcernNotifications } from '@/hooks/use-it-concern-notifications';
 
 interface Notification {
     id: number;
@@ -97,6 +98,10 @@ export function NotificationBell() {
             console.error('Failed to fetch unread count:', error);
         }
     };
+
+    // Show real-time desktop notifications for new IT concerns (IT staff only)
+    // and refresh the unread badge immediately when one arrives.
+    useItConcernNotifications({ onConcern: fetchUnreadCount });
 
     const handleOpenChange = (open: boolean) => {
         setIsOpen(open);

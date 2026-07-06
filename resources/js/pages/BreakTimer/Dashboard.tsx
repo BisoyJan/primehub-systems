@@ -271,7 +271,7 @@ export default function BreakTimerDashboard() {
         if (reason.length < 3) return;
 
         let url: string;
-        let payload: Record<string, unknown>;
+        let payload: Record<string, string | number | boolean>;
 
         if (actionDialog.kind === 'force_end') {
             url = `/break-timer/${actionDialog.session.id}/force-end`;

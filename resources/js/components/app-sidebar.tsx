@@ -19,7 +19,7 @@ import { index as stationIndex } from '@/routes/stations'
 
 import { index as medicationRequestsIndex } from '@/routes/medication-requests'
 import { index as attendanceToolsIndex } from '@/routes/attendance-tools'
-import { dashboard as coachingDashboard } from '@/routes/coaching'
+import { dashboard as coachingDashboard, settings as coachingSettings } from '@/routes/coaching'
 import { index as coachingSessionsIndex } from '@/routes/coaching/sessions'
 import { index as breakTimerIndex, dashboard as breakDashboard, reports as breakReports } from '@/routes/break-timer'
 import { index as breakPoliciesIndex } from '@/routes/break-timer/policies'
@@ -171,6 +171,12 @@ const getNavigationConfig = (userId: number, userRole: string, coachingPendingAc
                     href: '/coaching/exclusions',
                     icon: UserMinus,
                     permission: 'coaching.manage_exclusions',
+                },
+                {
+                    title: 'Settings',
+                    href: coachingSettings.url(),
+                    icon: Settings,
+                    permission: 'coaching.settings',
                 },
             ],
         },
