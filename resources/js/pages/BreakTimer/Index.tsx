@@ -14,9 +14,8 @@ import {
     pause as pauseRoute,
     resume as resumeRoute,
     end as endRoute,
-    reset as resetRoute,
 } from '@/routes/break-timer';
-import { Play, Pause, Square, Coffee, UtensilsCrossed, RotateCcw, Merge, Layers, ChevronDown, ChevronUp, Palette, Maximize, Minimize, Volume2, Info, Eye, EyeOff } from 'lucide-react';
+import { Play, Pause, Square, Coffee, UtensilsCrossed, Merge, Layers, ChevronDown, ChevronUp, Palette, Maximize, Minimize, Volume2, Info, Eye, EyeOff } from 'lucide-react';
 import { ThemeDecor } from './ThemeDecor';
 import {
     DropdownMenu,
@@ -101,6 +100,8 @@ function formatBreakType(type: string): string {
     return type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+const AUTO_HIDE_STORAGE_KEY = 'break-timer-auto-hide';
+
 export default function BreakTimerIndex() {
     const { policy, activeSession, todaySessions, breaksUsed, lunchUsed, auth } =
         usePage<PageProps>().props;
@@ -120,19 +121,35 @@ export default function BreakTimerIndex() {
 
     const [remainingSeconds, setRemainingSeconds] = useState<number>(0);
     const [isPauseDialogOpen, setIsPauseDialogOpen] = useState(false);
-    const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
     const [isStartDialogOpen, setIsStartDialogOpen] = useState(false);
     const [isEndDialogOpen, setIsEndDialogOpen] = useState(false);
     const [pendingStartType, setPendingStartType] = useState<'break' | 'lunch' | { combined: number } | { combinedBreak: number } | null>(null);
     const [pauseReason, setPauseReason] = useState('');
-    const [resetApproval, setResetApproval] = useState('');
     const [station, setStation] = useState<string>('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const [expandedSession, setExpandedSession] = useState<number | null>(null);
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [cardHovered, setCardHovered] = useState(false);
-    const [autoHide, setAutoHide] = useState(true);
+    const [autoHide, setAutoHideState] = useState<boolean>(() => {
+        try {
+            const stored = localStorage.getItem(AUTO_HIDE_STORAGE_KEY);
+            return stored !== null ? stored === 'true' : true;
+        } catch {
+            return true;
+        }
+    });
+    const setAutoHide = useCallback((updater: boolean | ((prev: boolean) => boolean)) => {
+        setAutoHideState((prev) => {
+            const next = typeof updater === 'function' ? updater(prev) : updater;
+            try {
+                localStorage.setItem(AUTO_HIDE_STORAGE_KEY, String(next));
+            } catch {
+                // localStorage unavailable
+            }
+            return next;
+        });
+    }, []);
     const containerRef = useRef<HTMLDivElement>(null);
 
     // Detect actual touch/mobile device (not just narrow viewport).
@@ -347,23 +364,6 @@ export default function BreakTimerIndex() {
     function handleEndConfirm() {
         setIsEndDialogOpen(false);
         handleEnd();
-    }
-
-    function handleReset() {
-        if (!resetApproval.trim()) return;
-        setIsSubmitting(true);
-        router.post(
-            resetRoute().url,
-            { approval: resetApproval.trim() },
-            {
-                preserveScroll: true,
-                onFinish: () => {
-                    setIsSubmitting(false);
-                    setIsResetDialogOpen(false);
-                    setResetApproval('');
-                },
-            },
-        );
     }
 
     const isActive = activeSession?.status === 'active';
@@ -891,19 +891,6 @@ export default function BreakTimerIndex() {
                                 </Badge>
                             </div>
                         </div>
-
-                        <Can permission="break_timer.reset">
-                            <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => setIsResetDialogOpen(true)}
-                                disabled={isSubmitting}
-                                className="h-9 gap-1.5 rounded-full text-xs opacity-60 hover:opacity-100"
-                            >
-                                <RotateCcw className="h-3.5 w-3.5" />
-                                Reset Shift
-                            </Button>
-                        </Can>
                     </div>
 
                     {/* ─── Today's Sessions ─── */}
@@ -1086,37 +1073,6 @@ export default function BreakTimerIndex() {
                             </Button>
                             <Button onClick={handlePause} disabled={!pauseReason.trim() || isSubmitting}>
                                 Pause
-                            </Button>
-                        </div>
-                    </div>
-                </DialogContent>
-            </Dialog>
-
-            {/* Reset Approval Dialog */}
-            <Dialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}>
-                <DialogContent className="max-w-[90vw] sm:max-w-md">
-                    <DialogHeader>
-                        <DialogTitle>Reset Shift</DialogTitle>
-                        <DialogDescription>
-                            This will clear all break data for today. Enter approval details.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                        <Input
-                            value={resetApproval}
-                            onChange={(e) => setResetApproval(e.target.value)}
-                            placeholder="Enter approval details..."
-                        />
-                        <div className="flex justify-end gap-2">
-                            <Button variant="outline" onClick={() => setIsResetDialogOpen(false)}>
-                                Cancel
-                            </Button>
-                            <Button
-                                onClick={handleReset}
-                                disabled={!resetApproval.trim() || isSubmitting}
-                                variant="destructive"
-                            >
-                                Reset Shift
                             </Button>
                         </div>
                     </div>
