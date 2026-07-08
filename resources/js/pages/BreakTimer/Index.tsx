@@ -16,7 +16,7 @@ import {
     end as endRoute,
     reset as resetRoute,
 } from '@/routes/break-timer';
-import { Play, Pause, Square, Coffee, UtensilsCrossed, RotateCcw, Merge, Layers, ChevronDown, ChevronUp, Palette, Maximize, Minimize, Volume2, Info } from 'lucide-react';
+import { Play, Pause, Square, Coffee, UtensilsCrossed, RotateCcw, Merge, Layers, ChevronDown, ChevronUp, Palette, Maximize, Minimize, Volume2, Info, Eye, EyeOff } from 'lucide-react';
 import { ThemeDecor } from './ThemeDecor';
 import {
     DropdownMenu,
@@ -131,6 +131,8 @@ export default function BreakTimerIndex() {
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const [expandedSession, setExpandedSession] = useState<number | null>(null);
     const [isFullscreen, setIsFullscreen] = useState(false);
+    const [cardHovered, setCardHovered] = useState(false);
+    const [autoHide, setAutoHide] = useState(true);
     const containerRef = useRef<HTMLDivElement>(null);
 
     // Detect actual touch/mobile device (not just narrow viewport).
@@ -438,6 +440,16 @@ export default function BreakTimerIndex() {
     // Always-dark themes force light text even in system light mode
     const forceDarkText = !isDark && theme.alwaysDark;
     const glassStyle = useMemo(() => getGlassStyle(theme, isDark || theme.alwaysDark), [theme, isDark]);
+    // Immersive reveal: when the cursor is not over the timer column, fade all
+    // chrome (card, ring, buttons, sessions) to 0 so only the countdown shows —
+    // revealing the themed background behind it. Only on themed, non-touch views.
+    const revealMode = !isMobileDevice && theme.id !== 'default';
+    const chromeHidden = revealMode && autoHide && !cardHovered;
+    const chromeStyle: React.CSSProperties = {
+        opacity: chromeHidden ? 0 : 1,
+        transition: 'opacity 0.6s ease',
+        pointerEvents: chromeHidden ? 'none' : 'auto',
+    };
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -460,10 +472,24 @@ export default function BreakTimerIndex() {
                     />
                 )}
                 <ThemeDecor theme={theme} isDark={isDark || theme.alwaysDark} timerOver={isOverage} overageSeconds={overageSeconds} />
-                <div className={`relative mx-auto flex max-w-2xl flex-col items-center gap-4 px-4 py-4 ${isMobileDevice ? 'min-h-[calc(100svh-7rem)] justify-center' : 'justify-start'}`}>
+                <div
+                    className={`relative mx-auto flex max-w-2xl flex-col items-center gap-4 px-4 py-4 ${isMobileDevice ? 'min-h-[calc(100svh-7rem)] justify-center' : 'justify-start'}`}
+                    onMouseEnter={() => setCardHovered(true)}
+                    onMouseLeave={() => setCardHovered(false)}
+                >
 
                     {/* ─── Theme Selector, Alarm & Fullscreen ─── */}
-                    <div className={isMobileDevice ? 'hidden' : 'flex w-full items-center justify-end gap-2'}>
+                    <div className={isMobileDevice ? 'hidden' : 'flex w-full items-center justify-end gap-2'} style={chromeStyle}>
+                        {revealMode && (
+                            <button
+                                onClick={() => setAutoHide((v) => !v)}
+                                className="flex h-8 w-8 items-center justify-center rounded-full border border-white/20 backdrop-blur-md transition-opacity hover:opacity-80 dark:border-white/10"
+                                style={glassStyle}
+                                title={autoHide ? 'Auto-hide card: On (hover to reveal)' : 'Auto-hide card: Off'}
+                            >
+                                {autoHide ? <EyeOff className="h-3.5 w-3.5 opacity-70" /> : <Eye className="h-3.5 w-3.5 opacity-70" />}
+                            </button>
+                        )}
                         <button
                             onClick={toggleFullscreen}
                             className="flex h-8 w-8 items-center justify-center rounded-full border border-white/20 backdrop-blur-md transition-opacity hover:opacity-80 dark:border-white/10"
@@ -522,8 +548,8 @@ export default function BreakTimerIndex() {
 
                     {/* ─── Glass Card ─── */}
                     <div
-                        className={`flex w-full flex-col items-center border border-white/25 shadow-2xl backdrop-blur-xl dark:border-white/10 ${isMobileDevice ? 'max-w-sm gap-4 rounded-[1.75rem] p-5' : 'gap-6 rounded-3xl p-10'}`}
-                        style={glassStyle}
+                        className={`flex w-full flex-col items-center border ${chromeHidden ? 'border-transparent shadow-none' : 'border-white/25 shadow-2xl backdrop-blur-xl dark:border-white/10'} ${isMobileDevice ? 'max-w-sm gap-4 rounded-[1.75rem] p-5' : 'gap-6 rounded-3xl p-10'}`}
+                        style={{ ...(chromeHidden ? { background: 'transparent' } : glassStyle), transition: 'background 0.6s ease, box-shadow 0.6s ease' }}
                     >
 
                         {/* ─── Circular Timer ─── */}
@@ -569,7 +595,8 @@ export default function BreakTimerIndex() {
                                 className="h-65 w-65 -rotate-90 md:h-125 md:w-125"
                                 style={{
                                     filter: glowFilter,
-                                    transition: 'filter 0.5s ease',
+                                    opacity: chromeHidden ? 0 : 1,
+                                    transition: 'filter 0.5s ease, opacity 0.6s ease',
                                     ...(isOverage ? { animation: `overage-glow-pulse ${overageLevel >= 2 ? '0.6' : overageLevel >= 1 ? '1' : '1.5'}s ease-in-out infinite` } : {}),
                                 }}
                                 role="img"
@@ -610,7 +637,7 @@ export default function BreakTimerIndex() {
                             {/* Center content */}
                             <div className="absolute inset-0 flex flex-col items-center justify-center">
                                 {/* ─── Status label with AnimatePresence transition ─── */}
-                                <div className={isMobileDevice ? 'hidden' : 'relative h-9 overflow-hidden'}>
+                                <div className={isMobileDevice ? 'hidden' : 'relative h-9 overflow-hidden'} style={chromeStyle}>
                                     <AnimatePresence mode="wait">
                                         <motion.span
                                             key={statusText}
@@ -664,12 +691,12 @@ export default function BreakTimerIndex() {
                                     )}
                                 </motion.span>
                                 {hasSession && (
-                                    <span className={isMobileDevice ? 'hidden' : 'text-muted-foreground mt-3 block text-lg'}>
+                                    <span className={isMobileDevice ? 'hidden' : 'text-muted-foreground mt-3 block text-lg'} style={chromeStyle}>
                                         of {Math.floor(totalDuration / 60)} min
                                     </span>
                                 )}
                                 {activeSession?.status === 'paused' && activeSession?.last_pause_reason && (
-                                    <span className={isMobileDevice ? 'hidden' : 'text-muted-foreground mt-1 block max-w-[280px] text-center text-sm italic leading-snug'}>
+                                    <span className={isMobileDevice ? 'hidden' : 'text-muted-foreground mt-1 block max-w-[280px] text-center text-sm italic leading-snug'} style={chromeStyle}>
                                         Paused: {activeSession.last_pause_reason}
                                     </span>
                                 )}
@@ -678,13 +705,16 @@ export default function BreakTimerIndex() {
 
                         {/* ─── Theme Quote ─── */}
                         {theme.quote && (
-                            <p className={isMobileDevice ? 'hidden' : 'max-w-xs text-center text-xs italic leading-relaxed opacity-50'}>
+                            <p
+                                className={isMobileDevice ? 'hidden' : 'max-w-xs text-center text-xs italic leading-relaxed'}
+                                style={{ opacity: chromeHidden ? 0 : 0.5, transition: 'opacity 0.6s ease', pointerEvents: chromeHidden ? 'none' : 'auto' }}
+                            >
                                 "{theme.quote}"
                             </p>
                         )}
 
                         {/* ─── Action Buttons ─── */}
-                        <div className={isMobileDevice ? 'hidden' : 'flex flex-wrap items-center justify-center gap-3'}>
+                        <div className={isMobileDevice ? 'hidden' : 'flex flex-wrap items-center justify-center gap-3'} style={chromeStyle}>
                             {!hasSession && (
                                 <>
                                     <Can permission="break_timer.use">
@@ -830,7 +860,7 @@ export default function BreakTimerIndex() {
                     </div>{/* end glass card */}
 
                     {/* ─── Info Pills ─── */}
-                    <div className={isMobileDevice ? 'hidden' : 'flex flex-wrap justify-center gap-3'}>
+                    <div className={isMobileDevice ? 'hidden' : 'flex flex-wrap justify-center gap-3'} style={chromeStyle}>
                         {!hasSession && (
                             <div className="w-56">
                                 <Label className="mb-1 block text-[11px] uppercase tracking-wider opacity-60">
@@ -878,7 +908,7 @@ export default function BreakTimerIndex() {
 
                     {/* ─── Today's Sessions ─── */}
                     {todaySessions.length > 0 && (
-                        <div className={isMobileDevice ? 'hidden' : 'w-full space-y-3'}>
+                        <div className={isMobileDevice ? 'hidden' : 'w-full space-y-3'} style={chromeStyle}>
                             <h3 className="text-xs font-semibold uppercase tracking-wider opacity-50">
                                 Today's Sessions
                             </h3>

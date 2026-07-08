@@ -130,7 +130,7 @@ Submit and manage leave requests (Vacation, Sick, Bereavement, Special, etc.).
 3. **Reason** — Type your reason. *Required, 10–1000 characters.*
 4. **Campaign / Department** — Type the campaign or department. *Required.*
 5. **File for Someone Else** — Toggle on to submit on behalf of another employee. Search and select the employee. *(Available to Team Leads, Admin, HR, and Super Admin only.)*
-6. **Supporting Document** (for SL, BL, UPTO, and IW) — Upload a file (JPEG, PNG, GIF, WebP, PDF, 4MB max). The field label changes per leave type: **Medical Certificate** (SL), **Death Certificate** (BL), **Supporting Document** (UPTO/IW). Or check the box for already submitted separately instead of uploading. Approving a request with a supporting document automatically excuses any related attendance points; cancelling the request reverses the excuse.
+6. **Supporting Documents** (for SL, BL, UPTO, and IW) — Upload up to **10 files** (JPEG, PNG, GIF, WebP, or PDF, **4MB each**). Click the upload area to pick multiple files at once; each added file shows a thumbnail (images) or file icon (PDFs) with a remove (**X**) button, and a running count (e.g. **3/10**) is displayed. Files that are the wrong type, too large, or beyond the 10-file limit are skipped with a notice. The field label changes per leave type: **Medical Certificate** (SL), **Death Certificate** (BL), **Supporting Document** (UPTO/IW). Approving a request that has supporting documents automatically excuses any related attendance points; cancelling the request reverses the excuse.
 7. **SL with Undertime** (for SL) — Check this if you are combining sick leave with undertime because you reported to work but left early due to illness. *When checked, every day of the leave is treated as a **Partial-day Absence** during approval.* *(Distinct from **IW**, which is for personal, non-illness reasons.)*
 8. **SPL Half Days** (for SPL) — If applying for Solo Parent Leave, a day-by-day breakdown appears. Check **Half Day** for any days that are half-days only. *If your remaining SPL credits are not enough for a full day, the system automatically downgrades that day to a half-day.*
 9. **Credit Balances** — The system displays your remaining VL, SL, and SPL credits.
@@ -157,15 +157,15 @@ A row of status tabs across the top: **All**, **Upcoming**, **Pending**, **Appro
 
 ### Table
 
-Columns: **User**, **Leave Type** (colored badge), **Dates**, **Days**, **Status** badge, **Campaign**, **Reason**, **Created**, **Medical Cert** (eye icon — shown when a supporting document was uploaded for SL, BL, UPTO, or IW), **Actions**.
+Columns: **User**, **Leave Type** (colored badge), **Dates**, **Days**, **Status** badge, **Campaign**, **Reason**, **Created**, **Documents** (green file icon — shown when one or more supporting documents were uploaded for SL, BL, UPTO, or IW; opens the request's detail page where the files can be viewed), **Actions**.
 
 **Row Actions:**
 - Click the row to view the full details.
-- **Edit** (pencil icon) — Modify the request. *(Visible for pending requests if you are the owner or have edit permission.)*
+- **Edit** (pencil icon) — Modify the request. On the edit form you can view existing documents, remove any of them, and add more (staying within the 10-file limit). *(Visible for pending requests if you are the owner or have edit permission.)*
 - **Cancel** (X) — Cancel the request. Opens a dialog — type the reason. *(Visible for pending requests if you are the owner.)*
 - **Delete** (trash icon) — Remove the request. *(Admin only.)*
 
-**Medical Certificate Viewer:** Click the eye icon to open a full-screen viewer with zoom in/out and rotate controls (supports image files and PDFs). Click **Download** to save the file.
+**Supporting Document Viewer:** Uploaded documents appear as attachment cards on the request's detail page (image thumbnail or file icon, filename, and file type/size). Click a card's **View** action to open a full-screen viewer with zoom in/out and reset controls (supports images and PDFs). When a request has more than one document, use the **Previous / Next** buttons (or the on-image arrows) to move between files — the header shows your position (e.g. **2 of 5**). Click **Open in New Tab** to view or download the current file directly.
 
 ## View Leave Request Details
 
@@ -173,7 +173,7 @@ Columns: **User**, **Leave Type** (colored badge), **Dates**, **Days**, **Status
 
 [Insert Screenshot: 'Leave Request' Detail]
 
-1. Full details: employee avatar and name, leave type badge, dates, days count, status badge, campaign, reason, medical certificate.
+1. Full details: employee avatar and name, leave type badge, dates, days count, status badge, campaign, reason, and supporting documents (shown as attachment cards for SL, BL, UPTO, and IW when files were uploaded).
 2. **Day-Level Statuses** — For approved leaves, each day shows its assigned status (SL credited, NCNS, advised absence, VL credited, etc.).
 3. **Admin Notes** — Notes from the approving administrator.
 4. **Conflict Alerts** — Shows campaign schedule overlaps if any.

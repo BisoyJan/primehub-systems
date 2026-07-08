@@ -1,6 +1,8 @@
 import { memo, useEffect, useRef, useCallback, useState } from 'react';
 import { motion } from 'framer-motion';
 import type { TimerTheme } from './themes';
+import { TetrisEngine } from './TetrisEngine';
+import { PacmanEngine } from './PacmanEngine';
 
 interface ThemeDecorProps {
     theme: TimerTheme;
@@ -42,6 +44,10 @@ function ThemeDecorInner({ theme, isDark, timerOver, overageSeconds }: ThemeDeco
             return <CyberpunkDecor opacity={o} />;
         case 'synthwave':
             return <SynthwaveDecor opacity={o} />;
+        case 'tetris':
+            return <TetrisEngine opacity={o} />;
+        case 'pacman':
+            return <PacmanEngine opacity={o} />;
         case 'desktop-goose':
             return <DesktopGooseDecor opacity={o} isDark={isDark} timerOver={timerOver} overageSeconds={overageSeconds} />;
         default:
@@ -1148,8 +1154,52 @@ function AuroraDecor({ opacity }: { opacity: number }) {
 
 // ─── 11. Cyberpunk ──────────────────────────────────────────────
 function CyberpunkDecor({ opacity }: { opacity: number }) {
+    const buildingWindows = [
+        { x: 32, y: 70, c: '#00ffcc', d: 0 }, { x: 32, y: 80, c: '#ff00ff', d: 1 },
+        { x: 78, y: 50, c: '#ffff00', d: 2 }, { x: 78, y: 60, c: '#00ffcc', d: 0.5 }, { x: 78, y: 75, c: '#ff00ff', d: 1.5 },
+        { x: 122, y: 72, c: '#00ffcc', d: 3 }, { x: 122, y: 82, c: '#ff00ff', d: 0.2 },
+        { x: 178, y: 40, c: '#ffff00', d: 2.2 }, { x: 178, y: 55, c: '#00ffcc', d: 1.8 }, { x: 178, y: 70, c: '#ff00ff', d: 0 },
+        { x: 232, y: 78, c: '#ff00ff', d: 1 },
+        { x: 283, y: 55, c: '#00ffcc', d: 2.5 }, { x: 283, y: 68, c: '#ffff00', d: 0 },
+        { x: 340, y: 68, c: '#ff00ff', d: 1.2 }, { x: 340, y: 78, c: '#00ffcc', d: 3 },
+        { x: 390, y: 82, c: '#ffff00', d: 0.5 },
+    ];
+
+    const neonSigns = [
+        { x: '8%', y: '30%', c: '#ff00ff', text: '零', delay: 0 },
+        { x: '20%', y: '18%', c: '#00ffcc', text: '夜', delay: 0.8 },
+        { x: '85%', y: '32%', c: '#ffff00', text: '電', delay: 1.6 },
+        { x: '68%', y: '14%', c: '#ff00ff', text: '光', delay: 0.4 },
+    ];
+
+    const rainStreaks = Array.from({ length: 20 }).map((_, i) => ({
+        x: `${(i * 5) % 100}%`,
+        delay: Math.random() * 2,
+        dur: 0.8 + Math.random() * 0.6,
+        c: i % 2 === 0 ? '#00ffcc' : '#ff00ff',
+    }));
+
     return (
         <DecorWrap>
+            <svg style={{ position: 'absolute', width: 0, height: 0 }}>
+                <defs>
+                    <radialGradient id="cpOrbGlow" cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" stopColor="#ffffff" stopOpacity="0.9" />
+                        <stop offset="20%" stopColor="currentColor" stopOpacity="0.7" />
+                        <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+                    </radialGradient>
+                    <linearGradient id="cpBuildingGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+                        <stop offset="0%" stopColor="#0a0a1e" stopOpacity="0.95" />
+                        <stop offset="100%" stopColor="#1a0a2e" stopOpacity="0.75" />
+                    </linearGradient>
+                    <linearGradient id="cpRainGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stopColor="currentColor" stopOpacity="0" />
+                        <stop offset="60%" stopColor="currentColor" stopOpacity="0.9" />
+                        <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+                    </linearGradient>
+                </defs>
+            </svg>
+
             <div className="absolute inset-0 bg-cover bg-center mix-blend-overlay" style={{ backgroundImage: 'radial-gradient(circle at center, transparent 40%, #09090e 100%)', opacity: opacity * 0.8 }}></div>
             {/* Grid overlay */}
             <div
@@ -1161,22 +1211,137 @@ function CyberpunkDecor({ opacity }: { opacity: number }) {
                 }}
             ></div>
 
-            {/* Glitching Matrix Lines */}
-            {[...Array(8)].map((_, i) => (
+            {/* City skyline silhouette with flickering neon windows */}
+            <motion.svg
+                className="absolute bottom-0 left-0 h-[42%] w-[110%]"
+                style={{ opacity: opacity * 0.85 }}
+                viewBox="0 0 400 140"
+                preserveAspectRatio="none"
+                animate={{ x: ['0%', '-5%'] }}
+                transition={{ duration: 45, repeat: Infinity, ease: 'linear', repeatType: 'mirror' }}
+            >
+                <path d="M0 140 V90 H25 V60 H45 V90 H70 V40 H95 V90 H115 V65 H140 V90 H170 V30 H195 V90 H220 V70 H250 V90 H275 V45 H300 V90 H330 V60 H355 V90 H385 V75 H400 V140Z" fill="url(#cpBuildingGrad)" />
+                {buildingWindows.map((w, i) => (
+                    <motion.rect
+                        key={`cwin-${i}`}
+                        x={w.x} y={w.y} width="6" height="5" rx="0.5"
+                        fill={w.c}
+                        animate={{ opacity: [0.1, 1, 0.15, 0.9, 0.3] }}
+                        transition={{ duration: 3 + (i % 4), repeat: Infinity, delay: w.d }}
+                    />
+                ))}
+                {/* Rooftop antenna beacons */}
+                <motion.circle cx="45" cy="38" r="2" fill="#ff0055" animate={{ opacity: [1, 0.2, 1] }} transition={{ duration: 1, repeat: Infinity }} />
+                <motion.circle cx="195" cy="28" r="2" fill="#ff0055" animate={{ opacity: [0.2, 1, 0.2] }} transition={{ duration: 1.2, repeat: Infinity }} />
+            </motion.svg>
+
+            {/* Vertical neon kanji signage */}
+            {neonSigns.map((s, i) => (
+                <motion.div
+                    key={`sign-${i}`}
+                    className="absolute font-bold"
+                    style={{
+                        left: s.x, top: s.y,
+                        color: s.c,
+                        fontSize: '22px',
+                        writingMode: 'vertical-rl',
+                        textShadow: `0 0 8px ${s.c}, 0 0 18px ${s.c}`,
+                        opacity: opacity * 0.75,
+                    }}
+                    animate={{ opacity: [opacity * 0.2, opacity * 0.9, opacity * 0.75, opacity * 0.3, opacity * 0.85] }}
+                    transition={{ duration: 2.5 + i * 0.6, repeat: Infinity, delay: s.delay, ease: 'easeInOut' }}
+                >
+                    {s.text}
+                </motion.div>
+            ))}
+
+            {/* Glitching Matrix Lines — denser, multi-color */}
+            {[...Array(10)].map((_, i) => (
                 <motion.div
                     key={i}
-                    className="absolute font-mono text-[10px] sm:text-xs text-[#00ffcc] font-bold overflow-hidden whitespace-nowrap"
-                    style={{ left: `${3 + i * 13}%`, top: '-20%', opacity: opacity * (0.15 + (i % 2) * 0.15) }}
+                    className="absolute font-mono text-[10px] sm:text-xs font-bold overflow-hidden whitespace-nowrap"
+                    style={{
+                        left: `${2 + i * 10}%`, top: '-20%',
+                        color: ['#00ffcc', '#ff00ff', '#ffff00'][i % 3],
+                        opacity: opacity * (0.15 + (i % 2) * 0.15),
+                    }}
                     animate={{ y: ['-10%', '130%'] }}
-                    transition={{ duration: 7 + (i % 5) * 2, repeat: Infinity, ease: 'linear', delay: i * 0.5 }}
+                    transition={{ duration: 6 + (i % 5) * 2, repeat: Infinity, ease: 'linear', delay: i * 0.4 }}
                 >
-                    {Array.from({ length: 15 }).map((_, j) => (
+                    {Array.from({ length: 16 }).map((_, j) => (
                         <div key={j} className="my-1 break-all">
                             {String.fromCharCode(0x30A0 + Math.random() * 96)}
                         </div>
                     ))}
                 </motion.div>
             ))}
+
+            {/* Neon rain streaks */}
+            {rainStreaks.map((r, i) => (
+                <motion.div
+                    key={`crain-${i}`}
+                    className="absolute top-0"
+                    style={{ left: r.x, color: r.c, opacity: opacity * 0.5 }}
+                    animate={{ top: ['-10%', '110%'] }}
+                    transition={{ duration: r.dur, repeat: Infinity, delay: r.delay, ease: 'linear' }}
+                >
+                    <svg width="2" height="60" viewBox="0 0 2 60">
+                        <line x1="1" y1="0" x2="1" y2="60" stroke="url(#cpRainGrad)" strokeWidth="2" />
+                    </svg>
+                </motion.div>
+            ))}
+
+            {/* Neon glow orbs drifting */}
+            {[
+                { x: '15%', y: '15%', s: 45, c: '#00ffcc', delay: 0, dur: 6 },
+                { x: '75%', y: '20%', s: 55, c: '#ff00ff', delay: 1.5, dur: 7 },
+                { x: '40%', y: '55%', s: 35, c: '#ffff00', delay: 2.5, dur: 5 },
+            ].map((g, i) => (
+                <motion.div
+                    key={`corb-${i}`}
+                    className="absolute rounded-full"
+                    style={{ left: g.x, top: g.y, width: g.s, height: g.s, color: g.c, filter: 'blur(10px)', background: 'url(#cpOrbGlow)', opacity: opacity * 0.6 }}
+                    animate={{ y: [-20, 20, -20], x: [-15, 15, -15], scale: [0.8, 1.3, 0.8], opacity: [0.3, 0.75, 0.3] }}
+                    transition={{ duration: g.dur, repeat: Infinity, ease: 'easeInOut', delay: g.delay }}
+                />
+            ))}
+
+            {/* Horizontal sweeping laser */}
+            <motion.div
+                className="absolute left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-[#ff00ff] to-transparent"
+                style={{ opacity: opacity * 0.6, boxShadow: '0 0 10px #ff00ff, 0 0 20px #ff00ff' }}
+                animate={{ top: ['-10%', '110%'] }}
+                transition={{ duration: 10, repeat: Infinity, ease: 'linear' }}
+            />
+            {/* Vertical sweeping scan laser */}
+            <motion.div
+                className="absolute top-0 h-full w-[1px] bg-gradient-to-b from-transparent via-[#00ffcc] to-transparent"
+                style={{ opacity: opacity * 0.5, boxShadow: '0 0 10px #00ffcc, 0 0 20px #00ffcc' }}
+                animate={{ left: ['-5%', '105%'] }}
+                transition={{ duration: 14, repeat: Infinity, ease: 'linear', delay: 3 }}
+            />
+
+            {/* Scanline overlay */}
+            <div
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                    backgroundImage: 'repeating-linear-gradient(0deg, rgba(255,255,255,0.03) 0px, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 3px)',
+                    opacity: opacity * 0.5,
+                }}
+            />
+
+            {/* Occasional RGB glitch bar */}
+            <motion.div
+                className="absolute left-0 w-full"
+                style={{ height: 6, mixBlendMode: 'screen' }}
+                animate={{
+                    top: ['10%', '10%', '65%', '65%', '30%', '30%', '10%'],
+                    opacity: [0, 0.6, 0.6, 0, 0.5, 0, 0],
+                }}
+                transition={{ duration: 5, repeat: Infinity, times: [0, 0.02, 0.03, 0.05, 0.06, 0.08, 1] }}
+            >
+                <div className="h-full w-full" style={{ background: 'linear-gradient(90deg, #ff00ff, #00ffcc, #ffff00)' }} />
+            </motion.div>
 
             {/* Hexagon tech accents */}
             <motion.svg className="absolute right-[10%] bottom-[10%] w-24 h-24" style={{ opacity: opacity * 0.3 }} viewBox="0 0 100 100"
@@ -1186,44 +1351,150 @@ function CyberpunkDecor({ opacity }: { opacity: number }) {
                 <polygon points="50,15 80,30 80,70 50,85 20,70 20,30" fill="none" stroke="#00ffcc" strokeWidth="0.5" />
                 <circle cx="50" cy="50" r="4" fill="#ffff00" />
             </motion.svg>
+            <motion.svg className="absolute left-[8%] top-[15%] w-16 h-16" style={{ opacity: opacity * 0.25 }} viewBox="0 0 100 100"
+                animate={{ rotate: -360 }} transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
+            >
+                <polygon points="50,5 90,25 90,75 50,95 10,75 10,25" fill="none" stroke="#00ffcc" strokeWidth="1" strokeDasharray="4, 6" />
+                <circle cx="50" cy="50" r="3" fill="#ff00ff" />
+            </motion.svg>
         </DecorWrap>
     );
 }
 
 // ─── 12. Synthwave ──────────────────────────────────────────────
 function SynthwaveDecor({ opacity }: { opacity: number }) {
+    const stars = [
+        { x: '10%', y: '8%', s: 2, delay: 0 },
+        { x: '25%', y: '15%', s: 1.5, delay: 0.5 },
+        { x: '40%', y: '5%', s: 2.5, delay: 1 },
+        { x: '60%', y: '10%', s: 1.5, delay: 1.5 },
+        { x: '75%', y: '18%', s: 2, delay: 0.8 },
+        { x: '85%', y: '6%', s: 1.5, delay: 2 },
+        { x: '15%', y: '22%', s: 1.5, delay: 1.2 },
+        { x: '90%', y: '25%', s: 2, delay: 0.3 },
+        { x: '50%', y: '20%', s: 1.5, delay: 1.8 },
+        { x: '5%', y: '30%', s: 2, delay: 0.6 },
+    ];
+
     return (
         <DecorWrap>
+            <svg style={{ position: 'absolute', width: 0, height: 0 }}>
+                <defs>
+                    <radialGradient id="swStarGlow" cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" stopColor="#ffffff" stopOpacity="1" />
+                        <stop offset="100%" stopColor="#ff71ce" stopOpacity="0" />
+                    </radialGradient>
+                </defs>
+            </svg>
+
+            {/* Starfield */}
+            {stars.map((st, i) => (
+                <motion.div
+                    key={`sw-star-${i}`}
+                    className="absolute rounded-full mix-blend-screen"
+                    style={{ left: st.x, top: st.y, width: st.s * 4, height: st.s * 4, background: 'url(#swStarGlow)', opacity: opacity * 0.8 }}
+                    animate={{ opacity: [0, opacity * 0.9, 0.1, opacity * 0.7, 0], scale: [0.6, 1.3, 0.8] }}
+                    transition={{ duration: 3 + (i % 4), repeat: Infinity, delay: st.delay, ease: 'easeInOut' }}
+                />
+            ))}
+
+            {/* Occasional shooting star */}
+            <motion.div
+                className="absolute h-[2px] w-24 rounded-full"
+                style={{
+                    background: 'linear-gradient(90deg, transparent, #ffffff, transparent)',
+                    top: '12%', left: '-10%',
+                    opacity: opacity * 0.9,
+                    boxShadow: '0 0 8px 2px rgba(255,255,255,0.8)',
+                    transform: 'rotate(18deg)',
+                }}
+                animate={{ left: ['-10%', '120%'], opacity: [0, opacity * 0.9, 0] }}
+                transition={{ duration: 2.5, repeat: Infinity, repeatDelay: 6, ease: 'easeIn' }}
+            />
+
+            {/* Distant mountain range silhouettes */}
+            <svg className="absolute bottom-[28%] left-0 h-[18%] w-full" style={{ opacity: opacity * 0.6 }} viewBox="0 0 400 60" preserveAspectRatio="none">
+                <path d="M0 60 L0 40 L30 15 L55 35 L80 10 L110 38 L140 20 L170 42 L200 12 L230 40 L260 22 L290 45 L320 18 L350 40 L380 25 L400 38 L400 60Z" fill="#1a0a35" fillOpacity="0.9" />
+            </svg>
+            <svg className="absolute bottom-[26%] left-0 h-[14%] w-full" style={{ opacity: opacity * 0.4 }} viewBox="0 0 400 50" preserveAspectRatio="none">
+                <path d="M0 50 L0 35 L40 18 L70 32 L100 15 L140 34 L180 20 L220 36 L260 16 L300 38 L340 22 L380 36 L400 30 L400 50Z" fill="#2d0f52" fillOpacity="0.8" />
+            </svg>
+
             {/* Sun */}
             <motion.div
-                className="absolute left-1/2 bottom-[30%] h-32 w-32 -translate-x-1/2 rounded-full md:h-48 md:w-48"
+                className="absolute left-1/2 bottom-[30%] h-32 w-32 -translate-x-1/2 rounded-full md:h-56 md:w-56"
                 style={{
-                    background: 'linear-gradient(180deg, #ffeb3b 0%, #ff9800 45%, #e91e63 55%, #9c27b0 100%)',
-                    boxShadow: '0 0 40px 10px rgba(233, 30, 99, 0.5)',
-                    opacity: opacity * 0.8
+                    background: 'linear-gradient(180deg, #fff9b0 0%, #ffeb3b 15%, #ff9800 45%, #e91e63 60%, #9c27b0 100%)',
+                    boxShadow: '0 0 60px 15px rgba(233, 30, 99, 0.6), 0 0 120px 40px rgba(156, 39, 176, 0.3)',
+                    opacity: opacity * 0.85
                 }}
+                animate={{
+                    scale: [1, 1.04, 1],
+                    boxShadow: [
+                        '0 0 60px 15px rgba(233,30,99,0.6), 0 0 120px 40px rgba(156,39,176,0.3)',
+                        '0 0 80px 25px rgba(233,30,99,0.8), 0 0 150px 55px rgba(156,39,176,0.45)',
+                        '0 0 60px 15px rgba(233,30,99,0.6), 0 0 120px 40px rgba(156,39,176,0.3)',
+                    ],
+                }}
+                transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
             >
                 {/* Sun horizontal stripes */}
-                <div className="absolute bottom-2 h-[2px] w-full bg-[#3d0043] shadow-[0_4px_0_0_#3d0043,0_10px_0_0_#3d0043,0_18px_0_0_#3d0043]"></div>
+                <div className="absolute bottom-2 h-[3px] w-full bg-[#3d0043] shadow-[0_5px_0_0_#3d0043,0_12px_0_0_#3d0043,0_21px_0_0_#3d0043,0_32px_0_0_#3d0043]"></div>
             </motion.div>
 
+            {/* Chrome horizon glow line */}
+            <motion.div
+                className="absolute left-0 w-full h-[2px]"
+                style={{
+                    bottom: '35%',
+                    background: 'linear-gradient(90deg, transparent, #ff71ce, #01cdfe, #ff71ce, transparent)',
+                    opacity: opacity * 0.8,
+                    boxShadow: '0 0 12px 2px #ff71ce, 0 0 24px 4px #01cdfe',
+                }}
+                animate={{ opacity: [opacity * 0.6, opacity * 0.95, opacity * 0.6] }}
+                transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+            />
+
             {/* Glowing Retro Grid */}
-            <div className="absolute bottom-0 w-full h-[35%] overflow-hidden" style={{ opacity: opacity * 0.8 }}>
+            <div className="absolute bottom-0 w-full h-[35%] overflow-hidden" style={{ opacity: opacity * 0.85 }}>
                 <div className="absolute bottom-0 w-full h-full" style={{ background: 'linear-gradient(180deg, transparent 0%, #1f013d 100%)' }}></div>
                 <motion.div
                     className="w-full h-full"
                     style={{
-                        backgroundImage: `linear-gradient(rgba(255, 113, 206, 0.8) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 113, 206, 0.8) 1px, transparent 1px)`,
+                        backgroundImage: `linear-gradient(rgba(255, 113, 206, 0.85) 1px, transparent 1px), linear-gradient(90deg, rgba(1, 205, 254, 0.7) 1px, transparent 1px)`,
                         backgroundSize: '40px 15px',
                         transform: 'perspective(300px) rotateX(60deg) scale(2.5) translateY(-50px)',
                     }}
                     animate={{ backgroundPosition: ['0px 0px', '0px 15px'] }}
                     transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
                 />
+                {/* Side depth vignette for grid */}
+                <div className="absolute inset-0" style={{ background: 'linear-gradient(90deg, #1f013d 0%, transparent 20%, transparent 80%, #1f013d 100%)', opacity: 0.7 }} />
             </div>
 
-            {/* Distant palm trees silhouettes */}
-            <svg className="absolute bottom-[30%] left-[10%] h-16 w-12" style={{ opacity: opacity * 0.6 }} viewBox="0 0 100 100">
+            {/* Distant palm trees silhouettes — varied sizes */}
+            <svg className="absolute bottom-[28%] left-[6%] h-20 w-14" style={{ opacity: opacity * 0.7 }} viewBox="0 0 100 100">
+                <path d="M45 100 L50 20 L55 100 Z" fill="#1f013d" />
+                <path d="M50 20 Q10 10 0 30 Q30 30 50 20" fill="#1f013d" />
+                <path d="M50 20 Q90 10 100 30 Q70 30 50 20" fill="#1f013d" />
+                <path d="M50 20 Q20 40 10 60 Q40 50 50 20" fill="#1f013d" />
+                <path d="M50 20 Q80 40 90 60 Q60 50 50 20" fill="#1f013d" />
+            </svg>
+            <svg className="absolute bottom-[27%] left-[13%] h-12 w-9" style={{ opacity: opacity * 0.5 }} viewBox="0 0 100 100">
+                <path d="M45 100 L50 20 L55 100 Z" fill="#1f013d" />
+                <path d="M50 20 Q10 10 0 30 Q30 30 50 20" fill="#1f013d" />
+                <path d="M50 20 Q90 10 100 30 Q70 30 50 20" fill="#1f013d" />
+                <path d="M50 20 Q20 40 10 60 Q40 50 50 20" fill="#1f013d" />
+                <path d="M50 20 Q80 40 90 60 Q60 50 50 20" fill="#1f013d" />
+            </svg>
+            <svg className="absolute bottom-[26%] right-[12%] h-28 w-18" style={{ opacity: opacity * 0.6, transform: 'scaleX(-1)' }} viewBox="0 0 100 100">
+                <path d="M45 100 L50 20 L55 100 Z" fill="#1f013d" />
+                <path d="M50 20 Q10 10 0 30 Q30 30 50 20" fill="#1f013d" />
+                <path d="M50 20 Q90 10 100 30 Q70 30 50 20" fill="#1f013d" />
+                <path d="M50 20 Q20 40 10 60 Q40 50 50 20" fill="#1f013d" />
+                <path d="M50 20 Q80 40 90 60 Q60 50 50 20" fill="#1f013d" />
+            </svg>
+            <svg className="absolute bottom-[25%] right-[20%] h-14 w-10" style={{ opacity: opacity * 0.45, transform: 'scaleX(-1)' }} viewBox="0 0 100 100">
                 <path d="M45 100 L50 20 L55 100 Z" fill="#1f013d" />
                 <path d="M50 20 Q10 10 0 30 Q30 30 50 20" fill="#1f013d" />
                 <path d="M50 20 Q90 10 100 30 Q70 30 50 20" fill="#1f013d" />
@@ -1231,13 +1502,26 @@ function SynthwaveDecor({ opacity }: { opacity: number }) {
                 <path d="M50 20 Q80 40 90 60 Q60 50 50 20" fill="#1f013d" />
             </svg>
 
-            <svg className="absolute bottom-[28%] right-[15%] h-24 w-16" style={{ opacity: opacity * 0.5, transform: 'scaleX(-1)' }} viewBox="0 0 100 100">
-                <path d="M45 100 L50 20 L55 100 Z" fill="#1f013d" />
-                <path d="M50 20 Q10 10 0 30 Q30 30 50 20" fill="#1f013d" />
-                <path d="M50 20 Q90 10 100 30 Q70 30 50 20" fill="#1f013d" />
-                <path d="M50 20 Q20 40 10 60 Q40 50 50 20" fill="#1f013d" />
-                <path d="M50 20 Q80 40 90 60 Q60 50 50 20" fill="#1f013d" />
-            </svg>
+            {/* VHS scanline overlay */}
+            <div
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                    backgroundImage: 'repeating-linear-gradient(0deg, rgba(255,255,255,0.025) 0px, rgba(255,255,255,0.025) 1px, transparent 1px, transparent 3px)',
+                    opacity: opacity * 0.5,
+                }}
+            />
+            {/* Subtle VHS chromatic flicker bar */}
+            <motion.div
+                className="absolute left-0 w-full"
+                style={{ height: 4, mixBlendMode: 'screen' }}
+                animate={{
+                    top: ['20%', '20%', '55%', '55%', '80%', '80%', '20%'],
+                    opacity: [0, 0.4, 0.4, 0, 0.3, 0, 0],
+                }}
+                transition={{ duration: 6, repeat: Infinity, times: [0, 0.02, 0.03, 0.05, 0.06, 0.08, 1] }}
+            >
+                <div className="h-full w-full" style={{ background: 'linear-gradient(90deg, #ff71ce, #01cdfe, #fffb96)' }} />
+            </motion.div>
         </DecorWrap>
     );
 }
@@ -1261,7 +1545,7 @@ interface DroppedMeme {
     y: number;
     rotation: number;
     content: string;
-    type: 'note' | 'meme';
+    type: 'note' | 'meme' | 'todo';
 }
 
 interface GooseData {
@@ -1286,7 +1570,7 @@ interface GooseData {
     targetSpeed: number;
     // Meme dragging
     dragMeme: string | null;
-    dragMemeType: 'note' | 'meme';
+    dragMemeType: 'note' | 'meme' | 'todo';
     dragOriginEdge: 'left' | 'right' | 'top' | 'bottom';
     dragMemeX: number;
     dragMemeY: number;
@@ -1326,24 +1610,32 @@ interface GooseData {
 }
 
 const GOOSE_NOTES = [
-    'HONK HONK HONK',
-    'This is MY timer now',
-    'Take a break or else 🔪',
-    'Honk',
-    'I am going to\nsteal your cursor',
-    'No take-backs',
-    'Have you honked\ntoday?',
-    '*angry goose noises*',
-    'Peace was never\nan option',
-    'I am the break\ntimer now',
+    'no.',
+    'you are doing\ngreat :)',
+    'HONK',
+    'have you honked\ntoday?',
+    'take a break\nor else 🔪',
+    'this is MY\ntimer now',
+    'i stole your\ncursor. no\ntake-backs',
+    '*angry goose\nnoises*',
     'HJÖNK HJÖNK',
     'am goose',
-    'Mess with the honk\nget the bonk',
+    'mess with the\nhonk get the\nbonk',
     'rake in the lake',
+    'i made you\na list →',
+    'bread?',
 ];
 
 const GOOSE_MEMES = [
-    '🔪', '👑', '💣', '🎺', '📢', '🧨', '🪿', '💀',
+    '🔪', '👑', '💣', '🎺', '📢', '🧨', '🪿', '💀', '🍞', '🪩', '🗝️', '🧦', '🥖', '📎',
+];
+
+const GOOSE_TODOS: string[][] = [
+    ['honk', 'steal cursor', 'no take-backs'],
+    ['get the bread', 'honk at human', 'rake in the lake'],
+    ['1. honk', '2. honk more', '3. HONK'],
+    ['annoy the human', 'deliver a gift', 'take a nap'],
+    ['spread chaos', 'be a good goose', 'honk twice'],
 ];
 
 // Easing helpers for smooth goose animations
@@ -1560,8 +1852,8 @@ function DesktopGooseDecor({ opacity, isDark, timerOver, overageSeconds = 0 }: {
                 // Head thrust phase (3-phase goose walk rhythm)
                 g.headBobPhase += dtS * (isPanic ? 13 : g.state === 'chasing' ? 9 : 5.5);
 
-                // Body sway (smooth oscillation synced to walk)
-                g.bodyTilt = Math.sin(g.walkPhase * 0.5) * (isPanic ? 6 : g.state === 'chasing' ? 3.5 : 2);
+                // Body sway (smooth oscillation synced to walk) — pronounced waddle
+                g.bodyTilt = Math.sin(g.walkPhase * 0.5) * (isPanic ? 9 : g.state === 'chasing' ? 6 : 4.5);
 
                 // Wing flutter phase
                 g.wingPhase += dtS * (isPanic ? 20 : g.state === 'chasing' ? 14 : 5);
@@ -1635,14 +1927,16 @@ function DesktopGooseDecor({ opacity, isDark, timerOver, overageSeconds = 0 }: {
                             g.dragMeme = null;
                             g.neckStretch = 0;
                             g.dragStopsLeft = 2 + Math.floor(Math.random() * 3); // 2-4 waypoints before dropping
-                            // Pick content
-                            if (Math.random() < 0.6) {
+                            // Pick content: note, to-do list, or stolen item
+                            const roll = Math.random();
+                            if (roll < 0.45) {
                                 g.dragMemeType = 'note';
-                                g.dragMeme = null; // will be set after reaching edge
+                            } else if (roll < 0.7) {
+                                g.dragMemeType = 'todo';
                             } else {
                                 g.dragMemeType = 'meme';
-                                g.dragMeme = null;
                             }
+                            g.dragMeme = null; // set after reaching edge
                         } else {
                             const t = pickRoamTarget(w, h);
                             g.targetX = t.targetX;
@@ -1793,9 +2087,11 @@ function DesktopGooseDecor({ opacity, isDark, timerOver, overageSeconds = 0 }: {
                     const dist = Math.sqrt(dx * dx + dy * dy);
 
                     if (!g.dragMeme && dist < 30) {
-                        // Reached the edge, pick up the meme
+                        // Reached the edge, pick up the gift
                         if (g.dragMemeType === 'note') {
                             g.dragMeme = GOOSE_NOTES[Math.floor(Math.random() * GOOSE_NOTES.length)];
+                        } else if (g.dragMemeType === 'todo') {
+                            g.dragMeme = GOOSE_TODOS[Math.floor(Math.random() * GOOSE_TODOS.length)].join('\n');
                         } else {
                             g.dragMeme = GOOSE_MEMES[Math.floor(Math.random() * GOOSE_MEMES.length)];
                         }
@@ -1829,11 +2125,13 @@ function DesktopGooseDecor({ opacity, isDark, timerOver, overageSeconds = 0 }: {
                                 }
                                 g.dragMeme = null;
                                 g.neckStretch = 0;
-                                g.state = 'roaming';
+                                // Present the gift with a proud honk
+                                g.state = 'honking';
+                                g.honkTimer = 700 + Math.random() * 400;
+                                g.stateTimer = g.honkTimer;
                                 const t = pickRoamTarget(w, h);
                                 g.targetX = t.targetX;
                                 g.targetY = t.targetY;
-                                g.stateTimer = 2000 + Math.random() * 2000;
                             } else {
                                 // Walk to another random spot while still dragging
                                 const t = pickRoamTarget(w, h);
@@ -2067,8 +2365,9 @@ function DesktopGooseDecor({ opacity, isDark, timerOver, overageSeconds = 0 }: {
     const isGrabbingCursor = g.state === 'grabbing_cursor';
     const isMoving = Math.abs(g.vx) > 3 || Math.abs(g.vy) > 3;
 
-    // Smooth continuous body and leg bob from walkPhase
-    const bobY = isMoving ? Math.sin(g.walkPhase * 2) * 3 : 0;
+    // Smooth continuous body and leg bob from walkPhase (waddle gait)
+    const bobY = isMoving ? Math.sin(g.walkPhase * 2) * 4 : 0;
+    const waddleX = isMoving ? Math.sin(g.walkPhase) * 3 : 0;
     const legOffset = isMoving ? Math.sin(g.walkPhase) * 8 : 0;
 
     // 3-phase head thrust (thrust forward → hold → retract)
@@ -2214,6 +2513,27 @@ function DesktopGooseDecor({ opacity, isDark, timerOver, overageSeconds = 0 }: {
                             </div>
                             {meme.content}
                         </div>
+                    ) : meme.type === 'todo' ? (
+                        <div
+                            style={{
+                                background: '#ffffff',
+                                border: '1px solid #808080',
+                                borderRadius: '2px',
+                                boxShadow: '2px 2px 6px rgba(0,0,0,0.25)',
+                                minWidth: '116px',
+                                fontFamily: 'monospace',
+                            }}
+                        >
+                            <div style={{ background: '#000080', color: '#fff', fontSize: '7px', padding: '2px 5px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span>to_do.txt - Notepad</span>
+                                <span style={{ opacity: 0.85 }}>✕</span>
+                            </div>
+                            <div style={{ padding: '5px 7px', fontSize: '9px', color: '#222', lineHeight: '1.55' }}>
+                                {meme.content.split('\n').map((line, li) => (
+                                    <div key={li}>☐ {line}</div>
+                                ))}
+                            </div>
+                        </div>
                     ) : (
                         <div
                             style={{
@@ -2263,6 +2583,27 @@ function DesktopGooseDecor({ opacity, isDark, timerOver, overageSeconds = 0 }: {
                             </div>
                             {g.dragMeme}
                         </div>
+                    ) : g.dragMemeType === 'todo' ? (
+                        <div
+                            style={{
+                                background: '#ffffff',
+                                border: '1px solid #808080',
+                                borderRadius: '2px',
+                                boxShadow: '2px 2px 6px rgba(0,0,0,0.25)',
+                                minWidth: '104px',
+                                fontFamily: 'monospace',
+                            }}
+                        >
+                            <div style={{ background: '#000080', color: '#fff', fontSize: '7px', padding: '2px 5px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span>to_do.txt</span>
+                                <span style={{ opacity: 0.85 }}>✕</span>
+                            </div>
+                            <div style={{ padding: '4px 6px', fontSize: '8px', color: '#222', lineHeight: '1.5' }}>
+                                {(g.dragMeme ?? '').split('\n').map((line, li) => (
+                                    <div key={li}>☐ {line}</div>
+                                ))}
+                            </div>
+                        </div>
                     ) : (
                         <div
                             style={{
@@ -2286,7 +2627,7 @@ function DesktopGooseDecor({ opacity, isDark, timerOver, overageSeconds = 0 }: {
                     position: 'absolute',
                     left: g.x - 45,
                     top: g.y - 50 + bobY + sitBob,
-                    transform: `scaleX(${facingScale}) scaleY(${sitSquish * breathScale}) rotate(${g.bodyTilt}deg)`,
+                    transform: `translateX(${waddleX}px) scaleX(${facingScale}) scaleY(${sitSquish * breathScale}) rotate(${g.bodyTilt}deg)`,
                     transformOrigin: 'center bottom',
                     transition: 'transform 0.12s ease',
                     filter: (isChasing || isPanicking)

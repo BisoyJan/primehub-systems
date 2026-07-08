@@ -449,7 +449,69 @@ export const THEMES: TimerTheme[] = [
         btnResume: { from: '#ff71ce', to: '#cc5ba5' },
         btnEnd: { from: '#3f015c', to: '#280142' },
     },
-    // 13. Desktop Goose — Interactive goose that roams and chases cursor
+    // 13. Tetris Arcade — Cascading neon tetrominoes
+    {
+        id: 'tetris',
+        name: 'Tetris Arcade',
+        icon: '🕹️',
+        quote: 'Clear your mind, one line at a time',
+        alwaysDark: true,
+        bgLight: 'radial-gradient(circle at 50% 120%, #1a0a3a 0%, #0a0618 65%, #050308 100%)',
+        bgDark: 'radial-gradient(circle at 50% 120%, #1a0a3a 0%, #0a0618 65%, #050308 100%)',
+        glassLight: 'rgba(20, 10, 45, 0.5)',
+        glassDark: 'rgba(20, 10, 45, 0.5)',
+        ringActive: '#00d4ff', // Electric blue
+        ringPaused: '#b026ff', // Deep purple
+        ringOverage: '#ffe600', // Bright yellow
+        ringDanger: '#ff2d95', // Hot pink
+        ringTrack: 'rgba(0, 212, 255, 0.15)',
+        ringTrackDark: 'rgba(0, 212, 255, 0.15)',
+        ringGlow: true,
+        ringAnimated: false,
+        statusActive: ['#00d4ff', '#00d4ff'],
+        statusPaused: ['#b026ff', '#b026ff'],
+        statusOverage: ['#ffe600', '#ffe600'],
+        statusDanger: ['#ff2d95', '#ff2d95'],
+        btnBreak: { from: '#00d4ff', to: '#0099cc' },
+        btnLunch: { from: '#ff2d95', to: '#cc1f75' },
+        btnCombined: { from: '#39ff14', to: '#2ecc10' },
+        btnCombinedBreak: { from: '#b026ff', to: '#8a1fcc' },
+        btnPause: { from: '#ffe600', to: '#ccb800' },
+        btnResume: { from: '#00d4ff', to: '#0099cc' },
+        btnEnd: { from: '#2d0a4a', to: '#1a0630' },
+    },
+    // 14. Pac-Man Arcade — self-playing neon Pac-Man
+    {
+        id: 'pacman',
+        name: 'Pac-Man Arcade',
+        icon: '🟡',
+        quote: 'Waka waka waka',
+        alwaysDark: true,
+        bgLight: 'radial-gradient(circle at 50% 50%, #10021f 0%, #0a0416 65%, #050308 100%)',
+        bgDark: 'radial-gradient(circle at 50% 50%, #10021f 0%, #0a0416 65%, #050308 100%)',
+        glassLight: 'rgba(15, 6, 35, 0.5)',
+        glassDark: 'rgba(15, 6, 35, 0.5)',
+        ringActive: '#ffe600', // Pac yellow
+        ringPaused: '#00e5ff', // neon cyan
+        ringOverage: '#ff9d00', // orange
+        ringDanger: '#ff004d', // Blinky red
+        ringTrack: 'rgba(0, 229, 255, 0.15)',
+        ringTrackDark: 'rgba(0, 229, 255, 0.15)',
+        ringGlow: true,
+        ringAnimated: false,
+        statusActive: ['#ffe600', '#ffe600'],
+        statusPaused: ['#00e5ff', '#00e5ff'],
+        statusOverage: ['#ff9d00', '#ff9d00'],
+        statusDanger: ['#ff004d', '#ff004d'],
+        btnBreak: { from: '#ffe600', to: '#ccb700' },
+        btnLunch: { from: '#ff004d', to: '#cc003d' },
+        btnCombined: { from: '#00e5ff', to: '#00b4cc' },
+        btnCombinedBreak: { from: '#ff77e1', to: '#cc5fb4' },
+        btnPause: { from: '#00e5ff', to: '#00b4cc' },
+        btnResume: { from: '#ffe600', to: '#ccb700' },
+        btnEnd: { from: '#1f0640', to: '#12042a' },
+    },
+    // 15. Desktop Goose — Interactive goose that roams and chases cursor
     {
         id: 'desktop-goose',
         name: 'Desktop Goose',

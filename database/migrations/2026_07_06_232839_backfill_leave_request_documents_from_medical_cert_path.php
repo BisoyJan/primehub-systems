@@ -40,10 +40,19 @@ return new class extends Migration
                         $mimeType = Storage::disk('local')->mimeType($path) ?: null;
                     }
 
+                    // The legacy single-file column stored no user-facing filename,
+                    // so use a generic display name (extension preserved) instead of
+                    // the internal storage filename (e.g. "medcert_173_...jpg"),
+                    // which is misleading for non-SL leave types like BL/UPTO/IW.
+                    $extension = pathinfo($path, PATHINFO_EXTENSION);
+                    $displayName = $extension !== ''
+                        ? "Supporting Document.{$extension}"
+                        : 'Supporting Document';
+
                     DB::table('leave_request_documents')->insert([
                         'leave_request_id' => $request->id,
                         'file_path' => $path,
-                        'original_filename' => basename($path),
+                        'original_filename' => $displayName,
                         'mime_type' => $mimeType,
                         'file_size' => $fileSize,
                         'created_at' => now(),
