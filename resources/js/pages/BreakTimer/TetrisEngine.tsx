@@ -256,15 +256,25 @@ export function TetrisEngine({ opacity }: { opacity: number }) {
     const rafRef = useRef(0);
     const [, setTick] = useState(0);
 
-    // Measure container
+    // Measure container. Clamp to the visible viewport height below the
+    // container's top so the board can't balloon past the fold if the parent
+    // (min-h-[...]) grows taller than the viewport due to page content.
     useEffect(() => {
         const el = wrapRef.current;
         if (!el) return;
-        const update = () => setSize({ w: el.clientWidth, h: el.clientHeight });
+        const update = () => {
+            const top = el.getBoundingClientRect().top;
+            const visibleH = Math.max(0, window.innerHeight - Math.max(0, top));
+            setSize({ w: el.clientWidth, h: Math.min(el.clientHeight, visibleH) });
+        };
         update();
         const ro = new ResizeObserver(update);
         ro.observe(el);
-        return () => ro.disconnect();
+        window.addEventListener('resize', update);
+        return () => {
+            ro.disconnect();
+            window.removeEventListener('resize', update);
+        };
     }, []);
 
     useEffect(() => {

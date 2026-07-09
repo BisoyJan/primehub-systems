@@ -82,10 +82,15 @@ const MAZE_TEMPLATE = [
 ];
 
 let MAZE: string[] = MAZE_TEMPLATE.slice();
+// Whenever a maze is (re)generated we flip it vertically, which yields a
+// genuinely different-looking layout (new pellet pattern, Pac-Man/ghost start
+// corners swap ends) while guaranteeing it's still a valid, fully-connected
+// maze - it's the same template, just mirrored top-to-bottom.
+let flipped = false;
 
-const PAC_START = { r: 23, c: 13 };
-const GHOST_EXIT = { r: 11, c: 13 };
-const GHOST_PEN = [
+const PAC_START_BASE = { r: 23, c: 13 };
+const GHOST_EXIT_BASE = { r: 11, c: 13 };
+const GHOST_PEN_BASE = [
     { r: 14, c: 12 },
     { r: 14, c: 13 },
     { r: 14, c: 15 },
@@ -96,12 +101,28 @@ interface GhostMeta {
     corner: { r: number; c: number };
     home: { r: number; c: number };
 }
-const GHOSTS_META: GhostMeta[] = [
-    { color: '#ff004d', corner: { r: 1, c: 26 }, home: { ...GHOST_EXIT } },
-    { color: '#ff77e1', corner: { r: 1, c: 1 }, home: { ...GHOST_PEN[0] } },
-    { color: '#00e5ff', corner: { r: 29, c: 26 }, home: { ...GHOST_PEN[1] } },
-    { color: '#ff9d00', corner: { r: 29, c: 1 }, home: { ...GHOST_PEN[2] } },
+const GHOSTS_META_BASE: GhostMeta[] = [
+    { color: '#ff004d', corner: { r: 1, c: 26 }, home: { ...GHOST_EXIT_BASE } },
+    { color: '#ff77e1', corner: { r: 1, c: 1 }, home: { ...GHOST_PEN_BASE[0] } },
+    { color: '#00e5ff', corner: { r: 29, c: 26 }, home: { ...GHOST_PEN_BASE[1] } },
+    { color: '#ff9d00', corner: { r: 29, c: 1 }, home: { ...GHOST_PEN_BASE[2] } },
 ];
+
+function flipPoint(p: { r: number; c: number }): { r: number; c: number } {
+    return { r: flipped ? MH - 1 - p.r : p.r, c: p.c };
+}
+function getPacStart(): { r: number; c: number } {
+    return flipPoint(PAC_START_BASE);
+}
+function getGhostExit(): { r: number; c: number } {
+    return flipPoint(GHOST_EXIT_BASE);
+}
+function getGhostPen(): { r: number; c: number }[] {
+    return GHOST_PEN_BASE.map(flipPoint);
+}
+function getGhostsMeta(): GhostMeta[] {
+    return GHOSTS_META_BASE.map((m) => ({ ...m, corner: flipPoint(m.corner), home: flipPoint(m.home) }));
+}
 
 function isWall(r: number, c: number): boolean {
     if (r < 0 || c < 0 || r >= MH || c >= MW) return true;
@@ -110,7 +131,8 @@ function isWall(r: number, c: number): boolean {
 }
 
 function generateMaze() {
-    MAZE = MAZE_TEMPLATE.slice();
+    flipped = !flipped;
+    MAZE = flipped ? [...MAZE_TEMPLATE].reverse() : MAZE_TEMPLATE.slice();
 }
 
 function clamp(v: number, lo: number, hi: number): number {
@@ -162,7 +184,7 @@ export function PacmanEngine({ opacity }: { opacity: number }) {
     const wrapRef = useRef<HTMLDivElement>(null);
     const [size, setSize] = useState({ w: 0, h: 0 });
 
-    const pacRef = useRef<Pac>({ ...PAC_START, dir: { dr: 0, dc: -1 }, mouth: true });
+    const pacRef = useRef<Pac>({ ...getPacStart(), dir: { dr: 0, dc: -1 }, mouth: true });
     const ghostsRef = useRef<Ghost[]>([]);
     const pelletsRef = useRef<Set<number>>(new Set());
     const powerRef = useRef<Set<number>>(new Set());
@@ -182,15 +204,28 @@ export function PacmanEngine({ opacity }: { opacity: number }) {
     const [pelletVersion, setPelletVersion] = useState(0);
     const [mazeVersion, setMazeVersion] = useState(0);
 
-    // Measure container
+    // Measure container. The parent uses min-h-[...] and can grow taller than
+    // the viewport once page content (timer card, action buttons, etc.) needs
+    // more room than that minimum - if we sized the maze off the raw
+    // (possibly inflated) container height, the board would balloon past the
+    // fold and force extra page scrolling. Clamp to the visible viewport
+    // height below the container's top so the maze always fits on-screen.
     useEffect(() => {
         const el = wrapRef.current;
         if (!el) return;
-        const update = () => setSize({ w: el.clientWidth, h: el.clientHeight });
+        const update = () => {
+            const top = el.getBoundingClientRect().top;
+            const visibleH = Math.max(0, window.innerHeight - Math.max(0, top));
+            setSize({ w: el.clientWidth, h: Math.min(el.clientHeight, visibleH) });
+        };
         update();
         const ro = new ResizeObserver(update);
         ro.observe(el);
-        return () => ro.disconnect();
+        window.addEventListener('resize', update);
+        return () => {
+            ro.disconnect();
+            window.removeEventListener('resize', update);
+        };
     }, []);
 
     useEffect(() => {
@@ -198,7 +233,8 @@ export function PacmanEngine({ opacity }: { opacity: number }) {
             // Flood-fill reachable cells from pac so isolated pellets / the ghost
             // house never leave uneatable dots (guards the win condition).
             const reachable = new Uint8Array(MW * MH);
-            const startIdx = PAC_START.r * MW + PAC_START.c;
+            const pacStart = getPacStart();
+            const startIdx = pacStart.r * MW + pacStart.c;
             reachable[startIdx] = 1;
             const q = [startIdx];
             let qi = 0;
@@ -235,11 +271,13 @@ export function PacmanEngine({ opacity }: { opacity: number }) {
         }
 
         function resetPositions() {
-            pacRef.current = { ...PAC_START, dir: { dr: 0, dc: -1 }, mouth: true };
+            pacRef.current = { ...getPacStart(), dir: { dr: 0, dc: -1 }, mouth: true };
             const now = performance.now();
             const delays = [0, 3500, 8000, 13000];
-            ghostsRef.current = GHOSTS_META.map((m, i) => {
-                const start = i === 0 ? GHOST_EXIT : GHOST_PEN[i - 1];
+            const ghostExit = getGhostExit();
+            const ghostPen = getGhostPen();
+            ghostsRef.current = getGhostsMeta().map((m, i) => {
+                const start = i === 0 ? ghostExit : ghostPen[i - 1];
                 return {
                     r: start.r,
                     c: start.c,
@@ -529,8 +567,9 @@ export function PacmanEngine({ opacity }: { opacity: number }) {
                 for (const g of ghostsRef.current) {
                     if (g.mode === 'house' && now >= g.releaseAt) {
                         g.mode = 'active';
-                        g.r = GHOST_EXIT.r;
-                        g.c = GHOST_EXIT.c;
+                        const ghostExit = getGhostExit();
+                        g.r = ghostExit.r;
+                        g.c = ghostExit.c;
                         g.dir = { dr: -1, dc: 0 };
                         if (powerTimerRef.current > 0) g.frightened = true;
                         dirty = true;
@@ -562,12 +601,18 @@ export function PacmanEngine({ opacity }: { opacity: number }) {
     }, []);
 
     // ─── Rendering ───────────────────────────────────────────
+    // Reserve ~1.4 extra rows of vertical space for the HUD strip rendered
+    // above the board (score/lives/high-score), so the whole group - HUD +
+    // maze - fits inside the container instead of overflowing/clipping it.
+    const HUD_ROWS = 1.4;
+    const FIT = 0.86;
     const { w, h } = size;
-    const cell = w && h ? Math.max(8, Math.floor(Math.min((w * 0.92) / MW, (h * 0.92) / MH))) : 0;
+    const cell = w && h ? Math.max(8, Math.floor(Math.min((w * FIT) / MW, (h * FIT) / (MH + HUD_ROWS)))) : 0;
     const boardW = cell * MW;
     const boardH = cell * MH;
+    const hudH = Math.max(18, cell * 0.95);
     const offX = (w - boardW) / 2;
-    const offY = (h - boardH) / 2;
+    const offY = (h - (boardH + hudH)) / 2 + hudH;
     const vis = Math.min(1, opacity * 2.4);
 
     const wallColor = '#2b6bff';
@@ -786,7 +831,7 @@ export function PacmanEngine({ opacity }: { opacity: number }) {
                     <div
                         style={{
                             position: 'absolute',
-                            top: -Math.max(18, cell * 0.95),
+                            top: -hudH,
                             left: 2,
                             right: 2,
                             display: 'flex',
