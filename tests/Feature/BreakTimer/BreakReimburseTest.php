@@ -400,4 +400,48 @@ class BreakReimburseTest extends TestCase
 
         $response->assertForbidden();
     }
+
+    #[Test]
+    public function it_blocks_reimbursing_an_ended_session_when_agent_has_another_active_session(): void
+    {
+        // Session A: already completed earlier today, has consumed time available to reimburse.
+        $sessionA = BreakSession::factory()->create([
+            'user_id' => $this->agent->id,
+            'break_policy_id' => $this->policy->id,
+            'type' => '1st_break',
+            'status' => 'completed',
+            'duration_seconds' => 900,
+            'remaining_seconds' => 780,
+            'overage_seconds' => 0,
+            'reimbursed_seconds' => 0,
+            'started_at' => Carbon::now()->subMinutes(30),
+            'ended_at' => Carbon::now()->subMinutes(28),
+        ]);
+
+        // Session B: agent has since started a new, currently active session same shift_date.
+        BreakSession::factory()->active()->create([
+            'user_id' => $this->agent->id,
+            'break_policy_id' => $this->policy->id,
+            'type' => 'lunch',
+            'duration_seconds' => 3600,
+            'remaining_seconds' => 3000,
+            'started_at' => Carbon::now()->subMinutes(10),
+        ]);
+
+        $response = $this->actingAs($this->admin)
+            ->from(route('break-timer.dashboard'))
+            ->post("/break-timer/{$sessionA->id}/reimburse", [
+                'minutes' => 2,
+                'reason' => 'Forgot to pause earlier',
+            ]);
+
+        $response->assertRedirect(route('break-timer.dashboard'));
+        $response->assertSessionHas('type', 'error');
+        $response->assertSessionHas('message', 'Agent already has another active session. End it first before reimbursing this session.');
+
+        // Session A must remain untouched — no partial update, no crash.
+        $sessionA->refresh();
+        $this->assertSame('completed', $sessionA->status);
+        $this->assertSame(0, $sessionA->reimbursed_seconds);
+    }
 }

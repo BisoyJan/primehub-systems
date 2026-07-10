@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Services\BreakTimerService;
 use App\Services\PermissionService;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -573,6 +574,24 @@ class BreakDashboardController extends Controller
             return $this->backWithFlash('Voided/reset sessions cannot be reimbursed.', 'error');
         }
 
+        // Reimbursing an already-ended session flips it back to 'paused' so the
+        // agent can resume it. That collides with the DB-level unique guard
+        // (break_sessions_active_guard_unique) if the agent already has another
+        // active/paused session for the same shift_date. Pre-check to avoid the
+        // DB error entirely (mirrors restore()'s $hasActive guard below).
+        if (! in_array($breakSession->status, ['active', 'paused'], true)) {
+            $hasActive = BreakSession::query()
+                ->forUser($breakSession->user_id)
+                ->forDate($breakSession->shift_date->toDateString())
+                ->active()
+                ->where('id', '!=', $breakSession->id)
+                ->exists();
+
+            if ($hasActive) {
+                return $this->backWithFlash('Agent already has another active session. End it first before reimbursing this session.', 'error');
+            }
+        }
+
         try {
             $admin = auth()->user();
             $adminName = trim("{$admin->first_name} {$admin->last_name}") ?: $admin->email;
@@ -588,6 +607,17 @@ class BreakDashboardController extends Controller
             $minutes = (int) $request->input('minutes');
 
             return $this->backWithFlash("Reimbursed {$minutes} minute(s) to the session.");
+        } catch (QueryException $e) {
+            // 1062 = MySQL duplicate-key on `break_sessions_active_guard_unique`.
+            // Defense-in-depth against a race with the pre-check above.
+            // NOTE: QueryException extends RuntimeException, so this must come first.
+            if ((int) ($e->errorInfo[1] ?? 0) === 1062) {
+                return $this->backWithFlash('Agent already has another active break/lunch session.', 'error');
+            }
+
+            Log::error('BreakTimer Reimburse DB Error: '.$e->getMessage());
+
+            return $this->backWithFlash('Failed to reimburse minutes.', 'error');
         } catch (\RuntimeException $e) {
             return $this->backWithFlash($e->getMessage(), 'error');
         } catch (\Exception $e) {

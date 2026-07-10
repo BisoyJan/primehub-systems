@@ -188,6 +188,9 @@ export default function BreakTimerDashboard() {
         if (!canReimburse) return false;
         if (session.status === 'reset') return false;
         if ((session.max_reimbursable_seconds ?? 0) <= 0) return false;
+        // 'completed' sessions are a Restore situation, not a Reimburse situation —
+        // hide Reimburse so admins aren't offered both actions for the same session.
+        if (session.status === 'completed') return false;
         return true;
     }
 

@@ -18,7 +18,7 @@ This is the main timer page — a circular countdown clock in the center of the 
 
 1. **Station** — Type your workstation number (e.g., ST-01, PC-05). *Required for Agents and Team Leads. If you leave it blank, the system will show an error.*
 
-2. **Theme** — Click the theme dropdown (top-right) to choose a visual background. **14 themes available**: Default, Cozy Cafe, Rainy Window, Sakura, Ocean Tide, Neon City, Golden Hour, Deep Forest, Snowfall, Moonlit, Aurora, Cyberpunk, Synthwave, Desktop Goose.
+2. **Theme** — Click the theme dropdown (top-right) to choose a visual background. **16 themes available**: Default, Cozy Cafe, Rainy Window, Sakura, Ocean Tide, Neon City, Golden Hour, Deep Forest, Snowfall, Moonlit, Aurora, Cyberpunk, Synthwave, Tetris Arcade, Pac-Man Arcade, Desktop Goose.
 
 3. **Alarm Sound** — Click the alarm dropdown to choose what sound plays when time runs out. Options: No Sound, Zen Bell, Corporate, 8-Bit, Beep, Urgent, Chime, Alert, Buzzer.
 
@@ -104,10 +104,15 @@ Columns: **Agent**, **Campaign**, **Station**, **Break Type**, **Status** (with 
 
 **Actions per session:**
 - **View Timeline** — Opens a dialog showing the full event timeline with timestamps and reasons.
-- **Force End** (red) — Ends immediately. Type the reason (required, min 3 chars). *(Requires `break_timer.force_end` permission.)*
+- **Force End** (red) — Ends immediately. Type the reason (required, min 3 chars). *(Requires `break_timer.force_end` permission. Only available while the session is Active or Paused.)*
 - **Restore** — Restores remaining time. Optionally check **Restore full break minutes** (Admin/Super Admin/Team Lead only). Type the reason. *(Requires `break_timer.restore` permission.)*
+  - Only available for sessions with at least 30 seconds of remaining time — sessions that ran out with less than 30 seconds left cannot be restored.
+  - Blocked if the agent already has another active or paused session that same day; end it first.
+  - Team Leads and IT staff cannot restore their own sessions — only a Super Admin (or Admin) can restore for themselves.
 - **Void** (orange) — Voids the session and frees the break/lunch slot. Type the reason. *(Requires `break_timer.void_session` permission.)*
 - **Reimburse** (green) — Adds minutes back. Shows allotted time, current overage, already reimbursed, max reimbursable. Type minutes (1–180) and reason. *(Requires `break_timer.reimburse` permission.)*
+  - Reimbursed minutes offset any existing overage first; only the leftover (if any) is added back as extra remaining time.
+  - If the overage reaches zero, the session's status automatically flips from **Overage** back to **Completed**.
 
 ### Timeline Dialog
 
@@ -195,6 +200,8 @@ Click **Export Excel** to download filtered data as .xlsx.
 | **Aurora** ✨ | Aurora bands, sparkles |
 | **Cyberpunk** 🌃 | Grid, matrix rain, hexagons |
 | **Synthwave** 🌇 | Retro sun, grid, palm trees |
+| **Tetris Arcade** 🕹️ | Cascading neon tetrominoes |
+| **Pac-Man Arcade** 🟡 | Self-playing neon Pac-Man animation |
 | **Desktop Goose** 🪿 | Interactive goose that chases cursor, honks, panics during overage |
 
 Select from the dropdown on the main timer page.
