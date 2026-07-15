@@ -119,7 +119,7 @@ The Leave Management System handles:
 
 2. **SL - Sick Leave**
    - No advance notice required (illness is unpredictable)
-   - **Date restrictions**: Can only apply for dates within the last 7 days up to today
+   - **Date restrictions**: None (e.g. extended illness/injury can be filed retroactively or with a future end date)
    - **Conditional credit deduction**: 
      - Credits deducted ONLY if status is NCNS (No Call No Show)
      - No credit deduction for regular sick leave (SL status)

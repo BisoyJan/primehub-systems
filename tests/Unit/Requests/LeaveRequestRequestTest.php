@@ -18,7 +18,7 @@ class LeaveRequestRequestTest extends TestCase
     #[Test]
     public function it_authorizes_all_users(): void
     {
-        $request = new LeaveRequestRequest();
+        $request = new LeaveRequestRequest;
 
         $this->assertTrue($request->authorize());
     }
@@ -34,7 +34,7 @@ class LeaveRequestRequestTest extends TestCase
             'campaign_department' => 'Campaign A',
         ];
 
-        $request = new LeaveRequestRequest();
+        $request = new LeaveRequestRequest;
         $validator = Validator::make($data, $request->rules());
 
         $this->assertFalse($validator->fails());
@@ -43,7 +43,7 @@ class LeaveRequestRequestTest extends TestCase
     #[Test]
     public function it_requires_all_mandatory_fields(): void
     {
-        $request = new LeaveRequestRequest();
+        $request = new LeaveRequestRequest;
         $data = [];
 
         $validator = Validator::make($data, $request->rules());
@@ -68,7 +68,7 @@ class LeaveRequestRequestTest extends TestCase
             'campaign_department' => 'Campaign A',
         ];
 
-        $request = new LeaveRequestRequest();
+        $request = new LeaveRequestRequest;
         $validator = Validator::make($data, $request->rules());
 
         $this->assertTrue($validator->fails());
@@ -89,7 +89,7 @@ class LeaveRequestRequestTest extends TestCase
                 'campaign_department' => 'Campaign A',
             ];
 
-            $request = new LeaveRequestRequest();
+            $request = new LeaveRequestRequest;
             $validator = Validator::make($data, $request->rules());
 
             $this->assertFalse($validator->fails(), "Leave type {$type} should be valid");
@@ -97,22 +97,39 @@ class LeaveRequestRequestTest extends TestCase
     }
 
     #[Test]
-    public function it_requires_start_date_not_in_past(): void
+    public function it_allows_sick_leave_start_date_far_in_the_past(): void
     {
         $data = [
             'leave_type' => 'SL',
             'start_date' => now()->subMonths(2)->format('Y-m-d'),
-            'end_date' => now()->addDays(7)->format('Y-m-d'),
+            'end_date' => now()->subMonths(2)->addDays(2)->format('Y-m-d'),
             'reason' => 'Test reason for leave',
             'campaign_department' => 'Campaign A',
         ];
 
-        $request = new LeaveRequestRequest();
+        $request = new LeaveRequestRequest;
         $request->merge($data);
         $validator = Validator::make($data, $request->rules());
 
-        $this->assertTrue($validator->fails());
-        $this->assertArrayHasKey('start_date', $validator->errors()->toArray());
+        $this->assertFalse($validator->fails());
+    }
+
+    #[Test]
+    public function it_allows_sick_leave_end_date_beyond_one_month_ahead(): void
+    {
+        $data = [
+            'leave_type' => 'SL',
+            'start_date' => now()->addDays(5)->format('Y-m-d'),
+            'end_date' => now()->addMonths(2)->format('Y-m-d'),
+            'reason' => 'Test reason for leave',
+            'campaign_department' => 'Campaign A',
+        ];
+
+        $request = new LeaveRequestRequest;
+        $request->merge($data);
+        $validator = Validator::make($data, $request->rules());
+
+        $this->assertFalse($validator->fails());
     }
 
     #[Test]
@@ -126,7 +143,7 @@ class LeaveRequestRequestTest extends TestCase
             'campaign_department' => 'Campaign A',
         ];
 
-        $request = new LeaveRequestRequest();
+        $request = new LeaveRequestRequest;
         $validator = Validator::make($data, $request->rules());
 
         $this->assertTrue($validator->fails());
@@ -144,7 +161,7 @@ class LeaveRequestRequestTest extends TestCase
             'campaign_department' => 'Campaign A',
         ];
 
-        $request = new LeaveRequestRequest();
+        $request = new LeaveRequestRequest;
         $validator = Validator::make($data, $request->rules());
 
         $this->assertTrue($validator->fails());
@@ -162,7 +179,7 @@ class LeaveRequestRequestTest extends TestCase
             'campaign_department' => 'Campaign A',
         ];
 
-        $request = new LeaveRequestRequest();
+        $request = new LeaveRequestRequest;
         $validator = Validator::make($data, $request->rules());
 
         $this->assertTrue($validator->fails());
@@ -175,8 +192,8 @@ class LeaveRequestRequestTest extends TestCase
         $admin = User::factory()->create(['role' => 'Admin']);
         $employee = User::factory()->create();
 
-        $request = new LeaveRequestRequest();
-        $request->setUserResolver(fn() => $admin);
+        $request = new LeaveRequestRequest;
+        $request->setUserResolver(fn () => $admin);
 
         $data = [
             'leave_type' => 'VL',
@@ -198,8 +215,8 @@ class LeaveRequestRequestTest extends TestCase
         $agent = User::factory()->create(['role' => 'Agent']);
         $employee = User::factory()->create();
 
-        $request = new LeaveRequestRequest();
-        $request->setUserResolver(fn() => $agent);
+        $request = new LeaveRequestRequest;
+        $request->setUserResolver(fn () => $agent);
 
         $data = [
             'leave_type' => 'VL',
@@ -218,7 +235,7 @@ class LeaveRequestRequestTest extends TestCase
     #[Test]
     public function it_has_custom_messages(): void
     {
-        $request = new LeaveRequestRequest();
+        $request = new LeaveRequestRequest;
 
         $messages = $request->messages();
 

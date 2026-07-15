@@ -248,7 +248,7 @@ See **[../../ATTENDANCE_TESTS_SUMMARY.md](../../ATTENDANCE_TESTS_SUMMARY.md)** f
 - **Validation**: Max 500 characters
 
 ### Sick Leave (SL) Updates (December 2025)
-- **Date restrictions**: SL can only be applied for dates within the last 7 days up to today
+- **Date restrictions**: None — SL can be filed for any past or future date (e.g. extended illness/injury)
 - **Conditional credit deduction**: Credits deducted ONLY for NCNS status, not regular SL
 - **Frontend improvements**: Info message explaining credit deduction policy
 - **Backend logic**: `LeaveCreditService` skips eligibility/balance checks for SL

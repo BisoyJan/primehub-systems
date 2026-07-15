@@ -33,8 +33,6 @@ import {
     type CampaignConflict,
     isWeekend,
     getDayName,
-    getSlMinDate,
-    getSlMaxEndDate,
     getSplMinDate,
     getSplMaxEndDate,
     getMlMaxEndDate,
@@ -967,8 +965,8 @@ export default function Edit({
                                         onChange={(value) => handleStartDateChange(value)}
                                         placeholder="Select start date"
                                         className={weekendError.start ? 'border-red-500' : ''}
-                                        minDate={data.leave_type === 'SL' ? getSlMinDate() : data.leave_type === 'SPL' ? getSplMinDate() : undefined}
-                                        maxDate={data.leave_type === 'SL' ? getSlMaxEndDate() : data.leave_type === 'SPL' ? getSplMaxEndDate() : data.leave_type === 'ML' ? getMlMaxEndDate() : undefined}
+                                        minDate={data.leave_type === 'SPL' ? getSplMinDate() : undefined}
+                                        maxDate={data.leave_type === 'SPL' ? getSplMaxEndDate() : data.leave_type === 'ML' ? getMlMaxEndDate() : undefined}
                                     />
                                     {weekendError.start && (
                                         <p className="text-sm text-red-500">{weekendError.start}</p>
@@ -976,9 +974,7 @@ export default function Edit({
                                     {errors.start_date && (
                                         <p className="text-sm text-red-500">{errors.start_date}</p>
                                     )}
-                                    {data.leave_type === 'SL' ? (
-                                        <p className="text-xs text-muted-foreground">Sick Leave: Select from last 3 weeks to 1 month ahead</p>
-                                    ) : data.leave_type === 'SPL' ? (
+                                    {data.leave_type === 'SPL' ? (
                                         <p className="text-xs text-muted-foreground">Solo Parent Leave: Select from last 2 weeks to 1 month ahead</p>
                                     ) : data.leave_type === 'ML' ? (
                                         <p className="text-xs text-muted-foreground">Maternity Leave: Up to 1 year ahead</p>
@@ -996,8 +992,8 @@ export default function Edit({
                                         onChange={(value) => handleEndDateChange(value)}
                                         placeholder="Select end date"
                                         className={weekendError.end ? 'border-red-500' : ''}
-                                        minDate={data.start_date || (data.leave_type === 'SL' ? getSlMinDate() : data.leave_type === 'SPL' ? getSplMinDate() : undefined)}
-                                        maxDate={data.leave_type === 'SL' ? getSlMaxEndDate() : data.leave_type === 'SPL' ? getSplMaxEndDate() : data.leave_type === 'ML' ? getMlMaxEndDate() : undefined}
+                                        minDate={data.start_date || (data.leave_type === 'SPL' ? getSplMinDate() : undefined)}
+                                        maxDate={data.leave_type === 'SPL' ? getSplMaxEndDate() : data.leave_type === 'ML' ? getMlMaxEndDate() : undefined}
                                         defaultMonth={data.start_date || undefined}
                                     />
                                     {weekendError.end && (
@@ -1006,9 +1002,7 @@ export default function Edit({
                                     {errors.end_date && (
                                         <p className="text-sm text-red-500">{errors.end_date}</p>
                                     )}
-                                    {data.leave_type === 'SL' ? (
-                                        <p className="text-xs text-muted-foreground">Sick Leave: Up to 1 month from today</p>
-                                    ) : data.leave_type === 'SPL' ? (
+                                    {data.leave_type === 'SPL' ? (
                                         <p className="text-xs text-muted-foreground">Solo Parent Leave: Up to 1 month from today</p>
                                     ) : data.leave_type === 'ML' ? (
                                         <p className="text-xs text-muted-foreground">Maternity Leave: Up to 1 year from today</p>

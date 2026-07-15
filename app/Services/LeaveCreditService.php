@@ -1140,18 +1140,7 @@ class LeaveCreditService
         // Admins can override the 2-week requirement during approval on the Show page
         // The rule is NOT enforced as a blocking validation anymore
 
-        // Validate SL date constraints (3 weeks back to 1 month ahead)
-        if ($leaveType === 'SL') {
-            $threeWeeksAgo = now()->subWeeks(3)->startOfDay();
-            $oneMonthAhead = now()->addMonth()->endOfDay();
-
-            if ($startDate->lt($threeWeeksAgo)) {
-                $errors[] = 'Sick Leave start date must be within the last 3 weeks.';
-            }
-            if ($endDate->gt($oneMonthAhead)) {
-                $errors[] = 'Sick Leave end date cannot exceed 1 month from today.';
-            }
-        }
+        // NOTE: SL has no date restrictions (no minimum backdate, no maximum end date)
 
         // NOTE: Attendance points > 6 is now informational only (shown in Create page)
         // Reviewers can see the attendance points on the Show page to make approval decisions

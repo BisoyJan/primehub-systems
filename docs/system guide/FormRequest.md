@@ -124,7 +124,7 @@ Submit and manage leave requests (Vacation, Sick, Bereavement, Special, etc.).
 ### Form Fields
 
 1. **Leave Type** — Select from the dropdown. *Required.*
-   - *Each leave type has different date rules. For example, SL cannot be more than 3 weeks in the past or more than 1 month in the future.*
+   - *Each leave type has different date rules. For example, SL has no date restrictions at all (past or future), while other leave types like SPL and ML have their own limits.*
    - **IW (Incomplete Workday)** — For employees who reported to the office but left early for personal reasons (not illness). Non-credited; biometric attendance hours for that day are preserved rather than replaced.
 2. **Start Date** and **End Date** — Click the date pickers to select. *Required.*
 3. **Reason** — Type your reason. *Required, 10–1000 characters.*

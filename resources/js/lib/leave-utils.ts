@@ -73,20 +73,6 @@ export function getDayName(dateString: string): string {
     return date.toLocaleDateString('en-US', { weekday: 'long' });
 }
 
-/** Sick Leave: minimum start date (3 weeks ago) */
-export function getSlMinDate(): string {
-    const date = new Date();
-    date.setDate(date.getDate() - 21);
-    return format(date, 'yyyy-MM-dd');
-}
-
-/** Sick Leave: maximum end date (1 month ahead) */
-export function getSlMaxEndDate(): string {
-    const date = new Date();
-    date.setMonth(date.getMonth() + 1);
-    return format(date, 'yyyy-MM-dd');
-}
-
 /** Solo Parent Leave: minimum start date (2 weeks ago) */
 export function getSplMinDate(): string {
     const date = new Date();
