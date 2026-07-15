@@ -346,7 +346,7 @@ export default function CoachingSessionsShow() {
 
                 {/* Performance Description */}
                 <SectionCard title="Performance Description">
-                    <div className="whitespace-pre-wrap text-sm text-gray-900 bg-white rounded-md p-3 prose prose-sm max-w-none [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6" dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(session.performance_description) }} />
+                    <div className="whitespace-pre-wrap text-sm text-gray-900 bg-white rounded-md p-3 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_li]:my-0.5 [&_ol_ol]:list-[lower-alpha] [&_ol_ol_ol]:list-[lower-roman] [&_ul_ul]:list-[circle] [&_ul_ul_ul]:list-[square] [&_blockquote]:border-l-4 [&_blockquote]:border-gray-300 [&_blockquote]:pl-3 [&_blockquote]:my-1" dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(session.performance_description) }} />
                 </SectionCard>
 
                 {/* Attachments */}
@@ -400,13 +400,13 @@ export default function CoachingSessionsShow() {
                 {/* Agent Strengths */}
                 {session.agent_strengths_wins && (
                     <SectionCard title="Agent Strengths / Wins">
-                        <div className="whitespace-pre-wrap text-sm text-gray-900 bg-white rounded-md p-3 prose prose-sm max-w-none [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6" dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(session.agent_strengths_wins) }} />
+                        <div className="whitespace-pre-wrap text-sm text-gray-900 bg-white rounded-md p-3 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_li]:my-0.5 [&_ol_ol]:list-[lower-alpha] [&_ol_ol_ol]:list-[lower-roman] [&_ul_ul]:list-[circle] [&_ul_ul_ul]:list-[square] [&_blockquote]:border-l-4 [&_blockquote]:border-gray-300 [&_blockquote]:pl-3 [&_blockquote]:my-1" dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(session.agent_strengths_wins) }} />
                     </SectionCard>
                 )}
 
                 {/* SMART Action Plan */}
                 <SectionCard title="SMART Action Plan">
-                    <div className="whitespace-pre-wrap text-sm text-gray-900 bg-white rounded-md p-3 prose prose-sm max-w-none [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6" dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(session.smart_action_plan) }} />
+                    <div className="whitespace-pre-wrap text-sm text-gray-900 bg-white rounded-md p-3 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_li]:my-0.5 [&_ol_ol]:list-[lower-alpha] [&_ol_ol_ol]:list-[lower-roman] [&_ul_ul]:list-[circle] [&_ul_ul_ul]:list-[square] [&_blockquote]:border-l-4 [&_blockquote]:border-gray-300 [&_blockquote]:pl-3 [&_blockquote]:my-1" dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(session.smart_action_plan) }} />
                 </SectionCard>
 
                 {/* Acknowledgement & Compliance Info */}
