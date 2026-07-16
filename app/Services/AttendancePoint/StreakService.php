@@ -65,7 +65,7 @@ class StreakService
      * Get a leaderboard of top streaks across the workforce.
      * On-leave users are filtered in real-time (never cached) to stay current.
      *
-     * @return array<int, array{user_id:int,name:string,campaign:?string,current_streak:int,badge:?array<string,mixed>}>
+     * @return array<int, array{user_id:int,name:string,avatar_url:?string,campaign:?string,current_streak:int,badge:?array<string,mixed>}>
      */
     public function getLeaderboard(int $limit = 10): array
     {
@@ -277,7 +277,7 @@ class StreakService
         // having Attendance rows.
         $users = User::query()
             ->where('is_active', true)
-            ->select(['id', 'first_name', 'middle_name', 'last_name', 'role', 'created_at'])
+            ->select(['id', 'first_name', 'middle_name', 'last_name', 'role', 'avatar', 'created_at'])
             ->with(['activeSchedule.campaign'])
             ->get();
 
@@ -290,6 +290,7 @@ class StreakService
             $rows[] = [
                 'user_id' => $user->id,
                 'name' => $user->name,
+                'avatar_url' => $user->avatar_url,
                 'campaign' => $user->activeSchedule?->campaign?->name,
                 'current_streak' => $summary['current_streak'],
                 'longest_streak' => $summary['longest_streak'],

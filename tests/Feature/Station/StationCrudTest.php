@@ -242,6 +242,44 @@ class StationCrudTest extends TestCase
     }
 
     #[Test]
+    public function multiple_stations_can_be_bulk_deleted(): void
+    {
+        $stationDeleter = User::factory()->create([
+            'role' => 'IT',
+            'is_approved' => true,
+        ]);
+
+        $stations = Station::factory()->count(3)->create([
+            'site_id' => $this->site->id,
+            'campaign_id' => $this->campaign->id,
+        ]);
+
+        $response = $this->actingAs($stationDeleter)->delete(route('stations.bulkDelete'), [
+            'ids' => $stations->pluck('id')->toArray(),
+        ]);
+
+        foreach ($stations as $station) {
+            $this->assertDatabaseMissing('stations', ['id' => $station->id]);
+        }
+        $response->assertSessionHas('flash.message', 'Deleted 3 stations.');
+    }
+
+    #[Test]
+    public function bulk_delete_requires_at_least_one_id(): void
+    {
+        $stationDeleter = User::factory()->create([
+            'role' => 'IT',
+            'is_approved' => true,
+        ]);
+
+        $response = $this->actingAs($stationDeleter)->delete(route('stations.bulkDelete'), [
+            'ids' => [],
+        ]);
+
+        $response->assertSessionHasErrors('ids');
+    }
+
+    #[Test]
     public function station_index_can_be_filtered_by_site(): void
     {
         $site1 = Site::factory()->create(['name' => 'Site 1']);

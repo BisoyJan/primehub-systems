@@ -121,6 +121,9 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
     Route::post('stations/bulk-unassign', [StationController::class, 'bulkUnassign'])
         ->middleware('permission:stations.edit')
         ->name('stations.bulkUnassign');
+    Route::delete('stations/bulk-delete', [StationController::class, 'bulkDelete'])
+        ->middleware(['permission:stations.delete', 'throttle:10,1'])
+        ->name('stations.bulkDelete');
     Route::resource('stations', StationController::class)
         ->except(['show'])
         ->middleware('permission:stations.view,stations.create,stations.edit,stations.delete');

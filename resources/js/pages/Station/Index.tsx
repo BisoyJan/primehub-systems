@@ -39,6 +39,7 @@ import {
     create as stationsCreateRoute,
     edit as stationsEditRoute,
     destroy as stationsDestroyRoute,
+    bulkDelete as stationsBulkDeleteRoute,
 } from "@/routes/stations";
 import { index as sitesIndexRoute } from "@/routes/sites";
 import { index as campaignsIndexRoute } from "@/routes/campaigns";
@@ -380,6 +381,8 @@ export default function StationIndex() {
     const [bulkAssignSubmitting, setBulkAssignSubmitting] = useState(false);
     const [bulkUnassignConfirmOpen, setBulkUnassignConfirmOpen] = useState(false);
     const [bulkUnassignSubmitting, setBulkUnassignSubmitting] = useState(false);
+    const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
+    const [bulkDeleteSubmitting, setBulkDeleteSubmitting] = useState(false);
 
     const updateAssignGroup = (idx: number, patch: Partial<AssignGroup>) => {
         setAssignGroups(prev => prev.map((g, i) => i === idx ? { ...g, ...patch } : g));
@@ -452,6 +455,24 @@ export default function StationIndex() {
             },
             onError: () => toast.error('Failed to unassign stations'),
             onFinish: () => setBulkUnassignSubmitting(false),
+        });
+    };
+
+    const handleSubmitBulkDelete = () => {
+        if (selectedStationIds.length === 0) {
+            toast.error('No stations selected');
+            return;
+        }
+        setBulkDeleteSubmitting(true);
+        router.delete(stationsBulkDeleteRoute().url, {
+            data: { ids: selectedStationIds },
+            preserveScroll: true,
+            onSuccess: () => {
+                setBulkDeleteConfirmOpen(false);
+                handleClearStationSelection();
+            },
+            onError: () => toast.error('Failed to delete selected stations'),
+            onFinish: () => setBulkDeleteSubmitting(false),
         });
     };
 
@@ -1008,6 +1029,16 @@ export default function StationIndex() {
                                         >
                                             {bulkProgress.running ? 'Processing...' : 'Download All QR'}
                                         </Button>
+                                        <Can permission="stations.delete">
+                                            <Button
+                                                onClick={() => setBulkDeleteConfirmOpen(true)}
+                                                variant="destructive"
+                                                className="w-full sm:w-auto min-w-0"
+                                                size="sm"
+                                            >
+                                                Delete Selected ({selectedStationIds.length})
+                                            </Button>
+                                        </Can>
                                     </div>
                                 </div>
                             )}
@@ -1923,6 +1954,30 @@ export default function StationIndex() {
                                 disabled={bulkUnassignSubmitting}
                             >
                                 {bulkUnassignSubmitting ? 'Unassigning...' : 'Unassign'}
+                            </Button>
+                        </div>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Bulk Delete Confirmation */}
+                <Dialog open={bulkDeleteConfirmOpen} onOpenChange={setBulkDeleteConfirmOpen}>
+                    <DialogContent className="max-w-[90vw] sm:max-w-md">
+                        <DialogHeader>
+                            <DialogTitle>Delete {selectedStationIds.length} Station{selectedStationIds.length !== 1 ? 's' : ''}?</DialogTitle>
+                            <DialogDescription>
+                                This action cannot be undone. This will permanently delete the selected station{selectedStationIds.length !== 1 ? 's' : ''} from the database.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="flex flex-col sm:flex-row gap-2 justify-end pt-2">
+                            <Button variant="outline" onClick={() => setBulkDeleteConfirmOpen(false)} disabled={bulkDeleteSubmitting}>
+                                Cancel
+                            </Button>
+                            <Button
+                                variant="destructive"
+                                onClick={handleSubmitBulkDelete}
+                                disabled={bulkDeleteSubmitting}
+                            >
+                                {bulkDeleteSubmitting ? 'Deleting...' : 'Delete'}
                             </Button>
                         </div>
                     </DialogContent>

@@ -101,6 +101,7 @@ function formatBreakType(type: string): string {
 }
 
 const AUTO_HIDE_STORAGE_KEY = 'break-timer-auto-hide';
+const STATION_STORAGE_KEY = 'break-timer-station';
 
 export default function BreakTimerIndex() {
     const { policy, activeSession, todaySessions, breaksUsed, lunchUsed, auth } =
@@ -125,7 +126,25 @@ export default function BreakTimerIndex() {
     const [isEndDialogOpen, setIsEndDialogOpen] = useState(false);
     const [pendingStartType, setPendingStartType] = useState<'break' | 'lunch' | { combined: number } | { combinedBreak: number } | null>(null);
     const [pauseReason, setPauseReason] = useState('');
-    const [station, setStation] = useState<string>('');
+    const [station, setStationState] = useState<string>(() => {
+        try {
+            return localStorage.getItem(STATION_STORAGE_KEY) ?? '';
+        } catch {
+            return '';
+        }
+    });
+    const setStation = useCallback((value: string) => {
+        setStationState(value);
+        try {
+            if (value.trim()) {
+                localStorage.setItem(STATION_STORAGE_KEY, value);
+            } else {
+                localStorage.removeItem(STATION_STORAGE_KEY);
+            }
+        } catch {
+            // localStorage unavailable
+        }
+    }, []);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const [expandedSession, setExpandedSession] = useState<number | null>(null);

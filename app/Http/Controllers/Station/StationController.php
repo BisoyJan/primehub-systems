@@ -679,6 +679,25 @@ class StationController extends Controller
     }
 
     /**
+     * DELETE stations/bulk-delete
+     * Delete multiple stations at once.
+     */
+    public function bulkDelete(Request $request)
+    {
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['integer', 'exists:stations,id'],
+        ]);
+
+        $count = Station::whereIn('id', $validated['ids'])->delete();
+
+        return redirect()->back()->with('flash', [
+            'message' => "Deleted {$count} station".($count === 1 ? '' : 's').'.',
+            'type' => 'success',
+        ]);
+    }
+
+    /**
      * Build redirect parameters preserving pagination page from request.
      *
      * @return array<string, mixed>

@@ -4,6 +4,7 @@ import AppLayout from '@/layouts/app-layout';
 import { usePageMeta } from '@/hooks';
 import { useFlashMessage } from '@/hooks/use-flash-message';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -57,6 +58,7 @@ interface BadgeTier {
 interface LeaderboardRow {
     user_id: number;
     name: string;
+    avatar_url: string | null;
     campaign: string | null;
     current_streak: number;
     longest_streak: number;
@@ -297,7 +299,17 @@ export default function LeaderboardPage({ leaderboard, limit, canManage, exclude
                                                         #{rank}
                                                     </span>
                                                 </TableCell>
-                                                <TableCell className="font-medium">{row.name}</TableCell>
+                                                <TableCell className="font-medium">
+                                                    <div className="flex items-center gap-3">
+                                                        <Avatar className="h-11 w-11 shrink-0">
+                                                            <AvatarImage loading="lazy" src={row.avatar_url ?? undefined} alt={row.name} />
+                                                            <AvatarFallback className="text-sm">
+                                                                {row.name.slice(0, 2).toUpperCase()}
+                                                            </AvatarFallback>
+                                                        </Avatar>
+                                                        <span>{row.name}</span>
+                                                    </div>
+                                                </TableCell>
                                                 <TableCell className="text-muted-foreground text-sm">
                                                     {row.campaign ?? '—'}
                                                 </TableCell>
@@ -342,10 +354,20 @@ export default function LeaderboardPage({ leaderboard, limit, canManage, exclude
                                                 {rank <= 3 ? <Medal className="inline h-4 w-4" /> : null} #{rank}
                                             </span>
                                         </div>
-                                        <p className="font-medium">{row.name}</p>
-                                        {row.campaign && (
-                                            <p className="text-muted-foreground text-xs">{row.campaign}</p>
-                                        )}
+                                        <div className="flex items-center gap-3">
+                                            <Avatar className="h-12 w-12 shrink-0">
+                                                <AvatarImage loading="lazy" src={row.avatar_url ?? undefined} alt={row.name} />
+                                                <AvatarFallback className="text-sm">
+                                                    {row.name.slice(0, 2).toUpperCase()}
+                                                </AvatarFallback>
+                                            </Avatar>
+                                            <div>
+                                                <p className="font-medium">{row.name}</p>
+                                                {row.campaign && (
+                                                    <p className="text-muted-foreground text-xs">{row.campaign}</p>
+                                                )}
+                                            </div>
+                                        </div>
                                         <div className="mt-2 flex items-center justify-between">
                                             <div className="flex items-center gap-1 text-orange-600 dark:text-orange-400">
                                                 <Flame className="h-4 w-4" />
@@ -505,8 +527,8 @@ export default function LeaderboardPage({ leaderboard, limit, canManage, exclude
                                                             <div className="flex min-w-0 flex-1 items-center gap-2">
                                                                 <div
                                                                     className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${checked
-                                                                            ? 'border-green-600 bg-green-600 text-white'
-                                                                            : 'border-muted-foreground/40'
+                                                                        ? 'border-green-600 bg-green-600 text-white'
+                                                                        : 'border-muted-foreground/40'
                                                                         }`}
                                                                     aria-hidden
                                                                 >
