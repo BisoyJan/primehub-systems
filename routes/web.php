@@ -84,6 +84,9 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
     Route::get('pcspecs/check-availability', [PcSpecController::class, 'checkAvailability'])
         ->middleware('permission:pcspecs.view')
         ->name('pcspecs.checkAvailability');
+    Route::delete('pcspecs/bulk-delete', [PcSpecController::class, 'bulkDelete'])
+        ->middleware(['permission:pcspecs.delete', 'throttle:10,1'])
+        ->name('pcspecs.bulkDelete');
     Route::resource('pcspecs', PcSpecController::class)
         ->middleware('permission:pcspecs.view,pcspecs.create,pcspecs.edit,pcspecs.delete');
 

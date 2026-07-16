@@ -60,12 +60,14 @@ import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { TableSkeleton } from '@/components/TableSkeleton';
+import { Can } from '@/components/authorization';
 
 import {
     index as pcSpecIndex,
     create as pcSpecCreate,
     edit as pcSpecEdit,
     destroy as pcSpecDestroy,
+    bulkDelete as pcSpecBulkDeleteRoute,
 } from '@/routes/pcspecs';
 
 
@@ -330,6 +332,29 @@ export default function Index() {
     const handleDelete = (id: number) => {
         form.delete(pcSpecDestroy({ pcspec: id }).url, {
             preserveScroll: true,
+        });
+    };
+
+    const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
+    const [bulkDeleteSubmitting, setBulkDeleteSubmitting] = useState(false);
+    const [forceBulkDelete, setForceBulkDelete] = useState(false);
+
+    const handleSubmitBulkDelete = () => {
+        if (selectedPcIds.length === 0) {
+            toast.error('No PC specs selected');
+            return;
+        }
+        setBulkDeleteSubmitting(true);
+        router.delete(pcSpecBulkDeleteRoute().url, {
+            data: { ids: selectedPcIds, force: forceBulkDelete },
+            preserveScroll: true,
+            onSuccess: () => {
+                setBulkDeleteConfirmOpen(false);
+                setForceBulkDelete(false);
+                setSelectedPcIds([]);
+            },
+            onError: () => toast.error('Failed to delete selected PC specs'),
+            onFinish: () => setBulkDeleteSubmitting(false),
         });
     };
 
@@ -810,6 +835,14 @@ export default function Index() {
                             >
                                 Download All QR Codes as ZIP
                             </Button>
+                            <Can permission="pcspecs.delete">
+                                <Button
+                                    onClick={() => setBulkDeleteConfirmOpen(true)}
+                                    variant="destructive"
+                                >
+                                    Delete Selected ({selectedPcIds.length})
+                                </Button>
+                            </Can>
                         </div>
                     </div>
                 )}
@@ -1303,6 +1336,44 @@ export default function Index() {
                 <div className="flex justify-center">
                     <PaginationNav links={pcspecs.links} />
                 </div>
+
+                {/* Bulk Delete Confirmation */}
+                <Dialog open={bulkDeleteConfirmOpen} onOpenChange={setBulkDeleteConfirmOpen}>
+                    <DialogContent className="max-w-[90vw] sm:max-w-md">
+                        <DialogHeader>
+                            <DialogTitle>Delete {selectedPcIds.length} PC Spec{selectedPcIds.length !== 1 ? 's' : ''}?</DialogTitle>
+                            <DialogDescription>
+                                This action cannot be undone. Any selected PC spec currently assigned to a
+                                station will be automatically unassigned first (the station itself is not
+                                deleted). PC specs with existing transfer or maintenance history are skipped
+                                by default.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="flex items-start gap-2 py-2">
+                            <Checkbox
+                                id="force-bulk-delete"
+                                checked={forceBulkDelete}
+                                onCheckedChange={(checked) => setForceBulkDelete(checked === true)}
+                                className="mt-0.5"
+                            />
+                            <Label htmlFor="force-bulk-delete" className="text-sm font-normal leading-snug">
+                                Also delete PC specs with existing transfer/maintenance history
+                            </Label>
+                        </div>
+                        <div className="flex flex-col sm:flex-row gap-2 justify-end pt-2">
+                            <Button variant="outline" onClick={() => setBulkDeleteConfirmOpen(false)} disabled={bulkDeleteSubmitting}>
+                                Cancel
+                            </Button>
+                            <Button
+                                variant="destructive"
+                                onClick={handleSubmitBulkDelete}
+                                disabled={bulkDeleteSubmitting}
+                            >
+                                {bulkDeleteSubmitting ? 'Deleting...' : 'Delete'}
+                            </Button>
+                        </div>
+                    </DialogContent>
+                </Dialog>
 
                 {/* Issue Dialog */}
                 <Dialog open={issueDialogOpen} onOpenChange={setIssueDialogOpen}>

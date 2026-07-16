@@ -6,6 +6,7 @@ use App\Jobs\GenerateAllPcSpecQRCodesZip;
 use App\Jobs\GenerateSelectedPcSpecQRCodesZip;
 use App\Models\PcSpec;
 use App\Models\ProcessorSpec;
+use App\Models\Station;
 use App\Traits\AddsQrCodeBorder;
 use Endroid\QrCode\Builder\Builder;
 use Endroid\QrCode\Encoding\Encoding;
@@ -482,6 +483,68 @@ class PcSpecController extends Controller
         return redirect()->route('pcspecs.index', $this->indexRedirectParams(request()))
             ->with('message', 'PC Spec deleted')
             ->with('type', 'success');
+    }
+
+    /**
+     * DELETE /pcspecs/bulk-delete
+     * Delete multiple PC specs at once.
+     *
+     * PC specs currently assigned to a station are automatically
+     * unassigned first (station row preserved, only pc_spec_id is
+     * cleared) — station assignment is never a reason to skip deletion.
+     *
+     * PC specs with existing transfer or maintenance history are
+     * skipped by default (force=false) since deleting them would
+     * cascade-delete that history. Pass force=true to delete them
+     * anyway and let the DB cascade remove the history.
+     */
+    public function bulkDelete(Request $request)
+    {
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['integer', 'exists:pc_specs,id'],
+            'force' => ['nullable', 'boolean'],
+        ]);
+
+        $force = $validated['force'] ?? false;
+
+        $pcSpecs = PcSpec::whereIn('id', $validated['ids'])
+            ->withCount(['transfers', 'maintenances'])
+            ->get();
+
+        $deletable = $force
+            ? $pcSpecs
+            : $pcSpecs->filter(fn ($pc) => $pc->transfers_count === 0 && $pc->maintenances_count === 0);
+        $skipped = $force ? collect() : $pcSpecs->diff($deletable);
+
+        $stationsUnassigned = 0;
+
+        DB::transaction(function () use ($deletable, &$stationsUnassigned) {
+            foreach ($deletable as $pcSpec) {
+                $stations = Station::where('pc_spec_id', $pcSpec->id)->get();
+                foreach ($stations as $station) {
+                    $station->update(['pc_spec_id' => null]);
+                    $stationsUnassigned++;
+                }
+
+                $pcSpec->processorSpecs()->detach();
+                $pcSpec->delete();
+            }
+        });
+
+        $count = $deletable->count();
+        $message = "Deleted {$count} PC spec".($count === 1 ? '' : 's').'.';
+        if ($stationsUnassigned > 0) {
+            $message .= " ({$stationsUnassigned} station".($stationsUnassigned === 1 ? '' : 's').' unassigned.)';
+        }
+        if ($skipped->isNotEmpty()) {
+            $message .= ' Skipped '.$skipped->count().' PC spec'.($skipped->count() === 1 ? '' : 's').' with existing transfer/maintenance history.';
+        }
+
+        return redirect()->back()->with([
+            'message' => $message,
+            'type' => $skipped->isNotEmpty() ? 'warning' : 'success',
+        ]);
     }
 
     /**

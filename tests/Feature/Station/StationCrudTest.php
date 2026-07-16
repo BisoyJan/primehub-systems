@@ -5,6 +5,7 @@ namespace Tests\Feature\Station;
 use App\Models\Campaign;
 use App\Models\EmployeeSchedule;
 use App\Models\PcSpec;
+use App\Models\PcTransfer;
 use App\Models\Site;
 use App\Models\Station;
 use App\Models\User;
@@ -277,6 +278,52 @@ class StationCrudTest extends TestCase
         ]);
 
         $response->assertSessionHasErrors('ids');
+    }
+
+    #[Test]
+    public function bulk_delete_skips_station_with_transfer_history_by_default(): void
+    {
+        $stationDeleter = User::factory()->create([
+            'role' => 'IT',
+            'is_approved' => true,
+        ]);
+
+        $station = Station::factory()->create([
+            'site_id' => $this->site->id,
+            'campaign_id' => $this->campaign->id,
+        ]);
+        PcTransfer::factory()->create(['to_station_id' => $station->id]);
+
+        $response = $this->actingAs($stationDeleter)->delete(route('stations.bulkDelete'), [
+            'ids' => [$station->id],
+        ]);
+
+        $this->assertDatabaseHas('stations', ['id' => $station->id]);
+        $response->assertSessionHas('flash.message', 'Deleted 0 stations. Skipped 1 station with existing transfer history.');
+    }
+
+    #[Test]
+    public function bulk_delete_with_force_removes_station_and_its_transfer_history(): void
+    {
+        $stationDeleter = User::factory()->create([
+            'role' => 'IT',
+            'is_approved' => true,
+        ]);
+
+        $station = Station::factory()->create([
+            'site_id' => $this->site->id,
+            'campaign_id' => $this->campaign->id,
+        ]);
+        $transfer = PcTransfer::factory()->create(['to_station_id' => $station->id]);
+
+        $response = $this->actingAs($stationDeleter)->delete(route('stations.bulkDelete'), [
+            'ids' => [$station->id],
+            'force' => true,
+        ]);
+
+        $this->assertDatabaseMissing('stations', ['id' => $station->id]);
+        $this->assertDatabaseMissing('pc_transfers', ['id' => $transfer->id]);
+        $response->assertSessionHas('flash.message', 'Deleted 1 station.');
     }
 
     #[Test]

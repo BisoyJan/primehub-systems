@@ -681,19 +681,47 @@ class StationController extends Controller
     /**
      * DELETE stations/bulk-delete
      * Delete multiple stations at once.
+     *
+     * Stations with existing transfer history (as the destination
+     * station, `to_station_id`) are skipped by default (force=false)
+     * since deleting them would cascade-delete that history. Pass
+     * force=true to delete them anyway and let the DB cascade remove
+     * the history. (`from_station_id` sets null on delete, so no data
+     * loss there — no need to guard on it.)
      */
     public function bulkDelete(Request $request)
     {
         $validated = $request->validate([
             'ids' => ['required', 'array', 'min:1'],
             'ids.*' => ['integer', 'exists:stations,id'],
+            'force' => ['nullable', 'boolean'],
         ]);
 
-        $count = Station::whereIn('id', $validated['ids'])->delete();
+        $force = $validated['force'] ?? false;
+
+        $stations = Station::whereIn('id', $validated['ids'])
+            ->withCount('transfersTo')
+            ->get();
+
+        $deletable = $force
+            ? $stations
+            : $stations->filter(fn ($station) => $station->transfers_to_count === 0);
+        $skipped = $force ? collect() : $stations->diff($deletable);
+
+        $count = 0;
+        foreach ($deletable as $station) {
+            $station->delete();
+            $count++;
+        }
+
+        $message = "Deleted {$count} station".($count === 1 ? '' : 's').'.';
+        if ($skipped->isNotEmpty()) {
+            $message .= ' Skipped '.$skipped->count().' station'.($skipped->count() === 1 ? '' : 's').' with existing transfer history.';
+        }
 
         return redirect()->back()->with('flash', [
-            'message' => "Deleted {$count} station".($count === 1 ? '' : 's').'.',
-            'type' => 'success',
+            'message' => $message,
+            'type' => $skipped->isNotEmpty() ? 'warning' : 'success',
         ]);
     }
 

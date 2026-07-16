@@ -383,6 +383,7 @@ export default function StationIndex() {
     const [bulkUnassignSubmitting, setBulkUnassignSubmitting] = useState(false);
     const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
     const [bulkDeleteSubmitting, setBulkDeleteSubmitting] = useState(false);
+    const [forceBulkDelete, setForceBulkDelete] = useState(false);
 
     const updateAssignGroup = (idx: number, patch: Partial<AssignGroup>) => {
         setAssignGroups(prev => prev.map((g, i) => i === idx ? { ...g, ...patch } : g));
@@ -465,10 +466,11 @@ export default function StationIndex() {
         }
         setBulkDeleteSubmitting(true);
         router.delete(stationsBulkDeleteRoute().url, {
-            data: { ids: selectedStationIds },
+            data: { ids: selectedStationIds, force: forceBulkDelete },
             preserveScroll: true,
             onSuccess: () => {
                 setBulkDeleteConfirmOpen(false);
+                setForceBulkDelete(false);
                 handleClearStationSelection();
             },
             onError: () => toast.error('Failed to delete selected stations'),
@@ -1965,9 +1967,21 @@ export default function StationIndex() {
                         <DialogHeader>
                             <DialogTitle>Delete {selectedStationIds.length} Station{selectedStationIds.length !== 1 ? 's' : ''}?</DialogTitle>
                             <DialogDescription>
-                                This action cannot be undone. This will permanently delete the selected station{selectedStationIds.length !== 1 ? 's' : ''} from the database.
+                                This action cannot be undone. Stations with existing transfer history are
+                                skipped by default.
                             </DialogDescription>
                         </DialogHeader>
+                        <div className="flex items-start gap-2 py-2">
+                            <Checkbox
+                                id="force-bulk-delete-stations"
+                                checked={forceBulkDelete}
+                                onCheckedChange={(checked) => setForceBulkDelete(checked === true)}
+                                className="mt-0.5"
+                            />
+                            <Label htmlFor="force-bulk-delete-stations" className="text-sm font-normal leading-snug">
+                                Also delete stations with existing transfer history
+                            </Label>
+                        </div>
                         <div className="flex flex-col sm:flex-row gap-2 justify-end pt-2">
                             <Button variant="outline" onClick={() => setBulkDeleteConfirmOpen(false)} disabled={bulkDeleteSubmitting}>
                                 Cancel

@@ -4,9 +4,12 @@ namespace Tests\Feature;
 
 use App\Models\Campaign;
 use App\Models\EmployeeSchedule;
+use App\Models\PcMaintenance;
 use App\Models\PcSpec;
+use App\Models\PcTransfer;
 use App\Models\ProcessorSpec;
 use App\Models\Site;
+use App\Models\Station;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -185,6 +188,92 @@ class PcSpecCrudTest extends TestCase
         $response->assertRedirect(route('pcspecs.index'));
 
         $this->assertDatabaseMissing('pc_specs', ['id' => $pcSpec->id]);
+    }
+
+    #[Test]
+    public function bulk_delete_removes_multiple_pc_specs_with_no_history()
+    {
+        $pcSpecs = PcSpec::factory()->count(3)->create();
+
+        $response = $this->actingAs($this->admin)->delete(route('pcspecs.bulkDelete'), [
+            'ids' => $pcSpecs->pluck('id')->toArray(),
+        ]);
+
+        foreach ($pcSpecs as $pcSpec) {
+            $this->assertDatabaseMissing('pc_specs', ['id' => $pcSpec->id]);
+        }
+        $response->assertSessionHas('message', 'Deleted 3 PC specs.');
+    }
+
+    #[Test]
+    public function bulk_delete_unassigns_pc_spec_from_station_before_deleting()
+    {
+        $pcSpec = PcSpec::factory()->create();
+        $station = Station::factory()->create(['pc_spec_id' => $pcSpec->id]);
+
+        $response = $this->actingAs($this->admin)->delete(route('pcspecs.bulkDelete'), [
+            'ids' => [$pcSpec->id],
+        ]);
+
+        $this->assertDatabaseMissing('pc_specs', ['id' => $pcSpec->id]);
+        $this->assertDatabaseHas('stations', [
+            'id' => $station->id,
+            'pc_spec_id' => null,
+        ]);
+        $response->assertSessionHas('message', 'Deleted 1 PC spec. (1 station unassigned.)');
+    }
+
+    #[Test]
+    public function bulk_delete_skips_pc_spec_with_transfer_history_by_default()
+    {
+        $pcSpec = PcSpec::factory()->create();
+        PcTransfer::factory()->create(['pc_spec_id' => $pcSpec->id]);
+
+        $response = $this->actingAs($this->admin)->delete(route('pcspecs.bulkDelete'), [
+            'ids' => [$pcSpec->id],
+        ]);
+
+        $this->assertDatabaseHas('pc_specs', ['id' => $pcSpec->id]);
+        $response->assertSessionHas('message', 'Deleted 0 PC specs. Skipped 1 PC spec with existing transfer/maintenance history.');
+    }
+
+    #[Test]
+    public function bulk_delete_skips_pc_spec_with_maintenance_history_by_default()
+    {
+        $pcSpec = PcSpec::factory()->create();
+        PcMaintenance::factory()->create(['pc_spec_id' => $pcSpec->id]);
+
+        $response = $this->actingAs($this->admin)->delete(route('pcspecs.bulkDelete'), [
+            'ids' => [$pcSpec->id],
+        ]);
+
+        $this->assertDatabaseHas('pc_specs', ['id' => $pcSpec->id]);
+    }
+
+    #[Test]
+    public function bulk_delete_with_force_removes_pc_spec_and_its_history()
+    {
+        $pcSpec = PcSpec::factory()->create();
+        $transfer = PcTransfer::factory()->create(['pc_spec_id' => $pcSpec->id]);
+
+        $response = $this->actingAs($this->admin)->delete(route('pcspecs.bulkDelete'), [
+            'ids' => [$pcSpec->id],
+            'force' => true,
+        ]);
+
+        $this->assertDatabaseMissing('pc_specs', ['id' => $pcSpec->id]);
+        $this->assertDatabaseMissing('pc_transfers', ['id' => $transfer->id]);
+        $response->assertSessionHas('message', 'Deleted 1 PC spec.');
+    }
+
+    #[Test]
+    public function bulk_delete_requires_at_least_one_id()
+    {
+        $response = $this->actingAs($this->admin)->delete(route('pcspecs.bulkDelete'), [
+            'ids' => [],
+        ]);
+
+        $response->assertSessionHasErrors('ids');
     }
 
     #[Test]
