@@ -107,15 +107,65 @@ Possible improvements:
 - [ ] Bulk point excuse capabilities
 - [ ] Point expiration/reset policies
 
+---
+
+## Critical Working Day (×2 Multiplier)
+
+Attendance violations occurring on a **Critical Working Day** are doubled. This is applied at both manual point creation and automated point regeneration.
+
+### How It Works
+
+```php
+// AttendancePointCreationService.php
+$isCriticalDay = $data['is_critical_day'] ?? false;
+$multiplier = $isCriticalDay ? 2.00 : 1.00;
+$basePoints = AttendancePoint::POINT_VALUES[$pointType];  // e.g. 0.25 for Tardy
+
+AttendancePoint::create([
+    'points'          => $basePoints * $multiplier,  // e.g. 0.50 for Tardy on critical day
+    'multiplier'      => $multiplier,
+    'is_critical_day' => $isCriticalDay,
+    ...
+]);
+```
+
+The same logic applies in `AttendanceProcessor::regeneratePointsForAttendance()` when automated points are generated during verification:
+
+```php
+// AttendanceProcessor.php
+$multiplier = $attendance->is_critical_day ? 2.00 : 1.00;
+```
+
+### Effective Point Values on Critical Days
+
+| Violation | Base Points | Critical Day Points |
+|-----------|-------------|--------------------|
+| Tardy | 0.25 | 0.50 |
+| Undertime | 0.25 | 0.50 |
+| Half-Day Absence | 0.50 | 1.00 |
+| NCNS (Whole Day) | 1.00 | 2.00 |
+
+### Where `is_critical_day` is set
+
+- **Attendance record** (`attendances.is_critical_day`) — toggled by Admin/HR during verification (via `VerifyAttendanceRequest`, `BatchVerifyAttendanceRequest`).
+- **Attendance point** (`attendance_points.is_critical_day`) — copied from the attendance record when points are auto-generated; also settable on manual points via `StoreAttendancePointRequest` / `UpdateAttendancePointRequest`.
+- **BulkCreate form** — each entry in `BulkStoreAttendancePointRequest` accepts `entries.*.is_critical_day`.
+
+> Changing `is_critical_day` on an already-verified attendance record triggers automatic point regeneration to reflect the new multiplier.
+
+---
+
 ## Related Files
 
-- `app/Services/AttendanceProcessor.php` - Main processing logic
+- `app/Services/AttendanceProcessor.php` - Main processing logic + critical day multiplier
+- `app/Services/AttendancePoint/AttendancePointCreationService.php` - Manual point creation with multiplier
 - `app/Http/Controllers/AttendancePointController.php` - Point management
 - `app/Models/AttendancePoint.php` - Point model with POINT_VALUES constant
-- `app/Http/Controllers/AttendanceController.php` - Upload handler
+- `app/Http/Controllers/AttendanceController.php` - Upload + verify handler
 
 ---
 
 **Implemented:** November 12, 2025
+**Critical Working Day feature:** July 2026
 **Performance Impact:** Minimal (~0.5-1 second per upload)
 **Status:** ✅ Active in Production

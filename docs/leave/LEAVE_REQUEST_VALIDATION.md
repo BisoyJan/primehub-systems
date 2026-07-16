@@ -24,7 +24,7 @@ useEffect(() => {
         );
     }
     
-    // Check 2-week advance notice (only for VL and BL, not SL as it's unpredictable)
+    // Check 2-week advance notice (VL and BL only; SL has no date restrictions)
     if (data.start_date && ['VL', 'BL'].includes(data.leave_type)) {
         const start = parseISO(data.start_date);
         const twoWeeks = parseISO(twoWeeksFromNow);
@@ -51,7 +51,7 @@ useEffect(() => {
         );
     }
     
-    // Check credits balance
+    // Check credits balance (VL, SL, BL only; ML/IW/LOA/etc. are non-credited)
     if (['VL', 'SL', 'BL'].includes(data.leave_type) && calculatedDays > 0) {
         if (creditsSummary.balance < calculatedDays) {
             warnings.push(
@@ -87,8 +87,8 @@ Validates form data structure and basic rules.
 public function rules(): array
 {
     return [
-        'leave_type' => ['required', 'string', 'in:VL,SL,BL,SPL,LOA,LDV,UPTO'],
-        'start_date' => ['required', 'date', 'after_or_equal:today'],
+        'leave_type' => ['required', Rule::in(['VL', 'SL', 'BL', 'SPL', 'LOA', 'LDV', 'UPTO', 'ML', 'IW'])],
+        'start_date' => ['required', 'date'],  // SL has no date restriction
         'end_date' => ['required', 'date', 'after_or_equal:start_date'],
         'reason' => ['required', 'string', 'min:10', 'max:1000'],
         'team_lead_email' => ['required', 'email'],
@@ -113,11 +113,12 @@ public function messages(): array
 ```
 
 **Basic Validations:**
-- ✅ Leave type is valid enum value
-- ✅ Start date is not in the past
+- ✅ Leave type is a valid enum value (`VL`, `SL`, `BL`, `SPL`, `LOA`, `LDV`, `UPTO`, `ML`, `IW`)
 - ✅ End date is not before start date
 - ✅ Reason is meaningful (10-1000 chars)
 - ✅ Team lead and campaign are provided
+
+> **Note:** `SL` has **no date restriction** — it can be filed for past or future dates. All other leave types requiring advance notice are enforced at the service layer.
 
 ---
 

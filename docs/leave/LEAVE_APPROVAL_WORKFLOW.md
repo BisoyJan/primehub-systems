@@ -14,13 +14,58 @@ $table->enum('status', ['pending', 'approved', 'denied', 'cancelled'])->default(
 ```
 
 ### State Transitions
+
+Leave requests move through a **three-party** approval chain.
+
 ```
 [Employee Submits] → pending
-                     ├→ [HR Approves] → approved
-                     ├→ [HR Denies] → denied
-                     └→ [Employee Cancels] → cancelled
-                     
+    │
+    ├─ requires_tl_approval = true
+    │   ├→ [TL Rejects] → denied (tl_rejected = true)
+    │   └→ [TL Approves] → still pending, ready for Stage 2
+    │
+    └─ requires_tl_approval = false  OR  TL has approved
+        ├→ [Admin Approves] → pending (awaiting HR)
+        │   └→ [HR Approves] → approved  ✅
+        ├→ [HR Approves] → pending (awaiting Admin)
+        │   └→ [Admin Approves] → approved  ✅
+        ├→ [Admin OR HR Denies] → denied
+        └→ [Employee Cancels] → cancelled
+
 approved → [Employee Cancels] → cancelled (if future date)
+```
+
+### Approval Status Text (model helper)
+
+| `getApprovalStatusText()` | Condition |
+|---|---|
+| Pending Team Lead Approval | TL required, not yet acted |
+| Rejected by Team Lead | `tl_rejected = true` |
+| Pending Both Approvals | TL done (or not required), neither Admin nor HR approved yet |
+| Pending HR Approval | Admin approved, HR has not |
+| Pending Admin Approval | HR approved, Admin has not |
+| Fully Approved | Both Admin and HR have approved |
+
+### New DB Columns (Team Lead Stage)
+
+```php
+// Migration: 2025_12_14_*_add_team_lead_approval_to_leave_requests_table
+$table->boolean('requires_tl_approval')->default(false);
+$table->foreignId('tl_approved_by')->nullable()->constrained('users')->nullOnDelete();
+$table->timestamp('tl_approved_at')->nullable();
+$table->text('tl_review_notes')->nullable();
+$table->boolean('tl_rejected')->default(false);
+```
+
+### New DB Columns (Admin / HR Stage)
+
+```php
+// admin_approved_by, hr_approved_by populated independently
+// Both must be non-null for status to become 'approved'
+$table->foreignId('admin_approved_by')->nullable()->constrained('users')->nullOnDelete();
+$table->timestamp('admin_approved_at')->nullable();
+$table->foreignId('hr_approved_by')->nullable()->constrained('users')->nullOnDelete();
+$table->timestamp('hr_approved_at')->nullable();
 ```
 
 ---
@@ -98,60 +143,57 @@ leave_requests:
 
 ---
 
-### Step 2a: Approval (HR/Admin)
-**File:** `LeaveRequestController@approve`
+### Step 1b: TL Approval / Rejection (Team Lead — when applicable)
+**File:** `LeaveRequestController@tlApprove` / `@tlReject`
+
+Triggered only when `requires_tl_approval = true` (requests from Agents within the TL's campaign).
 
 ```php
-public function approve(Request $request, LeaveRequest $leaveRequest)
-{
-    // Authorization check
-    if (!in_array(auth()->user()->role, ['HR', 'Admin', 'Super Admin'])) {
-        abort(403, 'Unauthorized');
-    }
-    
-    // Validate optional review notes
-    $request->validate([
-        'review_notes' => ['nullable', 'string', 'max:1000'],
-    ]);
-    
-    $user = $leaveRequest->user;
-    $creditedLeaveTypes = ['VL', 'SL', 'BL'];
-    $requiresCredits = in_array($leaveRequest->leave_type, $creditedLeaveTypes);
-    
-    // Start database transaction
-    DB::transaction(function () use ($leaveRequest, $request, $user, $requiresCredits) {
-        // Update leave request status
-        $leaveRequest->update([
-            'status' => 'approved',
-            'reviewed_by' => auth()->id(),
-            'reviewed_at' => now(),
-            'review_notes' => $request->review_notes,
-        ]);
-        
-        // Deduct credits if applicable
-        if ($requiresCredits) {
-            $year = Carbon::parse($leaveRequest->start_date)->year;
-            $deducted = $this->leaveCreditService->deductCredits(
-                $user,
-                $leaveRequest->days_requested,
-                $year
-            );
-            
-            if ($deducted) {
-                $leaveRequest->update([
-                    'credits_deducted' => $leaveRequest->days_requested,
-                    'credits_year' => $year,
-                ]);
-            }
-        }
-        
-        // TODO: Create attendance records for leave dates
-        // $this->createAttendanceRecords($leaveRequest);
-    });
-    
-    return back()->with('success', 'Leave request approved successfully.');
+// TL Approve
+$leaveRequest->update([
+    'tl_approved_by' => $user->id,
+    'tl_approved_at' => now(),
+    'tl_review_notes' => $request->tl_review_notes,
+]);
+// → Notifies Admin/HR that TL has approved; still 'pending'
+
+// TL Reject
+$leaveRequest->update([
+    'tl_rejected' => true,
+    'tl_approved_by' => $user->id,  // records who rejected
+    'tl_review_notes' => $request->tl_review_notes,
+    'status' => 'denied',
+]);
+```
+
+TL can also **Partial Approve** (multi-day requests only): selects specific days to endorse before forwarding to Admin/HR.
+
+---
+
+### Step 2a: Approval (Admin + HR — both required)
+**File:** `LeaveRequestController@approve`
+
+Admin and HR approve **independently** and in **any order**. Both approvals must exist before `status` becomes `'approved'`.
+
+```php
+// When Admin approves:
+$updateData['admin_approved_by'] = $user->id;
+$updateData['admin_approved_at'] = now();
+
+// When HR approves:
+$updateData['hr_approved_by'] = $user->id;
+$updateData['hr_approved_at'] = now();
+
+// Both present → finalize
+if ($leaveRequest->isFullyApproved()) {
+    $updateData['status'] = 'approved';
+    $updateData['reviewed_by'] = $user->id;
+    $updateData['reviewed_at'] = now();
+    // → deduct credits, create attendance records
 }
 ```
+
+**Guard:** If TL approval is required but not yet given, `approve()` returns an error — Admin/HR cannot skip Stage 1.
 
 **Credit Deduction Algorithm:**
 ```php
@@ -364,16 +406,17 @@ Result: Error - "Cannot cancel this leave request"
 
 ## Authorization Matrix
 
-| Action | Employee (Own) | Employee (Others) | HR/Admin |
-|--------|---------------|-------------------|----------|
-| Submit | ✅ | ❌ | ✅ |
-| View Own | ✅ | ❌ | ✅ |
-| View All | ❌ | ❌ | ✅ |
-| Approve | ❌ | ❌ | ✅ |
-| Deny | ❌ | ❌ | ✅ |
-| Cancel Pending | ✅ | ❌ | ❌ |
-| Cancel Approved (Future) | ✅ | ❌ | ❌ |
-| Cancel Approved (Past) | ❌ | ❌ | ❌ |
+| Action | Employee (Own) | Team Lead (Campaign) | Admin | HR | Super Admin |
+|--------|---------------|----------------------|-------|----|-------------|
+| Submit | ✅ | ✅ | ✅ | ✅ | ✅ |
+| View Own | ✅ | ✅ | ✅ | ✅ | ✅ |
+| View All | ❌ | ❌ | ✅ | ✅ | ✅ |
+| TL Approve / Reject | ❌ | ✅ (own campaign) | ❌ | ❌ | ❌ |
+| Admin Approve / Deny | ❌ | ❌ | ✅ | ❌ | ✅ |
+| HR Approve / Deny | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Cancel Pending | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Cancel Approved (Future) | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Cancel Approved (Past) | ❌ | ❌ | ❌ | ❌ | ❌ |
 
 ---
 
@@ -407,14 +450,29 @@ protected $fillable = [
 ### Relationships
 ```php
 // LeaveRequest.php
-public function user()
+public function user(): BelongsTo
 {
     return $this->belongsTo(User::class);
 }
 
-public function reviewer()
+public function reviewer(): BelongsTo
 {
     return $this->belongsTo(User::class, 'reviewed_by');
+}
+
+public function tlApprover(): BelongsTo
+{
+    return $this->belongsTo(User::class, 'tl_approved_by');
+}
+
+public function adminApprover(): BelongsTo
+{
+    return $this->belongsTo(User::class, 'admin_approved_by');
+}
+
+public function hrApprover(): BelongsTo
+{
+    return $this->belongsTo(User::class, 'hr_approved_by');
 }
 ```
 
@@ -575,13 +633,22 @@ $restoration = min($remainingToRestore, $maxRestoration);
 ### Backend
 - **Controller:** `app/Http/Controllers/LeaveRequestController.php`
   - `store()` - Submission
-  - `approve()` - Approval
-  - `deny()` - Denial
+  - `tlApprove()` - Team Lead endorsement
+  - `tlReject()` - Team Lead rejection
+  - `tlPartialApprove()` - Team Lead partial endorsement
+  - `approve()` - Admin / HR approval (both must call)
+  - `deny()` - Admin / HR denial
   - `cancel()` - Cancellation
 - **Service:** `app/Services/LeaveCreditService.php`
   - `deductCredits()` - Credit deduction
   - `restoreCredits()` - Credit restoration
 - **Model:** `app/Models/LeaveRequest.php`
+  - `requiresTlApproval()` — bool
+  - `isTlApproved()` / `isTlRejected()`
+  - `isAdminApproved()` / `isHrApproved()`
+  - `isFullyApproved()` — both Admin + HR present
+  - `isReadyForAdminHrApproval()` — TL done or not required
+  - `getApprovalStatusText()` — human-readable current stage
 
 ### Frontend
 - **Index:** `resources/js/pages/Leave/Index.tsx` - List with filters

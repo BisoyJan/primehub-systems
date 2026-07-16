@@ -389,3 +389,41 @@ The number of days since an employee's last coaching session determines their st
 2. Type a new number (1–365) in the **days** input.
 3. Click **Save Settings** to apply.
 4. Click **Reset to Defaults** to restore factory values.
+
+---
+
+## Coaching Session Archiving
+
+Coaching sessions can be **archived** when the coachee has resigned or is coaching-excluded and the session was never acknowledged. Archiving prevents stale unacknowledged sessions from cluttering dashboards without permanently deleting the record.
+
+### Who Can Archive
+
+Admins (and Super Admins) can archive any session where the agent is no longer active or has been excluded.
+
+### Archiving a Session
+
+1. Open the session's detail page.
+2. Click the **Archive** action (available when the agent is resigned or excluded).
+3. A dialog appears — optionally enter a reason.
+4. Click **Archive** to confirm.
+
+### Automated Archiving
+
+A scheduled Artisan command runs daily to automatically archive orphaned sessions:
+
+```bash
+php artisan coaching:archive-orphan-sessions
+```
+
+**Conditions for automatic archiving:**
+- The session's coachee has a `resigned` status **or** has an active coaching exclusion.
+- The session has never been acknowledged (pending acknowledgement state).
+
+This ensures the system stays clean without requiring manual intervention for every employee departure.
+
+### Effect of Archiving
+
+- Session status changes to `archived`.
+- The session no longer appears in the active Coaching Sessions list or the coachee's My Coaching Logs.
+- Archived sessions remain in the database for audit purposes and can be viewed by Admins.
+- Pending acknowledgement count on dashboards no longer includes archived sessions.
