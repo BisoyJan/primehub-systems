@@ -21,7 +21,9 @@ Artisan::command('inspire', function () {
 
 // Automated daily database backup at 8:00 AM
 // Uses Spatie backup:run with --only-db (dump config in config/database.php)
-Schedule::command('backup:run --only-db')
+// --disable-notifications matches the manual UI-triggered job (RunDatabaseBackup)
+// so a broken/unavailable mail transport can't mark an otherwise-successful backup as failed.
+Schedule::command('backup:run --only-db --disable-notifications')
     ->dailyAt('08:00')
     ->withoutOverlapping()
     ->onOneServer();
