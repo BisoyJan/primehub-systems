@@ -76,7 +76,7 @@ class MedicationRequestController extends Controller
             : Campaign::orderBy('name')->get(['id', 'name']);
 
         $medicationTypes = [
-            'Declogen',
+            'Decolgen',
             'Biogesic',
             'Mefenamic Acid',
             'Kremil-S',
@@ -110,7 +110,7 @@ class MedicationRequestController extends Controller
 
         return Inertia::render('FormRequest/MedicationRequests/Create', [
             'medicationTypes' => [
-                'Declogen',
+                'Decolgen',
                 'Biogesic',
                 'Mefenamic Acid',
                 'Kremil-S',
