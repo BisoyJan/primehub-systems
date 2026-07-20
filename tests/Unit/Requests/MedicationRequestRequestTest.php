@@ -74,7 +74,7 @@ class MedicationRequestRequestTest extends TestCase
     #[Test]
     public function it_accepts_all_valid_medication_types(): void
     {
-        $validTypes = ['Declogen', 'Biogesic', 'Mefenamic Acid', 'Kremil-S', 'Cetirizine', 'Saridon', 'Diatabs'];
+        $validTypes = ['Decolgen', 'Biogesic', 'Mefenamic Acid', 'Kremil-S', 'Cetirizine', 'Saridon', 'Diatabs'];
 
         foreach ($validTypes as $type) {
             $data = [

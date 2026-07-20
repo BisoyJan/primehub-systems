@@ -624,7 +624,7 @@ class TestingAccountsSeeder extends Seeder
             return MedicationRequest::where('user_id', $user->id)->count();
         }
 
-        $types = ['Declogen', 'Biogesic', 'Mefenamic Acid', 'Kremil-S', 'Cetirizine', 'Saridon', 'Diatabs'];
+        $types = ['Decolgen', 'Biogesic', 'Mefenamic Acid', 'Kremil-S', 'Cetirizine', 'Saridon', 'Diatabs'];
         $symptoms = ['Just today', 'More than 1 day', 'More than 1 week'];
         $totalCreated = 0;
 

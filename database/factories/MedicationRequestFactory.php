@@ -16,7 +16,7 @@ class MedicationRequestFactory extends Factory
             'user_id' => User::factory(),
             'name' => $this->faker->name(),
             'medication_type' => $this->faker->randomElement([
-                'Declogen',
+                'Decolgen',
                 'Biogesic',
                 'Mefenamic Acid',
                 'Kremil-S',

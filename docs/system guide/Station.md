@@ -109,6 +109,15 @@ Once stations are selected, a blue selection bar appears:
 - *System rejects if no stations are selected*
 - A confirmation dialog appears — click **Confirm** to proceed, or **Cancel** to stop
 - *This action cannot be undone — PCs become unassigned and available for other stations*
+- *(Requires the `stations.edit` permission — IT and Super Admin only.)*
+
+### Delete Selected
+
+- Click **Delete Selected (X)** to permanently remove all checked stations
+- *(Requires the `stations.delete` permission.)*
+- A confirmation dialog appears explaining that the action cannot be undone
+- **Also delete stations with existing transfer history** — check this box to force-delete stations that have PC transfer history. Left unchecked, stations with transfer history are automatically skipped and a warning message reports how many were skipped
+- Click **Delete** to confirm, or **Cancel** to stop
 
 ### Table Columns
 
@@ -124,7 +133,7 @@ Each row shows: checkbox, **Site**, **Station #**, **Campaign**, **Status** (col
 **Delete:**
 - Click to remove the station permanently
 - A confirmation dialog appears — click **Delete** to confirm
-- *System rejects if the station is currently in use or has active assignments*
+- *This deletes the station immediately, including any assigned monitors — it is not blocked by an assigned PC or transfer history (only the bulk "Delete Selected" action skips stations with transfer history unless forced)*
 
 ### Assigning PCs to Empty Stations
 

@@ -16,7 +16,7 @@ return new class extends Migration
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->string('name');
             $table->enum('medication_type', [
-                'Declogen',
+                'Decolgen',
                 'Biogesic',
                 'Mefenamic Acid',
                 'Kremil-S',

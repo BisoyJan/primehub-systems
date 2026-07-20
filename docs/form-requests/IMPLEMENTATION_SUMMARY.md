@@ -89,7 +89,7 @@ A comprehensive form request system for employee submissions including Leave Req
 
 | Field | Description |
 |-------|-------------|
-| Medication Type | Declogen, Biogesic, Mefenamic Acid, Kremil-S, Cetirizine, Saridon, Diatabs |
+| Medication Type | Decolgen, Biogesic, Mefenamic Acid, Kremil-S, Cetirizine, Saridon, Diatabs |
 | Reason | Why medication is needed |
 | Symptoms | Onset of symptoms |
 | Policy | Must agree to medication policy |
@@ -146,7 +146,7 @@ it_concerns (
 medication_requests (
     id, user_id,
     name,
-    medication_type,         -- enum: Declogen, Biogesic, etc.
+    medication_type,         -- enum: Decolgen, Biogesic, etc.
     reason,
     onset_of_symptoms,       -- enum: Just today, More than 1 day, More than 1 week
     agrees_to_policy,        -- default: false

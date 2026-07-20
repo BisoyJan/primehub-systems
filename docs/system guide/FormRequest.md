@@ -8,13 +8,15 @@ The Form Request module lets you submit and manage IT concerns, leave requests, 
 
 ## What Each Role Can Do (Overview)
 
-| Capability | Agent | Team Lead | Admin/HR | IT | Super Admin |
-|---|---|---|---|---|---|
-| **IT Concerns** | Own only | Own + campaign agents | All + status changes | All + resolve | All + full mgmt |
-| **Leave Requests** | Own only | Own + campaign agents | All + approve/deny | — | All + full mgmt |
-| **Leave Credits** | Own only | Campaign agents | All + edit/carryover | — | All + recalc/revert |
-| **Medication Requests** | Own only | Own + campaign agents | All + approve/dispense | — | All + full mgmt |
-| **Retention Policies** | — | — | Full CRUD | — | Full CRUD |
+| Capability | Agent | Team Lead | Admin | HR | IT | Super Admin |
+|---|---|---|---|---|---|---|
+| **IT Concerns** | Own only | Own + campaign (view/create only) | Own only¹ | No access¹ | All + resolve/assign | All + full mgmt |
+| **Leave Requests** | Own only | Own + campaign agents | All + approve/deny | All + approve/deny | — | All + full mgmt |
+| **Leave Credits** | Own only | Campaign agents | All + edit/carryover | All + edit/carryover | — | All + recalc/revert |
+| **Medication Requests** | Own only | Own + campaign (view/create/update) | All + approve/dispense | All + approve/dispense | Own only | All + full mgmt |
+| **Retention Policies** | — | — | Full CRUD | Full CRUD | — | Full CRUD |
+
+¹ Per current `config/permissions.php`: **Admin** is scoped to their own IT concerns only (same as Agent), despite having the `it_concerns.assign` permission. **HR** has no IT Concerns permissions at all, so HR cannot access this feature. If your organization expects Admin/HR to manage all IT concerns, this is a permissions gap to review rather than a documentation error.
 
 ---
 
@@ -68,7 +70,7 @@ Columns: **Date**, **Priority** (colored badge), **Submitted By**, **Site**, **S
 - **Resolve** (checkmark) — Mark as resolved. Opens a dialog with **Status**, **Priority**, and **Resolution Notes** fields.
 - *There are no separate "Cancel notes" or "Mark as In Progress" quick-buttons in the row; in-progress is reached via the Resolve / Update Status dialog.*
 
-*Agents and Team Leads see only their own concerns (or their campaign's concerns for Team Leads). IT and Super Admin see all.*
+*Agents and Admins see only their own concerns. Team Leads see their campaign's concerns. IT and Super Admin see all. HR currently has no access to IT Concerns.*
 
 ## View IT Concern Details
 
@@ -323,7 +325,7 @@ A 2-step wizard:
 ### Step 1: Request Details
 
 1. **Request for Employee** — *(Only shown to Team Leads, Admin, HR, and Super Admin.)* Search and select an employee to submit on their behalf. *Required if you have this permission; otherwise the request is filed for yourself.*
-2. **Medication Type** — Select from the options listed by the system. *Default catalog includes:* Declogen, Biogesic, Mefenamic Acid, Kremil-S, Cetirizine, Saridon, Diatabs. *Required.*
+2. **Medication Type** — Select from the options listed by the system. *Default catalog includes:* Decolgen, Biogesic, Mefenamic Acid, Kremil-S, Cetirizine, Saridon, Diatabs. *Required.*
 3. **Reason** — Describe why you need the medication. *Required, max 1000 characters.*
 4. **Onset of Symptoms** — Select when symptoms started. *Default options:* **Just today**, **More than 1 day**, **More than 1 week**. *Required.*
 

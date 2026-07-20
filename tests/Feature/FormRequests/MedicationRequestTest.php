@@ -50,7 +50,7 @@ class MedicationRequestTest extends TestCase
         ]);
 
         $this->medicationTypes = [
-            'Declogen',
+            'Decolgen',
             'Biogesic',
             'Mefenamic Acid',
             'Kremil-S',

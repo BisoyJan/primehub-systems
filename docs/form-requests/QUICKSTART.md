@@ -92,7 +92,7 @@
 
 1. Navigate to `/form-requests/medication-requests/create`
 2. Select medication type:
-   - Declogen
+   - Decolgen
    - Biogesic
    - Mefenamic Acid
    - Kremil-S

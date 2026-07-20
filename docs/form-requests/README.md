@@ -130,7 +130,7 @@ medication_requests
 ├── id
 ├── user_id (foreign key → users)
 ├── name (medication name)
-├── medication_type (enum: Declogen, Biogesic, Mefenamic Acid, Kremil-S, Cetirizine, Saridon, Diatabs)
+├── medication_type (enum: Decolgen, Biogesic, Mefenamic Acid, Kremil-S, Cetirizine, Saridon, Diatabs)
 ├── reason (text)
 ├── onset_of_symptoms (enum: Just today, More than 1 day, More than 1 week)
 ├── agrees_to_policy (boolean, default: false)
@@ -142,7 +142,7 @@ medication_requests
 ```
 
 ### Medication Types
-- **Declogen** - Pain relief
+- **Decolgen** - Pain relief
 - **Biogesic** - Fever/pain relief
 - **Mefenamic Acid** - Anti-inflammatory
 - **Kremil-S** - Antacid
