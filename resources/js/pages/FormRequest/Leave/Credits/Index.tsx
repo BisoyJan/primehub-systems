@@ -1378,49 +1378,51 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
                                         </div>
                                     )}
 
-                                    <Link href={`/form-requests/leave-requests/credits/${employee.id}?year=${yearFilter}`}>
-                                        <Button variant="outline" size="sm" className="w-full">
-                                            <Eye className="h-4 w-4 mr-2" />
-                                            View History
-                                        </Button>
-                                    </Link>
-                                    {canEdit && employee.carryover_received && (
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="w-full"
-                                            onClick={() => openEditCarryover(employee)}
-                                        >
-                                            <Pencil className="h-4 w-4 mr-2" />
-                                            Edit Carryover
-                                        </Button>
-                                    )}
-                                    {canEdit && employee.carryover_received && !employee.carryover_received.cash_converted && !employee.carryover_received.is_first_regularization && (
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="w-full"
-                                            disabled={isConverting}
-                                            onClick={() => {
-                                                setConvertingEmployeeId(employee.id);
-                                                setConvertingEmployeeName(employee.name);
-                                            }}
-                                        >
-                                            <ArrowRightLeft className="h-4 w-4 mr-2" />
-                                            Convert to Cash
-                                        </Button>
-                                    )}
-                                    {canEdit && (
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="w-full"
-                                            onClick={() => openRecalculate(employee)}
-                                        >
-                                            <RefreshCw className="h-4 w-4 mr-2" />
-                                            Recalculate Credits
-                                        </Button>
-                                    )}
+                                    <div className="flex flex-col gap-2 pt-1">
+                                        <Link href={`/form-requests/leave-requests/credits/${employee.id}?year=${yearFilter}`}>
+                                            <Button variant="outline" size="sm" className="w-full">
+                                                <Eye className="h-4 w-4 mr-2" />
+                                                View History
+                                            </Button>
+                                        </Link>
+                                        {canEdit && employee.carryover_received && (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="w-full"
+                                                onClick={() => openEditCarryover(employee)}
+                                            >
+                                                <Pencil className="h-4 w-4 mr-2" />
+                                                Edit Carryover
+                                            </Button>
+                                        )}
+                                        {canEdit && employee.carryover_received && !employee.carryover_received.cash_converted && !employee.carryover_received.is_first_regularization && (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="w-full"
+                                                disabled={isConverting}
+                                                onClick={() => {
+                                                    setConvertingEmployeeId(employee.id);
+                                                    setConvertingEmployeeName(employee.name);
+                                                }}
+                                            >
+                                                <ArrowRightLeft className="h-4 w-4 mr-2" />
+                                                Convert to Cash
+                                            </Button>
+                                        )}
+                                        {canEdit && (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="w-full"
+                                                onClick={() => openRecalculate(employee)}
+                                            >
+                                                <RefreshCw className="h-4 w-4 mr-2" />
+                                                Recalculate Credits
+                                            </Button>
+                                        )}
+                                    </div>
                                 </div>
                             ))}
                             {creditsData.links && creditsData.links.length > 0 && (
