@@ -84,6 +84,7 @@ interface Props {
     campaigns: string[];
     twoWeeksFromNow: string;
     isAdmin: boolean;
+    isSuperAdmin: boolean;
     isApprovedLeave: boolean;
     existingLeaveRequests: ExistingLeaveRequest[];
     splDaySettings: { date: string; is_half_day: boolean }[];
@@ -99,6 +100,7 @@ export default function Edit({
     campaigns,
     twoWeeksFromNow,
     isAdmin = false,
+    isSuperAdmin = false,
     isApprovedLeave = false,
     existingLeaveRequests = [],
     splDaySettings = [],
@@ -133,6 +135,11 @@ export default function Edit({
         data.start_date !== leaveRequest.start_date ||
         data.end_date !== leaveRequest.end_date
     );
+
+    // Super Admin can also change leave type and reason on approved leaves
+    const leaveTypeChanged = isApprovedLeave && isSuperAdmin && data.leave_type !== leaveRequest.leave_type;
+    const reasonChanged = isApprovedLeave && isSuperAdmin && data.reason !== leaveRequest.reason;
+    const fieldsChanged = datesChanged || leaveTypeChanged || reasonChanged;
 
     // Delegate to shared pure functions with component state
     const willBeEligibleByStartDate = () =>
@@ -799,6 +806,7 @@ export default function Edit({
                                 <Select
                                     value={data.leave_type}
                                     onValueChange={(value) => setData('leave_type', value)}
+                                    disabled={isApprovedLeave && !isSuperAdmin}
                                 >
                                     <SelectTrigger>
                                         <SelectValue placeholder="Select leave type" />
@@ -827,6 +835,11 @@ export default function Edit({
                                         {requiresCredits
                                             ? '✓ Deducts from leave credits'
                                             : '○ Does not deduct from leave credits'}
+                                    </p>
+                                )}
+                                {isApprovedLeave && isSuperAdmin && (
+                                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                                        Changing the leave type on an approved request will recalculate leave credits (restoring the old type's credits and deducting the new type's, if applicable).
                                     </p>
                                 )}
                                 {/* Consolidated Leave Type Notices */}
@@ -1207,7 +1220,7 @@ export default function Edit({
                                     placeholder="Please provide a detailed reason for your leave request..."
                                     rows={4}
                                     className="resize-none"
-                                    disabled={isApprovedLeave}
+                                    disabled={isApprovedLeave && !isSuperAdmin}
                                 />
                                 {errors.reason && <p className="text-sm text-red-500">{errors.reason}</p>}
                                 <p className="text-xs text-muted-foreground">
@@ -1215,17 +1228,17 @@ export default function Edit({
                                 </p>
                             </div>
 
-                            {/* Date Modification Reason (Required for approved leave date changes) */}
-                            {isApprovedLeave && datesChanged && (
+                            {/* Modification Reason (Required for approved leave changes: dates, leave type, or reason) */}
+                            {isApprovedLeave && fieldsChanged && (
                                 <div className="space-y-2">
                                     <Label htmlFor="date_modification_reason">
-                                        Reason for Date Change <span className="text-red-500">*</span>
+                                        Reason for Change <span className="text-red-500">*</span>
                                     </Label>
                                     <Textarea
                                         id="date_modification_reason"
                                         value={data.date_modification_reason}
                                         onChange={(e) => setData('date_modification_reason', e.target.value)}
-                                        placeholder="Please explain why the leave dates need to be changed..."
+                                        placeholder="Please explain why this approved leave request is being changed..."
                                         rows={3}
                                         className="resize-none"
                                     />
@@ -1276,7 +1289,7 @@ export default function Edit({
                                         !!weekendError.start ||
                                         !!weekendError.end ||
                                         !!creditError ||
-                                        (isApprovedLeave && datesChanged && !data.date_modification_reason.trim())
+                                        (isApprovedLeave && fieldsChanged && !data.date_modification_reason.trim())
                                     }
                                 >
                                     {processing ? 'Updating...' : isApprovedLeave ? 'Update Approved Leave' : 'Update Leave Request'}

@@ -94,24 +94,36 @@ class LeaveRequestPolicy
     }
 
     /**
-     * Determine whether the user can update approved leave dates.
+     * Determine whether the user can update approved leaves.
      * Only Super Admin and Admin can do this.
+     *
+     * Admin: dates only, blocked once the leave's end date has passed.
+     * Super Admin: dates, leave type, and reason, with no past-date
+     * restriction (can correct already-completed leaves).
      */
     public function updateApproved(User $user, LeaveRequest $leaveRequest): bool
     {
-        // Only approved leaves can have their dates changed
+        // Only approved leaves can be edited via this gate
         if ($leaveRequest->status !== 'approved') {
             return false;
         }
 
-        // Cannot update if the leave end date has already passed
-        if ($leaveRequest->end_date && $leaveRequest->end_date->endOfDay()->isPast()) {
+        // Only Super Admin and Admin can update approved leaves
+        if (! in_array($user->role, ['Super Admin', 'Admin'])) {
             return false;
         }
 
-        // Only Super Admin and Admin can update approved leaves
-        return in_array($user->role, ['Super Admin', 'Admin']) &&
-               $this->permissionService->userHasPermission($user, 'leave.edit');
+        if (! $this->permissionService->userHasPermission($user, 'leave.edit')) {
+            return false;
+        }
+
+        // Admin cannot update once the leave's end date has already passed.
+        // Super Admin has no such restriction.
+        if ($user->role === 'Admin' && $leaveRequest->end_date && $leaveRequest->end_date->copy()->endOfDay()->isPast()) {
+            return false;
+        }
+
+        return true;
     }
 
     /**

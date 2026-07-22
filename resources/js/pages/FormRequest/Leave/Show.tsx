@@ -937,7 +937,7 @@ export default function Show({
                                 <Link href={leaveEditRoute({ leaveRequest: leaveRequest.id }).url}>
                                     <Button variant="outline" size="sm">
                                         <Edit className="mr-1 h-4 w-4" />
-                                        <span className="hidden sm:inline">Edit Dates</span>
+                                        <span className="hidden sm:inline">{isSuperAdmin ? 'Edit Request' : 'Edit Dates'}</span>
                                     </Button>
                                 </Link>
                                 <Button

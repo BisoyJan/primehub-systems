@@ -9,8 +9,10 @@ use App\Models\Campaign;
 use App\Models\EmployeeSchedule;
 use App\Models\LeaveCredit;
 use App\Models\LeaveRequest;
+use App\Models\LeaveRequestDay;
 use App\Models\Site;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
@@ -711,7 +713,7 @@ class LeaveRequestControllerTest extends TestCase
         // Request SL with no credits — should succeed (SL handles at approval time)
         $startDate = now()->addDays(1);
         if ($startDate->isWeekend()) {
-            $startDate = $startDate->next(\Carbon\Carbon::MONDAY);
+            $startDate = $startDate->next(Carbon::MONDAY);
         }
         $endDate = $startDate->copy();
 
@@ -969,7 +971,7 @@ class LeaveRequestControllerTest extends TestCase
         $this->assertEquals($endDate->format('Y-m-d'), $leaveRequest->end_date->format('Y-m-d'));
 
         // Per-day status records should exist: 1 sl_credited, 2 advised_absence
-        $dayRecords = \App\Models\LeaveRequestDay::where('leave_request_id', $leaveRequest->id)
+        $dayRecords = LeaveRequestDay::where('leave_request_id', $leaveRequest->id)
             ->orderBy('date')
             ->get();
 
@@ -1254,7 +1256,7 @@ class LeaveRequestControllerTest extends TestCase
         $this->assertEquals($endDate->format('Y-m-d'), $leaveRequest->end_date->format('Y-m-d'));
 
         // Per-day status records: 1 sl_credited, 2 advised_absence
-        $dayRecords = \App\Models\LeaveRequestDay::where('leave_request_id', $leaveRequest->id)
+        $dayRecords = LeaveRequestDay::where('leave_request_id', $leaveRequest->id)
             ->orderBy('date')
             ->get();
 
@@ -1266,5 +1268,211 @@ class LeaveRequestControllerTest extends TestCase
         $credit = LeaveCredit::where('user_id', $agent->id)->first();
         $this->assertEquals(1, (float) $credit->credits_used);
         $this->assertEquals(0.25, (float) $credit->credits_balance);
+    }
+
+    // =====================================================================
+    // Super Admin Full-Edit of Approved Leave Requests
+    // =====================================================================
+
+    #[Test]
+    public function super_admin_changing_leave_type_from_credited_to_non_credited_restores_credits()
+    {
+        $superAdmin = User::factory()->create(['role' => 'Super Admin', 'is_approved' => true]);
+        $agent = $this->createAgentWithSchedule();
+
+        LeaveCredit::create([
+            'user_id' => $agent->id,
+            'year' => now()->year,
+            'month' => now()->month,
+            'credits_earned' => 5,
+            'credits_used' => 3,
+            'credits_balance' => 2,
+            'accrued_at' => now(),
+        ]);
+
+        $startDate = now()->addWeeks(2)->startOfWeek();
+        $endDate = $startDate->copy()->addDays(2);
+
+        $leaveRequest = LeaveRequest::factory()->create([
+            'user_id' => $agent->id,
+            'leave_type' => 'VL',
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'days_requested' => 3,
+            'status' => 'approved',
+            'credits_deducted' => 3,
+            'credits_year' => now()->year,
+            'campaign_department' => 'Sales',
+            'reason' => 'Original VL reason for approved leave request.',
+        ]);
+
+        $response = $this->actingAs($superAdmin)->put(route('leave-requests.update', $leaveRequest), [
+            'leave_type' => 'BL',
+            'start_date' => $startDate->format('Y-m-d'),
+            'end_date' => $endDate->format('Y-m-d'),
+            'reason' => 'Converted to bereavement leave per updated records.',
+            'campaign_department' => 'Sales',
+            'date_modification_reason' => 'Employee clarified this was bereavement leave.',
+        ]);
+
+        $response->assertRedirect(route('leave-requests.show', $leaveRequest));
+
+        $leaveRequest->refresh();
+        $this->assertEquals('BL', $leaveRequest->leave_type);
+        $this->assertEquals('Converted to bereavement leave per updated records.', $leaveRequest->reason);
+        $this->assertEquals(0, (float) $leaveRequest->credits_deducted);
+
+        $credit = LeaveCredit::where('user_id', $agent->id)->first();
+        $this->assertEquals(0, (float) $credit->credits_used);
+        $this->assertEquals(5, (float) $credit->credits_balance);
+    }
+
+    #[Test]
+    public function super_admin_changing_leave_type_from_non_credited_to_credited_deducts_credits()
+    {
+        $superAdmin = User::factory()->create(['role' => 'Super Admin', 'is_approved' => true]);
+        $agent = $this->createAgentWithSchedule();
+
+        LeaveCredit::create([
+            'user_id' => $agent->id,
+            'year' => now()->year,
+            'month' => now()->month,
+            'credits_earned' => 5,
+            'credits_used' => 0,
+            'credits_balance' => 5,
+            'accrued_at' => now(),
+        ]);
+
+        $startDate = now()->addWeeks(2)->startOfWeek();
+        $endDate = $startDate->copy()->addDay();
+
+        $leaveRequest = LeaveRequest::factory()->create([
+            'user_id' => $agent->id,
+            'leave_type' => 'BL',
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'days_requested' => 2,
+            'status' => 'approved',
+            'credits_deducted' => null,
+            'credits_year' => null,
+            'campaign_department' => 'Sales',
+        ]);
+
+        $response = $this->actingAs($superAdmin)->put(route('leave-requests.update', $leaveRequest), [
+            'leave_type' => 'VL',
+            'start_date' => $startDate->format('Y-m-d'),
+            'end_date' => $endDate->format('Y-m-d'),
+            'reason' => 'Reclassified as vacation leave per updated records.',
+            'campaign_department' => 'Sales',
+            'date_modification_reason' => 'Employee clarified this was vacation leave.',
+        ]);
+
+        $response->assertRedirect(route('leave-requests.show', $leaveRequest));
+
+        $leaveRequest->refresh();
+        $this->assertEquals('VL', $leaveRequest->leave_type);
+        $this->assertEquals(2, (float) $leaveRequest->credits_deducted);
+
+        $credit = LeaveCredit::where('user_id', $agent->id)->first();
+        $this->assertEquals(2, (float) $credit->credits_used);
+        $this->assertEquals(3, (float) $credit->credits_balance);
+    }
+
+    #[Test]
+    public function admin_cannot_change_leave_type_or_reason_of_approved_leave_request()
+    {
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+        $agent = $this->createAgentWithSchedule();
+
+        $leaveRequest = LeaveRequest::factory()->create([
+            'user_id' => $agent->id,
+            'leave_type' => 'VL',
+            'start_date' => now()->addWeek(),
+            'end_date' => now()->addWeek()->addDays(2),
+            'days_requested' => 3,
+            'status' => 'approved',
+            'credits_deducted' => 3,
+            'credits_year' => now()->year,
+            'campaign_department' => 'Sales',
+            'reason' => 'Original approved reason.',
+        ]);
+
+        $response = $this->actingAs($admin)->put(route('leave-requests.update', $leaveRequest), [
+            'leave_type' => 'BL',
+            'start_date' => $leaveRequest->start_date->format('Y-m-d'),
+            'end_date' => $leaveRequest->end_date->format('Y-m-d'),
+            'reason' => 'Attempting to tamper with the reason.',
+            'campaign_department' => 'Sales',
+            'date_modification_reason' => 'Attempting unauthorized leave type change.',
+        ]);
+
+        $response->assertSessionHasErrors('error');
+
+        $leaveRequest->refresh();
+        $this->assertEquals('VL', $leaveRequest->leave_type);
+        $this->assertEquals('Original approved reason.', $leaveRequest->reason);
+        $this->assertEquals(3, (float) $leaveRequest->credits_deducted);
+    }
+
+    #[Test]
+    public function switching_leave_type_away_from_sl_removes_stale_day_status_rows()
+    {
+        $superAdmin = User::factory()->create(['role' => 'Super Admin', 'is_approved' => true]);
+        $agent = $this->createAgentWithSchedule();
+
+        LeaveCredit::create([
+            'user_id' => $agent->id,
+            'year' => now()->year,
+            'month' => now()->month,
+            'credits_earned' => 5,
+            'credits_used' => 2,
+            'credits_balance' => 3,
+            'accrued_at' => now(),
+        ]);
+
+        $startDate = now()->addWeeks(2)->startOfWeek();
+        $endDate = $startDate->copy()->addDay();
+
+        $leaveRequest = LeaveRequest::factory()->create([
+            'user_id' => $agent->id,
+            'leave_type' => 'SL',
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'days_requested' => 2,
+            'status' => 'approved',
+            'credits_deducted' => 2,
+            'credits_year' => now()->year,
+            'campaign_department' => 'Sales',
+            'medical_cert_submitted' => true,
+        ]);
+
+        LeaveRequestDay::create([
+            'leave_request_id' => $leaveRequest->id,
+            'date' => $startDate,
+            'day_status' => 'sl_credited',
+            'is_half_day' => false,
+        ]);
+        LeaveRequestDay::create([
+            'leave_request_id' => $leaveRequest->id,
+            'date' => $endDate,
+            'day_status' => 'sl_credited',
+            'is_half_day' => false,
+        ]);
+
+        $response = $this->actingAs($superAdmin)->put(route('leave-requests.update', $leaveRequest), [
+            'leave_type' => 'BL',
+            'start_date' => $startDate->format('Y-m-d'),
+            'end_date' => $endDate->format('Y-m-d'),
+            'reason' => 'Reclassified as bereavement leave.',
+            'campaign_department' => 'Sales',
+            'date_modification_reason' => 'Correcting the leave type classification.',
+        ]);
+
+        $response->assertRedirect(route('leave-requests.show', $leaveRequest));
+
+        $this->assertEquals(
+            0,
+            LeaveRequestDay::where('leave_request_id', $leaveRequest->id)->count()
+        );
     }
 }

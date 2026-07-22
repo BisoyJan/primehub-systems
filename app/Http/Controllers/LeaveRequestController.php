@@ -893,10 +893,9 @@ class LeaveRequestController extends Controller
             && ! $isApprovedPastDate
             && app(PermissionService::class)->userHasPermission($user, 'leave.cancel');
 
-        // Check if Admin/Super Admin can edit approved leave dates (not if dates passed)
-        $canEditApproved = in_array($user->role, ['Super Admin', 'Admin'])
-            && $leaveRequest->status === 'approved'
-            && ! $leaveEndDatePassed;
+        // Check if Admin/Super Admin can edit this approved leave (Admin is
+        // blocked once the end date has passed; Super Admin is not).
+        $canEditApproved = $user->can('updateApproved', $leaveRequest);
 
         // Check if user can view medical certificate (own request OR Admin, HR, Super Admin)
         $canViewMedicalCert = $leaveRequest->user_id === $user->id || in_array($user->role, ['Super Admin', 'Admin', 'HR']);
@@ -1135,13 +1134,16 @@ class LeaveRequestController extends Controller
 
         $user = auth()->user();
         $isAdmin = in_array($user->role, ['Super Admin', 'Admin']);
+        $isSuperAdmin = $user->role === 'Super Admin';
         $isHR = $user->role === 'HR';
         $isApprovedLeave = $leaveRequest->status === 'approved';
 
-        // Only Admin/Super Admin can edit approved leaves
-        if ($isApprovedLeave && ! $isAdmin) {
+        // Only Admin/Super Admin can edit approved leaves, and only within the
+        // window allowed by the updateApproved policy (Admin is blocked once
+        // the end date has passed; Super Admin is not).
+        if ($isApprovedLeave && ! $user->can('updateApproved', $leaveRequest)) {
             return redirect()->route('leave-requests.show', $leaveRequest)
-                ->with('error', 'Only Admin or Super Admin can edit approved leave requests.');
+                ->with('error', 'This approved leave request can no longer be edited.');
         }
 
         // For non-admins, only pending requests can be edited
@@ -1249,6 +1251,7 @@ class LeaveRequestController extends Controller
             'campaigns' => $campaigns,
             'twoWeeksFromNow' => $twoWeeksFromNow,
             'isAdmin' => $isAdmin,
+            'isSuperAdmin' => $isSuperAdmin,
             'isApprovedLeave' => $isApprovedLeave,
             'canOverrideShortNotice' => $canOverrideShortNotice,
             'existingLeaveRequests' => $existingLeaveRequests,
@@ -1267,10 +1270,11 @@ class LeaveRequestController extends Controller
         $isAdmin = in_array($user->role, ['Super Admin', 'Admin']);
         $isApprovedLeave = $leaveRequest->status === 'approved';
 
-        // For approved leaves, only Admin/Super Admin can update (for date changes)
+        // For approved leaves, only Admin/Super Admin can update, and only within
+        // the window allowed by the updateApproved policy.
         if ($isApprovedLeave) {
-            if (! $isAdmin) {
-                return back()->withErrors(['error' => 'Only Admin or Super Admin can edit approved leave requests.']);
+            if (! $user->can('updateApproved', $leaveRequest)) {
+                return back()->withErrors(['error' => 'This approved leave request can no longer be edited.']);
             }
 
             // Redirect to updateApproved method
@@ -1424,20 +1428,33 @@ class LeaveRequestController extends Controller
     }
 
     /**
-     * Update approved leave request dates (Admin/Super Admin only).
-     * This handles Scenario 1: Employee wants to change dates of approved leave.
+     * Update approved leave request (Admin/Super Admin only).
+     * Admin can change dates. Super Admin can additionally change the
+     * leave type and reason, with automatic leave credit recalculation.
      */
     public function updateApproved(LeaveRequestRequest $request, LeaveRequest $leaveRequest)
     {
-        $user = auth()->user();
-
-        // Double-check authorization
-        if (! in_array($user->role, ['Super Admin', 'Admin'])) {
-            return back()->withErrors(['error' => 'Only Admin or Super Admin can update approved leave requests.']);
-        }
+        $this->authorize('updateApproved', $leaveRequest);
 
         if ($leaveRequest->status !== 'approved') {
             return back()->withErrors(['error' => 'This method is only for approved leave requests.']);
+        }
+
+        $user = auth()->user();
+        $isSuperAdmin = $user->role === 'Super Admin';
+
+        $requestedLeaveType = $request->input('leave_type');
+        $leaveTypeChanging = $requestedLeaveType && $requestedLeaveType !== $leaveRequest->leave_type;
+
+        // Only Super Admin can change the leave type or reason of an approved leave.
+        // Reject rather than silently ignore, to surface tampering attempts clearly.
+        if ($leaveTypeChanging && ! $isSuperAdmin) {
+            return back()->withErrors(['error' => 'Only Super Admin can change the leave type of an approved leave request.'])->withInput();
+        }
+
+        $reasonChanging = $request->filled('reason') && $request->reason !== $leaveRequest->reason;
+        if ($reasonChanging && ! $isSuperAdmin) {
+            return back()->withErrors(['error' => 'Only Super Admin can change the reason of an approved leave request.'])->withInput();
         }
 
         $targetUser = $leaveRequest->user;
@@ -1453,64 +1470,113 @@ class LeaveRequestController extends Controller
         $newDaysRequested = $leaveCreditService->calculateDays($newStartDate, $newEndDate);
         $oldDaysRequested = $leaveRequest->days_requested;
 
-        // Get the reason for modification
-        $modificationReason = $request->input('date_modification_reason', 'Date change requested by employee');
+        $oldLeaveType = $leaveRequest->leave_type;
+        $newLeaveType = $leaveTypeChanging ? $requestedLeaveType : $oldLeaveType;
+        $oldRequiresCredits = $leaveRequest->requiresCredits();
+        $newRequiresCredits = in_array($newLeaveType, LeaveRequest::CREDITED_LEAVE_TYPES);
+        $oldCreditsDeducted = (float) ($leaveRequest->credits_deducted ?? 0);
+        $oldCreditsYear = $leaveRequest->credits_year;
+
+        $datesChanging = ! $newStartDate->isSameDay($leaveRequest->start_date) || ! $newEndDate->isSameDay($leaveRequest->end_date);
+
+        // Get the reason for modification (required whenever dates, leave type, or reason change)
+        $modificationReason = $request->input('date_modification_reason');
+        if (($datesChanging || $leaveTypeChanging || $reasonChanging) && ! $modificationReason) {
+            return back()->withErrors(['date_modification_reason' => 'Please provide a reason for this change.'])->withInput();
+        }
+        $modificationReason = $modificationReason ?: 'Updated by administrator';
 
         DB::beginTransaction();
         try {
             // 1. Delete old attendance records associated with this leave
             Attendance::where('leave_request_id', $leaveRequest->id)->delete();
 
-            // 2. Handle credit adjustments if days changed and this is a credited leave type
-            if ($leaveRequest->requiresCredits() && $leaveRequest->credits_deducted) {
+            // 2. Handle credit adjustments
+            if ($leaveTypeChanging) {
+                // Leave type is switching — fully restore old-type credits (if any),
+                // then deduct fresh credits for the new type (if it requires credits).
+                if ($oldRequiresCredits && $oldCreditsDeducted > 0) {
+                    $restoreTemp = new LeaveRequest([
+                        'user_id' => $targetUser->id,
+                        'credits_deducted' => $oldCreditsDeducted,
+                        'credits_year' => $oldCreditsYear,
+                    ]);
+                    $leaveCreditService->restoreCredits($restoreTemp);
+                }
+
+                if ($newRequiresCredits) {
+                    $deductTemp = new LeaveRequest([
+                        'user_id' => $targetUser->id,
+                        'leave_type' => $newLeaveType,
+                        'start_date' => $newStartDate,
+                        'days_requested' => $newDaysRequested,
+                    ]);
+                    $newCreditsYear = $oldCreditsYear ?? $newStartDate->year;
+                    $leaveCreditService->deductCredits($deductTemp, $newCreditsYear);
+                    $leaveRequest->credits_deducted = $newDaysRequested;
+                    $leaveRequest->credits_year = $newCreditsYear;
+                } else {
+                    $leaveRequest->credits_deducted = 0;
+                }
+
+                // Moving away from SL/VL leaves stale per-day status rows behind
+                if (! in_array($newLeaveType, ['SL', 'VL']) && in_array($oldLeaveType, ['SL', 'VL'])) {
+                    $leaveRequest->days()->delete();
+                }
+            } elseif ($oldRequiresCredits && $oldCreditsDeducted) {
+                // Leave type unchanged — adjust credits by the day-count difference only
                 $creditsDifference = $newDaysRequested - $oldDaysRequested;
 
                 if ($creditsDifference > 0) {
-                    // Need to deduct more credits
                     $tempRequest = new LeaveRequest([
                         'user_id' => $targetUser->id,
-                        'leave_type' => $leaveRequest->leave_type,
+                        'leave_type' => $oldLeaveType,
+                        'start_date' => $newStartDate,
                         'days_requested' => $creditsDifference,
                     ]);
                     $leaveCreditService->deductCredits($tempRequest, $leaveRequest->credits_year);
-
-                    // Update total credits deducted
-                    $leaveRequest->credits_deducted = $leaveRequest->credits_deducted + $creditsDifference;
+                    $leaveRequest->credits_deducted = $oldCreditsDeducted + $creditsDifference;
                 } elseif ($creditsDifference < 0) {
-                    // Need to restore some credits
                     $tempRequest = new LeaveRequest([
                         'user_id' => $targetUser->id,
                         'credits_deducted' => abs($creditsDifference),
                         'credits_year' => $leaveRequest->credits_year,
                     ]);
                     $leaveCreditService->restoreCredits($tempRequest);
-
-                    // Update total credits deducted
-                    $leaveRequest->credits_deducted = $leaveRequest->credits_deducted + $creditsDifference;
+                    $leaveRequest->credits_deducted = $oldCreditsDeducted + $creditsDifference;
                 }
             }
 
-            // 3. Update leave request with new dates
-            $leaveRequest->update([
+            // 3. Update leave request with new data
+            $updateData = [
                 'start_date' => $newStartDate,
                 'end_date' => $newEndDate,
                 'days_requested' => $newDaysRequested,
-                'reason' => $request->reason,
                 'campaign_department' => $request->campaign_department,
+                'credits_deducted' => $leaveRequest->credits_deducted,
+                'credits_year' => $leaveRequest->credits_year,
                 // Track original dates and modification
                 'original_start_date' => $originalStartDate,
                 'original_end_date' => $originalEndDate,
                 'date_modified_by' => $user->id,
                 'date_modified_at' => now(),
                 'date_modification_reason' => $modificationReason,
-            ]);
+            ];
+
+            // Only Super Admin's leave_type/reason changes are ever applied
+            if ($isSuperAdmin) {
+                $updateData['leave_type'] = $newLeaveType;
+                $updateData['reason'] = $request->reason;
+            }
+
+            $leaveRequest->update($updateData);
 
             // 4. Create new attendance records for the new date range
             $this->updateAttendanceForApprovedLeave($leaveRequest);
 
             DB::commit();
 
-            // Notify the employee about the date change
+            // Notify the employee about the change
             $this->notificationService->notifyLeaveRequestDateChanged(
                 $targetUser->id,
                 str_replace('_', ' ', ucfirst($leaveRequest->leave_type)),
@@ -1523,17 +1589,19 @@ class LeaveRequestController extends Controller
                 $leaveRequest->id
             );
 
-            \Log::info('Approved leave request dates updated', [
+            \Log::info('Approved leave request updated', [
                 'leave_request_id' => $leaveRequest->id,
                 'modified_by' => $user->id,
                 'old_dates' => Carbon::parse($originalStartDate)->format('Y-m-d').' to '.Carbon::parse($originalEndDate)->format('Y-m-d'),
                 'new_dates' => Carbon::parse($newStartDate)->format('Y-m-d').' to '.Carbon::parse($newEndDate)->format('Y-m-d'),
                 'old_days' => $oldDaysRequested,
                 'new_days' => $newDaysRequested,
+                'old_leave_type' => $oldLeaveType,
+                'new_leave_type' => $newLeaveType,
             ]);
 
             return redirect()->route('leave-requests.show', $leaveRequest)
-                ->with('success', 'Approved leave request dates updated successfully. Attendance records have been adjusted.');
+                ->with('success', 'Approved leave request updated successfully. Attendance records have been adjusted.');
         } catch (\Exception $e) {
             DB::rollBack();
 

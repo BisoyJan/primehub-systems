@@ -190,4 +190,123 @@ class LeaveRequestAuthorizationTest extends TestCase
 
         $response->assertRedirect();
     }
+
+    // =====================================================================
+    // Approved Leave Editing: Admin vs Super Admin
+    // =====================================================================
+
+    #[Test]
+    public function admin_can_edit_approved_leave_dates_before_end_date()
+    {
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+        $agent = $this->createAgentWithSchedule();
+        $leaveRequest = LeaveRequest::factory()->create([
+            'user_id' => $agent->id,
+            'leave_type' => 'BL',
+            'status' => 'approved',
+            'start_date' => now()->addWeek(),
+            'end_date' => now()->addWeek()->addDays(2),
+            'campaign_department' => 'Sales',
+        ]);
+
+        $response = $this->actingAs($admin)->put(route('leave-requests.update', $leaveRequest), [
+            'leave_type' => 'BL',
+            'start_date' => $leaveRequest->start_date->format('Y-m-d'),
+            'end_date' => now()->addWeek()->addDays(3)->format('Y-m-d'),
+            'reason' => $leaveRequest->reason,
+            'campaign_department' => 'Sales',
+            'date_modification_reason' => 'Extending leave by a day.',
+        ]);
+
+        $response->assertRedirect(route('leave-requests.show', $leaveRequest));
+        $response->assertSessionDoesntHaveErrors();
+    }
+
+    #[Test]
+    public function admin_cannot_edit_approved_leave_once_end_date_has_passed()
+    {
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+        $agent = $this->createAgentWithSchedule();
+        $leaveRequest = LeaveRequest::factory()->create([
+            'user_id' => $agent->id,
+            'leave_type' => 'BL',
+            'status' => 'approved',
+            'start_date' => now()->subDays(5)->toDateString(),
+            'end_date' => now()->subDays(3)->toDateString(),
+            'campaign_department' => 'Sales',
+        ]);
+
+        $response = $this->actingAs($admin)->put(route('leave-requests.update', $leaveRequest), [
+            'leave_type' => 'BL',
+            'start_date' => $leaveRequest->start_date->format('Y-m-d'),
+            'end_date' => now()->subDays(2)->format('Y-m-d'),
+            'reason' => $leaveRequest->reason,
+            'campaign_department' => 'Sales',
+            'date_modification_reason' => 'Testing past edit block.',
+        ]);
+
+        $response->assertSessionHasErrors('error');
+        $this->assertEquals(
+            now()->subDays(3)->toDateString(),
+            $leaveRequest->fresh()->end_date->toDateString()
+        );
+    }
+
+    #[Test]
+    public function super_admin_can_edit_approved_leave_before_end_date()
+    {
+        $superAdmin = User::factory()->create(['role' => 'Super Admin', 'is_approved' => true]);
+        $agent = $this->createAgentWithSchedule();
+        $leaveRequest = LeaveRequest::factory()->create([
+            'user_id' => $agent->id,
+            'leave_type' => 'BL',
+            'status' => 'approved',
+            'start_date' => now()->addWeek(),
+            'end_date' => now()->addWeek()->addDays(2),
+            'campaign_department' => 'Sales',
+            'reason' => 'Original reason for this leave.',
+        ]);
+
+        $response = $this->actingAs($superAdmin)->put(route('leave-requests.update', $leaveRequest), [
+            'leave_type' => 'BL',
+            'start_date' => $leaveRequest->start_date->format('Y-m-d'),
+            'end_date' => $leaveRequest->end_date->format('Y-m-d'),
+            'reason' => 'Corrected reason for this leave.',
+            'campaign_department' => 'Sales',
+            'date_modification_reason' => 'Fixing records before the leave ends.',
+        ]);
+
+        $response->assertRedirect(route('leave-requests.show', $leaveRequest));
+        $response->assertSessionDoesntHaveErrors();
+        $this->assertEquals('Corrected reason for this leave.', $leaveRequest->fresh()->reason);
+    }
+
+    #[Test]
+    public function super_admin_can_edit_approved_leave_once_end_date_has_passed()
+    {
+        $superAdmin = User::factory()->create(['role' => 'Super Admin', 'is_approved' => true]);
+        $agent = $this->createAgentWithSchedule();
+        $leaveRequest = LeaveRequest::factory()->create([
+            'user_id' => $agent->id,
+            'leave_type' => 'BL',
+            'status' => 'approved',
+            'start_date' => now()->subDays(7)->toDateString(),
+            'end_date' => now()->subDays(3)->toDateString(),
+            'campaign_department' => 'Sales',
+            'reason' => 'Original reason for this completed leave.',
+        ]);
+
+        $response = $this->actingAs($superAdmin)->put(route('leave-requests.update', $leaveRequest), [
+            'leave_type' => 'BL',
+            'start_date' => $leaveRequest->start_date->format('Y-m-d'),
+            'end_date' => $leaveRequest->end_date->format('Y-m-d'),
+            'reason' => 'Corrected reason for this completed leave.',
+            'campaign_department' => 'Sales',
+            'date_modification_reason' => 'Correcting records after the leave has ended.',
+        ]);
+
+        $response->assertRedirect(route('leave-requests.show', $leaveRequest));
+        $response->assertSessionDoesntHaveErrors();
+        $this->assertEquals('Corrected reason for this completed leave.', $leaveRequest->fresh()->reason);
+    }
 }
