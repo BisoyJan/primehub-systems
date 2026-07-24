@@ -815,7 +815,7 @@ export default function CoachingSessionsIndex() {
                                                                 </Button>
                                                             </Link>
                                                         )}
-                                                        {can('coaching.delete') && (isAdmin || !['Verified', 'Rejected'].includes(session.compliance_status)) && (
+                                                        {can('coaching.delete') && (isAdmin || (session.compliance_status === 'Awaiting_Agent_Ack' && session.ack_status === 'Pending')) && (
                                                             <DeleteConfirmDialog
                                                                 title="Delete Coaching Session"
                                                                 description="Are you sure you want to delete this coaching session? This action cannot be undone."

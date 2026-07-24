@@ -104,9 +104,13 @@ class CoachingSessionPolicy
             return false;
         }
 
-        // Team Leads can only delete sessions not yet reviewed by Admin
+        // Team Leads can only delete sessions with Awaiting_Agent_Ack compliance and Pending ack
         if (! in_array($user->role, ['Super Admin', 'Admin'])) {
-            if (in_array($coachingSession->compliance_status, ['Verified', 'Rejected'])) {
+            if ($coachingSession->compliance_status !== 'Awaiting_Agent_Ack') {
+                return false;
+            }
+
+            if ($coachingSession->ack_status !== 'Pending') {
                 return false;
             }
 
