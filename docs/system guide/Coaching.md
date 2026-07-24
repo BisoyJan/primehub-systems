@@ -87,7 +87,7 @@ Columns: **Date**, **Coachee**, **Coach**, **Purpose**, **Severity** (colored ba
 - **View** (eye icon) — Open session details.
 - **Edit** (pencil icon) — Modify the session. *(Requires edit permission.)*
 - **Copy** (copy icon) — Clone the session as a new one.
-- **Delete** (trash icon) — Remove the session. A confirmation dialog appears: *"This action cannot be undone."* *(Disabled for Verified or Rejected sessions.)*
+- **Delete** (trash icon) — Remove the session. A confirmation dialog appears: *"This action cannot be undone."* *(Team Lead: only available when compliance is **Awaiting Agent Ack** and ack status is **Pending**. Admin: always available.)*
 
 ### Create New Session
 
