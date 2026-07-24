@@ -758,9 +758,8 @@ Add violation points to multiple employees at once.
 
 1. **Violation Details** — Pick a **Date** and **Violation Type**. These apply as defaults.
 2. **Advised absence** — Check if applicable.
-3. Click **Re-apply to all rows** to push the current settings to every row.
-4. **Add Employees** — Search and select employees to add them directly.
-5. Click **Add blank row** to add an empty row.
+3. **Add Employees** — Search and select employees to add them directly.
+4. Click **Add blank row** to add an empty row.
 
 ### Right Panel (Entry List)
 

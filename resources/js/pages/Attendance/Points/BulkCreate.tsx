@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Separator } from '@/components/ui/separator';
-import { RefreshCcw } from 'lucide-react';
+
 import {
     AlertDialog,
     AlertDialogAction,
@@ -285,14 +285,6 @@ export default function BulkCreatePage({ users }: PageProps) {
         [sharedDate, sharedType, sharedIsAdvised, sharedIsCriticalDay, sharedTardyMinutes, userIdsInEntries],
     );
 
-    // Apply shared values to ALL existing rows
-    const applySharedToAll = useCallback(
-        (field: 'shift_date' | 'point_type' | 'is_advised' | 'is_critical_day' | 'tardy_minutes', value: string | boolean) => {
-            setEntries((prev) => prev.map((r) => ({ ...r, [field]: value })));
-        },
-        [],
-    );
-
     const handleSharedDateChange = (v: string) => {
         setSharedDate(v);
     };
@@ -500,23 +492,6 @@ export default function BulkCreatePage({ users }: PageProps) {
                                     </Label>
                                 </div>
 
-                                {entries.length > 0 && (
-                                    <Button
-                                        variant="secondary"
-                                        size="sm"
-                                        className="w-full gap-2 mt-1"
-                                        onClick={() => {
-                                            applySharedToAll('shift_date', sharedDate);
-                                            applySharedToAll('point_type', sharedType);
-                                            applySharedToAll('is_advised', sharedIsAdvised);
-                                            applySharedToAll('is_critical_day', sharedIsCriticalDay);
-                                            if (sharedType === 'tardy') applySharedToAll('tardy_minutes', sharedTardyMinutes);
-                                        }}
-                                    >
-                                        <RefreshCcw className="h-3.5 w-3.5" />
-                                        Re-apply to all rows
-                                    </Button>
-                                )}
                             </CardContent>
                         </Card>
 
