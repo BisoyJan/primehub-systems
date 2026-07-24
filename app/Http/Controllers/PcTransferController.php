@@ -21,11 +21,14 @@ class PcTransferController extends Controller
         $search = $request->query('search');
         $siteFilter = $request->query('site');
         $campaignFilter = $request->query('campaign');
-        $perPage = 15;
+        $perPage = 50;
 
-        // Get stations with their PC specs
-        $query = Station::with(['site', 'campaign', 'pcSpec.processorSpecs'])
-            ->orderByRaw('CAST(station_number AS UNSIGNED), station_number');
+        // Get stations with their PC specs, ordered by site then station number
+        $query = Station::select('stations.*')
+            ->with(['site', 'campaign', 'pcSpec.processorSpecs'])
+            ->join('sites', 'stations.site_id', '=', 'sites.id')
+            ->orderBy('sites.name')
+            ->orderByRaw('CAST(stations.station_number AS UNSIGNED), stations.station_number');
 
         // Apply filters
         if ($search) {
@@ -391,8 +394,11 @@ class PcTransferController extends Controller
             });
 
         // Get all stations or filter by IDs if provided (bulk mode)
-        $stationsQuery = Station::with(['site', 'campaign', 'pcSpec'])
-            ->orderByRaw('CAST(station_number AS UNSIGNED), station_number');
+        $stationsQuery = Station::select('stations.*')
+            ->with(['site', 'campaign', 'pcSpec'])
+            ->join('sites', 'stations.site_id', '=', 'sites.id')
+            ->orderBy('sites.name')
+            ->orderByRaw('CAST(stations.station_number AS UNSIGNED), stations.station_number');
 
         // If station IDs provided in query string (for bulk mode)
         if ($request->has('stations')) {

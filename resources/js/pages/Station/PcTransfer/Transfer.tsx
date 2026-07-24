@@ -288,6 +288,8 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
         return matchesSearch && matchesSite && matchesCampaign && matchesAssignment;
     });
 
+
+
     function getTransferByPc(pcId: number): Transfer | undefined {
         return transfers.find(t => t.pcId === pcId);
     }

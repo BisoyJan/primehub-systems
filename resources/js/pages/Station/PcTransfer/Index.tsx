@@ -230,6 +230,7 @@ export default function Index({ stations: stationsPayload, filters }: PageProps)
     };
 
     const stationRows = stationsPayload.data;
+
     const paginationMeta = stationsPayload.meta || {
         current_page: 1,
         last_page: 1,
@@ -427,110 +428,110 @@ export default function Index({ stations: stationsPayload, filters }: PageProps)
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {stationRows.map((station) => (
-                                        <TableRow
-                                            key={station.id}
-                                            className={bulkMode && selectedStations.has(station.id) ? 'bg-blue-800' : ''}
-                                        >
-                                            {bulkMode && (
-                                                <TableCell>
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={selectedStations.has(station.id)}
-                                                        onChange={() => toggleStationSelection(station.id)}
-                                                        className="w-4 h-4 cursor-pointer"
-                                                        aria-label={`Select station ${station.station_number}`}
-                                                    />
-                                                </TableCell>
-                                            )}
-                                            <TableCell className="font-medium">
-                                                {station.station_number}
-                                            </TableCell>
-                                            <TableCell>{station.site}</TableCell>
-                                            <TableCell>{station.campaign}</TableCell>
-                                            <TableCell>
-                                                <Badge
-                                                    className={
-                                                        (station.status ?? '').toLowerCase() === 'occupied'
-                                                            ? 'bg-green-500 hover:bg-green-600 text-white'
-                                                            : (station.status ?? '').toLowerCase() === 'vacant'
-                                                                ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
-                                                                : (station.status ?? '').toLowerCase() === 'no pc'
-                                                                    ? 'bg-red-500 hover:bg-red-600 text-white'
-                                                                    : (station.status ?? '').toLowerCase() === 'admin'
-                                                                        ? 'bg-blue-500 hover:bg-blue-600 text-white'
-                                                                        : 'bg-gray-500 hover:bg-gray-600 text-white'
-                                                    }
-                                                >
-                                                    {station.status ?? 'N/A'}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell>
-                                                {station.pc_spec_details ? (
-                                                    <div>
-                                                        <span className="font-medium text-green-600">
-                                                            {station.pc_spec_details.manufacturer}
-                                                        </span>
-                                                        {station.pc_spec_details.pc_number && (
-                                                            <div className="text-xs text-blue-600 mt-1">
-                                                                PC: {station.pc_spec_details.pc_number}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                ) : (
-                                                    <span className="text-gray-400">No PC assigned</span>
-                                                )}
-                                            </TableCell>
-                                            <TableCell>
-                                                {station.pc_spec_details && (
-                                                    <div className="text-xs text-muted-foreground">
-                                                        <div>{station.pc_spec_details.processor}</div>
-                                                        <div>
-                                                            {station.pc_spec_details.ram_ddr} {station.pc_spec_details.ram_gb}GB RAM
-                                                        </div>
-                                                        <div>
-                                                            {station.pc_spec_details.disk_type} {station.pc_spec_details.disk_gb}GB
-                                                        </div>
-                                                        <div>
-                                                            Ports: {station.pc_spec_details.available_ports || 'N/A'}
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                {!bulkMode && (
-                                                    <div className="flex justify-end gap-2">
-                                                        <Can permission="pc_transfers.create">
-                                                            <Link href={pcTransfersTransferPageRoute(station.id).url}>
-                                                                <Button size="sm">
-                                                                    <ArrowRight size={14} className="mr-1" />
-                                                                    {station.pc_spec_id ? 'Transfer' : 'Assign'}
-                                                                </Button>
-                                                            </Link>
-                                                        </Can>
-                                                        {station.pc_spec_id && (
-                                                            <Can permission="pc_transfers.remove">
-                                                                <DeleteConfirmDialog
-                                                                    onConfirm={() => handleRemovePC(station)}
-                                                                    title="Unassign PC from Station"
-                                                                    description={`Are you sure you want to unassign the PC from station "${station.station_number}"? The PC will become available for assignment to other stations.`}
-                                                                    triggerLabel="Unassign"
-                                                                    disabled={isMutating}
-                                                                />
-                                                            </Can>
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-
-                                    {stationRows.length === 0 && (
+                                    {stationRows.length === 0 ? (
                                         <TableRow>
                                             <TableCell colSpan={8} className="text-center py-8 text-gray-500">
                                                 No stations found
                                             </TableCell>
                                         </TableRow>
+                                    ) : (
+                                        stationRows.map((station) => (
+                                            <TableRow
+                                                key={station.id}
+                                                className={bulkMode && selectedStations.has(station.id) ? 'bg-blue-800' : ''}
+                                            >
+                                                {bulkMode && (
+                                                    <TableCell>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedStations.has(station.id)}
+                                                            onChange={() => toggleStationSelection(station.id)}
+                                                            className="w-4 h-4 cursor-pointer"
+                                                            aria-label={`Select station ${station.station_number}`}
+                                                        />
+                                                    </TableCell>
+                                                )}
+                                                <TableCell className="font-medium">
+                                                    {station.station_number}
+                                                </TableCell>
+                                                <TableCell>{station.site}</TableCell>
+                                                <TableCell>{station.campaign}</TableCell>
+                                                <TableCell>
+                                                    <Badge
+                                                        className={
+                                                            (station.status ?? '').toLowerCase() === 'occupied'
+                                                                ? 'bg-green-500 hover:bg-green-600 text-white'
+                                                                : (station.status ?? '').toLowerCase() === 'vacant'
+                                                                    ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
+                                                                    : (station.status ?? '').toLowerCase() === 'no pc'
+                                                                        ? 'bg-red-500 hover:bg-red-600 text-white'
+                                                                        : (station.status ?? '').toLowerCase() === 'admin'
+                                                                            ? 'bg-blue-500 hover:bg-blue-600 text-white'
+                                                                            : 'bg-gray-500 hover:bg-gray-600 text-white'
+                                                        }
+                                                    >
+                                                        {station.status ?? 'N/A'}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell>
+                                                    {station.pc_spec_details ? (
+                                                        <div>
+                                                            <span className="font-medium text-green-600">
+                                                                {station.pc_spec_details.manufacturer}
+                                                            </span>
+                                                            {station.pc_spec_details.pc_number && (
+                                                                <div className="text-xs text-blue-600 mt-1">
+                                                                    PC: {station.pc_spec_details.pc_number}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-gray-400">No PC assigned</span>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {station.pc_spec_details && (
+                                                        <div className="text-xs text-muted-foreground">
+                                                            <div>{station.pc_spec_details.processor}</div>
+                                                            <div>
+                                                                {station.pc_spec_details.ram_ddr} {station.pc_spec_details.ram_gb}GB RAM
+                                                            </div>
+                                                            <div>
+                                                                {station.pc_spec_details.disk_type} {station.pc_spec_details.disk_gb}GB
+                                                            </div>
+                                                            <div>
+                                                                Ports: {station.pc_spec_details.available_ports || 'N/A'}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    {!bulkMode && (
+                                                        <div className="flex justify-end gap-2">
+                                                            <Can permission="pc_transfers.create">
+                                                                <Link href={pcTransfersTransferPageRoute(station.id).url}>
+                                                                    <Button size="sm">
+                                                                        <ArrowRight size={14} className="mr-1" />
+                                                                        {station.pc_spec_id ? 'Transfer' : 'Assign'}
+                                                                    </Button>
+                                                                </Link>
+                                                            </Can>
+                                                            {station.pc_spec_id && (
+                                                                <Can permission="pc_transfers.remove">
+                                                                    <DeleteConfirmDialog
+                                                                        onConfirm={() => handleRemovePC(station)}
+                                                                        title="Unassign PC from Station"
+                                                                        description={`Are you sure you want to unassign the PC from station "${station.station_number}"? The PC will become available for assignment to other stations.`}
+                                                                        triggerLabel="Unassign"
+                                                                        disabled={isMutating}
+                                                                    />
+                                                                </Can>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))
                                     )}
                                 </TableBody>
                             </Table>
@@ -633,9 +634,9 @@ export default function Index({ stations: stationsPayload, filters }: PageProps)
                                                 )}
                                             </div>
                                         )}
-                                    </div>
-                                ))
-                            )}
+                                            </div>
+                                        ))
+                                    )}
                         </div>
                     </CardContent>
                 </Card>
