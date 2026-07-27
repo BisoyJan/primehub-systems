@@ -82,8 +82,8 @@ class LeaveRequest extends Model
     protected function casts(): array
     {
         return [
-            'start_date' => 'date',
-            'end_date' => 'date',
+            'start_date' => 'date:Y-m-d',
+            'end_date' => 'date:Y-m-d',
             'days_requested' => 'decimal:2',
             'medical_cert_submitted' => 'boolean',
             'sl_with_undertime' => 'boolean',
@@ -99,8 +99,8 @@ class LeaveRequest extends Model
             'short_notice_override' => 'boolean',
             'short_notice_override_at' => 'datetime',
             // Date modification tracking
-            'original_start_date' => 'date',
-            'original_end_date' => 'date',
+            'original_start_date' => 'date:Y-m-d',
+            'original_end_date' => 'date:Y-m-d',
             'date_modified_at' => 'datetime',
             // Auto-cancellation
             'auto_cancelled' => 'boolean',

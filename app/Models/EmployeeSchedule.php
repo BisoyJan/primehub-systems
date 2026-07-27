@@ -40,8 +40,8 @@ class EmployeeSchedule extends Model
         return [
             'work_days' => 'array',
             'is_active' => 'boolean',
-            'effective_date' => 'date',
-            'end_date' => 'date',
+            'effective_date' => 'date:Y-m-d',
+            'end_date' => 'date:Y-m-d',
             'grace_period_minutes' => 'integer',
         ];
     }

@@ -20,7 +20,7 @@ class LeaveRequestDeniedDate extends Model
     protected function casts(): array
     {
         return [
-            'denied_date' => 'date',
+            'denied_date' => 'date:Y-m-d',
         ];
     }
 

@@ -88,7 +88,7 @@ class User extends Authenticatable implements MustVerifyEmail
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
-            'hired_date' => 'date',
+            'hired_date' => 'date:Y-m-d',
             'is_approved' => 'boolean',
             'is_active' => 'boolean',
             'is_solo_parent' => 'boolean',

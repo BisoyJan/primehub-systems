@@ -36,7 +36,7 @@ class BiometricRecord extends Model
     {
         return [
             'datetime' => 'datetime',
-            'record_date' => 'date',
+            'record_date' => 'date:Y-m-d',
             'last_processed_at' => 'datetime',
         ];
     }

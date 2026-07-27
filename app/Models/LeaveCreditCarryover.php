@@ -49,9 +49,9 @@ class LeaveCreditCarryover extends Model
             'from_year' => 'integer',
             'to_year' => 'integer',
             'is_first_regularization' => 'boolean',
-            'regularization_date' => 'date',
+            'regularization_date' => 'date:Y-m-d',
             'cash_converted' => 'boolean',
-            'cash_converted_at' => 'date',
+            'cash_converted_at' => 'date:Y-m-d',
         ];
     }
 

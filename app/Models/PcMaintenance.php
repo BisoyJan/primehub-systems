@@ -34,8 +34,8 @@ class PcMaintenance extends Model
     protected function casts(): array
     {
         return [
-            'last_maintenance_date' => 'date',
-            'next_due_date' => 'date',
+            'last_maintenance_date' => 'date:Y-m-d',
+            'next_due_date' => 'date:Y-m-d',
             'pc_spec_id' => 'integer',
         ];
     }

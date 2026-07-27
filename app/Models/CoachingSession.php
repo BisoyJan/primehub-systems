@@ -79,8 +79,8 @@ class CoachingSession extends Model
     protected function casts(): array
     {
         return [
-            'session_date' => 'date',
-            'follow_up_date' => 'date',
+            'session_date' => 'date:Y-m-d',
+            'follow_up_date' => 'date:Y-m-d',
             'ack_timestamp' => 'datetime',
             'agent_response_at' => 'datetime',
             'compliance_review_timestamp' => 'datetime',

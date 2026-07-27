@@ -38,7 +38,7 @@ class LeaveCredit extends Model
             'credits_balance' => 'decimal:2',
             'year' => 'integer',
             'month' => 'integer',
-            'accrued_at' => 'date',
+            'accrued_at' => 'date:Y-m-d',
         ];
     }
 
