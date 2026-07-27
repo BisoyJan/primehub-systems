@@ -755,7 +755,7 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
                                                                 </Button>
                                                             </Link>
                                                             {/* Medical/Supporting Document Button - For SL, BL, UPTO, and IW with uploaded document */}
-                                                            {(request.leave_type === 'SL' || request.leave_type === 'BL' || request.leave_type === 'UPTO' || request.leave_type === 'IW') && ((request.documents_count ?? 0) > 0 || request.medical_cert_path) && (auth.user.id === request.user.id || isAdmin) && (
+                                                            {(request.leave_type === 'SL' || request.leave_type === 'BL' || request.leave_type === 'UPTO' || request.leave_type === 'IW') && ((request.documents_count ?? 0) > 0 || request.medical_cert_path) && (auth.user.id === request.user.id || isAdmin || isTeamLead) && (
                                                                 <Link href={leaveShowRoute(request.id).url}>
                                                                     <Button
                                                                         size="icon"
@@ -888,7 +888,7 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
                                         </Button>
                                     </Link>
                                     {/* Medical/Supporting Document Button - Mobile */}
-                                    {(request.leave_type === 'SL' || request.leave_type === 'BL' || request.leave_type === 'UPTO' || request.leave_type === 'IW') && ((request.documents_count ?? 0) > 0 || request.medical_cert_path) && (auth.user.id === request.user.id || isAdmin) && (
+                                    {(request.leave_type === 'SL' || request.leave_type === 'BL' || request.leave_type === 'UPTO' || request.leave_type === 'IW') && ((request.documents_count ?? 0) > 0 || request.medical_cert_path) && (auth.user.id === request.user.id || isAdmin || isTeamLead) && (
                                         <Link href={leaveShowRoute(request.id).url} className="flex-1">
                                             <Button
                                                 size="sm"

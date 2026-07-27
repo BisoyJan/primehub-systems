@@ -897,8 +897,8 @@ class LeaveRequestController extends Controller
         // blocked once the end date has passed; Super Admin is not).
         $canEditApproved = $user->can('updateApproved', $leaveRequest);
 
-        // Check if user can view medical certificate (own request OR Admin, HR, Super Admin)
-        $canViewMedicalCert = $leaveRequest->user_id === $user->id || in_array($user->role, ['Super Admin', 'Admin', 'HR']);
+        // Check if user can view medical certificate (own request OR Admin, HR, Super Admin, Team Lead)
+        $canViewMedicalCert = $leaveRequest->user_id === $user->id || in_array($user->role, ['Super Admin', 'Admin', 'HR', 'Team Lead']);
 
         // Get earlier conflicts for VL/UPTO (first-come-first-serve)
         $earlierConflicts = $this->getEarlierConflicts($leaveRequest);
@@ -1082,8 +1082,8 @@ class LeaveRequestController extends Controller
     {
         $user = auth()->user();
 
-        // Only the request owner OR Admin/HR/Super Admin can view medical certificates
-        if ($leaveRequest->user_id !== $user->id && ! in_array($user->role, ['Super Admin', 'Admin', 'HR'])) {
+        // Only the request owner OR Admin/HR/Super Admin/Team Lead can view medical certificates
+        if ($leaveRequest->user_id !== $user->id && ! in_array($user->role, ['Super Admin', 'Admin', 'HR', 'Team Lead'])) {
             abort(403, 'Unauthorized to view medical certificate.');
         }
 
@@ -1108,8 +1108,8 @@ class LeaveRequestController extends Controller
     {
         $user = auth()->user();
 
-        // Only the request owner OR Admin/HR/Super Admin can view supporting documents
-        if ($leaveRequest->user_id !== $user->id && ! in_array($user->role, ['Super Admin', 'Admin', 'HR'])) {
+        // Only the request owner OR Admin/HR/Super Admin/Team Lead can view supporting documents
+        if ($leaveRequest->user_id !== $user->id && ! in_array($user->role, ['Super Admin', 'Admin', 'HR', 'Team Lead'])) {
             abort(403, 'Unauthorized to view document.');
         }
 
