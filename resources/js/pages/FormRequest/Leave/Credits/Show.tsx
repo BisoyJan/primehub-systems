@@ -39,7 +39,7 @@ import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { index as creditsIndexRoute } from '@/routes/leave-requests/credits';
 import { show as leaveShowRoute } from '@/routes/leave-requests';
 import { updateCarryover, updateMonthly, revertEdit, recalculateCredits as recalculateCreditsAction } from '@/actions/App/Http/Controllers/LeaveCreditController';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import RecalculateCreditsDialog from '@/components/leave/RecalculateCreditsDialog';
 
 interface MonthlyCredit {
@@ -302,7 +302,7 @@ export default function Show({ user, year, summary, carryoverSummary, carryoverR
                     <div className="flex-1">
                         <h1 className="text-2xl font-bold">{canViewAll ? user.name : 'My Leave Credits'}</h1>
                         <p className="text-sm text-muted-foreground mt-1">
-                            {user.email} • {user.role} • Hired: {format(new Date(user.hired_date), 'MMM d, yyyy')}
+                            {user.email} • {user.role} • Hired: {format(parseISO(user.hired_date), 'MMM d, yyyy')}
                         </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -530,7 +530,7 @@ export default function Show({ user, year, summary, carryoverSummary, carryoverR
                                     <p>No credits accrued for {year}</p>
                                     {!summary.is_eligible && summary.eligibility_date && (
                                         <p className="text-sm mt-2">
-                                            Eligible from: {format(new Date(summary.eligibility_date), 'MMM d, yyyy')}
+                                            Eligible from: {format(parseISO(summary.eligibility_date), 'MMM d, yyyy')}
                                         </p>
                                     )}
                                 </div>
@@ -655,9 +655,9 @@ export default function Show({ user, year, summary, carryoverSummary, carryoverR
                                                         </Badge>
                                                     </TableCell>
                                                     <TableCell className="text-sm">
-                                                        {format(new Date(leave.start_date), 'MMM d')}
+                                                        {format(parseISO(leave.start_date), 'MMM d')}
                                                         {leave.start_date !== leave.end_date && (
-                                                            <> - {format(new Date(leave.end_date), 'MMM d')}</>
+                                                            <> - {format(parseISO(leave.end_date), 'MMM d')}</>
                                                         )}
                                                     </TableCell>
                                                     <TableCell className="text-right">
@@ -869,7 +869,7 @@ export default function Show({ user, year, summary, carryoverSummary, carryoverR
                                                         className="underline hover:text-blue-900 dark:hover:text-blue-100"
                                                         target="_blank"
                                                     >
-                                                        {req.leave_type} — {format(new Date(req.start_date), 'MMM d')} to {format(new Date(req.end_date), 'MMM d, yyyy')} ({req.days_requested} day{req.days_requested !== 1 ? 's' : ''})
+                                                        {req.leave_type} — {format(parseISO(req.start_date), 'MMM d')} to {format(parseISO(req.end_date), 'MMM d, yyyy')} ({req.days_requested} day{req.days_requested !== 1 ? 's' : ''})
                                                     </Link>
                                                 </li>
                                             ))}
@@ -1088,7 +1088,7 @@ export default function Show({ user, year, summary, carryoverSummary, carryoverR
                                                         className="underline hover:text-blue-900 dark:hover:text-blue-100"
                                                         target="_blank"
                                                     >
-                                                        {req.leave_type} — {format(new Date(req.start_date), 'MMM d')} to {format(new Date(req.end_date), 'MMM d, yyyy')} ({req.days_requested} day{req.days_requested !== 1 ? 's' : ''})
+                                                        {req.leave_type} — {format(parseISO(req.start_date), 'MMM d')} to {format(parseISO(req.end_date), 'MMM d, yyyy')} ({req.days_requested} day{req.days_requested !== 1 ? 's' : ''})
                                                     </Link>
                                                 </li>
                                             ))}

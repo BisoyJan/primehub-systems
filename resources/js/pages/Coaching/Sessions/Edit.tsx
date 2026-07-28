@@ -10,6 +10,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { usePageMeta, useFlashMessage, usePageLoading } from '@/hooks';
 import { CoachingFormFields } from '@/components/coaching/CoachingFormFields';
+import { formatDate } from '@/lib/utils';
 
 import {
     index as sessionsIndex,
@@ -155,7 +156,7 @@ export default function CoachingSessionsEdit() {
 
                 <PageHeader
                     title="Edit Coaching Session"
-                    description={`Editing session for ${formatName(session.coachee)} on ${new Date(session.session_date).toLocaleDateString()}`}
+                    description={`Editing session for ${formatName(session.coachee)} on ${formatDate(session.session_date)}`}
                     actions={
                         <Link href={sessionsShow.url(session.id)}>
                             <Button variant="outline">

@@ -28,6 +28,7 @@ import { LoadingOverlay } from '@/components/LoadingOverlay';
 import PaginationNav from '@/components/pagination-nav';
 import { usePageMeta, useFlashMessage, usePageLoading } from '@/hooks';
 import { CoachingStatusBadge, AckStatusBadge, SeverityBadge } from '@/components/coaching/CoachingStatusBadge';
+import { formatDate } from '@/lib/utils';
 
 import { dashboard as coachingDashboard } from '@/routes/coaching';
 import { show as sessionsShow, acknowledge as sessionsAcknowledge } from '@/routes/coaching/sessions';
@@ -100,13 +101,13 @@ export default function MyCoachingLogsIndex() {
                     <div className="rounded-lg border bg-card p-4 shadow-sm">
                         <p className="text-xs font-medium text-muted-foreground">Last Coached</p>
                         <p className="mt-1 text-lg font-bold">
-                            {summary.last_coached_date ? new Date(summary.last_coached_date).toLocaleDateString() : 'Never'}
+                            {summary.last_coached_date ? formatDate(summary.last_coached_date) : 'Never'}
                         </p>
                     </div>
                     <div className="rounded-lg border bg-card p-4 shadow-sm">
                         <p className="text-xs font-medium text-muted-foreground">Previous</p>
                         <p className="mt-1 text-lg font-bold">
-                            {summary.previous_coached_date ? new Date(summary.previous_coached_date).toLocaleDateString() : '—'}
+                            {summary.previous_coached_date ? formatDate(summary.previous_coached_date) : '—'}
                         </p>
                     </div>
                     <div className="rounded-lg border bg-card p-4 shadow-sm">
@@ -174,10 +175,10 @@ export default function MyCoachingLogsIndex() {
                                     ) : (
                                         sessions.data.map((session) => (
                                             <TableRow key={session.id}>
-                                                <TableCell className="whitespace-nowrap">
-                                                    {new Date(session.session_date).toLocaleDateString()}
-                                                </TableCell>
-                                                <TableCell>{formatName(session.coach)}</TableCell>
+                                            <TableCell className="whitespace-nowrap">
+                                                {formatDate(session.session_date)}
+                                            </TableCell>
+                                            <TableCell>{formatName(session.coach)}</TableCell>
                                                 <TableCell>{purposes[session.purpose] ?? session.purpose}</TableCell>
                                                 <TableCell>
                                                     <AckStatusBadge status={session.ack_status} />
@@ -204,7 +205,7 @@ export default function MyCoachingLogsIndex() {
                                                                         <DialogTitle>Acknowledge Session</DialogTitle>
                                                                         <DialogDescription>
                                                                             Confirm you have reviewed this coaching session from {formatName(session.coach)} on{' '}
-                                                                            {new Date(session.session_date).toLocaleDateString()}.
+                                                                            {formatDate(session.session_date)}.
                                                                         </DialogDescription>
                                                                     </DialogHeader>
                                                                     <div className="space-y-3 py-2">
@@ -263,7 +264,7 @@ export default function MyCoachingLogsIndex() {
                                     <div className="flex items-start justify-between gap-2">
                                         <div>
                                             <p className="text-xs text-muted-foreground">
-                                                {new Date(session.session_date).toLocaleDateString()}
+                                                {formatDate(session.session_date)}
                                             </p>
                                             <p className="text-sm font-medium">{formatName(session.coach)}</p>
                                             <p className="text-xs text-muted-foreground">{purposes[session.purpose] ?? session.purpose}</p>

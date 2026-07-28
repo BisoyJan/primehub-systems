@@ -64,7 +64,7 @@ import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { TableSkeleton } from '@/components/TableSkeleton';
 import PaginationNav from '@/components/pagination-nav';
 import { index as leaveIndexRoute } from '@/routes/leave-requests';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -948,7 +948,7 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
                                                             {employee.role}
                                                         </Badge>
                                                     </TableCell>
-                                                    <TableCell>{format(new Date(employee.hired_date), 'MMM d, yyyy')}</TableCell>
+                                                    <TableCell>{format(parseISO(employee.hired_date), 'MMM d, yyyy')}</TableCell>
                                                     <TableCell className="text-center">
                                                         {employee.regularization.is_regularized ? (
                                                             <TooltipProvider>
@@ -956,7 +956,7 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
                                                                     <TooltipTrigger asChild>
                                                                         <Badge variant="default" className="bg-green-600 cursor-help">
                                                                             {employee.regularization.regularization_date
-                                                                                ? format(new Date(employee.regularization.regularization_date), 'MMM d, yyyy')
+                                                                                ? format(parseISO(employee.regularization.regularization_date), 'MMM d, yyyy')
                                                                                 : 'Regularized'
                                                                             }
                                                                         </Badge>
@@ -964,7 +964,7 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
                                                                     <TooltipContent>
                                                                         <p className="font-medium">Regular Employee</p>
                                                                         <p className="text-xs text-muted-foreground">
-                                                                            Hired: {format(new Date(employee.hired_date), 'MMM d, yyyy')}
+                                                                            Hired: {format(parseISO(employee.hired_date), 'MMM d, yyyy')}
                                                                         </p>
                                                                         {employee.regularization.has_first_regularization && (
                                                                             <p className="text-xs text-green-600 mt-1">
@@ -980,13 +980,13 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
                                                                     <TooltipTrigger asChild>
                                                                         <Badge variant="secondary" className="cursor-help">
                                                                             <Clock className="h-3 w-3 mr-1" />
-                                                                            {format(new Date(employee.eligibility_date), 'MMM d, yyyy')}
+                                                                            {format(parseISO(employee.eligibility_date), 'MMM d, yyyy')}
                                                                         </Badge>
                                                                     </TooltipTrigger>
                                                                     <TooltipContent>
                                                                         <p className="font-medium">Probationary Period</p>
                                                                         <p className="text-xs">
-                                                                            Regularization: {format(new Date(employee.eligibility_date), 'MMM d, yyyy')}
+                                                                            Regularization: {format(parseISO(employee.eligibility_date), 'MMM d, yyyy')}
                                                                         </p>
                                                                         <p className="text-xs text-muted-foreground">
                                                                             {employee.regularization.days_until_regularization > 0
@@ -1227,21 +1227,21 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
                                     <div className="grid grid-cols-2 gap-2 text-sm">
                                         <div>
                                             <p className="text-muted-foreground">Hired</p>
-                                            <p>{format(new Date(employee.hired_date), 'MMM d, yyyy')}</p>
+                                            <p>{format(parseISO(employee.hired_date), 'MMM d, yyyy')}</p>
                                         </div>
                                         <div>
                                             <p className="text-muted-foreground">Regularization</p>
                                             {employee.regularization.is_regularized ? (
                                                 <Badge variant="default" className="bg-green-600">
                                                     {employee.regularization.regularization_date
-                                                        ? format(new Date(employee.regularization.regularization_date), 'MMM d, yyyy')
+                                                        ? format(parseISO(employee.regularization.regularization_date), 'MMM d, yyyy')
                                                         : 'Regularized'
                                                     }
                                                 </Badge>
                                             ) : (
                                                 <Badge variant="secondary">
                                                     <Clock className="h-3 w-3 mr-1" />
-                                                    {format(new Date(employee.eligibility_date), 'MMM d')}
+                                                    {format(parseISO(employee.eligibility_date), 'MMM d')}
                                                     {employee.regularization.days_until_regularization > 0 && (
                                                         <span className="ml-1 text-xs">({employee.regularization.days_until_regularization}d)</span>
                                                     )}

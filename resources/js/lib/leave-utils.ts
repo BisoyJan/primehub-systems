@@ -62,14 +62,14 @@ export interface DateSuggestion {
 /** Check if a date string falls on a weekend (Saturday or Sunday) */
 export function isWeekend(dateString: string): boolean {
     if (!dateString) return false;
-    const date = new Date(dateString);
+    const date = parseISO(dateString);
     const day = date.getDay();
     return day === 0 || day === 6;
 }
 
 /** Get the full day name for a date string (e.g. "Saturday") */
 export function getDayName(dateString: string): string {
-    const date = new Date(dateString);
+    const date = parseISO(dateString);
     return date.toLocaleDateString('en-US', { weekday: 'long' });
 }
 

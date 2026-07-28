@@ -25,6 +25,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Calendar } from '@/components/ui/calendar';
+import { formatDate } from '@/lib/utils';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -186,7 +187,9 @@ function getUrgencyStyles(days: number) {
 }
 
 const getAgingLabel = (dateStr: string): { text: string; className: string } => {
-    const days = Math.floor((Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24));
+    const p = dateStr.split('-');
+    const target = new Date(+p[0], +p[1] - 1, +p[2]);
+    const days = Math.floor((Date.now() - target.getTime()) / (1000 * 60 * 60 * 24));
     if (days <= 2) return { text: `${days}d ago`, className: 'text-green-600' };
     if (days <= 5) return { text: `${days}d ago`, className: 'text-amber-600' };
     return { text: `${days}d ago`, className: 'text-red-600 font-semibold' };
@@ -689,7 +692,7 @@ export default function CoachingAdminIndex() {
                                                                     {agent.is_coaching_excluded && (
                                                                         <span className="text-[10px] text-slate-500">
                                                                             {agent.exclusion_expires_at
-                                                                                ? `Until ${new Date(agent.exclusion_expires_at).toLocaleDateString()}`
+                                                                                ? `Until ${formatDate(agent.exclusion_expires_at)}`
                                                                                 : 'Forever'}
                                                                         </span>
                                                                     )}
@@ -699,7 +702,7 @@ export default function CoachingAdminIndex() {
                                                                 <CoachingStatusBadge status={agent.coaching_status} />
                                                             </TableCell>
                                                             <TableCell className="whitespace-nowrap">
-                                                                {agent.last_coached_date ? new Date(agent.last_coached_date).toLocaleDateString() : 'Never'}
+                                                                {agent.last_coached_date ? formatDate(agent.last_coached_date) : 'Never'}
                                                             </TableCell>
                                                             <TableCell>{agent.total_sessions}</TableCell>
                                                             <TableCell className="text-center"><WeekIndicator coachedWeeks={agent.coached_weeks} /></TableCell>
@@ -761,15 +764,15 @@ export default function CoachingAdminIndex() {
                                                         {agent.is_coaching_excluded && (
                                                             <p className="text-[10px] text-slate-500">
                                                                 Excluded {agent.exclusion_expires_at
-                                                                    ? `until ${new Date(agent.exclusion_expires_at).toLocaleDateString()}`
-                                                                    : '(forever)'}
+                                                                     ? `until ${formatDate(agent.exclusion_expires_at)}`
+                                                                     : '(forever)'}
                                                             </p>
                                                         )}
                                                     </div>
                                                     <CoachingStatusBadge status={agent.coaching_status} />
                                                 </div>
                                                 <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-                                                    <span>Last: {agent.last_coached_date ? new Date(agent.last_coached_date).toLocaleDateString() : 'Never'}</span>
+                                                    <span>Last: {agent.last_coached_date ? formatDate(agent.last_coached_date) : 'Never'}</span>
                                                     <span className="flex items-center gap-1.5">Sessions: {agent.total_sessions} <WeekIndicator coachedWeeks={agent.coached_weeks} /></span>
                                                     {agent.pending_acknowledgements > 0 && (
                                                         <span className="font-medium text-amber-600">{agent.pending_acknowledgements} Pending</span>
@@ -878,7 +881,7 @@ export default function CoachingAdminIndex() {
                                                             />
                                                         </TableCell>
                                                         <TableCell className="whitespace-nowrap">
-                                                            {new Date(session.session_date).toLocaleDateString()}
+                                                            {formatDate(session.session_date)}
                                                         </TableCell>
                                                         <TableCell className="font-medium">{formatName(session.coachee)}</TableCell>
                                                         <TableCell>{formatName(session.coach)}</TableCell>
@@ -923,7 +926,7 @@ export default function CoachingAdminIndex() {
                                         <div key={session.id} className="rounded-lg border bg-card p-4 shadow-sm space-y-3">
                                             <div className="flex items-start justify-between gap-2">
                                                 <div>
-                                                    <p className="text-xs text-muted-foreground">{new Date(session.session_date).toLocaleDateString()} <span className={`ml-1 ${aging.className}`}>{aging.text}</span></p>
+                                                    <p className="text-xs text-muted-foreground">{formatDate(session.session_date)} <span className={`ml-1 ${aging.className}`}>{aging.text}</span></p>
                                                     <p className="text-sm font-medium">{formatName(session.coachee)}</p>
                                                     <p className="text-xs text-muted-foreground">Coach: {formatName(session.coach)}</p>
                                                 </div>
@@ -1162,7 +1165,7 @@ function SessionQueueTable({
                                     return (
                                         <TableRow key={session.id}>
                                             <TableCell className="whitespace-nowrap">
-                                                {new Date(session.session_date).toLocaleDateString()}
+                                                {formatDate(session.session_date)}
                                             </TableCell>
                                             <TableCell className="font-medium">{formatName(session.coachee)}</TableCell>
                                             <TableCell>{formatName(session.coach)}</TableCell>
@@ -1202,7 +1205,7 @@ function SessionQueueTable({
                             <div key={session.id} className="rounded-lg border bg-card p-3 shadow-sm">
                                 <div className="flex items-start justify-between gap-2">
                                     <div>
-                                        <p className="text-xs text-muted-foreground">{new Date(session.session_date).toLocaleDateString()} <span className={`ml-1 ${aging.className}`}>{aging.text}</span></p>
+                                        <p className="text-xs text-muted-foreground">{formatDate(session.session_date)} <span className={`ml-1 ${aging.className}`}>{aging.text}</span></p>
                                         <p className="text-sm font-medium">{formatName(session.coachee)}</p>
                                         <p className="text-xs text-muted-foreground">Coach: {formatName(session.coach)}</p>
                                     </div>
@@ -1362,7 +1365,7 @@ function FollowUpTable({
                                         <TableCell>{item.purpose_label}</TableCell>
                                         {!compact && (
                                             <TableCell className="whitespace-nowrap">
-                                                {new Date(item.session_date).toLocaleDateString()}
+                                                {formatDate(item.session_date)}
                                             </TableCell>
                                         )}
                                         <TableCell>
@@ -1397,7 +1400,7 @@ function FollowUpTable({
                             <p className="text-xs text-muted-foreground truncate">{item.purpose_label}</p>
                             <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                                 <span>Follow-up: {new Date(item.follow_up_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                                {!compact && <span>Session: {new Date(item.session_date).toLocaleDateString()}</span>}
+                                {!compact && <span>Session: {formatDate(item.session_date)}</span>}
                             </div>
                         </Link>
                     );

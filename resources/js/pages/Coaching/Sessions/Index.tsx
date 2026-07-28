@@ -4,6 +4,7 @@ import type { PageProps as InertiaPageProps } from '@inertiajs/core';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
+import { formatDate } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import {
     Select,
@@ -111,8 +112,13 @@ const purposes: CoachingPurposeLabels = {
     recognition_appreciation: 'Recognition/Appreciation',
 };
 
+const toLocalMidnight = (dateStr: string): Date => {
+    const p = dateStr.split('-');
+    return new Date(+p[0], +p[1] - 1, +p[2]);
+};
+
 const getAgingLabel = (dateStr: string): { text: string; className: string } => {
-    const days = Math.floor((Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24));
+    const days = Math.floor((Date.now() - toLocalMidnight(dateStr).getTime()) / (1000 * 60 * 60 * 24));
     if (days <= 2) return { text: `${days}d ago`, className: 'text-green-600' };
     if (days <= 5) return { text: `${days}d ago`, className: 'text-amber-600' };
     return { text: `${days}d ago`, className: 'text-red-600 font-semibold' };
@@ -120,7 +126,7 @@ const getAgingLabel = (dateStr: string): { text: string; className: string } => 
 
 const getReviewAgingClass = (session: CoachingSession): string => {
     if (session.compliance_status !== 'For_Review') return '';
-    const days = Math.floor((Date.now() - new Date(session.session_date).getTime()) / (1000 * 60 * 60 * 24));
+    const days = Math.floor((Date.now() - toLocalMidnight(session.session_date).getTime()) / (1000 * 60 * 60 * 24));
     if (days > 5) return 'bg-red-50/50 dark:bg-red-950/20 border-l-2 border-l-red-400';
     if (days > 2) return 'bg-amber-50/50 dark:bg-amber-950/20 border-l-2 border-l-amber-400';
     return 'border-l-2 border-l-transparent';
@@ -427,7 +433,7 @@ export default function CoachingSessionsIndex() {
                             </div>
                             <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                                 <span>
-                                    Last: <strong>{agentSummary.last_coached_date ? new Date(agentSummary.last_coached_date).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A'}</strong>
+                                    Last: <strong>{agentSummary.last_coached_date ? formatDate(agentSummary.last_coached_date) : 'N/A'}</strong>
                                 </span>
                                 <span>
                                     Sessions: <strong>{agentSummary.total_sessions}</strong>
@@ -452,7 +458,7 @@ export default function CoachingSessionsIndex() {
                             </div>
                             <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                                 <span>
-                                    Last: <strong>{agentSummary.last_coached_date ? new Date(agentSummary.last_coached_date).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A'}</strong>
+                                    Last: <strong>{agentSummary.last_coached_date ? formatDate(agentSummary.last_coached_date) : 'N/A'}</strong>
                                 </span>
                                 <span>
                                     Sessions: <strong>{agentSummary.total_sessions}</strong>
@@ -760,7 +766,7 @@ export default function CoachingSessionsIndex() {
                                         sessions.data.map((session) => (
                                             <TableRow key={session.id} className={getReviewAgingClass(session)}>
                                                 <TableCell className="whitespace-nowrap">
-                                                    {new Date(session.session_date).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
+                                                    {formatDate(session.session_date)}
                                                     {session.is_draft && (
                                                         <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
                                                             Draft

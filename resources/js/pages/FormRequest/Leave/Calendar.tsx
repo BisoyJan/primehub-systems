@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { Head, router, usePage } from "@inertiajs/react";
+import { format, parseISO } from 'date-fns';
 import AppLayout from "@/layouts/app-layout";
 import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
@@ -451,12 +452,12 @@ export default function LeaveCalendar() {
                                                 </div>
                                                 <div className="text-xs text-muted-foreground">
                                                     {Number(leave.days_requested) === 1
-                                                        ? `${new Date(leave.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} (1 day)`
-                                                        : `${new Date(leave.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${new Date(leave.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} (${Math.round(Number(leave.days_requested))} days)`
+                                                        ? `${format(parseISO(leave.start_date), 'MMM d')} (1 day)`
+                                                        : `${format(parseISO(leave.start_date), 'MMM d')} - ${format(parseISO(leave.end_date), 'MMM d')} (${Math.round(Number(leave.days_requested))} days)`
                                                     }
                                                 </div>
                                                 <div className="text-xs text-muted-foreground">
-                                                    Requested: {new Date(leave.requested_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                                                    Requested: {format(parseISO(leave.requested_at), 'MMM d, yyyy, h:mm a')}
                                                 </div>
                                                 {!isRestrictedRole && leave.reason && (
                                                     <div className="text-xs text-muted-foreground mt-1 line-clamp-2">

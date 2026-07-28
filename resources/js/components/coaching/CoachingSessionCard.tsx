@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { AckStatusBadge, ComplianceStatusBadge, SeverityBadge } from './CoachingStatusBadge';
 import type { CoachingSession, CoachingPurposeLabels } from '@/types';
 import { show } from '@/routes/coaching/sessions';
+import { formatDate } from '@/lib/utils';
 
 interface CoachingSessionCardProps {
     session: CoachingSession;
@@ -24,7 +25,7 @@ export function CoachingSessionCard({
                 <div className="space-y-1">
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Calendar className="h-3.5 w-3.5" />
-                        <span>{new Date(session.session_date).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}</span>
+                        <span>{formatDate(session.session_date)}</span>
                     </div>
                     {showCoachee && session.coachee && (
                         <div className="flex items-center gap-2">

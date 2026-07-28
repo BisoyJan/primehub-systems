@@ -266,9 +266,9 @@ export default function Edit({
         // Check 2-week notice (only for VL, not SL/BL/ML as they are unpredictable)
         // Short notice override is handled at approval time on the Show page
         if (data.start_date && ['VL', 'UPTO'].includes(data.leave_type)) {
-            const start = new Date(data.start_date);
+            const start = parseISO(data.start_date);
             start.setHours(0, 0, 0, 0);
-            const twoWeeks = new Date(twoWeeksFromNow);
+            const twoWeeks = parseISO(twoWeeksFromNow);
             twoWeeks.setHours(0, 0, 0, 0);
             if (start.getTime() < twoWeeks.getTime()) {
                 warnings.push(
@@ -313,14 +313,14 @@ export default function Edit({
 
         // Check for overlapping dates with existing pending/approved leave requests
         if (data.start_date && data.end_date && existingLeaveRequests.length > 0) {
-            const newStart = new Date(data.start_date);
-            const newEnd = new Date(data.end_date);
+            const newStart = parseISO(data.start_date);
+            const newEnd = parseISO(data.end_date);
             newStart.setHours(0, 0, 0, 0);
             newEnd.setHours(0, 0, 0, 0);
 
             for (const existing of existingLeaveRequests) {
-                const existingStart = new Date(existing.start_date);
-                const existingEnd = new Date(existing.end_date);
+                const existingStart = parseISO(existing.start_date);
+                const existingEnd = parseISO(existing.end_date);
                 existingStart.setHours(0, 0, 0, 0);
                 existingEnd.setHours(0, 0, 0, 0);
 

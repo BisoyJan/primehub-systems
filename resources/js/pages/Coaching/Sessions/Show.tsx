@@ -44,6 +44,7 @@ import {
 } from '@/routes/coaching/sessions';
 
 import type { CoachingSession, CoachingPurposeLabels } from '@/types';
+import { formatDate, formatDateTime } from '@/lib/utils';
 
 /** Strip near-black inline color styles that break dark mode readability */
 function sanitizeRichHtml(html: string | null | undefined): string {
@@ -200,27 +201,9 @@ export default function CoachingSessionsShow() {
         return `${user.first_name} ${user.last_name}`;
     };
 
-    const formatDate = (date: string | null) => {
+    const formatDateLocal = (date: string | null) => {
         if (!date) return 'N/A';
-        return new Date(date).toLocaleDateString('en-US', {
-            weekday: 'short',
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-        });
-    };
-
-    const formatDateTime = (date: string | null) => {
-        if (!date) return 'N/A';
-        return new Date(date).toLocaleString('en-US', {
-            weekday: 'short',
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true,
-        });
+        return formatDate(date);
     };
 
     return (
@@ -301,7 +284,7 @@ export default function CoachingSessionsShow() {
                                 {coacheeExclusion && (
                                     <span
                                         className="inline-flex items-center rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
-                                        title={`Excluded from coaching: ${coacheeExclusion.reason}${coacheeExclusion.expires_at ? ` (until ${new Date(coacheeExclusion.expires_at).toLocaleDateString()})` : ''}`}
+                                        title={`Excluded from coaching: ${coacheeExclusion.reason}${coacheeExclusion.expires_at ? ` (until ${formatDate(coacheeExclusion.expires_at)})` : ''}`}
                                     >
                                         Coaching Excluded · {coacheeExclusion.reason}
                                     </span>
@@ -309,11 +292,11 @@ export default function CoachingSessionsShow() {
                             </span>
                         </InfoRow>
                         <InfoRow label="Coach">{formatName(session.coach)}</InfoRow>
-                        <InfoRow label="Session Date">{formatDate(session.session_date)}</InfoRow>
+                        <InfoRow label="Session Date">{formatDateLocal(session.session_date)}</InfoRow>
                         <InfoRow label="Purpose">{purposes[session.purpose] ?? session.purpose}</InfoRow>
                         <InfoRow label="Severity">{session.severity_flag}</InfoRow>
                         {session.follow_up_date && (
-                            <InfoRow label="Follow-up Date">{formatDate(session.follow_up_date)}</InfoRow>
+                            <InfoRow label="Follow-up Date">{formatDateLocal(session.follow_up_date)}</InfoRow>
                         )}
                     </dl>
                 </SectionCard>
@@ -527,7 +510,7 @@ export default function CoachingSessionsShow() {
                                         <div className="flex items-center justify-between rounded-md border p-3 transition-colors hover:bg-muted/50">
                                             <div className="flex flex-col gap-0.5">
                                                 <span className="text-sm font-medium">
-                                                    {formatDate(item.session_date)}
+                                                    {formatDateLocal(item.session_date)}
                                                 </span>
                                                 <span className="text-xs text-muted-foreground">
                                                     {item.purpose}{item.coach ? ` \u2022 Coach: ${item.coach.first_name} ${item.coach.last_name}` : ''}

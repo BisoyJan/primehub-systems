@@ -254,7 +254,7 @@ export default function Create({
         if (data.start_date && ['VL', 'UPTO'].includes(data.leave_type)) {
             const start = parseISO(data.start_date);
             start.setHours(0, 0, 0, 0);
-            const twoWeeks = new Date(twoWeeksFromNow);
+            const twoWeeks = parseISO(twoWeeksFromNow);
             twoWeeks.setHours(0, 0, 0, 0);
             if (start.getTime() < twoWeeks.getTime()) {
                 warnings.push(

@@ -6,6 +6,7 @@ import PaginationNav, { type PaginationLink } from '@/components/pagination-nav'
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
+import { formatDate } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
@@ -676,7 +677,7 @@ export default function CoachingDashboardIndex() {
                                                             {agent.is_coaching_excluded && (
                                                                 <span className="text-[10px] text-slate-500">
                                                                     {agent.exclusion_expires_at
-                                                                        ? `Until ${new Date(agent.exclusion_expires_at).toLocaleDateString()}`
+                                                                        ? `Until ${formatDate(agent.exclusion_expires_at)}`
                                                                         : 'Forever'}
                                                                 </span>
                                                             )}
@@ -687,7 +688,7 @@ export default function CoachingDashboardIndex() {
                                                         <CoachingStatusBadge status={agent.coaching_status} />
                                                     </TableCell>
                                                     <TableCell className="whitespace-nowrap">
-                                                        {agent.last_coached_date ? new Date(agent.last_coached_date).toLocaleDateString() : 'Never'}
+                                                        {agent.last_coached_date ? formatDate(agent.last_coached_date) : 'Never'}
                                                     </TableCell>
                                                     <TableCell>{agent.total_sessions}</TableCell>
                                                     <TableCell className="text-center"><WeekIndicator coachedWeeks={agent.coached_weeks} /></TableCell>
@@ -769,7 +770,7 @@ export default function CoachingDashboardIndex() {
                                             <CoachingStatusBadge status={agent.coaching_status} />
                                         </div>
                                         <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-                                            <span>Last: {agent.last_coached_date ? new Date(agent.last_coached_date).toLocaleDateString() : 'Never'}</span>
+                                                <span>Last: {agent.last_coached_date ? formatDate(agent.last_coached_date) : 'Never'}</span>
                                             <span className="flex items-center gap-1.5">Sessions: {agent.total_sessions} <WeekIndicator coachedWeeks={agent.coached_weeks} /></span>
                                             {agent.trend !== undefined && agent.trend !== 0 && (
                                                 <TrendIndicator trend={agent.trend} />
@@ -881,7 +882,7 @@ export default function CoachingDashboardIndex() {
                                             {recentSessions.data.map((session) => (
                                                 <TableRow key={session.id}>
                                                     <TableCell className="whitespace-nowrap">
-                                                        {new Date(session.session_date).toLocaleDateString()}
+                                                        {formatDate(session.session_date)}
                                                     </TableCell>
                                                     <TableCell className="font-medium">
                                                         {session.coachee ? `${session.coachee.first_name} ${session.coachee.last_name}` : 'N/A'}
@@ -915,7 +916,7 @@ export default function CoachingDashboardIndex() {
                                             <div className="flex items-start justify-between gap-2">
                                                 <div>
                                                     <p className="text-xs text-muted-foreground">
-                                                        {new Date(session.session_date).toLocaleDateString()}
+                                                        {formatDate(session.session_date)}
                                                     </p>
                                                     <p className="text-sm font-medium">
                                                         {session.coachee ? `${session.coachee.first_name} ${session.coachee.last_name}` : 'N/A'}
@@ -1008,7 +1009,7 @@ function FollowUpTable({
                                         <TableCell>{item.purpose_label}</TableCell>
                                         {!compact && (
                                             <TableCell className="whitespace-nowrap">
-                                                {new Date(item.session_date).toLocaleDateString()}
+                                                {formatDate(item.session_date)}
                                             </TableCell>
                                         )}
                                         <TableCell>
@@ -1042,7 +1043,7 @@ function FollowUpTable({
                             <p className="text-xs text-muted-foreground truncate">{item.purpose_label}</p>
                             <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                                 <span>Follow-up: {new Date(item.follow_up_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                                {!compact && <span>Session: {new Date(item.session_date).toLocaleDateString()}</span>}
+                                {!compact && <span>Session: {formatDate(item.session_date)}</span>}
                             </div>
                         </Link>
                     );
