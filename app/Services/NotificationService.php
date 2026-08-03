@@ -1094,6 +1094,24 @@ class NotificationService
         );
     }
 
+    public function notifyConfidentialCoachingComment(string $coacheeName, string $sessionDate, int $sessionId): void
+    {
+        $data = [
+            'session_id' => $sessionId,
+            'coachee_name' => $coacheeName,
+            'session_date' => $sessionDate,
+            'link' => route('coaching.sessions.show', $sessionId),
+        ];
+
+        $this->notifyUsersByRole(
+            'Super Admin',
+            'coaching_confidential_comment',
+            'Confidential Coaching Comment',
+            "{$coacheeName} left a confidential comment on their coaching session dated {$sessionDate}.",
+            $data,
+        );
+    }
+
     /**
      * Notify coach that coaching session was reviewed by compliance.
      */

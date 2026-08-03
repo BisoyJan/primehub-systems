@@ -789,6 +789,17 @@ class CoachingSessionController extends Controller
 
         $coacheeExclusion = $session->coachee?->activeCoachingExclusion()->first();
 
+        // Only the coachee (their own) and Super Admin receive the confidential fields
+        $confidentialComment = null;
+        if ($user->can('viewConfidentialComment', $session)) {
+            $session->makeVisible(['confidential_comment', 'confidential_comment_at']);
+            $confidentialComment = [
+                'comment' => $session->confidential_comment,
+                'submitted_at' => $session->confidential_comment_at?->toIso8601String(),
+                'is_own' => $session->coachee_id === $user->id,
+            ];
+        }
+
         return Inertia::render('Coaching/Sessions/Show', [
             'session' => $session,
             'coaching_history' => $coachingHistory,
@@ -803,6 +814,7 @@ class CoachingSessionController extends Controller
                 'excluded_at' => $coacheeExclusion->excluded_at?->toIso8601String(),
                 'expires_at' => $coacheeExclusion->expires_at?->toIso8601String(),
             ] : null,
+            'confidentialComment' => $confidentialComment,
         ]);
     }
 
@@ -944,6 +956,8 @@ class CoachingSessionController extends Controller
                         'ack_comment' => $request->validated('ack_comment'),
                         'agent_response' => $request->input('agent_response'),
                         'agent_response_at' => $request->input('agent_response') ? now() : null,
+                        'confidential_comment' => $request->validated('confidential_comment'),
+                        'confidential_comment_at' => $request->validated('confidential_comment') ? now() : null,
                         'compliance_status' => 'For_Review',
                     ]);
 
@@ -972,6 +986,16 @@ class CoachingSessionController extends Controller
                 $sessionDate,
                 $session->id,
             );
+
+            // Notify Super Admin if a confidential comment was submitted
+            $session->makeVisible(['confidential_comment']);
+            if ($session->confidential_comment) {
+                $this->notificationService->notifyConfidentialCoachingComment(
+                    $session->coachee->name,
+                    $sessionDate,
+                    $session->id,
+                );
+            }
 
             return redirect()->route('coaching.sessions.show', $session)
                 ->with('message', 'Coaching session acknowledged successfully.')

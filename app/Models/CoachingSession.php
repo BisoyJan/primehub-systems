@@ -64,6 +64,8 @@ class CoachingSession extends Model
         'ack_comment',
         'agent_response',
         'agent_response_at',
+        'confidential_comment',
+        'confidential_comment_at',
         'compliance_status',
         'compliance_reviewer_id',
         'compliance_review_timestamp',
@@ -83,6 +85,7 @@ class CoachingSession extends Model
             'follow_up_date' => 'date:Y-m-d',
             'ack_timestamp' => 'datetime',
             'agent_response_at' => 'datetime',
+            'confidential_comment_at' => 'datetime',
             'compliance_review_timestamp' => 'datetime',
             'submitted_at' => 'datetime',
             'is_draft' => 'boolean',
@@ -110,6 +113,9 @@ class CoachingSession extends Model
             'root_cause_others' => 'boolean',
         ];
     }
+
+    // Never expose confidential fields in default serialization
+    protected $hidden = ['confidential_comment', 'confidential_comment_at'];
 
     /**
      * Purpose enum values.

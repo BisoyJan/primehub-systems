@@ -141,6 +141,9 @@ export interface CoachingSession {
     ack_comment: string | null;
     agent_response: string | null;
     agent_response_at: string | null;
+    // confidential_comment is never included in the session prop; passed via separate prop
+    confidential_comment?: never;
+    confidential_comment_at?: never;
     compliance_status: ComplianceStatus;
     compliance_reviewer_id: number | null;
     compliance_review_timestamp: string | null;

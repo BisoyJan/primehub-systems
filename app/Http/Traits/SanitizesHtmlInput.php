@@ -119,6 +119,18 @@ trait SanitizesHtmlInput
             }
         }
 
+        // Spacing styles (paragraph gaps, line spacing, indentation) with sane bounds.
+        $spacingProperties = ['margin-top', 'margin-bottom', 'line-height', 'padding-left'];
+
+        foreach ($spacingProperties as $property) {
+            if (preg_match('/(?<![a-z-])'.preg_quote($property, '/').'\s*:\s*([^;"]+)/i', $attrs, $m)) {
+                $val = trim($m[1]);
+                if ($this->isSafeStyleValue($val) && $this->isSafeSpacingValue($val)) {
+                    $safeStyles[] = $property.': '.$val;
+                }
+            }
+        }
+
         return $safeStyles;
     }
 
@@ -142,6 +154,32 @@ trait SanitizesHtmlInput
         }
 
         return true;
+    }
+
+    /**
+     * Allow only small, sane spacing values so pasted content cannot inject huge gaps.
+     */
+    private function isSafeSpacingValue(string $value): bool
+    {
+        $v = strtolower(trim($value));
+
+        // Unitless line-height (e.g. "1.5") capped at 3.
+        if (preg_match('/^\d+(\.\d+)?$/', $v)) {
+            return (float) $v <= 3;
+        }
+
+        if (! preg_match('/^(\d+(?:\.\d+)?)(px|pt|em|rem|%)$/', $v, $m)) {
+            return false;
+        }
+
+        $num = (float) $m[1];
+
+        return match ($m[2]) {
+            'px', '%' => $num <= 100,
+            'pt' => $num <= 75,
+            'em', 'rem' => $num <= 6,
+            default => false,
+        };
     }
 
     /**

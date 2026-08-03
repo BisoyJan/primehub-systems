@@ -25,6 +25,7 @@ class AcknowledgeCoachingSessionRequest extends FormRequest
         return [
             'ack_comment' => ['nullable', 'string', 'max:2000'],
             'agent_response' => ['nullable', 'string', 'max:10000'],
+            'confidential_comment' => ['nullable', 'string', 'max:5000'],
         ];
     }
 
@@ -36,6 +37,7 @@ class AcknowledgeCoachingSessionRequest extends FormRequest
         return [
             'ack_comment.max' => 'Comment cannot exceed 2000 characters.',
             'agent_response.max' => 'Response cannot exceed 10000 characters.',
+            'confidential_comment.max' => 'Confidential comment cannot exceed 5000 characters.',
         ];
     }
 }

@@ -180,6 +180,16 @@ class CoachingSessionPolicy
         return $this->permissionService->userHasPermission($user, 'coaching.review');
     }
 
+    public function viewConfidentialComment(User $user, CoachingSession $coachingSession): bool
+    {
+        // Coachee can view their own confidential comment
+        if ($coachingSession->coachee_id === $user->id) {
+            return true;
+        }
+
+        return $user->role === 'Super Admin';
+    }
+
     /**
      * Determine whether the user can export coaching logs.
      */

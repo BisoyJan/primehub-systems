@@ -14,6 +14,7 @@ import {
     Redo2,
     Baseline,
     Type,
+    Rows3,
 } from 'lucide-react';
 import {
     Popover,
@@ -46,6 +47,19 @@ const OL_STYLES = ['decimal', 'lower-alpha', 'lower-roman'] as const;
 // Font size presets (in points, like MS Office) offered in the toolbar.
 const FONT_SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 72] as const;
 
+// Line spacing presets (unitless line-height, like MS Office) offered in the toolbar.
+const LINE_SPACINGS = [
+    { label: '1.0', value: '1' },
+    { label: '1.15', value: '1.15' },
+    { label: '1.5', value: '1.5' },
+    { label: '2.0', value: '2' },
+    { label: '2.5', value: '2.5' },
+    { label: '3.0', value: '3' },
+] as const;
+
+// Block-level tags whose line-height can be adjusted for paragraph spacing.
+const BLOCK_TAGS = new Set(['P', 'DIV', 'LI', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE']);
+
 // Inline styles preserved when pasting from Word/Google Docs (maps to editor formatting).
 const SAFE_PASTE_STYLES = [
     'font-weight',
@@ -57,6 +71,9 @@ const SAFE_PASTE_STYLES = [
     'text-align',
     'font-size',
 ] as const;
+
+// Spacing styles preserved so paragraph gaps/line spacing/indentation carry over on paste.
+const SAFE_SPACING_STYLES = ['margin-top', 'margin-bottom', 'line-height', 'padding-left'] as const;
 
 /** Reject CSS values that could smuggle scripts (url(), expression()), allowing only color functions. */
 function isSafeStyleValue(value: string): boolean {
@@ -72,6 +89,30 @@ function isSafeStyleValue(value: string): boolean {
     return true;
 }
 
+/** Allow only small, sane spacing values (prevents pasted content from injecting huge gaps). */
+function isSafeSpacingValue(value: string): boolean {
+    const v = value.trim().toLowerCase();
+    // Unitless line-height (e.g. "1.5") capped at 3.
+    if (/^\d+(\.\d+)?$/.test(v)) {
+        return parseFloat(v) <= 3;
+    }
+    const match = v.match(/^(\d+(?:\.\d+)?)(px|pt|em|rem|%)$/);
+    if (!match) return false;
+    const num = parseFloat(match[1]);
+    switch (match[2]) {
+        case 'px':
+        case '%':
+            return num <= 100;
+        case 'pt':
+            return num <= 75;
+        case 'em':
+        case 'rem':
+            return num <= 6;
+        default:
+            return false;
+    }
+}
+
 /** Copy whitelisted, validated inline styles from a source element onto a target element. */
 function copySafeStyles(source: HTMLElement, target: HTMLElement): void {
     for (const prop of SAFE_PASTE_STYLES) {
@@ -80,6 +121,19 @@ function copySafeStyles(source: HTMLElement, target: HTMLElement): void {
             target.style.setProperty(prop, val);
         }
     }
+    for (const prop of SAFE_SPACING_STYLES) {
+        const val = source.style.getPropertyValue(prop);
+        if (val && isSafeStyleValue(val) && isSafeSpacingValue(val)) {
+            target.style.setProperty(prop, val);
+        }
+    }
+}
+
+/** True when an inline font-weight explicitly means "not bold" (Google Docs wrapper trick). */
+function isNormalWeight(weight: string): boolean {
+    if (!weight) return false;
+    const w = weight.trim().toLowerCase();
+    return w === 'normal' || w === 'lighter' || /^[1-5]\d{2}$/.test(w);
 }
 
 /** Walk up from a node to find the closest ancestor matching a tag name within a boundary */
@@ -324,6 +378,50 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
         }
         emitChange();
     };
+    const handleLineSpacing = (spacing: string) => {
+        const editor = editorRef.current;
+        if (!editor) return;
+        // The popover steals focus, so restore the saved selection before locating blocks
+        restoreSelection();
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) return;
+        let range = sel.getRangeAt(0);
+
+        const collectBlocks = (): Set<HTMLElement> => {
+            const set = new Set<HTMLElement>();
+            editor.querySelectorAll('p,div,li,h1,h2,h3,h4,h5,h6,blockquote').forEach((el) => {
+                if (range.intersectsNode(el)) set.add(el as HTMLElement);
+            });
+            let cur: Node | null = range.startContainer;
+            while (cur && cur !== editor) {
+                if (cur instanceof HTMLElement && BLOCK_TAGS.has(cur.tagName)) {
+                    set.add(cur);
+                    break;
+                }
+                cur = cur.parentNode;
+            }
+            return set;
+        };
+
+        let blocks = collectBlocks();
+        // Bare text/<br> lines have no block wrapper; create one so the spacing can attach
+        if (blocks.size === 0) {
+            document.execCommand('formatBlock', false, 'div');
+            range = sel.getRangeAt(0);
+            blocks = collectBlocks();
+        }
+        if (blocks.size === 0) return;
+
+        // Apply only to the innermost blocks so ancestors don't over-space unselected lines
+        const blockArr = [...blocks];
+        const leaves = blockArr.filter((b) => !blockArr.some((o) => o !== b && b.contains(o)));
+        leaves.forEach((b) => {
+            b.style.lineHeight = spacing;
+        });
+
+        savedRangeRef.current = range.cloneRange();
+        emitChange();
+    };
     const handleRemoveFormatting = () => {
         editorRef.current?.focus();
         document.execCommand('removeFormat', false);
@@ -394,20 +492,33 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
                     }
                     copySafeStyles(el, newEl);
                 } else if (ALLOWED.has(tag)) {
-                    newEl = document.createElement(tag);
+                    // Google Docs wraps content in <b style="font-weight:normal"> (and similar
+                    // <i>/<u> wrappers). Downgrade those to <span> so they don't force formatting
+                    // onto every child; the real bold/italic runs carry their own inline styles.
+                    const deco = el.style.textDecorationLine || el.style.textDecoration;
+                    const neutralBold = (tag === 'B' || tag === 'STRONG') && isNormalWeight(el.style.fontWeight);
+                    const neutralItalic = (tag === 'I' || tag === 'EM') && el.style.fontStyle === 'normal';
+                    const neutralUnderline = tag === 'U' && (deco === 'none' || deco === 'line-through');
 
-                    // Only preserve href on anchors
-                    if (tag === 'A' && el.getAttribute('href')) {
-                        newEl.setAttribute('href', el.getAttribute('href')!);
+                    if (neutralBold || neutralItalic || neutralUnderline) {
+                        newEl = document.createElement('span');
+                        copySafeStyles(el, newEl);
+                    } else {
+                        newEl = document.createElement(tag);
+
+                        // Only preserve href on anchors
+                        if (tag === 'A' && el.getAttribute('href')) {
+                            newEl.setAttribute('href', el.getAttribute('href')!);
+                        }
+
+                        // Preserve list-style-type on OL (used for nested list styles)
+                        if (tag === 'OL' && el.style.listStyleType) {
+                            newEl.style.listStyleType = el.style.listStyleType;
+                        }
+
+                        // Preserve whitelisted formatting styles (bold, italic, color, etc.)
+                        copySafeStyles(el, newEl);
                     }
-
-                    // Preserve list-style-type on OL (used for nested list styles)
-                    if (tag === 'OL' && el.style.listStyleType) {
-                        newEl.style.listStyleType = el.style.listStyleType;
-                    }
-
-                    // Preserve whitelisted formatting styles (bold, italic, color, etc.)
-                    copySafeStyles(el, newEl);
                 } else {
                     // Convert unrecognized block elements to DIV, inline to SPAN
                     const display = window.getComputedStyle?.(el)?.display;
@@ -434,6 +545,12 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
                 if (cleaned) {
                     fragment.appendChild(cleaned);
                 }
+            }
+
+            // Drop the leading top margin so pasted content doesn't start with a stray gap.
+            const firstBlock = fragment.firstElementChild as HTMLElement | null;
+            if (firstBlock?.style?.marginTop) {
+                firstBlock.style.marginTop = '0';
             }
 
             // Insert the cleaned HTML
@@ -742,6 +859,39 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
                                         </button>
                                     ))}
                                 </div>
+                            </div>
+                        </PopoverContent>
+                    </Popover>
+
+                    {/* Line spacing */}
+                    <Popover>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <PopoverTrigger asChild>
+                                    <button
+                                        type="button"
+                                        className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                                        aria-label="Line spacing"
+                                        onMouseDown={(e) => { e.preventDefault(); saveSelection(); }}
+                                    >
+                                        <Rows3 className={iconSize} />
+                                    </button>
+                                </PopoverTrigger>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="text-xs">Line spacing</TooltipContent>
+                        </Tooltip>
+                        <PopoverContent className="w-28 p-1" align="start" side="top">
+                            <div className="max-h-48 overflow-y-auto">
+                                {LINE_SPACINGS.map((spacing) => (
+                                    <button
+                                        key={spacing.value}
+                                        type="button"
+                                        className="flex w-full items-center rounded px-2 py-1 text-left text-sm text-foreground transition-colors hover:bg-accent"
+                                        onMouseDown={(e) => { e.preventDefault(); handleLineSpacing(spacing.value); }}
+                                    >
+                                        {spacing.label}
+                                    </button>
+                                ))}
                             </div>
                         </PopoverContent>
                     </Popover>

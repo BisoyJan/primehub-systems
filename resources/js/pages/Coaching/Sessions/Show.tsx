@@ -78,6 +78,11 @@ interface Props extends InertiaPageProps {
         excluded_at: string | null;
         expires_at: string | null;
     };
+    confidentialComment: null | {
+        comment: string | null;
+        submitted_at: string | null;
+        is_own: boolean;
+    };
 }
 
 function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -112,7 +117,7 @@ function SectionCard({ title, children }: { title: string; children: React.React
 }
 
 export default function CoachingSessionsShow() {
-    const { session, canAcknowledge, canReview, canEdit, canArchive, canSubmitDraft, purposes, coaching_history, coacheeExclusion } = usePage<Props>().props;
+    const { session, canAcknowledge, canReview, canEdit, canArchive, canSubmitDraft, purposes, coaching_history, coacheeExclusion, confidentialComment } = usePage<Props>().props;
 
     const { title, breadcrumbs } = usePageMeta({
         title: 'Coaching Session Details',
@@ -179,7 +184,7 @@ export default function CoachingSessionsShow() {
         new Date(m + '-01').toLocaleDateString('en-US', { month: 'short' });
 
     // Acknowledge form
-    const ackForm = useForm({ ack_comment: '', agent_response: '' });
+    const ackForm = useForm({ ack_comment: '', agent_response: '', confidential_comment: '' });
     const handleAcknowledge = () => {
         ackForm.patch(sessionsAcknowledge(session.id).url);
     };
@@ -429,6 +434,18 @@ export default function CoachingSessionsShow() {
                     </dl>
                 </SectionCard>
 
+                {/* Prop is null for roles that cannot view (e.g. TL/coach) */}
+                {confidentialComment?.comment && (
+                    <SectionCard title={confidentialComment.is_own ? 'Your Confidential Comment' : 'Confidential Comment'}>
+                        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 space-y-1">
+                            <p className="whitespace-pre-wrap text-sm text-amber-900">{confidentialComment.comment}</p>
+                            {confidentialComment.submitted_at && (
+                                <p className="text-xs text-amber-700">Submitted on {formatDateTime(confidentialComment.submitted_at)}</p>
+                            )}
+                        </div>
+                    </SectionCard>
+                )}
+
                 {/* Coaching History */}
                 {coaching_history && coaching_history.length > 0 && (
                     <div className="rounded-lg border bg-card p-4 shadow-sm">
@@ -569,6 +586,19 @@ export default function CoachingSessionsShow() {
                                         />
                                         {ackForm.errors.agent_response && (
                                             <p className="text-sm text-red-600">{ackForm.errors.agent_response}</p>
+                                        )}
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="confidential_comment">Confidential comment (visible only to Super Admin)</Label>
+                                        <Textarea
+                                            id="confidential_comment"
+                                            value={ackForm.data.confidential_comment}
+                                            onChange={(e) => ackForm.setData('confidential_comment', e.target.value)}
+                                            placeholder="This comment will not be visible to your Team Lead..."
+                                            rows={3}
+                                        />
+                                        {ackForm.errors.confidential_comment && (
+                                            <p className="text-sm text-red-600">{ackForm.errors.confidential_comment}</p>
                                         )}
                                     </div>
                                 </div>
