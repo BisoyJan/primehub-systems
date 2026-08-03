@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect, useState } from 'react';
 import {
     Bold,
     Italic,
@@ -13,6 +13,7 @@ import {
     Undo2,
     Redo2,
     Baseline,
+    Type,
 } from 'lucide-react';
 import {
     Popover,
@@ -41,6 +42,45 @@ const GMAIL_COLORS = [
 
 // Ordered list style cycle: 1. -> a. -> i. (like MS Word)
 const OL_STYLES = ['decimal', 'lower-alpha', 'lower-roman'] as const;
+
+// Font size presets (in points, like MS Office) offered in the toolbar.
+const FONT_SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 72] as const;
+
+// Inline styles preserved when pasting from Word/Google Docs (maps to editor formatting).
+const SAFE_PASTE_STYLES = [
+    'font-weight',
+    'font-style',
+    'text-decoration',
+    'text-decoration-line',
+    'color',
+    'background-color',
+    'text-align',
+    'font-size',
+] as const;
+
+/** Reject CSS values that could smuggle scripts (url(), expression()), allowing only color functions. */
+function isSafeStyleValue(value: string): boolean {
+    if (!value) return false;
+    const lower = value.toLowerCase();
+    if (lower.includes('javascript:') || lower.includes('expression(') || lower.includes('url(')) {
+        return false;
+    }
+    // Allow parentheses only for known color functions
+    if (value.includes('(') && !/^[^()]*(rgb|rgba|hsl|hsla)\([^()]*\)[^()]*$/i.test(value)) {
+        return false;
+    }
+    return true;
+}
+
+/** Copy whitelisted, validated inline styles from a source element onto a target element. */
+function copySafeStyles(source: HTMLElement, target: HTMLElement): void {
+    for (const prop of SAFE_PASTE_STYLES) {
+        const val = source.style.getPropertyValue(prop);
+        if (val && isSafeStyleValue(val)) {
+            target.style.setProperty(prop, val);
+        }
+    }
+}
 
 /** Walk up from a node to find the closest ancestor matching a tag name within a boundary */
 function closestTag(node: Node | null, tag: string, boundary: HTMLElement): HTMLElement | null {
@@ -153,6 +193,8 @@ interface RichTextareaProps {
 export function RichTextarea({ id, value, onChange, placeholder, minHeight = '120px' }: RichTextareaProps) {
     const editorRef = useRef<HTMLDivElement>(null);
     const isInternalChange = useRef(false);
+    const savedRangeRef = useRef<Range | null>(null);
+    const [customSize, setCustomSize] = useState('');
 
     // Sync external value changes into the editor
     useEffect(() => {
@@ -180,6 +222,29 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
         document.execCommand(command, false, val);
         emitChange();
     }, [emitChange]);
+
+    // Remember the current selection so toolbar popovers (which steal focus) can restore it
+    const saveSelection = useCallback(() => {
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) return;
+        const range = sel.getRangeAt(0);
+        if (editorRef.current?.contains(range.commonAncestorContainer)) {
+            savedRangeRef.current = range.cloneRange();
+        }
+    }, []);
+
+    const restoreSelection = useCallback(() => {
+        const editor = editorRef.current;
+        const range = savedRangeRef.current;
+        if (!editor) return;
+        editor.focus();
+        if (!range) return;
+        const sel = window.getSelection();
+        if (sel) {
+            sel.removeAllRanges();
+            sel.addRange(range);
+        }
+    }, []);
 
     // Formatting commands
     const handleUndo = () => exec('undo');
@@ -224,6 +289,38 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
             document.execCommand('removeFormat', false);
         } else {
             document.execCommand('hiliteColor', false, color);
+        }
+        emitChange();
+    };
+    const handleFontSize = (size: string) => {
+        const editor = editorRef.current;
+        if (!editor) return;
+        // Opening the popover moves focus out of the editor, so restore the saved selection first
+        restoreSelection();
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+
+        // execCommand only supports sizes 1-7, so tag the selection then rewrite to styled spans
+        document.execCommand('fontSize', false, '7');
+        const spans: HTMLElement[] = [];
+        editor.querySelectorAll('font[size="7"]').forEach((font) => {
+            const span = document.createElement('span');
+            span.style.fontSize = size;
+            while (font.firstChild) {
+                span.appendChild(font.firstChild);
+            }
+            font.replaceWith(span);
+            spans.push(span);
+        });
+
+        // Keep the resized text selected so the size can be tweaked again
+        if (spans.length > 0) {
+            const range = document.createRange();
+            range.setStartBefore(spans[0]);
+            range.setEndAfter(spans[spans.length - 1]);
+            sel.removeAllRanges();
+            sel.addRange(range);
+            savedRangeRef.current = range.cloneRange();
         }
         emitChange();
     };
@@ -288,7 +385,15 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
 
                 let newEl: HTMLElement;
 
-                if (ALLOWED.has(tag)) {
+                // Legacy <font> from some editors: convert to span, carry over color/size
+                if (tag === 'FONT') {
+                    newEl = document.createElement('span');
+                    const colorAttr = el.getAttribute('color');
+                    if (colorAttr && isSafeStyleValue(colorAttr)) {
+                        newEl.style.color = colorAttr;
+                    }
+                    copySafeStyles(el, newEl);
+                } else if (ALLOWED.has(tag)) {
                     newEl = document.createElement(tag);
 
                     // Only preserve href on anchors
@@ -301,20 +406,15 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
                         newEl.style.listStyleType = el.style.listStyleType;
                     }
 
-                    // Preserve color and background-color on SPAN (editor text/highlight colors)
-                    if (tag === 'SPAN') {
-                        if (el.style.color) {
-                            newEl.style.color = el.style.color;
-                        }
-                        if (el.style.backgroundColor) {
-                            newEl.style.backgroundColor = el.style.backgroundColor;
-                        }
-                    }
+                    // Preserve whitelisted formatting styles (bold, italic, color, etc.)
+                    copySafeStyles(el, newEl);
                 } else {
                     // Convert unrecognized block elements to DIV, inline to SPAN
                     const display = window.getComputedStyle?.(el)?.display;
                     const isBlock = display ? display === 'block' || display === 'list-item' : ['DIV', 'TABLE', 'TR', 'TD', 'TH', 'THEAD', 'TBODY', 'SECTION', 'ARTICLE', 'HEADER', 'FOOTER', 'NAV', 'MAIN', 'FIGURE', 'FIGCAPTION', 'PRE', 'HR'].includes(tag);
                     newEl = document.createElement(isBlock ? 'div' : 'span');
+                    // Keep formatting even when downgrading the element type
+                    copySafeStyles(el, newEl);
                 }
 
                 // Recurse into children
@@ -495,6 +595,8 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
                     onBlur={emitChange}
                     onPaste={handlePaste}
                     onKeyDown={handleKeyDown}
+                    onMouseUp={saveSelection}
+                    onKeyUp={saveSelection}
                 />
 
                 {/* Bottom toolbar (Gmail-style) */}
@@ -585,6 +687,60 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
                                     >
                                         Reset
                                     </button>
+                                </div>
+                            </div>
+                        </PopoverContent>
+                    </Popover>
+
+                    {/* Font size */}
+                    <Popover>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <PopoverTrigger asChild>
+                                    <button
+                                        type="button"
+                                        className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                                        aria-label="Font size"
+                                        onMouseDown={(e) => { e.preventDefault(); saveSelection(); }}
+                                    >
+                                        <Type className={iconSize} />
+                                    </button>
+                                </PopoverTrigger>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="text-xs">Font size</TooltipContent>
+                        </Tooltip>
+                        <PopoverContent className="w-32 p-1" align="start" side="top">
+                            <div className="flex flex-col">
+                                {/* Custom size input (like MS Office) */}
+                                <div className="flex items-center gap-1 px-1 pb-1">
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        max={200}
+                                        value={customSize}
+                                        onChange={(e) => setCustomSize(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                const n = parseInt(customSize, 10);
+                                                if (n > 0) handleFontSize(`${n}pt`);
+                                            }
+                                        }}
+                                        placeholder="Size"
+                                        className="h-7 w-full rounded border border-input bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring"
+                                    />
+                                </div>
+                                <div className="max-h-48 overflow-y-auto">
+                                    {FONT_SIZES.map((size) => (
+                                        <button
+                                            key={size}
+                                            type="button"
+                                            className="flex w-full items-center rounded px-2 py-1 text-left text-sm text-foreground transition-colors hover:bg-accent"
+                                            onMouseDown={(e) => { e.preventDefault(); handleFontSize(`${size}pt`); }}
+                                        >
+                                            {size}
+                                        </button>
+                                    ))}
                                 </div>
                             </div>
                         </PopoverContent>

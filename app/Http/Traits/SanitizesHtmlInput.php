@@ -48,8 +48,9 @@ trait SanitizesHtmlInput
                 $value = strip_tags($value, self::ALLOWED_TAGS);
 
                 // Strip unwanted style attributes from tags, preserving only safe styles.
-                // This prevents pasted content from Word/Google Docs from carrying over
-                // unwanted font-family, font-size, line-height, margin, etc.
+                // Keeps pasted formatting from Word/Google Docs (bold, italic, color,
+                // highlight, alignment, font-size) while dropping font-family, line-height,
+                // margins, and other layout-breaking styles.
                 $value = preg_replace_callback(
                     '/<(ol|li|span|p|strong|b|em|i|u|s|h[1-6]|blockquote|a|sub|sup)\b([^>]*?)>/i',
                     function ($matches) {
@@ -57,39 +58,28 @@ trait SanitizesHtmlInput
                         $attrs = $matches[2];
 
                         // Collect safe styles to preserve
-                        $safeStyles = [];
+                        $safeStyles = $this->extractSafeStyles($attrs);
 
-                        if ($tag === 'ol') {
-                            // Preserve list-style-type on <ol>
-                            if (preg_match('/list-style-type\s*:\s*([^;"]+)/i', $attrs, $m)) {
-                                $safeStyles[] = 'list-style-type: ' . trim($m[1]);
-                            }
-                        }
-
-                        if ($tag === 'span') {
-                            // Preserve color and background-color on <span> (editor text/highlight colors)
-                            if (preg_match('/(?<![a-z-])color\s*:\s*([^;"]+)/i', $attrs, $m)) {
-                                $safeStyles[] = 'color: ' . trim($m[1]);
-                            }
-                            if (preg_match('/background-color\s*:\s*([^;"]+)/i', $attrs, $m)) {
-                                $safeStyles[] = 'background-color: ' . trim($m[1]);
-                            }
+                        // Preserve list-style-type on <ol> (used for nested list styles)
+                        if ($tag === 'ol' && preg_match('/list-style-type\s*:\s*([^;"]+)/i', $attrs, $m)) {
+                            $safeStyles[] = 'list-style-type: '.trim($m[1]);
                         }
 
                         if ($tag === 'a') {
                             // Preserve href on anchors
                             if (preg_match('/href\s*=\s*"([^"]*)"/i', $attrs, $hrefMatch)) {
-                                $styleAttr = $safeStyles ? ' style="' . implode('; ', $safeStyles) . '"' : '';
-                                return '<a href="' . $hrefMatch[1] . '"' . $styleAttr . '>';
+                                $styleAttr = $safeStyles ? ' style="'.implode('; ', $safeStyles).'"' : '';
+
+                                return '<a href="'.$hrefMatch[1].'"'.$styleAttr.'>';
                             }
                         }
 
                         if ($safeStyles) {
-                            return '<' . $matches[1] . ' style="' . implode('; ', $safeStyles) . '">';
+                            return '<'.$matches[1].' style="'.implode('; ', $safeStyles).'">';
                         }
 
                         // Strip all attributes from other tags
-                        return '<' . $matches[1] . '>';
+                        return '<'.$matches[1].'>';
                     },
                     $value
                 );
@@ -97,6 +87,61 @@ trait SanitizesHtmlInput
                 $this->merge([$field => $value]);
             }
         }
+    }
+
+    /**
+     * Extract whitelisted, validated inline styles from a tag's attribute string.
+     *
+     * @return array<string>
+     */
+    private function extractSafeStyles(string $attrs): array
+    {
+        $properties = [
+            'font-weight',
+            'font-style',
+            'text-decoration',
+            'text-decoration-line',
+            'color',
+            'background-color',
+            'text-align',
+            'font-size',
+        ];
+
+        $safeStyles = [];
+
+        foreach ($properties as $property) {
+            // Use a negative lookbehind so "color" does not match "background-color".
+            if (preg_match('/(?<![a-z-])'.preg_quote($property, '/').'\s*:\s*([^;"]+)/i', $attrs, $m)) {
+                $val = trim($m[1]);
+                if ($this->isSafeStyleValue($val)) {
+                    $safeStyles[] = $property.': '.$val;
+                }
+            }
+        }
+
+        return $safeStyles;
+    }
+
+    /**
+     * Reject CSS values that could smuggle scripts, allowing only known color functions.
+     */
+    private function isSafeStyleValue(string $value): bool
+    {
+        if ($value === '') {
+            return false;
+        }
+
+        $lower = strtolower($value);
+        if (str_contains($lower, 'javascript:') || str_contains($lower, 'expression(') || str_contains($lower, 'url(')) {
+            return false;
+        }
+
+        // Allow parentheses only for known color functions
+        if (str_contains($value, '(') && ! preg_match('/^[^()]*(rgb|rgba|hsl|hsla)\([^()]*\)[^()]*$/i', $value)) {
+            return false;
+        }
+
+        return true;
     }
 
     /**
