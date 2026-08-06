@@ -7,7 +7,10 @@ namespace Tests\Feature\LeaveCredits;
 use App\Http\Middleware\EnsureUserHasSchedule;
 use App\Models\LeaveCredit;
 use App\Models\LeaveCreditCarryover;
+use App\Models\LeaveRequest;
+use App\Models\LeaveRequestDay;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -440,13 +443,13 @@ class UpdateLeaveCreditTest extends TestCase
         $employee = $this->createAgent();
         $year = now()->year;
 
-        \App\Models\LeaveRequest::factory()->create([
+        LeaveRequest::factory()->create([
             'user_id' => $employee->id,
             'leave_type' => 'VL',
             'status' => 'pending',
             'days_requested' => 2,
-            'start_date' => \Carbon\Carbon::create($year, 6, 10),
-            'end_date' => \Carbon\Carbon::create($year, 6, 11),
+            'start_date' => Carbon::create($year, 6, 10),
+            'end_date' => Carbon::create($year, 6, 11),
         ]);
 
         $response = $this->actingAs($admin)
@@ -470,24 +473,24 @@ class UpdateLeaveCreditTest extends TestCase
         $year = now()->year;
 
         // Create a leave credit record so monthly rate can be calculated
-        \App\Models\LeaveCredit::factory()->create([
+        LeaveCredit::factory()->create([
             'user_id' => $employee->id,
             'year' => $year,
             'month' => 1,
             'credits_earned' => 1.25,
             'credits_used' => 0,
             'credits_balance' => 1.25,
-            'accrued_at' => \Carbon\Carbon::create($year, 1, 15),
+            'accrued_at' => Carbon::create($year, 1, 15),
         ]);
 
         // Pending leave far in the future so future_accrual > 0
-        \App\Models\LeaveRequest::factory()->create([
+        LeaveRequest::factory()->create([
             'user_id' => $employee->id,
             'leave_type' => 'VL',
             'status' => 'pending',
             'days_requested' => 1,
-            'start_date' => \Carbon\Carbon::create($year, 12, 15),
-            'end_date' => \Carbon\Carbon::create($year, 12, 15),
+            'start_date' => Carbon::create($year, 12, 15),
+            'end_date' => Carbon::create($year, 12, 15),
         ]);
 
         $response = $this->actingAs($admin)
@@ -527,23 +530,23 @@ class UpdateLeaveCreditTest extends TestCase
         $year = now()->year;
 
         // Create credits so employee appears in list
-        \App\Models\LeaveCredit::factory()->create([
+        LeaveCredit::factory()->create([
             'user_id' => $employee->id,
             'year' => $year,
             'month' => 1,
             'credits_earned' => 1.25,
             'credits_used' => 0,
             'credits_balance' => 1.25,
-            'accrued_at' => \Carbon\Carbon::create($year, 1, 15),
+            'accrued_at' => Carbon::create($year, 1, 15),
         ]);
 
-        \App\Models\LeaveRequest::factory()->create([
+        LeaveRequest::factory()->create([
             'user_id' => $employee->id,
             'leave_type' => 'VL',
             'status' => 'pending',
             'days_requested' => 1,
-            'start_date' => \Carbon\Carbon::create($year, 6, 10),
-            'end_date' => \Carbon\Carbon::create($year, 6, 10),
+            'start_date' => Carbon::create($year, 6, 10),
+            'end_date' => Carbon::create($year, 6, 10),
         ]);
 
         $response = $this->actingAs($admin)
@@ -670,6 +673,47 @@ class UpdateLeaveCreditTest extends TestCase
                 ->where('editor_name', "{$admin->first_name} {$admin->last_name}")
                 ->etc()
             )
+        );
+    }
+
+    #[Test]
+    public function credits_show_uses_effective_deducted_credits_from_day_statuses_in_leave_history(): void
+    {
+        $admin = $this->createAdmin();
+        $employee = User::factory()->create([
+            'role' => 'Agent',
+            'is_approved' => true,
+            'hired_date' => now()->subYears(1),
+        ]);
+        $year = 2026;
+
+        $leaveRequest = LeaveRequest::factory()->create([
+            'user_id' => $employee->id,
+            'leave_type' => 'VL',
+            'status' => 'approved',
+            'days_requested' => 6,
+            'credits_year' => $year,
+            'credits_deducted' => 4.75,
+            'start_date' => '2026-08-24',
+            'end_date' => '2026-08-31',
+        ]);
+
+        foreach (['2026-08-24', '2026-08-25', '2026-08-26', '2026-08-27', '2026-08-28', '2026-08-31'] as $date) {
+            LeaveRequestDay::create([
+                'leave_request_id' => $leaveRequest->id,
+                'date' => $date,
+                'day_status' => LeaveRequestDay::STATUS_VL_CREDITED,
+                'is_half_day' => false,
+            ]);
+        }
+
+        $response = $this->actingAs($admin)
+            ->get("/form-requests/leave-requests/credits/{$employee->id}?year={$year}");
+
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page
+            ->component('FormRequest/Leave/Credits/Show')
+            ->where('leaveRequests.0.credits_deducted', 6)
         );
     }
 }

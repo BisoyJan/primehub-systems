@@ -677,23 +677,8 @@ class LeaveCreditService
         $daysToDeduct = $leaveRequest->days_requested;
         $userId = $leaveRequest->user_id;
 
-        // Determine if carryover credits can be used
-        // Carryover credits expire at the end of March of the current year
         $leaveStartDate = $leaveRequest->start_date;
-        $carryoverExpirationDate = Carbon::create($year, 3, 31)->endOfDay();
-        $canUseCarryover = $leaveStartDate->lte($carryoverExpirationDate);
-
-        // Also check if carryover has been cash-converted — cannot use converted credits
-        if ($canUseCarryover) {
-            $carryoverRecord = LeaveCreditCarryover::forUser($userId)
-                ->toYear($year)
-                ->where('is_first_regularization', false)
-                ->first();
-
-            if ($carryoverRecord && $carryoverRecord->cash_converted) {
-                $canUseCarryover = false;
-            }
-        }
+        $canUseCarryover = $this->canUseCarryoverForLeaveDate($userId, $year, $leaveStartDate);
 
         // Ensure carryover credit record exists for this year (month 0)
         // Only create if carryover is still valid
@@ -706,7 +691,6 @@ class LeaveCreditService
         $creditsQuery = LeaveCredit::forUser($userId)
             ->forYear($year);
 
-        // Exclude carryover (month 0) if leave is after March 31
         if (! $canUseCarryover) {
             $creditsQuery->where('month', '>', 0);
         }
@@ -1421,19 +1405,7 @@ class LeaveCreditService
         }
 
         $leaveStartDate = $leaveRequest->start_date;
-        $carryoverExpirationDate = Carbon::create($year, 3, 31)->endOfDay();
-        $canUseCarryover = $leaveStartDate->lte($carryoverExpirationDate);
-
-        if ($canUseCarryover) {
-            $carryoverRecord = LeaveCreditCarryover::forUser($userId)
-                ->toYear($year)
-                ->where('is_first_regularization', false)
-                ->first();
-
-            if ($carryoverRecord && $carryoverRecord->cash_converted) {
-                $canUseCarryover = false;
-            }
-        }
+        $canUseCarryover = $this->canUseCarryoverForLeaveDate($userId, $year, $leaveStartDate);
 
         if ($canUseCarryover) {
             $this->ensureCarryoverCreditRecord($userId, $year);
@@ -1486,6 +1458,31 @@ class LeaveCreditService
         ]);
 
         return $actuallyDeducted;
+    }
+
+    /**
+     * Determine whether prior-year carryover can be used for a leave date.
+     *
+     * Regular carryover is usable only until Mar 31 of the carryover year.
+     * First-regularization carryover remains usable all year and is never cash-converted.
+     */
+    protected function canUseCarryoverForLeaveDate(int $userId, int $year, Carbon $leaveStartDate): bool
+    {
+        $carryoverRecord = LeaveCreditCarryover::forUser($userId)
+            ->toYear($year)
+            ->first();
+
+        if (! $carryoverRecord || $carryoverRecord->carryover_credits <= 0 || $carryoverRecord->cash_converted) {
+            return false;
+        }
+
+        if ($carryoverRecord->is_first_regularization) {
+            return true;
+        }
+
+        $carryoverExpirationDate = Carbon::create($year, 3, 31)->endOfDay();
+
+        return $leaveStartDate->lte($carryoverExpirationDate);
     }
 
     /**
@@ -2550,7 +2547,8 @@ class LeaveCreditService
         foreach ($requests as $leaveRequest) {
             $year = (int) $leaveRequest->credits_year;
             $leaveMonth = (int) $leaveRequest->start_date->month;
-            $remaining = $this->getReapplyDeductionAmount($leaveRequest);
+            $effectiveDeduction = $this->getEffectiveCreditsDeducted($leaveRequest);
+            $remaining = $effectiveDeduction;
 
             if ($remaining <= 0) {
                 continue;
@@ -2571,15 +2569,35 @@ class LeaveCreditService
             //          SL on Apr 22 → deducts from Mar (Apr not yet accrued)
             //
             // Priority:
-            //  1. Carryover (month 0)  — only for Jan/Feb/Mar leaves (expires Mar 31)
+            //  1. Carryover (month 0)  — Jan/Feb/Mar for regular carryover,
+            //     or any month for first-regularization carryover
             //  2. Previous month (L-1) — most recently accrued at time of leave
             //  3. Earlier months going backward (L-2, L-3 … 1)
             //  4. Leave's own month (L) — fallback; technically not yet accrued
             //  5. Later months going forward (L+1 … 12) — last resort
             $deductionOrder = [];
 
-            // 1. Carryover first so it is consumed before expiry (Jan–Mar leaves only)
-            if ($leaveMonth <= 3 && $credits->has(0)) {
+            $carryoverRecord = LeaveCreditCarryover::forUser($user->id)
+                ->toYear($year)
+                ->first();
+
+            $carryoverExpirationDate = Carbon::create($year, 3, 31)->endOfDay();
+            $canUseCarryover = false;
+
+            if ($credits->has(0)) {
+                if ($carryoverRecord) {
+                    $canUseCarryover = ! $carryoverRecord->cash_converted
+                        && ($carryoverRecord->is_first_regularization
+                            || $leaveRequest->start_date->lte($carryoverExpirationDate));
+                } else {
+                    // Legacy fallback: if a month-0 row exists without a carryover record,
+                    // preserve the historical Jan-Mar replay behavior.
+                    $canUseCarryover = $leaveRequest->start_date->lte($carryoverExpirationDate);
+                }
+            }
+
+            // 1. Carryover first when available for this leave date.
+            if ($canUseCarryover && $credits->has(0)) {
                 $deductionOrder[] = 0;
             }
 
@@ -2624,6 +2642,13 @@ class LeaveCreditService
                 }
             }
 
+            if ((float) $leaveRequest->credits_deducted !== $effectiveDeduction) {
+                $leaveRequest->update([
+                    'credits_deducted' => $effectiveDeduction,
+                    'credits_year' => $year,
+                ]);
+            }
+
             $applied++;
         }
 
@@ -2636,7 +2661,7 @@ class LeaveCreditService
      * Uses paid day statuses when available so recalculation reflects actual
      * approved day assignments, then falls back to stored credits_deducted.
      */
-    private function getReapplyDeductionAmount(LeaveRequest $leaveRequest): float
+    public function getEffectiveCreditsDeducted(LeaveRequest $leaveRequest): float
     {
         if ($leaveRequest->relationLoaded('days') && $leaveRequest->days->isNotEmpty()) {
             $paidDays = 0.0;

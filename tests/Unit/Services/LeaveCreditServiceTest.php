@@ -1611,6 +1611,138 @@ class LeaveCreditServiceTest extends TestCase
     }
 
     #[Test]
+    public function deduct_credits_uses_first_regularization_carryover_after_march(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'Agent',
+            'hired_date' => Carbon::parse('2025-08-04'),
+        ]);
+
+        LeaveCreditCarryover::factory()->firstRegularization()->create([
+            'user_id' => $user->id,
+            'from_year' => 2025,
+            'to_year' => 2026,
+            'carryover_credits' => 1.25,
+            'credits_from_previous_year' => 1.25,
+            'cash_converted' => false,
+        ]);
+
+        LeaveCredit::factory()->create([
+            'user_id' => $user->id,
+            'year' => 2026,
+            'month' => 0,
+            'credits_earned' => 1.25,
+            'credits_used' => 0,
+            'credits_balance' => 1.25,
+        ]);
+
+        LeaveCredit::factory()->create([
+            'user_id' => $user->id,
+            'year' => 2026,
+            'month' => 1,
+            'credits_earned' => 1.25,
+            'credits_used' => 0,
+            'credits_balance' => 1.25,
+        ]);
+
+        $leaveRequest = LeaveRequest::factory()->create([
+            'user_id' => $user->id,
+            'leave_type' => 'VL',
+            'status' => 'approved',
+            'days_requested' => 1,
+            'start_date' => '2026-08-24',
+            'end_date' => '2026-08-24',
+        ]);
+
+        $result = $this->service->deductCredits($leaveRequest, 2026);
+
+        $this->assertTrue($result);
+        $this->assertDatabaseHas('leave_credits', [
+            'user_id' => $user->id,
+            'year' => 2026,
+            'month' => 0,
+            'credits_used' => 1.00,
+            'credits_balance' => 0.25,
+        ]);
+        $this->assertDatabaseHas('leave_credits', [
+            'user_id' => $user->id,
+            'year' => 2026,
+            'month' => 1,
+            'credits_used' => 0.00,
+            'credits_balance' => 1.25,
+        ]);
+    }
+
+    #[Test]
+    public function reapply_deductions_uses_first_regularization_carryover_after_march(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'Agent',
+            'hired_date' => Carbon::parse('2025-08-04'),
+        ]);
+
+        LeaveCreditCarryover::factory()->firstRegularization()->create([
+            'user_id' => $user->id,
+            'from_year' => 2025,
+            'to_year' => 2026,
+            'carryover_credits' => 1.25,
+            'credits_from_previous_year' => 1.25,
+            'cash_converted' => false,
+        ]);
+
+        LeaveCredit::factory()->create([
+            'user_id' => $user->id,
+            'year' => 2026,
+            'month' => 0,
+            'credits_earned' => 1.25,
+            'credits_used' => 0,
+            'credits_balance' => 1.25,
+        ]);
+
+        LeaveCredit::factory()->create([
+            'user_id' => $user->id,
+            'year' => 2026,
+            'month' => 1,
+            'credits_earned' => 1.25,
+            'credits_used' => 0,
+            'credits_balance' => 1.25,
+        ]);
+
+        $leaveRequest = LeaveRequest::factory()->create([
+            'user_id' => $user->id,
+            'leave_type' => 'VL',
+            'status' => 'approved',
+            'days_requested' => 1,
+            'credits_year' => 2026,
+            'credits_deducted' => 1.00,
+            'start_date' => '2026-08-24',
+            'end_date' => '2026-08-24',
+        ]);
+
+        $applied = $this->invokeReapplyLeaveDeductions($user);
+
+        $this->assertEquals(1, $applied);
+        $this->assertDatabaseHas('leave_credits', [
+            'user_id' => $user->id,
+            'year' => 2026,
+            'month' => 0,
+            'credits_used' => 1.00,
+            'credits_balance' => 0.25,
+        ]);
+        $this->assertDatabaseHas('leave_credits', [
+            'user_id' => $user->id,
+            'year' => 2026,
+            'month' => 1,
+            'credits_used' => 0.00,
+        ]);
+
+        $this->assertDatabaseHas('leave_requests', [
+            'id' => $leaveRequest->id,
+            'credits_deducted' => 1.00,
+        ]);
+    }
+
+    #[Test]
     public function reapply_deductions_uses_paid_day_statuses_and_ignores_stale_credits_deducted(): void
     {
         $user = User::factory()->create([
@@ -1668,6 +1800,10 @@ class LeaveCreditServiceTest extends TestCase
             'month' => 0,
             'credits_used' => 2.00,
             'credits_balance' => 1.00,
+        ]);
+        $this->assertDatabaseHas('leave_requests', [
+            'id' => $leaveRequest->id,
+            'credits_deducted' => 2.00,
         ]);
     }
 

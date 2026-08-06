@@ -348,16 +348,19 @@ class LeaveCreditController extends Controller
             ->where('status', 'approved')
             ->whereNotNull('credits_deducted')
             ->where('credits_deducted', '>', 0)
+            ->with('days')
             ->orderBy('start_date', 'asc')
             ->get()
             ->map(function ($request) {
+                $effectiveCreditsDeducted = $this->leaveCreditService->getEffectiveCreditsDeducted($request);
+
                 return [
                     'id' => $request->id,
                     'leave_type' => $request->leave_type,
                     'start_date' => $request->start_date->format('Y-m-d'),
                     'end_date' => $request->end_date->format('Y-m-d'),
                     'days_requested' => (float) $request->days_requested,
-                    'credits_deducted' => (float) $request->credits_deducted,
+                    'credits_deducted' => $effectiveCreditsDeducted,
                     'approved_at' => $request->reviewed_at?->format('Y-m-d'),
                     'has_partial_denial' => (bool) $request->has_partial_denial,
                     'approved_days' => $request->approved_days !== null ? (float) $request->approved_days : null,
