@@ -7,6 +7,7 @@ use App\Models\LeaveCreditCarryover;
 use App\Models\LeaveRequest;
 use App\Models\User;
 use App\Services\LeaveCreditService;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -28,6 +29,10 @@ class LeaveCreditCashConversionTest extends TestCase
     {
         parent::setUp();
 
+        // Default to a pre-deadline date so baseline conversion behavior
+        // is deterministic across environments.
+        Carbon::setTestNow(Carbon::parse('2026-02-15 09:00:00'));
+
         $this->admin = User::factory()->create([
             'role' => 'Admin',
             'is_approved' => true,
@@ -41,6 +46,13 @@ class LeaveCreditCashConversionTest extends TestCase
         ]);
 
         $this->service = app(LeaveCreditService::class);
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+
+        parent::tearDown();
     }
 
     #[Test]
@@ -503,5 +515,75 @@ class LeaveCreditCashConversionTest extends TestCase
                 'success' => true,
                 'pending_warning' => null,
             ]);
+    }
+
+    #[Test]
+    public function it_rejects_regular_carryover_conversion_after_march_deadline(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-04-01 08:00:00'));
+
+        $carryover = LeaveCreditCarryover::factory()->create([
+            'user_id' => $this->employee->id,
+            'carryover_credits' => 3.00,
+            'from_year' => 2025,
+            'to_year' => 2026,
+            'is_first_regularization' => false,
+            'cash_converted' => false,
+        ]);
+
+        $result = $this->service->convertCarryoverToCash($carryover, $this->admin->id);
+
+        $this->assertFalse($result['success']);
+        $this->assertStringContainsString('deadline has passed', $result['message']);
+
+        $carryover->refresh();
+        $this->assertFalse($carryover->cash_converted);
+    }
+
+    #[Test]
+    public function it_allows_regular_carryover_conversion_on_march_31_deadline(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-03-31 18:00:00'));
+
+        $carryover = LeaveCreditCarryover::factory()->create([
+            'user_id' => $this->employee->id,
+            'carryover_credits' => 2.00,
+            'from_year' => 2025,
+            'to_year' => 2026,
+            'is_first_regularization' => false,
+            'cash_converted' => false,
+        ]);
+
+        $result = $this->service->convertCarryoverToCash($carryover, $this->admin->id);
+
+        $this->assertTrue($result['success']);
+        $this->assertEquals(2.00, $result['credits_converted']);
+    }
+
+    #[Test]
+    public function per_employee_endpoint_rejects_conversion_after_march_deadline(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-04-15 10:00:00'));
+
+        LeaveCreditCarryover::factory()->create([
+            'user_id' => $this->employee->id,
+            'carryover_credits' => 3.00,
+            'from_year' => 2025,
+            'to_year' => 2026,
+            'is_first_regularization' => false,
+            'cash_converted' => false,
+        ]);
+
+        $response = $this->actingAs($this->admin)
+            ->postJson("/form-requests/leave-requests/credits/{$this->employee->id}/cash-conversion", [
+                'year' => 2026,
+            ]);
+
+        $response->assertStatus(422)
+            ->assertJson([
+                'success' => false,
+            ]);
+
+        $this->assertStringContainsString('deadline has passed', (string) $response->json('error'));
     }
 }
