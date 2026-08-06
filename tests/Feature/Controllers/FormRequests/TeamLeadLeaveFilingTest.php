@@ -9,6 +9,7 @@ use App\Models\Site;
 use App\Models\User;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -213,6 +214,78 @@ class TeamLeadLeaveFilingTest extends TestCase
         $this->assertDatabaseMissing('leave_requests', [
             'user_id' => $otherAgent->id,
         ]);
+    }
+
+    #[Test]
+    public function team_lead_cannot_file_for_agent_assigned_to_another_team_lead_in_same_campaign(): void
+    {
+        $otherTl = User::factory()->create([
+            'role' => 'Team Lead',
+            'is_approved' => true,
+            'hired_date' => now()->subYear(),
+        ]);
+        EmployeeSchedule::factory()->create([
+            'user_id' => $otherTl->id,
+            'site_id' => $this->site->id,
+            'campaign_id' => $this->campaign->id,
+            'is_active' => true,
+        ]);
+        $otherTl->campaigns()->attach($this->campaign->id);
+
+        DB::table('agent_team_lead')->insert([
+            'team_lead_id' => $otherTl->id,
+            'agent_id' => $this->agent->id,
+            'campaign_id' => $this->campaign->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $response = $this->actingAs($this->teamLead)->get(
+            route('leave-requests.create', ['employee_id' => $this->agent->id])
+        );
+        $response->assertStatus(403);
+
+        $startDate = now()->addWeeks(3)->startOfWeek();
+        $endDate = $startDate->copy()->addDay();
+
+        $storeResponse = $this->actingAs($this->teamLead)->post(route('leave-requests.store'), [
+            'employee_id' => $this->agent->id,
+            'leave_type' => 'VL',
+            'start_date' => $startDate->format('Y-m-d'),
+            'end_date' => $endDate->format('Y-m-d'),
+            'reason' => 'TL trying to file for agent assigned to another TL',
+            'campaign_department' => $this->campaign->name,
+        ]);
+
+        $storeResponse->assertSessionHasErrors('error');
+    }
+
+    #[Test]
+    public function unassigned_agent_is_visible_to_team_lead_as_fallback(): void
+    {
+        $otherTl = User::factory()->create([
+            'role' => 'Team Lead',
+            'is_approved' => true,
+            'hired_date' => now()->subYear(),
+        ]);
+        EmployeeSchedule::factory()->create([
+            'user_id' => $otherTl->id,
+            'site_id' => $this->site->id,
+            'campaign_id' => $this->campaign->id,
+            'is_active' => true,
+        ]);
+        $otherTl->campaigns()->attach($this->campaign->id);
+
+        DB::table('agent_team_lead')->where('campaign_id', $this->campaign->id)->delete();
+
+        $response = $this->actingAs($this->teamLead)->get(route('leave-requests.create'));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn ($page) => $page
+                ->component('FormRequest/Leave/Create')
+                ->where('canFileForOthers', true)
+                ->has('employees', 2)
+            );
     }
 
     #[Test]

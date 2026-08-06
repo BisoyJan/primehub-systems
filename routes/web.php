@@ -110,6 +110,12 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
     Route::resource('campaigns', CampaignController::class)
         ->except(['show'])
         ->middleware('permission:campaigns.view,campaigns.create,campaigns.edit,campaigns.delete');
+    Route::get('campaigns/{campaign}/team-assignments', [CampaignController::class, 'teamAssignments'])
+        ->middleware('permission:campaigns.edit')
+        ->name('campaigns.team-assignments.show');
+    Route::put('campaigns/{campaign}/team-assignments', [CampaignController::class, 'updateTeamAssignments'])
+        ->middleware('permission:campaigns.edit')
+        ->name('campaigns.team-assignments.update');
 
     // Stations
     Route::post('stations/bulk', [StationController::class, 'storeBulk'])

@@ -72,6 +72,7 @@ class LeaveRequestController extends Controller
                 $teamLeadCampaignNames = Campaign::whereIn('id', $teamLeadCampaignIds)->pluck('name')->toArray();
             }
         }
+        $managedAgentIds = $isTeamLead ? $user->getManagedAgentIds($teamLeadCampaignIds) : [];
 
         $query = LeaveRequest::with(['user', 'reviewer', 'adminApprover', 'hrApprover', 'tlApprover'])
             ->withCount('documents');
@@ -79,11 +80,11 @@ class LeaveRequestController extends Controller
         // Admins see all requests
         if ($isAdmin) {
             // No filter - see all
-        } elseif ($isTeamLead && ! empty($teamLeadCampaignNames)) {
-            // Team Leads see their own requests + requests from agents in their campaigns
-            $query->where(function ($q) use ($user, $teamLeadCampaignNames) {
+        } elseif ($isTeamLead && ! empty($managedAgentIds)) {
+            // Team Leads see own requests + managed agents' requests.
+            $query->where(function ($q) use ($user, $managedAgentIds) {
                 $q->where('user_id', $user->id) // Own requests
-                    ->orWhereIn('campaign_department', $teamLeadCampaignNames); // Requests from their campaigns
+                    ->orWhereIn('user_id', $managedAgentIds);
             });
         } elseif ($isTeamLead) {
             // Team Lead with no campaigns assigned - only see own requests
@@ -167,8 +168,6 @@ class LeaveRequestController extends Controller
         }
         if (count($campaignFilterValues) > 0) {
             $query->whereIn('campaign_department', $campaignFilterValues);
-        } elseif ($isTeamLead && ! empty($teamLeadCampaignNames)) {
-            $query->whereIn('campaign_department', $teamLeadCampaignNames);
         }
 
         // Compute status counts before applying the status filter
@@ -249,10 +248,10 @@ class LeaveRequestController extends Controller
             $employeeQuery = User::whereHas('leaveRequests');
 
             // Team Leads only see employees whose requests they can view
-            if ($isTeamLead && ! empty($teamLeadCampaignNames)) {
-                $employeeQuery->where(function ($q) use ($user, $teamLeadCampaignNames) {
+            if ($isTeamLead && ! empty($managedAgentIds)) {
+                $employeeQuery->where(function ($q) use ($user, $managedAgentIds) {
                     $q->where('id', $user->id)
-                        ->orWhereHas('leaveRequests', fn ($lq) => $lq->whereIn('campaign_department', $teamLeadCampaignNames));
+                        ->orWhereIn('id', $managedAgentIds);
                 });
             } elseif ($isTeamLead) {
                 $employeeQuery->where('id', $user->id);
@@ -298,8 +297,10 @@ class LeaveRequestController extends Controller
 
         // Detect Team Lead's campaigns for auto-filter
         $teamLeadCampaignIds = [];
+        $managedAgentIds = [];
         if ($user->role === 'Team Lead') {
             $teamLeadCampaignIds = $user->getCampaignIds();
+            $managedAgentIds = $user->getManagedAgentIds($teamLeadCampaignIds);
         }
 
         // Get filters
@@ -359,11 +360,11 @@ class LeaveRequestController extends Controller
                 $q->where('campaign_id', $campaignId)
                     ->where('is_active', true);
             });
-        } elseif (! empty($teamLeadCampaignIds)) {
-            // Team Lead with no campaign selected - show all their campaigns
-            $query->whereHas('user.employeeSchedules', function ($q) use ($teamLeadCampaignIds) {
-                $q->whereIn('campaign_id', $teamLeadCampaignIds)
-                    ->where('is_active', true);
+        } elseif ($user->role === 'Team Lead') {
+            // Team Lead with no campaign selected: own + managed agents.
+            $query->where(function ($q) use ($user, $managedAgentIds) {
+                $q->where('user_id', $user->id)
+                    ->orWhereIn('user_id', $managedAgentIds);
             });
         }
 
@@ -432,13 +433,12 @@ class LeaveRequestController extends Controller
         if ($canFileForOthers && $request->filled('employee_id') && (int) $request->employee_id !== $user->id) {
             $targetUser = User::findOrFail($request->employee_id);
 
-            // Team Leads can only file for agents in their campaign
+            // Team Leads can only file for managed agents.
             if ($isTeamLead) {
-                $teamLeadCampaignIds = $user->getCampaignIds();
-                $targetCampaignId = $targetUser->activeSchedule?->campaign_id;
+                $managedAgentIds = $user->getManagedAgentIds();
 
-                if (empty($teamLeadCampaignIds) || ! in_array($targetCampaignId, $teamLeadCampaignIds) || $targetUser->role !== 'Agent') {
-                    abort(403, 'You can only file leave requests for agents in your campaign.');
+                if ($targetUser->role !== 'Agent' || ! in_array((int) $targetUser->id, $managedAgentIds, true)) {
+                    abort(403, 'You can only file leave requests for managed agents.');
                 }
             }
         }
@@ -509,8 +509,8 @@ class LeaveRequestController extends Controller
                     ];
                 });
         } elseif ($isTeamLead) {
-            // Team Leads can file for themselves + agents in their campaigns
-            $teamLeadCampaignIds = $user->getCampaignIds();
+            // Team Leads can file for themselves + managed agents.
+            $managedAgentIds = $user->getManagedAgentIds();
 
             // Always include the Team Lead themselves first
             $selfEntry = collect([[
@@ -519,13 +519,11 @@ class LeaveRequestController extends Controller
                 'email' => $user->email,
             ]]);
 
-            if (! empty($teamLeadCampaignIds)) {
+            if (! empty($managedAgentIds)) {
                 $agents = User::select('id', 'first_name', 'middle_name', 'last_name', 'email')
                     ->where('role', 'Agent')
                     ->where('is_approved', true)
-                    ->whereHas('activeSchedule', function ($query) use ($teamLeadCampaignIds) {
-                        $query->whereIn('campaign_id', $teamLeadCampaignIds);
-                    })
+                    ->whereIn('id', $managedAgentIds)
                     ->orderBy('first_name')
                     ->orderBy('last_name')
                     ->get()
@@ -597,13 +595,12 @@ class LeaveRequestController extends Controller
         if (in_array($user->role, ['Super Admin', 'Admin', 'Team Lead']) && $request->filled('employee_id') && (int) $request->employee_id !== $user->id) {
             $targetUser = User::findOrFail($request->employee_id);
 
-            // Team Leads can only file for agents in their campaign
+            // Team Leads can only file for managed agents.
             if ($user->role === 'Team Lead') {
-                $teamLeadCampaignIds = $user->getCampaignIds();
-                $targetCampaignId = $targetUser->activeSchedule?->campaign_id;
+                $managedAgentIds = $user->getManagedAgentIds();
 
-                if (empty($teamLeadCampaignIds) || ! in_array($targetCampaignId, $teamLeadCampaignIds) || $targetUser->role !== 'Agent') {
-                    return back()->withErrors(['error' => 'You can only file leave requests for agents in your campaign.'])->withInput();
+                if ($targetUser->role !== 'Agent' || ! in_array((int) $targetUser->id, $managedAgentIds, true)) {
+                    return back()->withErrors(['error' => 'You can only file leave requests for managed agents.'])->withInput();
                 }
             }
         }
@@ -703,6 +700,17 @@ class LeaveRequestController extends Controller
                             $q->where('campaigns.id', $agentSchedule->campaign_id);
                         })
                         ->get();
+
+                    $assignedTlIds = DB::table('agent_team_lead')
+                        ->where('campaign_id', $agentSchedule->campaign_id)
+                        ->where('agent_id', $targetUser->id)
+                        ->pluck('team_lead_id')
+                        ->map(fn ($id) => (int) $id)
+                        ->values();
+
+                    if ($assignedTlIds->isNotEmpty()) {
+                        $campaignTeamLeads = $campaignTeamLeads->whereIn('id', $assignedTlIds->all())->values();
+                    }
 
                     $campaignHasTeamLead = $campaignTeamLeads->isNotEmpty();
                     if ($campaignHasTeamLead) {
@@ -859,8 +867,7 @@ class LeaveRequestController extends Controller
         // Check if Team Lead can approve this request
         $canTlApprove = false;
         if ($isTeamLead && $leaveRequest->requiresTlApproval() && ! $leaveRequest->isTlApproved() && ! $leaveRequest->isTlRejected()) {
-            // Any Team Lead can approve agent leave requests
-            $canTlApprove = true;
+            $canTlApprove = $user->can('tlApprove', $leaveRequest);
         }
 
         // Format dates to prevent timezone issues
@@ -897,8 +904,8 @@ class LeaveRequestController extends Controller
         // blocked once the end date has passed; Super Admin is not).
         $canEditApproved = $user->can('updateApproved', $leaveRequest);
 
-        // Check if user can view medical certificate (own request OR Admin, HR, Super Admin, Team Lead)
-        $canViewMedicalCert = $leaveRequest->user_id === $user->id || in_array($user->role, ['Super Admin', 'Admin', 'HR', 'Team Lead']);
+        // Check if user can view medical certificate.
+        $canViewMedicalCert = $leaveRequest->user_id === $user->id || $user->can('view', $leaveRequest);
 
         // Get earlier conflicts for VL/UPTO (first-come-first-serve)
         $earlierConflicts = $this->getEarlierConflicts($leaveRequest);
@@ -1082,8 +1089,7 @@ class LeaveRequestController extends Controller
     {
         $user = auth()->user();
 
-        // Only the request owner OR Admin/HR/Super Admin/Team Lead can view medical certificates
-        if ($leaveRequest->user_id !== $user->id && ! in_array($user->role, ['Super Admin', 'Admin', 'HR', 'Team Lead'])) {
+        if ($leaveRequest->user_id !== $user->id && ! $user->can('view', $leaveRequest)) {
             abort(403, 'Unauthorized to view medical certificate.');
         }
 
@@ -1108,8 +1114,7 @@ class LeaveRequestController extends Controller
     {
         $user = auth()->user();
 
-        // Only the request owner OR Admin/HR/Super Admin/Team Lead can view supporting documents
-        if ($leaveRequest->user_id !== $user->id && ! in_array($user->role, ['Super Admin', 'Admin', 'HR', 'Team Lead'])) {
+        if ($leaveRequest->user_id !== $user->id && ! $user->can('view', $leaveRequest)) {
             abort(403, 'Unauthorized to view document.');
         }
 

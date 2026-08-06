@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Head, router } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -21,6 +22,16 @@ import {
 import { index as stationsIndexRoute } from '@/routes/stations';
 
 interface Campaign {
+    id: number;
+    name: string;
+}
+
+interface TeamLeadOption {
+    id: number;
+    name: string;
+}
+
+interface AgentOption {
     id: number;
     name: string;
 }
@@ -73,6 +84,14 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [campaignPendingDelete, setCampaignPendingDelete] = useState<Campaign | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
+
+    const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
+    const [assignmentCampaign, setAssignmentCampaign] = useState<Campaign | null>(null);
+    const [assignmentTeamLeads, setAssignmentTeamLeads] = useState<TeamLeadOption[]>([]);
+    const [assignmentAgents, setAssignmentAgents] = useState<AgentOption[]>([]);
+    const [assignmentMap, setAssignmentMap] = useState<Record<number, number[]>>({});
+    const [isAssignmentLoading, setIsAssignmentLoading] = useState(false);
+    const [isAssignmentSaving, setIsAssignmentSaving] = useState(false);
 
     const showClearFilters = Boolean(search.trim());
 
@@ -236,6 +255,86 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
         });
     };
 
+    const openAssignmentDialog = async (campaign: Campaign) => {
+        setAssignmentCampaign(campaign);
+        setIsAssignDialogOpen(true);
+        setIsAssignmentLoading(true);
+
+        try {
+            const response = await fetch(`/campaigns/${campaign.id}/team-assignments`, {
+                headers: {
+                    Accept: 'application/json',
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to load team assignments');
+            }
+
+            const payload = await response.json() as {
+                teamLeads: TeamLeadOption[];
+                agents: AgentOption[];
+                assignments: Record<string, number[]>;
+            };
+
+            setAssignmentTeamLeads(payload.teamLeads ?? []);
+            setAssignmentAgents(payload.agents ?? []);
+
+            const normalized: Record<number, number[]> = {};
+            Object.entries(payload.assignments ?? {}).forEach(([teamLeadId, agentIds]) => {
+                normalized[Number(teamLeadId)] = (agentIds ?? []).map((id) => Number(id));
+            });
+            setAssignmentMap(normalized);
+        } catch {
+            setAssignmentTeamLeads([]);
+            setAssignmentAgents([]);
+            setAssignmentMap({});
+        } finally {
+            setIsAssignmentLoading(false);
+        }
+    };
+
+    const closeAssignmentDialog = () => {
+        setIsAssignDialogOpen(false);
+        setAssignmentCampaign(null);
+        setAssignmentTeamLeads([]);
+        setAssignmentAgents([]);
+        setAssignmentMap({});
+    };
+
+    const toggleAssignment = (teamLeadId: number, agentId: number) => {
+        setAssignmentMap((prev) => {
+            const current = prev[teamLeadId] ?? [];
+            const exists = current.includes(agentId);
+
+            return {
+                ...prev,
+                [teamLeadId]: exists ? current.filter((id) => id !== agentId) : [...current, agentId],
+            };
+        });
+    };
+
+    const saveAssignments = () => {
+        if (!assignmentCampaign) {
+            return;
+        }
+
+        setIsAssignmentSaving(true);
+        router.put(
+            `/campaigns/${assignmentCampaign.id}/team-assignments`,
+            { assignments: assignmentMap },
+            {
+                preserveScroll: true,
+                preserveState: true,
+                onSuccess: () => {
+                    closeAssignmentDialog();
+                    setLastRefresh(new Date());
+                },
+                onFinish: () => setIsAssignmentSaving(false),
+            },
+        );
+    };
+
     const paginationMeta: PaginationMeta = campaigns.meta || {
         current_page: 1,
         last_page: 1,
@@ -354,6 +453,13 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
                                                         >
                                                             Edit
                                                         </Button>
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => openAssignmentDialog(campaign)}
+                                                        >
+                                                            Manage Team
+                                                        </Button>
                                                     </Can>
                                                     <Can permission="campaigns.delete">
                                                         <Button
@@ -429,6 +535,56 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
                         </Button>
                         <Button variant="destructive" onClick={handleDeleteConfirm} disabled={isDeleting || !campaignPendingDelete}>
                             {isDeleting ? 'Deleting...' : 'Delete'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={isAssignDialogOpen} onOpenChange={(open) => !open && closeAssignmentDialog()}>
+                <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-4xl">
+                    <DialogHeader>
+                        <DialogTitle>
+                            {assignmentCampaign ? `Team Assignments: ${assignmentCampaign.name}` : 'Team Assignments'}
+                        </DialogTitle>
+                    </DialogHeader>
+
+                    {isAssignmentLoading ? (
+                        <p className="text-sm text-muted-foreground">Loading assignments...</p>
+                    ) : assignmentTeamLeads.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No active team leads assigned to this campaign.</p>
+                    ) : assignmentAgents.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No active agents in this campaign.</p>
+                    ) : (
+                        <div className="space-y-5">
+                            {assignmentTeamLeads.map((teamLead) => (
+                                <div key={teamLead.id} className="rounded-md border p-3">
+                                    <p className="mb-2 text-sm font-semibold">{teamLead.name}</p>
+                                    <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                                        {assignmentAgents.map((agent) => {
+                                            const checked = (assignmentMap[teamLead.id] ?? []).includes(agent.id);
+
+                                            return (
+                                                <label key={`${teamLead.id}-${agent.id}`} className="flex items-center gap-2 text-sm">
+                                                    <Checkbox
+                                                        checked={checked}
+                                                        onCheckedChange={() => toggleAssignment(teamLead.id, agent.id)}
+                                                    />
+                                                    <span>{agent.name}</span>
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={closeAssignmentDialog} disabled={isAssignmentSaving}>
+                            Cancel
+                        </Button>
+                        <Button type="button" onClick={saveAssignments} disabled={isAssignmentSaving || isAssignmentLoading}>
+                            {isAssignmentSaving ? 'Saving...' : 'Save Assignments'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

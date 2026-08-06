@@ -9,6 +9,7 @@ use App\Models\Notification;
 use App\Models\User;
 use App\Services\NotificationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia as Assert;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -135,6 +136,90 @@ class CoachingSessionControllerTest extends TestCase
                 ->has('sessions.data', 1)
                 ->where('isTeamLead', true)
             );
+    }
+
+    #[Test]
+    public function team_leads_in_same_campaign_only_see_assigned_agents_when_assignments_exist(): void
+    {
+        $campaign = Campaign::factory()->create();
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+
+        $teamLeadA = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
+        $teamLeadB = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
+        $teamLeadA->campaigns()->sync([$campaign->id]);
+        $teamLeadB->campaigns()->sync([$campaign->id]);
+
+        EmployeeSchedule::factory()->create(['user_id' => $teamLeadA->id, 'campaign_id' => $campaign->id, 'is_active' => true]);
+        EmployeeSchedule::factory()->create(['user_id' => $teamLeadB->id, 'campaign_id' => $campaign->id, 'is_active' => true]);
+
+        $agentA = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        $agentB = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create(['user_id' => $agentA->id, 'campaign_id' => $campaign->id, 'is_active' => true]);
+        EmployeeSchedule::factory()->create(['user_id' => $agentB->id, 'campaign_id' => $campaign->id, 'is_active' => true]);
+
+        DB::table('agent_team_lead')->insert([
+            [
+                'team_lead_id' => $teamLeadA->id,
+                'agent_id' => $agentA->id,
+                'campaign_id' => $campaign->id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'team_lead_id' => $teamLeadB->id,
+                'agent_id' => $agentB->id,
+                'campaign_id' => $campaign->id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        $sessionA = CoachingSession::factory()->create([
+            'coachee_id' => $agentA->id,
+            'coach_id' => $admin->id,
+        ]);
+        $sessionB = CoachingSession::factory()->create([
+            'coachee_id' => $agentB->id,
+            'coach_id' => $admin->id,
+        ]);
+
+        $responseA = $this->actingAs($teamLeadA)->get(route('coaching.sessions.index'));
+        $responseA->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('sessions.data', 1)
+                ->where('sessions.data.0.id', $sessionA->id)
+            );
+
+        $responseB = $this->actingAs($teamLeadB)->get(route('coaching.sessions.index'));
+        $responseB->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('sessions.data', 1)
+                ->where('sessions.data.0.id', $sessionB->id)
+            );
+    }
+
+    #[Test]
+    public function team_lead_cannot_view_other_team_leads_direct_super_admin_session(): void
+    {
+        $campaign = Campaign::factory()->create();
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+
+        $teamLeadA = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
+        $teamLeadB = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
+        $teamLeadA->campaigns()->sync([$campaign->id]);
+        $teamLeadB->campaigns()->sync([$campaign->id]);
+
+        EmployeeSchedule::factory()->create(['user_id' => $teamLeadA->id, 'campaign_id' => $campaign->id, 'is_active' => true]);
+        EmployeeSchedule::factory()->create(['user_id' => $teamLeadB->id, 'campaign_id' => $campaign->id, 'is_active' => true]);
+
+        $session = CoachingSession::factory()->create([
+            'coachee_id' => $teamLeadA->id,
+            'coach_id' => $admin->id,
+        ]);
+
+        $response = $this->actingAs($teamLeadB)->get(route('coaching.sessions.show', $session));
+
+        $response->assertStatus(403);
     }
 
     #[Test]
@@ -350,6 +435,38 @@ class CoachingSessionControllerTest extends TestCase
         $data = $this->validSessionData($otherAgent->id);
 
         $response = $this->actingAs($team['teamLead'])
+            ->post(route('coaching.sessions.store'), $data);
+
+        $response->assertSessionHasErrors('coachee_id');
+    }
+
+    #[Test]
+    public function store_rejects_agent_assigned_to_another_team_lead_in_same_campaign(): void
+    {
+        $campaign = Campaign::factory()->create();
+
+        $teamLeadA = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
+        $teamLeadB = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
+        $teamLeadA->campaigns()->sync([$campaign->id]);
+        $teamLeadB->campaigns()->sync([$campaign->id]);
+
+        EmployeeSchedule::factory()->create(['user_id' => $teamLeadA->id, 'campaign_id' => $campaign->id, 'is_active' => true]);
+        EmployeeSchedule::factory()->create(['user_id' => $teamLeadB->id, 'campaign_id' => $campaign->id, 'is_active' => true]);
+
+        $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create(['user_id' => $agent->id, 'campaign_id' => $campaign->id, 'is_active' => true]);
+
+        DB::table('agent_team_lead')->insert([
+            'team_lead_id' => $teamLeadB->id,
+            'agent_id' => $agent->id,
+            'campaign_id' => $campaign->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $data = $this->validSessionData($agent->id);
+
+        $response = $this->actingAs($teamLeadA)
             ->post(route('coaching.sessions.store'), $data);
 
         $response->assertSessionHasErrors('coachee_id');

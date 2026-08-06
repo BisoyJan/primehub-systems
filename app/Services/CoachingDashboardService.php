@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\CoachingSession;
 use App\Models\CoachingStatusSetting;
-use App\Models\EmployeeSchedule;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -175,7 +174,7 @@ class CoachingDashboardService
      */
     public function getTeamLeadDashboardData(User $teamLead, ?array $filters = null): array
     {
-        // Get agents in the team lead's campaigns
+        // Get agents in the team lead's managed scope
         $campaignIds = $teamLead->getCampaignIds();
 
         if (empty($campaignIds)) {
@@ -186,16 +185,7 @@ class CoachingDashboardService
             ];
         }
 
-        $agentIds = EmployeeSchedule::whereIn('campaign_id', $campaignIds)
-            ->where('is_active', true)
-            ->whereHas('user', function ($q) {
-                $q->where('role', 'Agent')
-                    ->where('is_active', true)
-                    ->whereNull('deleted_at');
-            })
-            ->pluck('user_id')
-            ->unique()
-            ->values();
+        $agentIds = collect($teamLead->getManagedAgentIds($campaignIds));
 
         return $this->buildDashboardData($agentIds, $filters);
     }

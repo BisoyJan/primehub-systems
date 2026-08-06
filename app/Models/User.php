@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 use Spatie\Activitylog\LogOptions;
@@ -179,6 +180,26 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     /**
+     * Get agents explicitly assigned to this team lead.
+     */
+    public function assignedAgents()
+    {
+        return $this->belongsToMany(User::class, 'agent_team_lead', 'team_lead_id', 'agent_id')
+            ->withPivot('campaign_id')
+            ->withTimestamps();
+    }
+
+    /**
+     * Get team leads explicitly assigned to this agent.
+     */
+    public function assignedTeamLeads()
+    {
+        return $this->belongsToMany(User::class, 'agent_team_lead', 'agent_id', 'team_lead_id')
+            ->withPivot('campaign_id')
+            ->withTimestamps();
+    }
+
+    /**
      * Get campaign IDs this user has access to.
      *
      * Team Leads: from campaign_user pivot table.
@@ -203,6 +224,71 @@ class User extends Authenticatable implements MustVerifyEmail
     public function belongsToCampaign(int $campaignId): bool
     {
         return in_array($campaignId, $this->getCampaignIds());
+    }
+
+    /**
+     * Get IDs of agents this team lead can manage.
+     *
+     * Fallback: if an agent has no explicit TL assignment in a campaign,
+     * all TLs for that campaign can still manage the agent.
+     *
+     * @param  array<int>|null  $campaignIds
+     * @return array<int>
+     */
+    public function getManagedAgentIds(?array $campaignIds = null): array
+    {
+        if ($this->role !== 'Team Lead') {
+            return [];
+        }
+
+        $campaignIds = $campaignIds ?? $this->getCampaignIds();
+        if (empty($campaignIds)) {
+            return [];
+        }
+
+        $activeAgentRows = EmployeeSchedule::query()
+            ->whereIn('campaign_id', $campaignIds)
+            ->where('is_active', true)
+            ->whereHas('user', function ($query) {
+                $query->where('role', 'Agent')
+                    ->where('is_approved', true)
+                    ->where('is_active', true)
+                    ->whereNull('deleted_at');
+            })
+            ->get(['user_id', 'campaign_id']);
+
+        if ($activeAgentRows->isEmpty()) {
+            return [];
+        }
+
+        $activeAgentIds = $activeAgentRows->pluck('user_id')->unique()->values()->all();
+
+        $assignmentRows = DB::table('agent_team_lead')
+            ->whereIn('campaign_id', $campaignIds)
+            ->whereIn('agent_id', $activeAgentIds)
+            ->get(['team_lead_id', 'agent_id', 'campaign_id']);
+
+        $assignedByCampaign = $assignmentRows
+            ->groupBy('campaign_id')
+            ->map(fn ($rows) => collect($rows)->pluck('agent_id')->unique()->values()->all());
+
+        $myAssignments = $assignmentRows
+            ->where('team_lead_id', $this->id)
+            ->map(fn ($row) => $row->campaign_id.':'.$row->agent_id)
+            ->flip();
+
+        $managedAgentIds = [];
+        foreach ($activeAgentRows as $row) {
+            $campaignAssignedAgentIds = $assignedByCampaign->get($row->campaign_id, []);
+            $hasExplicitAssignment = in_array($row->user_id, $campaignAssignedAgentIds, true);
+            $isAssignedToThisTl = $myAssignments->has($row->campaign_id.':'.$row->user_id);
+
+            if (! $hasExplicitAssignment || $isAssignedToThisTl) {
+                $managedAgentIds[] = (int) $row->user_id;
+            }
+        }
+
+        return array_values(array_unique($managedAgentIds));
     }
 
     /**
