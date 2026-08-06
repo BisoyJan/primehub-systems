@@ -1275,22 +1275,12 @@ class DashboardService
             ->orderBy('start_date', 'asc');
 
         if ($role === 'Team Lead') {
-            // Get the TL's active campaign IDs
-            $tlCampaignIds = EmployeeSchedule::where('user_id', $user->id)
-                ->where('is_active', true)
-                ->pluck('campaign_id')
-                ->filter()
-                ->toArray();
-
-            if (empty($tlCampaignIds)) {
+            $managedAgentIds = $user->getManagedAgentIds();
+            if (empty($managedAgentIds)) {
                 return ['count' => 0, 'requests' => []];
             }
 
-            // Only show requests from users in the same campaign(s)
-            $query->whereHas('user.employeeSchedules', function ($q) use ($tlCampaignIds) {
-                $q->where('is_active', true)
-                    ->whereIn('campaign_id', $tlCampaignIds);
-            });
+            $query->whereIn('user_id', $managedAgentIds);
 
             // TL-specific: only pending TL approval
             $query->where('requires_tl_approval', true)

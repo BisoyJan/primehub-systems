@@ -8,6 +8,7 @@ use App\Models\LeaveRequest;
 use App\Models\Site;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -308,5 +309,100 @@ class LeaveRequestAuthorizationTest extends TestCase
         $response->assertRedirect(route('leave-requests.show', $leaveRequest));
         $response->assertSessionDoesntHaveErrors();
         $this->assertEquals('Corrected reason for this completed leave.', $leaveRequest->fresh()->reason);
+    }
+
+    #[Test]
+    public function team_lead_can_only_view_managed_agents_leave_requests()
+    {
+        $campaign = Campaign::factory()->create();
+
+        $teamLeadA = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
+        $teamLeadB = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
+        $teamLeadA->campaigns()->sync([$campaign->id]);
+        $teamLeadB->campaigns()->sync([$campaign->id]);
+
+        EmployeeSchedule::factory()->create(['user_id' => $teamLeadA->id, 'campaign_id' => $campaign->id, 'is_active' => true]);
+        EmployeeSchedule::factory()->create(['user_id' => $teamLeadB->id, 'campaign_id' => $campaign->id, 'is_active' => true]);
+
+        $agentA = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        $agentB = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create(['user_id' => $agentA->id, 'campaign_id' => $campaign->id, 'is_active' => true]);
+        EmployeeSchedule::factory()->create(['user_id' => $agentB->id, 'campaign_id' => $campaign->id, 'is_active' => true]);
+
+        DB::table('agent_team_lead')->insert([
+            [
+                'team_lead_id' => $teamLeadA->id,
+                'agent_id' => $agentA->id,
+                'campaign_id' => $campaign->id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'team_lead_id' => $teamLeadB->id,
+                'agent_id' => $agentB->id,
+                'campaign_id' => $campaign->id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        $leaveForAgentA = LeaveRequest::factory()->create([
+            'user_id' => $agentA->id,
+            'campaign_department' => $campaign->name,
+            'requires_tl_approval' => true,
+            'status' => 'pending',
+        ]);
+
+        $canViewOwnManaged = $this->actingAs($teamLeadA)->get(route('leave-requests.show', $leaveForAgentA));
+        $canViewOwnManaged->assertOk();
+
+        $cannotViewOtherManaged = $this->actingAs($teamLeadB)->get(route('leave-requests.show', $leaveForAgentA));
+        $cannotViewOtherManaged->assertForbidden();
+    }
+
+    #[Test]
+    public function team_lead_can_only_tl_approve_managed_agents_leave_requests()
+    {
+        $campaign = Campaign::factory()->create();
+
+        $teamLeadA = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
+        $teamLeadB = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
+        $teamLeadA->campaigns()->sync([$campaign->id]);
+        $teamLeadB->campaigns()->sync([$campaign->id]);
+
+        EmployeeSchedule::factory()->create(['user_id' => $teamLeadA->id, 'campaign_id' => $campaign->id, 'is_active' => true]);
+        EmployeeSchedule::factory()->create(['user_id' => $teamLeadB->id, 'campaign_id' => $campaign->id, 'is_active' => true]);
+
+        $agentA = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create(['user_id' => $agentA->id, 'campaign_id' => $campaign->id, 'is_active' => true]);
+
+        DB::table('agent_team_lead')->insert([
+            'team_lead_id' => $teamLeadA->id,
+            'agent_id' => $agentA->id,
+            'campaign_id' => $campaign->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $leaveForAgentA = LeaveRequest::factory()->create([
+            'user_id' => $agentA->id,
+            'campaign_department' => $campaign->name,
+            'requires_tl_approval' => true,
+            'status' => 'pending',
+            'tl_approved_by' => null,
+            'tl_rejected' => false,
+        ]);
+
+        $forbidden = $this->actingAs($teamLeadB)->post(route('leave-requests.approve-tl', $leaveForAgentA), [
+            'review_notes' => 'Attempting approval as non-assigned TL.',
+        ]);
+        $forbidden->assertForbidden();
+
+        $allowed = $this->actingAs($teamLeadA)->post(route('leave-requests.approve-tl', $leaveForAgentA), [
+            'review_notes' => 'Approved by assigned team lead.',
+        ]);
+        $allowed->assertRedirect();
+
+        $this->assertEquals($teamLeadA->id, (int) $leaveForAgentA->fresh()->tl_approved_by);
     }
 }

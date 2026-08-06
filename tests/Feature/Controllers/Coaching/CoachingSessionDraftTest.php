@@ -9,6 +9,7 @@ use App\Models\Notification;
 use App\Models\User;
 use App\Services\NotificationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia as Assert;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -159,6 +160,39 @@ class CoachingSessionDraftTest extends TestCase
 
         $response = $this->actingAs($team['teamLead'])
             ->post(route('coaching.sessions.draft'), []);
+
+        $response->assertSessionHasErrors('coachee_id');
+    }
+
+    #[Test]
+    public function team_lead_cannot_save_draft_for_agent_assigned_to_another_team_lead(): void
+    {
+        $campaign = Campaign::factory()->create();
+
+        $teamLeadA = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
+        $teamLeadB = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
+        $teamLeadA->campaigns()->sync([$campaign->id]);
+        $teamLeadB->campaigns()->sync([$campaign->id]);
+
+        EmployeeSchedule::factory()->create(['user_id' => $teamLeadA->id, 'campaign_id' => $campaign->id, 'is_active' => true]);
+        EmployeeSchedule::factory()->create(['user_id' => $teamLeadB->id, 'campaign_id' => $campaign->id, 'is_active' => true]);
+
+        $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create(['user_id' => $agent->id, 'campaign_id' => $campaign->id, 'is_active' => true]);
+
+        DB::table('agent_team_lead')->insert([
+            'team_lead_id' => $teamLeadB->id,
+            'agent_id' => $agent->id,
+            'campaign_id' => $campaign->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $response = $this->actingAs($teamLeadA)
+            ->post(route('coaching.sessions.draft'), [
+                'coachee_id' => $agent->id,
+                'session_date' => now()->format('Y-m-d'),
+            ]);
 
         $response->assertSessionHasErrors('coachee_id');
     }
@@ -360,6 +394,42 @@ class CoachingSessionDraftTest extends TestCase
 
         $this->actingAs($team['teamLead'])
             ->patch(route('coaching.sessions.submit', $session), $data);
+    }
+
+    #[Test]
+    public function submit_draft_fails_when_agent_is_reassigned_to_another_team_lead(): void
+    {
+        $campaign = Campaign::factory()->create();
+
+        $teamLeadA = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
+        $teamLeadB = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
+        $teamLeadA->campaigns()->sync([$campaign->id]);
+        $teamLeadB->campaigns()->sync([$campaign->id]);
+
+        EmployeeSchedule::factory()->create(['user_id' => $teamLeadA->id, 'campaign_id' => $campaign->id, 'is_active' => true]);
+        EmployeeSchedule::factory()->create(['user_id' => $teamLeadB->id, 'campaign_id' => $campaign->id, 'is_active' => true]);
+
+        $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create(['user_id' => $agent->id, 'campaign_id' => $campaign->id, 'is_active' => true]);
+
+        $session = CoachingSession::factory()->draft()->create([
+            'coachee_id' => $agent->id,
+            'coach_id' => $teamLeadA->id,
+        ]);
+
+        DB::table('agent_team_lead')->insert([
+            'team_lead_id' => $teamLeadB->id,
+            'agent_id' => $agent->id,
+            'campaign_id' => $campaign->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $response = $this->actingAs($teamLeadA)
+            ->patch(route('coaching.sessions.submit', $session), $this->validSessionData($agent->id));
+
+        $response->assertSessionHasErrors('coachee_id');
+        $this->assertTrue($session->fresh()->is_draft);
     }
 
     // ─── Draft Visibility Tests ─────────────────────────────────────

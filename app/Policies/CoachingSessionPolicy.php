@@ -51,14 +51,12 @@ class CoachingSessionPolicy
             return $this->permissionService->userHasPermission($user, 'coaching.view_team');
         }
 
-        // Team Lead can view sessions for coachees on their campaigns
-        if ($user->role === 'Team Lead') {
-            $teamLeadCampaignIds = $user->getCampaignIds();
-            if (! empty($teamLeadCampaignIds)) {
-                $coacheeCampaignId = $coachingSession->coachee?->activeSchedule?->campaign_id;
-                if ($coacheeCampaignId && in_array($coacheeCampaignId, $teamLeadCampaignIds)) {
-                    return $this->permissionService->userHasPermission($user, 'coaching.view_team');
-                }
+        // Team Lead can view managed agent sessions only.
+        if ($user->role === 'Team Lead' && $coachingSession->coachee?->role === 'Agent') {
+            $managedAgentIds = $user->getManagedAgentIds();
+
+            if (in_array((int) $coachingSession->coachee_id, $managedAgentIds, true)) {
+                return $this->permissionService->userHasPermission($user, 'coaching.view_team');
             }
         }
 

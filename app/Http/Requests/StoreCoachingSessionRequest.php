@@ -168,8 +168,38 @@ class StoreCoachingSessionRequest extends FormRequest
                     $validator->errors()->add('root_cause', 'Please select at least one root cause.');
                 }
 
-                // Skip campaign validation when submitting an existing draft (already validated on creation)
-                if ($this->route('session') !== null) {
+                $draftSession = $this->route('session');
+                if ($draftSession !== null) {
+                    $coach = User::find((int) $draftSession->coach_id);
+                    if (! $coach || $coach->role !== 'Team Lead') {
+                        return;
+                    }
+
+                    $coachCampaignIds = $coach->getCampaignIds();
+                    if (empty($coachCampaignIds)) {
+                        $validator->errors()->add('coachee_id', 'The selected agent does not belong to the same campaign as the team lead.');
+
+                        return;
+                    }
+
+                    $coacheeId = (int) $draftSession->coachee_id;
+
+                    $coacheeInCampaign = EmployeeSchedule::where('user_id', $coacheeId)
+                        ->whereIn('campaign_id', $coachCampaignIds)
+                        ->where('is_active', true)
+                        ->exists();
+
+                    if (! $coacheeInCampaign) {
+                        $validator->errors()->add('coachee_id', 'The selected agent does not belong to the same campaign as the team lead.');
+
+                        return;
+                    }
+
+                    $managedAgentIds = $coach->getManagedAgentIds($coachCampaignIds);
+                    if (! in_array($coacheeId, $managedAgentIds, true)) {
+                        $validator->errors()->add('coachee_id', 'The selected agent is assigned to another team lead in this campaign.');
+                    }
+
                     return;
                 }
 
@@ -258,6 +288,18 @@ class StoreCoachingSessionRequest extends FormRequest
                         'coachee_id',
                         'The selected agent does not belong to the same campaign as the team lead.',
                     );
+
+                    return;
+                }
+
+                if ($coach->role === 'Team Lead') {
+                    $managedAgentIds = $coach->getManagedAgentIds($coachCampaignIds);
+                    if (! in_array((int) $coacheeId, $managedAgentIds, true)) {
+                        $validator->errors()->add(
+                            'coachee_id',
+                            'The selected agent is assigned to another team lead in this campaign.',
+                        );
+                    }
                 }
             },
         ];

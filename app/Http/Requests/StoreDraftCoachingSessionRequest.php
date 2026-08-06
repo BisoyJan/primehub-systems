@@ -4,9 +4,12 @@ namespace App\Http\Requests;
 
 use App\Http\Traits\SanitizesHtmlInput;
 use App\Models\CoachingSession;
+use App\Models\EmployeeSchedule;
+use App\Models\User;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class StoreDraftCoachingSessionRequest extends FormRequest
 {
@@ -104,6 +107,91 @@ class StoreDraftCoachingSessionRequest extends FormRequest
             'attachments.*.image' => 'Each attachment must be an image.',
             'attachments.*.mimes' => 'Only JPEG, PNG, GIF, and WebP images are allowed.',
             'attachments.*.max' => 'Each image must be less than 4MB.',
+        ];
+    }
+
+    /**
+     * Additional validation after rules pass.
+     */
+    public function after(): array
+    {
+        return [
+            function (Validator $validator) {
+                $coacheeId = (int) $this->input('coachee_id');
+                if (! $coacheeId) {
+                    return;
+                }
+
+                $user = $this->user();
+                $isAdmin = in_array($user->role, ['Super Admin', 'Admin']);
+                $coachingMode = $this->input('coaching_mode', 'assign');
+
+                if ($coachingMode === 'direct' && $isAdmin) {
+                    if ($coacheeId === (int) $user->id) {
+                        $validator->errors()->add('coachee_id', 'You cannot coach yourself.');
+
+                        return;
+                    }
+
+                    $coachee = User::find($coacheeId);
+                    if (! $coachee) {
+                        return;
+                    }
+
+                    if ($coachee->role !== 'Team Lead') {
+                        $validator->errors()->add('coachee_id', 'The selected coachee must be a Team Lead for direct coaching.');
+
+                        return;
+                    }
+
+                    $hasActiveCampaign = EmployeeSchedule::where('user_id', $coacheeId)
+                        ->where('is_active', true)
+                        ->whereNotNull('campaign_id')
+                        ->exists();
+
+                    if (! $hasActiveCampaign) {
+                        $validator->errors()->add('coachee_id', 'The selected Team Lead does not have an active campaign.');
+                    }
+
+                    return;
+                }
+
+                $coachId = $isAdmin ? (int) ($this->input('coach_id') ?: $user->id) : (int) $user->id;
+
+                if ($coachId === $coacheeId) {
+                    $validator->errors()->add('coachee_id', 'You cannot coach yourself.');
+
+                    return;
+                }
+
+                $coach = User::find($coachId);
+                if (! $coach) {
+                    return;
+                }
+
+                $coachCampaignIds = $coach->getCampaignIds();
+                if (empty($coachCampaignIds)) {
+                    return;
+                }
+
+                $coacheeInCampaign = EmployeeSchedule::where('user_id', $coacheeId)
+                    ->whereIn('campaign_id', $coachCampaignIds)
+                    ->where('is_active', true)
+                    ->exists();
+
+                if (! $coacheeInCampaign) {
+                    $validator->errors()->add('coachee_id', 'The selected agent does not belong to the same campaign as the team lead.');
+
+                    return;
+                }
+
+                if ($coach->role === 'Team Lead') {
+                    $managedAgentIds = $coach->getManagedAgentIds($coachCampaignIds);
+                    if (! in_array($coacheeId, $managedAgentIds, true)) {
+                        $validator->errors()->add('coachee_id', 'The selected agent is assigned to another team lead in this campaign.');
+                    }
+                }
+            },
         ];
     }
 }

@@ -12,7 +12,6 @@ use App\Http\Traits\RedirectsWithFlashMessages;
 use App\Models\Campaign;
 use App\Models\CoachingSession;
 use App\Models\CoachingSessionAttachment;
-use App\Models\EmployeeSchedule;
 use App\Models\User;
 use App\Services\CoachingDashboardService;
 use App\Services\NotificationService;
@@ -71,18 +70,20 @@ class CoachingSessionController extends Controller
             $query->forCoachee($user->id);
         } elseif ($isTeamLead && ! $showDrafts) {
             $activeTab = $request->input('tab', 'team');
+            $managedAgentIds = $user->getManagedAgentIds($teamLeadCampaignIds);
 
             if ($activeTab === 'my') {
                 // "My Sessions" tab — only sessions where TL is the coachee
                 $query->forCoachee($user->id);
             } else {
-                // "Team Sessions" tab — sessions TL coached or for agents in their campaigns (excluding TL's own)
-                if (! empty($teamLeadCampaignIds)) {
+                // "Team Sessions" tab — sessions TL coached or for managed agents only.
+                if (! empty($managedAgentIds)) {
                     $query->where('coachee_id', '!=', $user->id)
-                        ->where(function ($q) use ($user, $teamLeadCampaignIds) {
+                        ->where(function ($q) use ($user, $managedAgentIds) {
                             $q->where('coach_id', $user->id)
-                                ->orWhereHas('coachee.activeSchedule', function ($sq) use ($teamLeadCampaignIds) {
-                                    $sq->whereIn('campaign_id', $teamLeadCampaignIds);
+                                ->orWhere(function ($sub) use ($managedAgentIds) {
+                                    $sub->whereIn('coachee_id', $managedAgentIds)
+                                        ->whereHas('coachee', fn ($coachee) => $coachee->where('role', 'Agent'));
                                 });
                         });
                 } else {
@@ -193,18 +194,9 @@ class CoachingSessionController extends Controller
                 ->orderBy('last_name')
                 ->get(['id', 'first_name', 'middle_name', 'last_name', 'role']);
         } elseif ($isTeamLead && ! empty($teamLeadCampaignIds)) {
-            $agentIds = EmployeeSchedule::whereIn('campaign_id', $teamLeadCampaignIds)
-                ->where('is_active', true)
-                ->whereHas('user', function ($q) {
-                    $q->where('role', 'Agent')
-                        ->where('is_approved', true)
-                        ->where('is_active', true)
-                        ->notCoachingExcluded();
-                })
-                ->pluck('user_id')
-                ->unique();
+            $managedAgentIds = $user->getManagedAgentIds($teamLeadCampaignIds);
 
-            $allAgents = User::whereIn('id', $agentIds)
+            $allAgents = User::whereIn('id', $managedAgentIds)
                 ->with('activeSchedule.campaign:id,name')
                 ->orderBy('first_name')
                 ->orderBy('last_name')
@@ -295,21 +287,12 @@ class CoachingSessionController extends Controller
             // Coachable team leads (for direct coaching mode)
             $coachableTeamLeads = $teamLeads;
         } else {
-            // Team Lead: agents in their campaigns only
+            // Team Lead: agents assigned to this TL (or unassigned fallback) within TL campaigns
             $campaignIds = $user->getCampaignIds();
             if (! empty($campaignIds)) {
-                $agentIds = EmployeeSchedule::whereIn('campaign_id', $campaignIds)
-                    ->where('is_active', true)
-                    ->whereHas('user', function ($q) {
-                        $q->where('role', 'Agent')
-                            ->where('is_approved', true)
-                            ->where('is_active', true)
-                            ->notCoachingExcluded();
-                    })
-                    ->pluck('user_id')
-                    ->unique();
+                $managedAgentIds = $user->getManagedAgentIds($campaignIds);
 
-                $agents = User::whereIn('id', $agentIds)
+                $agents = User::whereIn('id', $managedAgentIds)
                     ->with('activeSchedule.campaign:id,name')
                     ->orderBy('first_name')
                     ->orderBy('last_name')

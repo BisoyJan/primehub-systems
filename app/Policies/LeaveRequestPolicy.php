@@ -41,10 +41,11 @@ class LeaveRequestPolicy
             return true;
         }
 
-        // Team Leads can view leave requests from their campaigns
+        // Team Leads can view leave requests from agents they manage.
         if ($user->role === 'Team Lead') {
-            $teamLeadCampaignNames = $user->campaigns->pluck('name')->toArray();
-            if (! empty($teamLeadCampaignNames) && in_array($leaveRequest->campaign_department, $teamLeadCampaignNames)) {
+            $managedAgentIds = $user->getManagedAgentIds();
+
+            if (in_array((int) $leaveRequest->user_id, $managedAgentIds, true)) {
                 return true;
             }
         }
@@ -167,8 +168,10 @@ class LeaveRequestPolicy
             return false;
         }
 
-        // Any Team Lead can approve agent leave requests
-        return true;
+        // Team Lead can only approve requests from managed agents
+        $managedAgentIds = $user->getManagedAgentIds();
+
+        return in_array((int) $leaveRequest->user_id, $managedAgentIds, true);
     }
 
     /**
