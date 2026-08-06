@@ -832,9 +832,11 @@ export default function Edit({
                                 )}
                                 {data.leave_type && (
                                     <p className="text-xs text-muted-foreground">
-                                        {requiresCredits
-                                            ? '✓ Deducts from leave credits'
-                                            : '○ Does not deduct from leave credits'}
+                                        {data.leave_type === 'LOA'
+                                            ? '○ May use available leave credits first at approval, then remaining days are unpaid'
+                                            : requiresCredits
+                                                ? '✓ Deducts from leave credits'
+                                                : '○ Does not deduct from leave credits'}
                                     </p>
                                 )}
                                 {isApprovedLeave && isSuperAdmin && (
@@ -848,7 +850,11 @@ export default function Edit({
                                     const showNotEligible = requiresCredits && !creditsSummary.is_eligible && !willBeEligibleByStartDate();
                                     const showCreditError = !!creditError;
                                     const showWarnings = validationWarnings.length > 0;
-                                    const totalNotices = [showReminder, showNotEligible, showCreditError, showWarnings].filter(Boolean).length;
+                                    const loaAvailableCredits = Math.max(0, Math.floor(creditsSummary.balance - creditsSummary.pending_credits));
+                                    const loaPotentialPaidDays = data.leave_type === 'LOA' ? Math.min(calculatedDays, loaAvailableCredits) : 0;
+                                    const loaPotentialUnpaidDays = data.leave_type === 'LOA' ? Math.max(0, calculatedDays - loaPotentialPaidDays) : 0;
+                                    const showLoaCreditPreview = data.leave_type === 'LOA' && calculatedDays > 0;
+                                    const totalNotices = [showReminder, showNotEligible, showCreditError, showWarnings, showLoaCreditPreview].filter(Boolean).length;
 
                                     if (totalNotices === 0) return null;
 
@@ -951,6 +957,21 @@ export default function Edit({
                                                                         </CollapsibleContent>
                                                                     </Collapsible>
                                                                 )}
+                                                            </div>
+                                                        </>
+                                                    )}
+
+                                                    {/* LOA credit preview - informational only */}
+                                                    {showLoaCreditPreview && (
+                                                        <>
+                                                            {(showReminder || showNotEligible || showCreditError || showWarnings) && <hr className="border-amber-200 dark:border-amber-700" />}
+                                                            <div className="text-sm text-amber-700 dark:text-amber-300">
+                                                                <p className="font-medium mb-1">LOA Credit Allocation Preview</p>
+                                                                <p>
+                                                                    At approval time, up to <strong>{loaPotentialPaidDays} day(s)</strong> may be credited from currently available whole leave credits.
+                                                                    The remaining <strong>{loaPotentialUnpaidDays} day(s)</strong> may be marked unpaid.
+                                                                    {loaAvailableCredits === 0 ? ' You currently have no whole credits available.' : ''}
+                                                                </p>
                                                             </div>
                                                         </>
                                                     )}

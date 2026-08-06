@@ -64,6 +64,23 @@ const formatDocumentDescription = (document: LeaveRequestDocument): string => {
     return [extension, size].filter(Boolean).join(' · ') || 'Document';
 };
 
+const getFirstValidationError = (errors: Record<string, unknown>): string | null => {
+    for (const value of Object.values(errors)) {
+        if (Array.isArray(value)) {
+            const message = value.find((item) => typeof item === 'string' && item.trim().length > 0);
+            if (typeof message === 'string' && message.trim()) {
+                return message;
+            }
+        }
+
+        if (typeof value === 'string' && value.trim()) {
+            return value;
+        }
+    }
+
+    return null;
+};
+
 interface User {
     id: number;
     name: string;
@@ -178,7 +195,7 @@ interface LeaveRequestDayRecord {
 
 interface SuggestedDayStatus {
     date: string;
-    status: 'pending' | 'sl_credited' | 'ncns' | 'advised_absence' | 'vl_credited' | 'upto' | 'spl_credited' | 'absent';
+    status: 'pending' | 'sl_credited' | 'ncns' | 'advised_absence' | 'vl_credited' | 'upto' | 'spl_credited' | 'absent' | 'loa_credited' | 'loa_unpaid';
     notes: string | null;
     is_half_day?: boolean;
 }
@@ -282,6 +299,7 @@ export default function Show({
     const [selectedApprovedDates, setSelectedApprovedDates] = useState<string[]>([]);
     const [showAttendancePointsDialog, setShowAttendancePointsDialog] = useState(false);
     const [showEditDayStatusesDialog, setShowEditDayStatusesDialog] = useState(false);
+    const [editDayStatusesError, setEditDayStatusesError] = useState<string | null>(null);
     const { can } = usePermission();
     const getInitials = useInitials();
 
@@ -289,7 +307,9 @@ export default function Show({
     const isSl = leaveRequest.leave_type === 'SL';
     const isVl = leaveRequest.leave_type === 'VL';
     const isSpl = leaveRequest.leave_type === 'SPL';
+    const isLoa = leaveRequest.leave_type === 'LOA';
     const hasDayStatuses = isSl || isVl;
+    const hasDisplayableDayStatuses = hasDayStatuses || isLoa;
 
     // SL with Undertime (partial-day absence) restricts options to "Partial-day Absence" only —
     // employee worked partial hours; existing attendance is preserved, no credits consumed,
@@ -429,8 +449,9 @@ export default function Show({
         });
     };
 
-    // Handle editing day statuses for approved SL requests
+    // Handle editing day statuses for approved SL/VL requests
     const handleOpenEditDayStatuses = () => {
+        setEditDayStatusesError(null);
         if (leaveRequestDays && leaveRequestDays.length > 0) {
             setEditDayStatuses(
                 leaveRequestDays.map((d) => ({
@@ -445,6 +466,7 @@ export default function Show({
 
     const handleSaveEditDayStatuses = () => {
         setEditDayStatusesProcessing(true);
+        setEditDayStatusesError(null);
         router.put(
             leaveUpdateDayStatusesRoute(leaveRequest.id).url,
             { day_statuses: editDayStatuses.map((d) => ({ date: d.date, status: d.status, notes: d.notes || undefined })) },
@@ -452,11 +474,14 @@ export default function Show({
                 onSuccess: () => {
                     setShowEditDayStatusesDialog(false);
                     setEditDayStatusesProcessing(false);
+                    setEditDayStatusesError(null);
                     toast.success('Per-day statuses updated successfully');
                 },
                 onError: (errors) => {
                     setEditDayStatusesProcessing(false);
-                    toast.error(errors.error || 'Failed to update day statuses');
+                    const message = getFirstValidationError(errors) || errors.error || 'Failed to update day statuses';
+                    setEditDayStatusesError(message);
+                    toast.error(message);
                 },
             },
         );
@@ -1297,12 +1322,12 @@ export default function Show({
                             </div>
                         )}
 
-                        {/* SL/VL Per-Day Status Breakdown (for approved requests) */}
-                        {hasDayStatuses && leaveRequestDays && leaveRequestDays.length > 0 && leaveRequest.status === 'approved' && (
+                        {/* SL/VL/LOA Per-Day Status Breakdown (for approved requests) */}
+                        {hasDisplayableDayStatuses && leaveRequestDays && leaveRequestDays.length > 0 && leaveRequest.status === 'approved' && (
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between">
                                     <p className="text-sm font-medium text-muted-foreground">Per-Day Status Breakdown</p>
-                                    {isAdmin && canEditApproved && (
+                                    {isAdmin && canEditApproved && hasDayStatuses && (
                                         <Button variant="outline" size="sm" onClick={handleOpenEditDayStatuses} className="h-7 text-xs">
                                             <Edit className="h-3 w-3 mr-1" />
                                             Edit Day Statuses
@@ -3053,6 +3078,7 @@ export default function Show({
                 if (!open) {
                     setEditDayStatuses([]);
                     setEditDayStatusesProcessing(false);
+                    setEditDayStatusesError(null);
                 }
             }}>
                 <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -3063,6 +3089,11 @@ export default function Show({
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
+                        {editDayStatusesError && (
+                            <Alert className="border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300">
+                                <AlertDescription>{editDayStatusesError}</AlertDescription>
+                            </Alert>
+                        )}
                         {editDayStatuses.length > 0 && (
                             <DayStatusAssignment
                                 dayStatuses={editDayStatuses}

@@ -56,7 +56,7 @@ class AssignDayStatusesRequest extends FormRequest
             'day_statuses.*.date.required' => 'Each day status must include a date.',
             'day_statuses.*.date.date' => 'Each day status date must be a valid date.',
             'day_statuses.*.status.required' => 'Each day must have a status assigned.',
-            'day_statuses.*.status.in' => 'Invalid day status. Must be sl_credited, ncns, or advised_absence.',
+            'day_statuses.*.status.in' => 'Invalid day status. Use one of the supported values for Sick Leave or Vacation Leave.',
             'day_statuses.*.notes.max' => 'Day notes cannot exceed 500 characters.',
         ];
     }
@@ -73,8 +73,8 @@ class AssignDayStatusesRequest extends FormRequest
             }
 
             // Verify leave type and status before running date/credit checks
-            if ($leaveRequest->leave_type !== 'SL') {
-                $validator->errors()->add('error', 'Per-day status assignment is only available for Sick Leave requests.');
+            if (! in_array($leaveRequest->leave_type, ['SL', 'VL'], true)) {
+                $validator->errors()->add('error', 'Per-day status assignment is only available for Sick Leave and Vacation Leave requests.');
 
                 return;
             }
@@ -121,9 +121,12 @@ class AssignDayStatusesRequest extends FormRequest
                 }
             }
 
-            // Validate sl_credited count does not exceed available credits
+            // Validate paid-day count does not exceed available credits for the leave type.
+            $paidStatus = $leaveRequest->leave_type === 'VL'
+                ? LeaveRequestDay::STATUS_VL_CREDITED
+                : LeaveRequestDay::STATUS_SL_CREDITED;
             $creditedCount = collect($dayStatuses)
-                ->where('status', LeaveRequestDay::STATUS_SL_CREDITED)
+                ->where('status', $paidStatus)
                 ->count();
 
             if ($creditedCount > 0) {
@@ -131,14 +134,14 @@ class AssignDayStatusesRequest extends FormRequest
                 $year = $startDate->year;
                 $balance = $leaveCreditService->getBalance($leaveRequest->user, $year);
 
-                // If editing existing day statuses, add back previously deducted credits for accurate check
+                // If editing existing day statuses, add back previously deducted credits for accurate check.
                 $previouslyDeducted = (float) ($leaveRequest->credits_deducted ?? 0);
                 $availableCredits = $balance + $previouslyDeducted;
 
                 if ($creditedCount > $availableCredits) {
                     $validator->errors()->add(
                         'day_statuses',
-                        "Cannot assign {$creditedCount} day(s) as SL Credited. Only ".floor($availableCredits).' credit(s) available.'
+                        "Cannot assign {$creditedCount} day(s) as ".($leaveRequest->leave_type === 'VL' ? 'VL Credited' : 'SL Credited').'. Only '.floor($availableCredits).' credit(s) available.'
                     );
                 }
             }

@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 
 export interface DayStatus {
     date: string;
-    status: 'pending' | 'sl_credited' | 'ncns' | 'advised_absence' | 'vl_credited' | 'upto' | 'spl_credited' | 'absent' | 'partial_day_absence';
+    status: 'pending' | 'sl_credited' | 'ncns' | 'advised_absence' | 'vl_credited' | 'upto' | 'spl_credited' | 'absent' | 'partial_day_absence' | 'loa_credited' | 'loa_unpaid';
     notes?: string;
     is_half_day?: boolean;
 }
@@ -106,7 +106,31 @@ const SPL_STATUS_OPTIONS = [
     },
 ] as const;
 
-export type StatusOption = (typeof SL_STATUS_OPTIONS)[number] | (typeof VL_STATUS_OPTIONS)[number] | (typeof SPL_STATUS_OPTIONS)[number];
+/** LOA-specific status options (used internally for ReadOnlyView lookups). */
+const LOA_STATUS_OPTIONS = [
+    {
+        value: 'loa_credited',
+        label: 'LOA Credited',
+        shortLabel: 'LOA Credited',
+        description: 'Paid - uses available leave credits',
+        color: 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800',
+        dotColor: 'bg-green-500',
+        tag: 'Paid',
+        tagColor: 'text-green-600 dark:text-green-400',
+    },
+    {
+        value: 'loa_unpaid',
+        label: 'LOA Unpaid',
+        shortLabel: 'LOA Unpaid',
+        description: 'Unpaid LOA day - no credits remaining',
+        color: 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800',
+        dotColor: 'bg-amber-500',
+        tag: 'Unpaid',
+        tagColor: 'text-amber-600 dark:text-amber-400',
+    },
+] as const;
+
+export type StatusOption = (typeof SL_STATUS_OPTIONS)[number] | (typeof VL_STATUS_OPTIONS)[number] | (typeof SPL_STATUS_OPTIONS)[number] | (typeof LOA_STATUS_OPTIONS)[number];
 
 /** VL-specific status options: VL Credited (paid) or UPTO (unpaid). */
 const VL_STATUS_OPTIONS = [
@@ -137,7 +161,7 @@ function getStatusOption(value: string, options: readonly StatusOption[] = SL_ST
 }
 
 /** All possible status options (for ReadOnlyView lookups). */
-const ALL_STATUS_OPTIONS = [...SL_STATUS_OPTIONS, ...VL_STATUS_OPTIONS, ...SPL_STATUS_OPTIONS];
+const ALL_STATUS_OPTIONS = [...SL_STATUS_OPTIONS, ...VL_STATUS_OPTIONS, ...SPL_STATUS_OPTIONS, ...LOA_STATUS_OPTIONS];
 
 function StatusBadge({ status, options }: { status: string; options?: readonly StatusOption[] }) {
     const opt = getStatusOption(status, options as StatusOption[]);
@@ -418,14 +442,24 @@ export default function DayStatusAssignment({ dayStatuses, onChange, readOnly = 
 
 function ReadOnlyView({ records }: { records: ExistingDayRecord[] }) {
     const summary = useMemo(() => {
-        const credited = records.filter((r) => r.day_status === 'sl_credited' || r.day_status === 'vl_credited' || r.day_status === 'spl_credited').length;
+        const credited = records.filter((r) => r.day_status === 'sl_credited' || r.day_status === 'vl_credited' || r.day_status === 'spl_credited' || r.day_status === 'loa_credited').length;
         const ncns = records.filter((r) => r.day_status === 'ncns').length;
         const advised = records.filter((r) => r.day_status === 'advised_absence' || r.day_status === 'upto').length;
+        const loaUnpaid = records.filter((r) => r.day_status === 'loa_unpaid').length;
         const absent = records.filter((r) => r.day_status === 'absent').length;
         // Determine label from records
         const hasVl = records.some((r) => r.day_status === 'vl_credited' || r.day_status === 'upto');
         const hasSpl = records.some((r) => r.day_status === 'spl_credited' || r.day_status === 'absent');
-        return { credited, ncns, advised, absent, total: records.length, creditLabel: hasSpl ? 'SPL' : hasVl ? 'VL' : 'SL' };
+        const hasLoa = records.some((r) => r.day_status === 'loa_credited' || r.day_status === 'loa_unpaid');
+        return {
+            credited,
+            ncns,
+            advised,
+            loaUnpaid,
+            absent,
+            total: records.length,
+            creditLabel: hasLoa ? 'LOA' : hasSpl ? 'SPL' : hasVl ? 'VL' : 'SL',
+        };
     }, [records]);
 
     return (
@@ -448,6 +482,11 @@ function ReadOnlyView({ records }: { records: ExistingDayRecord[] }) {
                         <AlertTriangle className="h-3 w-3" /> {summary.advised} {summary.creditLabel === 'VL' ? 'UPTO' : 'Advised Absence'}
                     </span>
                 )}
+                {summary.loaUnpaid > 0 && (
+                    <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-400">
+                        <AlertTriangle className="h-3 w-3" /> {summary.loaUnpaid} LOA Unpaid
+                    </span>
+                )}
                 {summary.absent > 0 && (
                     <span className="inline-flex items-center gap-1 text-xs font-medium text-red-700 dark:text-red-400">
                         <XCircle className="h-3 w-3" /> {summary.absent} Absent
@@ -465,9 +504,9 @@ function ReadOnlyView({ records }: { records: ExistingDayRecord[] }) {
                             key={record.id}
                             className={cn(
                                 'transition-colors',
-                                (record.day_status === 'sl_credited' || record.day_status === 'vl_credited' || record.day_status === 'spl_credited') && 'bg-green-50/40 dark:bg-green-950/10',
+                                (record.day_status === 'sl_credited' || record.day_status === 'vl_credited' || record.day_status === 'spl_credited' || record.day_status === 'loa_credited') && 'bg-green-50/40 dark:bg-green-950/10',
                                 (record.day_status === 'ncns' || record.day_status === 'absent') && 'bg-red-50/40 dark:bg-red-950/10',
-                                (record.day_status === 'advised_absence' || record.day_status === 'upto') && 'bg-amber-50/40 dark:bg-amber-950/10',
+                                (record.day_status === 'advised_absence' || record.day_status === 'upto' || record.day_status === 'loa_unpaid') && 'bg-amber-50/40 dark:bg-amber-950/10',
                             )}
                         >
                             <div className="flex items-center gap-2 px-3 py-2">

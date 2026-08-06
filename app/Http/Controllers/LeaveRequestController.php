@@ -989,11 +989,11 @@ class LeaveRequestController extends Controller
             }
         }
 
-        // Per-day statuses for SL, VL, and SPL requests (existing assigned days)
+        // Per-day statuses for SL, VL, LOA, and SPL requests (existing assigned days)
         $leaveRequestDays = null;
         $suggestedDayStatuses = null;
 
-        if (in_array($leaveRequest->leave_type, ['SL', 'VL', 'SPL'])) {
+        if (in_array($leaveRequest->leave_type, ['SL', 'VL', 'LOA', 'SPL'])) {
             // Load existing per-day statuses if any
             $leaveRequestDays = $leaveRequest->days->map(function ($day) {
                 return [
@@ -1955,6 +1955,9 @@ class LeaveRequestController extends Controller
                     // Solo Parent Leave - auto-FIFO credit allocation with optional half-day overrides
                     $splHalfDayOverrides = $request->input('spl_half_day_overrides', []);
                     $this->handleSplApproval($leaveRequest, $splHalfDayOverrides);
+                } elseif ($leaveRequest->leave_type === 'LOA') {
+                    // Leave of Absence - earliest approved workdays use available credits, remaining days are unpaid
+                    $this->handleLoaApproval($leaveRequest, $leaveCreditService);
                 } elseif ($leaveRequest->leave_type === 'IW') {
                     // Incomplete Workday - employee reported to office but left early
                     // No credit deduction, preserve biometric data, auto-excuse attendance points
@@ -2091,7 +2094,7 @@ class LeaveRequestController extends Controller
             'denial_reason' => 'nullable|required_with:denied_dates|string|min:10',
             'day_statuses' => 'nullable|array',
             'day_statuses.*.date' => 'required_with:day_statuses|date',
-            'day_statuses.*.status' => 'required_with:day_statuses|string|in:pending,sl_credited,ncns,advised_absence,vl_credited,upto,spl_credited,absent,partial_day_absence',
+            'day_statuses.*.status' => 'required_with:day_statuses|string|in:pending,sl_credited,ncns,advised_absence,vl_credited,upto,spl_credited,absent,partial_day_absence,loa_credited,loa_unpaid',
             'day_statuses.*.is_half_day' => 'nullable|boolean',
             'day_statuses.*.notes' => 'nullable|string|max:500',
             'spl_half_day_overrides' => 'nullable|array',
@@ -2232,6 +2235,9 @@ class LeaveRequestController extends Controller
                 // Solo Parent Leave - auto-FIFO credit allocation with optional half-day overrides
                 $splHalfDayOverrides = $request->input('spl_half_day_overrides', []);
                 $this->handleSplApproval($leaveRequest, $splHalfDayOverrides);
+            } elseif ($leaveRequest->leave_type === 'LOA') {
+                // Leave of Absence - earliest approved workdays use available credits, remaining days are unpaid
+                $this->handleLoaApproval($leaveRequest, $leaveCreditService);
             } elseif ($leaveRequest->requiresCredits()) {
                 // Other credited leave types - normal deduction
                 $year = $request->input('credits_year', $leaveRequest->created_at->year);
@@ -2311,8 +2317,8 @@ class LeaveRequestController extends Controller
     }
 
     /**
-     * Update per-day statuses for an approved Sick Leave request.
-     * Allows admin to re-assign day statuses after initial approval.
+     * Update per-day statuses for an approved SL/VL request.
+     * Allows admins to re-assign day statuses after initial approval.
      * Handles credit recalculation, attendance updates, and point adjustments.
      */
     public function updateDayStatuses(AssignDayStatusesRequest $request, LeaveRequest $leaveRequest)
@@ -2472,7 +2478,7 @@ class LeaveRequestController extends Controller
             'review_notes' => 'nullable|string|max:1000',
             'day_statuses' => 'nullable|array',
             'day_statuses.*.date' => 'required_with:day_statuses|date',
-            'day_statuses.*.status' => 'required_with:day_statuses|string|in:pending,sl_credited,ncns,advised_absence,vl_credited,upto,spl_credited,absent,partial_day_absence',
+            'day_statuses.*.status' => 'required_with:day_statuses|string|in:pending,sl_credited,ncns,advised_absence,vl_credited,upto,spl_credited,absent,partial_day_absence,loa_credited,loa_unpaid',
             'day_statuses.*.is_half_day' => 'nullable|boolean',
             'day_statuses.*.notes' => 'nullable|string|max:500',
         ]);
@@ -2702,6 +2708,9 @@ class LeaveRequestController extends Controller
                         LeaveRequestDay::where('leave_request_id', $leaveRequest->id)->delete();
                     }
                     $this->handleVlApproval($leaveRequest, $leaveCreditService, $vlDayStatuses);
+                } elseif ($leaveRequest->leave_type === 'LOA') {
+                    // Leave of Absence - earliest approved workdays use available credits, remaining days are unpaid
+                    $this->handleLoaApproval($leaveRequest, $leaveCreditService);
                 } elseif ($leaveRequest->requiresCredits()) {
                     // Other credited leave types - deduct for approved days only
                     $year = $leaveRequest->created_at->year;
@@ -3480,6 +3489,114 @@ class LeaveRequestController extends Controller
                 'credits_deducted' => 0,
             ]);
         }
+    }
+
+    /**
+     * Handle Leave of Absence approval with automatic FIFO credit allocation.
+     *
+     * The earliest approved workdays consume currently available whole credits.
+     * Remaining approved workdays are marked as unpaid LOA.
+     */
+    protected function handleLoaApproval(LeaveRequest $leaveRequest, LeaveCreditService $leaveCreditService): void
+    {
+        $user = $leaveRequest->user;
+        $startDate = Carbon::parse($leaveRequest->start_date);
+        $endDate = Carbon::parse($leaveRequest->end_date);
+
+        $deniedDates = [];
+        if ($leaveRequest->has_partial_denial) {
+            $deniedDates = $leaveRequest->deniedDates()
+                ->pluck('denied_date')
+                ->map(fn ($d) => Carbon::parse($d)->format('Y-m-d'))
+                ->toArray();
+        }
+
+        $allDates = [];
+        $currentDate = $startDate->copy();
+        while ($currentDate->lte($endDate)) {
+            $dateStr = $currentDate->format('Y-m-d');
+            if ($currentDate->isWeekday() && ! in_array($dateStr, $deniedDates)) {
+                $allDates[] = $dateStr;
+            }
+            $currentDate->addDay();
+        }
+
+        if (empty($allDates)) {
+            $leaveRequest->update([
+                'credits_deducted' => 0,
+                'credits_year' => $startDate->year,
+            ]);
+
+            return;
+        }
+
+        $availableWholeCredits = $leaveCreditService->getAvailableWholeCredits($user, $startDate);
+        $creditedDaysLimit = min($availableWholeCredits, count($allDates));
+
+        $dayStatusMap = [];
+        foreach ($allDates as $index => $dateStr) {
+            if ($index < $creditedDaysLimit) {
+                $dayStatusMap[$dateStr] = [
+                    'date' => $dateStr,
+                    'status' => LeaveRequestDay::STATUS_LOA_CREDITED,
+                    'notes' => 'Auto-assigned: LOA credit applied',
+                ];
+            } else {
+                $dayStatusMap[$dateStr] = [
+                    'date' => $dateStr,
+                    'status' => LeaveRequestDay::STATUS_LOA_UNPAID,
+                    'notes' => 'Auto-assigned: No leave credits remaining (LOA unpaid)',
+                ];
+            }
+        }
+
+        $this->storeLeaveRequestDays($leaveRequest, $dayStatusMap);
+
+        $creditedDays = 0;
+        $unpaidDays = 0;
+
+        foreach ($allDates as $dateStr) {
+            $dayInfo = $dayStatusMap[$dateStr] ?? null;
+            $status = $dayInfo['status'] ?? LeaveRequestDay::STATUS_LOA_UNPAID;
+            $dayNotes = $dayInfo['notes'] ?? null;
+
+            if ($status === LeaveRequestDay::STATUS_LOA_CREDITED) {
+                $this->createOrUpdateAttendanceForDate(
+                    $user,
+                    $dateStr,
+                    'on_leave',
+                    "LOA Credited (Paid) - Leave Request #{$leaveRequest->id}".($dayNotes ? " - {$dayNotes}" : ''),
+                    $leaveRequest->id
+                );
+                $creditedDays++;
+            } else {
+                $this->createOrUpdateAttendanceForDate(
+                    $user,
+                    $dateStr,
+                    'on_leave',
+                    "LOA Unpaid - Leave Request #{$leaveRequest->id}".($dayNotes ? " - {$dayNotes}" : ''),
+                    $leaveRequest->id
+                );
+                $unpaidDays++;
+            }
+        }
+
+        if ($creditedDays > 0) {
+            $leaveCreditService->deductCreditsByAmount($leaveRequest, $creditedDays, $startDate->year);
+        } else {
+            $leaveRequest->update([
+                'credits_deducted' => 0,
+                'credits_year' => $startDate->year,
+            ]);
+        }
+
+        \Log::info("LOA approval with auto-FIFO credit allocation for Leave Request #{$leaveRequest->id}", [
+            'user_id' => $user->id,
+            'credited_days' => $creditedDays,
+            'unpaid_days' => $unpaidDays,
+            'available_whole_credits' => $availableWholeCredits,
+            'total_days' => count($allDates),
+        ]);
     }
 
     /**

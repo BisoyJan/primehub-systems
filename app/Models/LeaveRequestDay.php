@@ -37,6 +37,10 @@ class LeaveRequestDay extends Model
 
     const STATUS_SPL_CREDITED = 'spl_credited';
 
+    const STATUS_LOA_CREDITED = 'loa_credited';
+
+    const STATUS_LOA_UNPAID = 'loa_unpaid';
+
     const STATUS_ABSENT = 'absent';
 
     const STATUS_PARTIAL_DAY_ABSENCE = 'partial_day_absence';
@@ -52,6 +56,8 @@ class LeaveRequestDay extends Model
         self::STATUS_VL_CREDITED => 'VL Credited (Paid)',
         self::STATUS_UPTO => 'UPTO — Unpaid Time Off',
         self::STATUS_SPL_CREDITED => 'SPL Credited (Paid)',
+        self::STATUS_LOA_CREDITED => 'LOA Credited (Paid)',
+        self::STATUS_LOA_UNPAID => 'LOA Unpaid',
         self::STATUS_ABSENT => 'Absent',
         self::STATUS_PARTIAL_DAY_ABSENCE => 'Partial-day Absence',
     ];
@@ -59,12 +65,12 @@ class LeaveRequestDay extends Model
     /**
      * Statuses that are considered paid (deducted from credits).
      */
-    const PAID_STATUSES = [self::STATUS_SL_CREDITED, self::STATUS_VL_CREDITED, self::STATUS_SPL_CREDITED];
+    const PAID_STATUSES = [self::STATUS_SL_CREDITED, self::STATUS_VL_CREDITED, self::STATUS_SPL_CREDITED, self::STATUS_LOA_CREDITED];
 
     /**
      * Statuses that are considered unpaid.
      */
-    const UNPAID_STATUSES = [self::STATUS_NCNS, self::STATUS_ADVISED_ABSENCE, self::STATUS_UPTO, self::STATUS_ABSENT, self::STATUS_PARTIAL_DAY_ABSENCE];
+    const UNPAID_STATUSES = [self::STATUS_NCNS, self::STATUS_ADVISED_ABSENCE, self::STATUS_UPTO, self::STATUS_ABSENT, self::STATUS_PARTIAL_DAY_ABSENCE, self::STATUS_LOA_UNPAID];
 
     protected $fillable = [
         'leave_request_id',

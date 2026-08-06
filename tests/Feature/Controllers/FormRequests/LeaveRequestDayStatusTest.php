@@ -60,6 +60,22 @@ class LeaveRequestDayStatusTest extends TestCase
     }
 
     /**
+     * Create VL credits for the agent.
+     */
+    private function giveVlCredits(int $credits, ?int $year = null): LeaveCredit
+    {
+        return LeaveCredit::create([
+            'user_id' => $this->agent->id,
+            'year' => $year ?? now()->year,
+            'month' => now()->month,
+            'credits_earned' => $credits,
+            'credits_used' => 0,
+            'credits_balance' => $credits,
+            'accrued_at' => now(),
+        ]);
+    }
+
+    /**
      * Create a pending SL request for the agent.
      */
     private function createSlRequest(string $startDate, string $endDate, int $days, bool $medCert = true): LeaveRequest
@@ -73,6 +89,27 @@ class LeaveRequestDayStatusTest extends TestCase
             'medical_cert_submitted' => $medCert,
             'status' => 'pending',
         ]);
+    }
+
+    /**
+     * Create a pending LOA request for the agent.
+     */
+    private function createLoaRequest(string $startDate, string $endDate, int $days): LeaveRequest
+    {
+        $leaveRequest = LeaveRequest::factory()->create([
+            'user_id' => $this->agent->id,
+            'leave_type' => 'LOA',
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'days_requested' => $days,
+            'medical_cert_submitted' => false,
+            'requires_tl_approval' => false,
+            'status' => 'pending',
+        ]);
+
+        $leaveRequest->update(['requires_tl_approval' => false]);
+
+        return $leaveRequest->fresh();
     }
 
     /**
@@ -297,6 +334,51 @@ class LeaveRequestDayStatusTest extends TestCase
     }
 
     #[Test]
+    public function it_allows_admin_to_update_vl_day_statuses_after_approval(): void
+    {
+        $this->giveVlCredits(3);
+
+        $leaveRequest = LeaveRequest::factory()->create([
+            'user_id' => $this->agent->id,
+            'leave_type' => 'VL',
+            'start_date' => '2026-07-06',
+            'end_date' => '2026-07-08',
+            'days_requested' => 3,
+            'status' => 'approved',
+        ]);
+
+        $response = $this->actingAs($this->admin)->put(
+            route('leave-requests.update-day-statuses', $leaveRequest),
+            ['day_statuses' => [
+                ['date' => '2026-07-06', 'status' => 'vl_credited', 'notes' => 'Credit this day'],
+                ['date' => '2026-07-07', 'status' => 'upto', 'notes' => 'UPTO for this day'],
+                ['date' => '2026-07-08', 'status' => 'vl_credited', 'notes' => 'Credit this day'],
+            ]]
+        );
+
+        $response->assertRedirect();
+
+        $leaveRequest->refresh();
+
+        $days = LeaveRequestDay::where('leave_request_id', $leaveRequest->id)
+            ->orderBy('date')
+            ->get();
+
+        $this->assertCount(3, $days);
+
+        $day06 = $days->first(fn ($day) => $day->date->format('Y-m-d') === '2026-07-06');
+        $day07 = $days->first(fn ($day) => $day->date->format('Y-m-d') === '2026-07-07');
+        $day08 = $days->first(fn ($day) => $day->date->format('Y-m-d') === '2026-07-08');
+
+        $this->assertNotNull($day06);
+        $this->assertNotNull($day07);
+        $this->assertNotNull($day08);
+        $this->assertSame('vl_credited', $day06->day_status);
+        $this->assertSame('upto', $day07->day_status);
+        $this->assertSame('vl_credited', $day08->day_status);
+    }
+
+    #[Test]
     public function it_rejects_day_status_update_for_non_sl_vl_requests(): void
     {
         $leaveRequest = LeaveRequest::factory()->create([
@@ -361,6 +443,99 @@ class LeaveRequestDayStatusTest extends TestCase
     }
 
     #[Test]
+    public function it_allocates_loa_credits_to_earliest_workdays_on_full_approval(): void
+    {
+        $superAdmin = User::factory()->create(['role' => 'Super Admin', 'is_approved' => true]);
+        $credit = $this->giveVlCredits(2, 2026);
+        $leaveRequest = $this->createLoaRequest('2026-07-06', '2026-07-10', 5);
+
+        $this->actingAs($superAdmin)->post(route('leave-requests.force-approve', $leaveRequest), [
+            'review_notes' => 'Super Admin force approval for LOA request allocation.',
+        ]);
+
+        $leaveRequest->refresh();
+        $credit->refresh();
+
+        $this->assertEquals('approved', $leaveRequest->status);
+        $this->assertEquals(2, (int) $leaveRequest->credits_deducted);
+
+        $days = LeaveRequestDay::where('leave_request_id', $leaveRequest->id)
+            ->orderBy('date')
+            ->get();
+
+        $this->assertCount(5, $days);
+        $this->assertEquals('loa_credited', $days[0]->day_status);
+        $this->assertEquals('loa_credited', $days[1]->day_status);
+        $this->assertEquals('loa_unpaid', $days[2]->day_status);
+        $this->assertEquals('loa_unpaid', $days[3]->day_status);
+        $this->assertEquals('loa_unpaid', $days[4]->day_status);
+
+        $this->assertEquals(2.0, (float) $credit->credits_used);
+        $this->assertEquals(0.0, (float) $credit->credits_balance);
+    }
+
+    #[Test]
+    public function it_marks_all_loa_days_unpaid_when_no_whole_credits_are_available(): void
+    {
+        $superAdmin = User::factory()->create(['role' => 'Super Admin', 'is_approved' => true]);
+        $this->giveVlCredits(0, 2026);
+        $leaveRequest = $this->createLoaRequest('2026-07-06', '2026-07-10', 5);
+
+        $this->actingAs($superAdmin)->post(route('leave-requests.force-approve', $leaveRequest), [
+            'review_notes' => 'Super Admin force approval for LOA with no available credits.',
+        ]);
+
+        $leaveRequest->refresh();
+
+        $this->assertEquals('approved', $leaveRequest->status);
+        $this->assertEquals(0, (int) $leaveRequest->credits_deducted);
+
+        $days = LeaveRequestDay::where('leave_request_id', $leaveRequest->id)
+            ->orderBy('date')
+            ->get();
+
+        $this->assertCount(5, $days);
+        foreach ($days as $day) {
+            $this->assertEquals('loa_unpaid', $day->day_status);
+        }
+    }
+
+    #[Test]
+    public function it_allocates_loa_credits_only_within_remaining_approved_dates_after_partial_deny(): void
+    {
+        $superAdmin = User::factory()->create(['role' => 'Super Admin', 'is_approved' => true]);
+        $credit = $this->giveVlCredits(2, 2026);
+        $leaveRequest = $this->createLoaRequest('2026-07-06', '2026-07-10', 5);
+
+        $this->actingAs($superAdmin)->post(route('leave-requests.force-approve', $leaveRequest), [
+            'denied_dates' => ['2026-07-09', '2026-07-10'],
+            'denial_reason' => 'Denying final LOA dates for coverage need.',
+            'review_notes' => 'Super Admin force partial approval for LOA request.',
+        ]);
+
+        $leaveRequest->refresh();
+        $credit->refresh();
+
+        $this->assertEquals('approved', $leaveRequest->status);
+        $this->assertTrue((bool) $leaveRequest->has_partial_denial);
+        $this->assertEquals(2, (int) $leaveRequest->credits_deducted);
+
+        $days = LeaveRequestDay::where('leave_request_id', $leaveRequest->id)
+            ->orderBy('date')
+            ->get();
+
+        $this->assertCount(3, $days);
+        $this->assertEquals('loa_credited', $days[0]->day_status);
+        $this->assertEquals('loa_credited', $days[1]->day_status);
+        $this->assertEquals('loa_unpaid', $days[2]->day_status);
+        $this->assertEquals('2026-07-06', $days[0]->date->format('Y-m-d'));
+        $this->assertEquals('2026-07-08', $days[2]->date->format('Y-m-d'));
+
+        $this->assertEquals(2.0, (float) $credit->credits_used);
+        $this->assertEquals(0.0, (float) $credit->credits_balance);
+    }
+
+    #[Test]
     public function it_returns_suggested_day_statuses_for_pending_sl(): void
     {
         $this->giveSlCredits(2);
@@ -385,12 +560,15 @@ class LeaveRequestDayStatusTest extends TestCase
     {
         $this->giveSlCredits(3);
 
-        $leaveRequest = $this->createSlRequest('2026-07-06', '2026-07-08', 3);
+        $startDate = now()->addDay()->format('Y-m-d');
+        $endDate = now()->addDays(3)->format('Y-m-d');
+
+        $leaveRequest = $this->createSlRequest($startDate, $endDate, 3);
 
         $dayStatuses = [
-            ['date' => '2026-07-06', 'status' => 'sl_credited'],
-            ['date' => '2026-07-07', 'status' => 'sl_credited'],
-            ['date' => '2026-07-08', 'status' => 'sl_credited'],
+            ['date' => $startDate, 'status' => 'sl_credited'],
+            ['date' => now()->addDays(2)->format('Y-m-d'), 'status' => 'sl_credited'],
+            ['date' => $endDate, 'status' => 'sl_credited'],
         ];
 
         $this->dualApproveWithDayStatuses($leaveRequest, $dayStatuses);

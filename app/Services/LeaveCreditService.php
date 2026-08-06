@@ -1392,6 +1392,105 @@ class LeaveCreditService
     }
 
     /**
+     * Get currently available whole leave credits for the request year.
+     */
+    public function getAvailableWholeCredits(User $user, Carbon $leaveStartDate): int
+    {
+        $balance = $this->getBalance($user, $leaveStartDate->year);
+
+        return max(0, (int) floor($balance));
+    }
+
+    /**
+     * Deduct an explicit amount of leave credits from a user's balance.
+     *
+     * Unlike deductCredits(), this does not depend on leave type.
+     * Returns the actual amount deducted.
+     */
+    public function deductCreditsByAmount(LeaveRequest $leaveRequest, float $daysToDeduct, ?int $year = null): float
+    {
+        $daysToDeduct = max(0, $daysToDeduct);
+        $year = $year ?? $leaveRequest->start_date->year;
+        $userId = $leaveRequest->user_id;
+
+        if ($daysToDeduct <= 0) {
+            $leaveRequest->update([
+                'credits_deducted' => 0,
+                'credits_year' => $year,
+            ]);
+
+            return 0;
+        }
+
+        $leaveStartDate = $leaveRequest->start_date;
+        $carryoverExpirationDate = Carbon::create($year, 3, 31)->endOfDay();
+        $canUseCarryover = $leaveStartDate->lte($carryoverExpirationDate);
+
+        if ($canUseCarryover) {
+            $carryoverRecord = LeaveCreditCarryover::forUser($userId)
+                ->toYear($year)
+                ->where('is_first_regularization', false)
+                ->first();
+
+            if ($carryoverRecord && $carryoverRecord->cash_converted) {
+                $canUseCarryover = false;
+            }
+        }
+
+        if ($canUseCarryover) {
+            $this->ensureCarryoverCreditRecord($userId, $year);
+        }
+
+        $creditsQuery = LeaveCredit::forUser($userId)
+            ->forYear($year);
+
+        if (! $canUseCarryover) {
+            $creditsQuery->where('month', '>', 0);
+        }
+
+        $credits = $creditsQuery->orderBy('month')->get();
+        $totalAvailableCredits = (float) $credits->sum('credits_balance');
+
+        if ($totalAvailableCredits <= 0) {
+            $leaveRequest->update([
+                'credits_deducted' => 0,
+                'credits_year' => $year,
+            ]);
+
+            return 0;
+        }
+
+        $remainingToDeduct = $daysToDeduct;
+        $actuallyDeducted = 0.0;
+
+        /** @var LeaveCredit $credit */
+        foreach ($credits as $credit) {
+            if ($remainingToDeduct <= 0) {
+                break;
+            }
+
+            $availableInThisMonth = (float) $credit->credits_balance;
+            $deductFromThisMonth = min($remainingToDeduct, $availableInThisMonth);
+
+            if ($deductFromThisMonth > 0) {
+                $credit->credits_used += $deductFromThisMonth;
+                $credit->credits_balance -= $deductFromThisMonth;
+                $credit->save();
+
+                $remainingToDeduct -= $deductFromThisMonth;
+                $actuallyDeducted += $deductFromThisMonth;
+            }
+        }
+
+        $leaveRequest->update([
+            'credits_deducted' => $actuallyDeducted,
+            'credits_year' => $year,
+        ]);
+
+        return $actuallyDeducted;
+    }
+
+    /**
      * Maximum credits that can be carried over to the next year.
      * These can be used for leave requests or conversion until end of March.
      * After March, unused carryover credits expire.
