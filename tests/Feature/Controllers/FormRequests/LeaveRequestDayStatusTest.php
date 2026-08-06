@@ -23,6 +23,8 @@ class LeaveRequestDayStatusTest extends TestCase
 
     protected User $hr;
 
+    protected User $superAdmin;
+
     protected User $agent;
 
     protected function setUp(): void
@@ -36,6 +38,7 @@ class LeaveRequestDayStatusTest extends TestCase
 
         $this->admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
         $this->hr = User::factory()->create(['role' => 'HR', 'is_approved' => true]);
+        $this->superAdmin = User::factory()->create(['role' => 'Super Admin', 'is_approved' => true]);
         $this->agent = User::factory()->create([
             'role' => 'Agent',
             'is_approved' => true,
@@ -1131,5 +1134,109 @@ class LeaveRequestDayStatusTest extends TestCase
         $deniedDates = LeaveRequestDeniedDate::where('leave_request_id', $leaveRequest->id)->get();
         $this->assertCount(1, $deniedDates);
         $this->assertEquals('2026-07-10', $deniedDates[0]->denied_date->format('Y-m-d'));
+    }
+
+    #[Test]
+    public function super_admin_can_edit_partial_denial_dates_while_pending(): void
+    {
+        $leaveRequest = LeaveRequest::factory()->create([
+            'user_id' => $this->agent->id,
+            'leave_type' => 'BL',
+            'status' => 'pending',
+            'start_date' => '2026-07-07',
+            'end_date' => '2026-07-10',
+            'days_requested' => 5,
+            'has_partial_denial' => true,
+            'approved_days' => 4,
+            'original_start_date' => '2026-07-06',
+            'original_end_date' => '2026-07-10',
+        ]);
+
+        LeaveRequestDeniedDate::create([
+            'leave_request_id' => $leaveRequest->id,
+            'denied_date' => '2026-07-06',
+            'denial_reason' => 'Initial TL/HR partial denial',
+            'denied_by' => $this->admin->id,
+        ]);
+
+        $response = $this->actingAs($this->superAdmin)->put(
+            route('leave-requests.update-partial-denial', $leaveRequest),
+            [
+                'denied_dates' => ['2026-07-10'],
+            ]
+        );
+
+        $response->assertRedirect();
+        $response->assertSessionHas('success');
+
+        $leaveRequest->refresh();
+
+        $this->assertTrue((bool) $leaveRequest->has_partial_denial);
+        $this->assertEquals(4, (int) $leaveRequest->approved_days);
+        $this->assertEquals('2026-07-06', $leaveRequest->start_date->format('Y-m-d'));
+        $this->assertEquals('2026-07-09', $leaveRequest->end_date->format('Y-m-d'));
+
+        $deniedDates = LeaveRequestDeniedDate::where('leave_request_id', $leaveRequest->id)
+            ->orderBy('denied_date')
+            ->get();
+
+        $this->assertCount(1, $deniedDates);
+        $this->assertEquals('2026-07-10', $deniedDates[0]->denied_date->format('Y-m-d'));
+        $this->assertEquals($this->superAdmin->id, $deniedDates[0]->denied_by);
+    }
+
+    #[Test]
+    public function super_admin_can_clear_partial_denial_after_final_approval_without_overwriting_admin_hr_metadata(): void
+    {
+        $leaveRequest = LeaveRequest::factory()->create([
+            'user_id' => $this->agent->id,
+            'leave_type' => 'BL',
+            'status' => 'approved',
+            'start_date' => '2026-07-07',
+            'end_date' => '2026-07-10',
+            'days_requested' => 5,
+            'has_partial_denial' => true,
+            'approved_days' => 4,
+            'original_start_date' => '2026-07-06',
+            'original_end_date' => '2026-07-10',
+            'admin_approved_by' => $this->admin->id,
+            'admin_approved_at' => now(),
+            'admin_review_notes' => 'Admin partial approval recorded',
+            'hr_approved_by' => $this->hr->id,
+            'hr_approved_at' => now(),
+            'hr_review_notes' => 'HR completed approval',
+        ]);
+
+        LeaveRequestDeniedDate::create([
+            'leave_request_id' => $leaveRequest->id,
+            'denied_date' => '2026-07-06',
+            'denial_reason' => 'Initial TL/HR partial denial',
+            'denied_by' => $this->hr->id,
+        ]);
+
+        $response = $this->actingAs($this->superAdmin)->put(
+            route('leave-requests.update-partial-denial', $leaveRequest),
+            [
+                'denied_dates' => [],
+            ]
+        );
+
+        $response->assertRedirect();
+        $response->assertSessionHas('success');
+
+        $leaveRequest->refresh();
+
+        $this->assertEquals('approved', $leaveRequest->status);
+        $this->assertFalse((bool) $leaveRequest->has_partial_denial);
+        $this->assertNull($leaveRequest->approved_days);
+        $this->assertEquals('2026-07-06', $leaveRequest->start_date->format('Y-m-d'));
+        $this->assertEquals('2026-07-10', $leaveRequest->end_date->format('Y-m-d'));
+
+        $this->assertEquals($this->admin->id, $leaveRequest->admin_approved_by);
+        $this->assertEquals($this->hr->id, $leaveRequest->hr_approved_by);
+        $this->assertEquals('Admin partial approval recorded', $leaveRequest->admin_review_notes);
+        $this->assertEquals('HR completed approval', $leaveRequest->hr_review_notes);
+
+        $this->assertCount(0, LeaveRequestDeniedDate::where('leave_request_id', $leaveRequest->id)->get());
     }
 }

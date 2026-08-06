@@ -300,6 +300,7 @@ export default function Show({
     const [showAttendancePointsDialog, setShowAttendancePointsDialog] = useState(false);
     const [showEditDayStatusesDialog, setShowEditDayStatusesDialog] = useState(false);
     const [editDayStatusesError, setEditDayStatusesError] = useState<string | null>(null);
+    const [isEditingPartialDenial, setIsEditingPartialDenial] = useState(false);
     const { can } = usePermission();
     const getInitials = useInitials();
 
@@ -792,7 +793,7 @@ export default function Show({
             return;
         }
 
-        if (selectedApprovedDates.length === originalWorkDays.length) {
+        if (!isEditingPartialDenial && selectedApprovedDates.length === originalWorkDays.length) {
             toast.error('You cannot approve all dates. Use full approve instead.');
             return;
         }
@@ -828,12 +829,33 @@ export default function Show({
             }));
         }
 
+        if (isEditingPartialDenial) {
+            router.put(`/form-requests/leave-requests/${leaveRequest.id}/partial-denial`, {
+                denied_dates: deniedDates,
+            }, {
+                onSuccess: () => {
+                    setShowPartialDenyDialog(false);
+                    setSelectedApprovedDates([]);
+                    partialDenyForm.reset();
+                    setPartialDenySlDayStatuses([]);
+                    setIsEditingPartialDenial(false);
+                    toast.success('Partial approval dates updated successfully');
+                },
+                onError: (errors) => {
+                    toast.error(errors.error || 'Failed to update partial approval dates');
+                },
+            });
+
+            return;
+        }
+
         router.post(leavePartialDenyRoute(leaveRequest.id).url, submitData, {
             onSuccess: () => {
                 setShowPartialDenyDialog(false);
                 setSelectedApprovedDates([]);
                 partialDenyForm.reset();
                 setPartialDenySlDayStatuses([]);
+                setIsEditingPartialDenial(false);
                 toast.success('Leave request partially approved');
             },
             onError: (errors) => {
@@ -899,7 +921,10 @@ export default function Show({
                                         variant="outline"
                                         size="sm"
                                         className="border-green-300 text-green-700 hover:bg-green-50"
-                                        onClick={() => setShowPartialDenyDialog(true)}
+                                        onClick={() => {
+                                            setIsEditingPartialDenial(false);
+                                            setShowPartialDenyDialog(true);
+                                        }}
                                     >
                                         <Calendar className="mr-1 h-4 w-4" />
                                         <span className="hidden sm:inline">Partial Approved (TL)</span>
@@ -929,7 +954,10 @@ export default function Show({
                                             variant="outline"
                                             size="sm"
                                             className="border-green-300 text-green-700 hover:bg-green-50"
-                                            onClick={() => setShowPartialDenyDialog(true)}
+                                            onClick={() => {
+                                                setIsEditingPartialDenial(false);
+                                                setShowPartialDenyDialog(true);
+                                            }}
                                         >
                                             <Calendar className="mr-1 h-4 w-4" />
                                             <span className="hidden sm:inline">Partial Approved</span>
@@ -948,6 +976,20 @@ export default function Show({
                             >
                                 <Shield className="mr-1 h-4 w-4" />
                                 <span className="hidden sm:inline">Force Approve</span>
+                            </Button>
+                        )}
+                        {isSuperAdmin && leaveRequest.has_partial_denial && (leaveRequest.status === 'pending' || leaveRequest.status === 'approved') && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="border-amber-300 text-amber-700 hover:bg-amber-50"
+                                onClick={() => {
+                                    setIsEditingPartialDenial(true);
+                                    setShowPartialDenyDialog(true);
+                                }}
+                            >
+                                <Edit className="mr-1 h-4 w-4" />
+                                <span className="hidden sm:inline">Edit Partial Dates</span>
                             </Button>
                         )}
                         {hasUserApproved && leaveRequest.status === 'pending' && (
@@ -1996,13 +2038,16 @@ export default function Show({
                     partialDenyForm.reset();
                     setPartialDenySlDayStatuses([]);
                     setPartialDenyDayStatusInvalid(false);
+                    setIsEditingPartialDenial(false);
                 }
             }}>
                 <DialogContent className={hasDayStatuses ? 'max-w-2xl max-h-[90vh] overflow-y-auto' : 'max-w-lg'}>
                     <DialogHeader>
-                        <DialogTitle>Partial Approval - Select Dates to Approve</DialogTitle>
+                        <DialogTitle>{isEditingPartialDenial ? 'Edit Partial Approval Dates' : 'Partial Approval - Select Dates to Approve'}</DialogTitle>
                         <DialogDescription>
-                            Select specific dates to approve from this leave request. The remaining dates will be denied.
+                            {isEditingPartialDenial
+                                ? 'Adjust which dates are approved. Unselected dates will remain denied.'
+                                : 'Select specific dates to approve from this leave request. The remaining dates will be denied.'}
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
@@ -2058,20 +2103,22 @@ export default function Show({
                                 })}
                             </div>
                         </div>
-                        <div>
-                            <Label className="text-sm font-medium">
-                                Reason for Partial Approval <span className="text-red-500">*</span>
-                            </Label>
-                            <Textarea
-                                value={partialDenyForm.data.denial_reason}
-                                onChange={(e) => partialDenyForm.setData('denial_reason', e.target.value)}
-                                placeholder="Why are some dates being denied? (required, minimum 10 characters)..."
-                                rows={2}
-                            />
-                            {partialDenyForm.errors.denial_reason && (
-                                <p className="text-sm text-red-500 mt-1">{partialDenyForm.errors.denial_reason}</p>
-                            )}
-                        </div>
+                        {!isEditingPartialDenial && (
+                            <div>
+                                <Label className="text-sm font-medium">
+                                    Reason for Partial Approval <span className="text-red-500">*</span>
+                                </Label>
+                                <Textarea
+                                    value={partialDenyForm.data.denial_reason}
+                                    onChange={(e) => partialDenyForm.setData('denial_reason', e.target.value)}
+                                    placeholder="Why are some dates being denied? (required, minimum 10 characters)..."
+                                    rows={2}
+                                />
+                                {partialDenyForm.errors.denial_reason && (
+                                    <p className="text-sm text-red-500 mt-1">{partialDenyForm.errors.denial_reason}</p>
+                                )}
+                            </div>
+                        )}
                         {/* Short Notice Override Toggle */}
                         {isShortNotice && canOverrideShortNotice && !leaveRequest.short_notice_override && (
                             <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
@@ -2091,15 +2138,17 @@ export default function Show({
                             </Alert>
                         )}
 
-                        <div>
-                            <Label className="text-sm font-medium">Additional Notes (Optional)</Label>
-                            <Textarea
-                                value={partialDenyForm.data.review_notes}
-                                onChange={(e) => partialDenyForm.setData('review_notes', e.target.value)}
-                                placeholder="Any additional notes..."
-                                rows={2}
-                            />
-                        </div>
+                        {!isEditingPartialDenial && (
+                            <div>
+                                <Label className="text-sm font-medium">Additional Notes (Optional)</Label>
+                                <Textarea
+                                    value={partialDenyForm.data.review_notes}
+                                    onChange={(e) => partialDenyForm.setData('review_notes', e.target.value)}
+                                    placeholder="Any additional notes..."
+                                    rows={2}
+                                />
+                            </div>
+                        )}
                         {selectedApprovedDates.length > 0 && selectedApprovedDates.length < originalWorkDays.length && (
                             <Alert className="bg-green-50 border-green-200">
                                 <Check className="h-4 w-4 text-green-600" />
@@ -2158,11 +2207,13 @@ export default function Show({
                             disabled={
                                 partialDenyForm.processing ||
                                 selectedApprovedDates.length === 0 ||
-                                selectedApprovedDates.length === originalWorkDays.length ||
+                                (!isEditingPartialDenial && selectedApprovedDates.length === originalWorkDays.length) ||
                                 (hasDayStatuses && partialDenyDayStatusInvalid)
                             }
                         >
-                            Partial Approve ({selectedApprovedDates.length} days)
+                            {isEditingPartialDenial
+                                ? `Save Partial Dates (${selectedApprovedDates.length} days)`
+                                : `Partial Approve (${selectedApprovedDates.length} days)`}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

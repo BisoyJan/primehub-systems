@@ -494,6 +494,7 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
             Route::post('/{leaveRequest}/force-approve', [LeaveRequestController::class, 'forceApprove'])->name('force-approve');
             Route::post('/{leaveRequest}/deny', [LeaveRequestController::class, 'deny'])->name('deny');
             Route::post('/{leaveRequest}/partial-deny', [LeaveRequestController::class, 'partialDeny'])->name('partial-deny');
+            Route::put('/{leaveRequest}/partial-denial', [LeaveRequestController::class, 'updatePartialDenial'])->name('update-partial-denial');
             Route::post('/{leaveRequest}/cancel', [LeaveRequestController::class, 'cancel'])->name('cancel');
             Route::post('/{leaveRequest}/adjust-for-work', [LeaveRequestController::class, 'adjustForWorkDay'])->name('adjust-for-work');
             Route::post('/{leaveRequest}/approve-tl', [LeaveRequestController::class, 'approveTL'])->name('approve-tl');

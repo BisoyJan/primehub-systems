@@ -2773,6 +2773,113 @@ class LeaveRequestController extends Controller
     }
 
     /**
+     * Edit the denied dates of an existing partial approval (Super Admin only).
+     *
+     * Scope: denied dates only. TL/HR approval metadata remains unchanged.
+     * Supports both pending and approved requests.
+     */
+    public function updatePartialDenial(Request $request, LeaveRequest $leaveRequest)
+    {
+        $this->authorize('editPartialDenial', $leaveRequest);
+
+        if (! $leaveRequest->has_partial_denial) {
+            return back()->withErrors(['error' => 'This leave request does not have a partial approval to edit.']);
+        }
+
+        if (! in_array($leaveRequest->status, ['pending', 'approved'])) {
+            return back()->withErrors(['error' => 'Only pending or approved requests can be updated.']);
+        }
+
+        $validated = $request->validate([
+            'denied_dates' => 'nullable|array',
+            'denied_dates.*' => 'date',
+        ]);
+
+        $rangeStart = $leaveRequest->original_start_date
+            ? Carbon::parse($leaveRequest->original_start_date)
+            : Carbon::parse($leaveRequest->start_date);
+        $rangeEnd = $leaveRequest->original_end_date
+            ? Carbon::parse($leaveRequest->original_end_date)
+            : Carbon::parse($leaveRequest->end_date);
+
+        $allWorkDays = [];
+        $cursor = $rangeStart->copy();
+        while ($cursor->lte($rangeEnd)) {
+            if ($cursor->isWeekday()) {
+                $allWorkDays[] = $cursor->format('Y-m-d');
+            }
+            $cursor->addDay();
+        }
+
+        $deniedDateStrings = collect($validated['denied_dates'] ?? [])
+            ->map(fn ($date) => Carbon::parse($date)->format('Y-m-d'))
+            ->unique()
+            ->values()
+            ->all();
+
+        foreach ($deniedDateStrings as $dateStr) {
+            $date = Carbon::parse($dateStr);
+            if ($date->lt($rangeStart) || $date->gt($rangeEnd)) {
+                return back()->withErrors(['error' => "Date {$date->format('M d, Y')} is not within the leave period."]);
+            }
+
+            if (! $date->isWeekday()) {
+                return back()->withErrors(['error' => "Date {$date->format('M d, Y')} is a weekend and cannot be partially denied."]);
+            }
+        }
+
+        $approvedDates = array_values(array_diff($allWorkDays, $deniedDateStrings));
+        if (empty($approvedDates)) {
+            return back()->withErrors(['error' => 'At least one workday must remain approved.']);
+        }
+
+        DB::beginTransaction();
+        try {
+            LeaveRequestDeniedDate::where('leave_request_id', $leaveRequest->id)->delete();
+
+            $reason = 'Updated by Super Admin during partial approval edit';
+            foreach ($deniedDateStrings as $dateStr) {
+                LeaveRequestDeniedDate::create([
+                    'leave_request_id' => $leaveRequest->id,
+                    'denied_date' => $dateStr,
+                    'denial_reason' => $reason,
+                    'denied_by' => auth()->id(),
+                ]);
+            }
+
+            $isStillPartial = count($deniedDateStrings) > 0;
+
+            $leaveRequest->update([
+                'start_date' => $isStillPartial ? min($approvedDates) : $rangeStart->format('Y-m-d'),
+                'end_date' => $isStillPartial ? max($approvedDates) : $rangeEnd->format('Y-m-d'),
+                'has_partial_denial' => $isStillPartial,
+                'approved_days' => $isStillPartial ? count($approvedDates) : null,
+            ]);
+
+            if ($leaveRequest->status === 'approved') {
+                $this->reapplyApprovedLeaveAfterPartialDenialEdit($leaveRequest->fresh());
+            }
+
+            DB::commit();
+
+            $message = $isStillPartial
+                ? 'Partial approval dates updated successfully.'
+                : 'Partial approval cleared. All workdays are now approved.';
+
+            return redirect()->route('leave-requests.show', $leaveRequest)
+                ->with('success', $message);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Failed to update partial denial dates', [
+                'leave_request_id' => $leaveRequest->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return back()->withErrors(['error' => 'Failed to update partial approval dates. Please try again.']);
+        }
+    }
+
+    /**
      * Adjust leave dates when employee reported to work on specific day(s).
      * This allows HR/Admin to reduce leave duration and restore partial credits.
      *
@@ -4570,6 +4677,190 @@ class LeaveRequestController extends Controller
         ]);
 
         return $unExcusedCount;
+    }
+
+    /**
+     * Re-apply attendance and credits after Super Admin edits partial denial dates
+     * on an already-approved request.
+     */
+    protected function reapplyApprovedLeaveAfterPartialDenialEdit(LeaveRequest $leaveRequest): void
+    {
+        $existingDaysByDate = $leaveRequest->days()
+            ->get()
+            ->keyBy(fn (LeaveRequestDay $day) => $day->date->format('Y-m-d'));
+
+        $this->rollbackExcusedAttendancePointsForLeaveRequest($leaveRequest);
+        $this->rollbackAttendanceForCancelledLeave($leaveRequest);
+
+        if ((float) ($leaveRequest->credits_deducted ?? 0) > 0) {
+            $this->leaveCreditService->restoreCredits($leaveRequest);
+        }
+
+        $leaveRequest->days()->delete();
+
+        $leaveRequest->update([
+            'credits_deducted' => 0,
+            'sl_credits_applied' => null,
+            'sl_no_credit_reason' => null,
+        ]);
+
+        if ($leaveRequest->leave_type === 'SL') {
+            $defaultStatus = $leaveRequest->sl_with_undertime
+                ? LeaveRequestDay::STATUS_PARTIAL_DAY_ABSENCE
+                : LeaveRequestDay::STATUS_ADVISED_ABSENCE;
+
+            $dayStatuses = $this->buildDayStatusesForPartialEdit(
+                $leaveRequest,
+                $existingDaysByDate,
+                $defaultStatus,
+                'Auto-assigned after Super Admin partial approval date update'
+            );
+
+            $this->handleSlApproval($leaveRequest, $this->leaveCreditService, $dayStatuses);
+
+            return;
+        }
+
+        if ($leaveRequest->leave_type === 'VL') {
+            $dayStatuses = $this->buildDayStatusesForPartialEdit(
+                $leaveRequest,
+                $existingDaysByDate,
+                LeaveRequestDay::STATUS_UPTO,
+                'Auto-assigned as UPTO after Super Admin partial approval date update'
+            );
+
+            $this->handleVlApproval($leaveRequest, $this->leaveCreditService, $dayStatuses);
+
+            return;
+        }
+
+        if ($leaveRequest->leave_type === 'SPL') {
+            $approvedDates = $this->getApprovedWorkdayDates($leaveRequest);
+            $halfDayOverrides = [];
+            foreach ($approvedDates as $dateStr) {
+                if (isset($existingDaysByDate[$dateStr])) {
+                    $halfDayOverrides[$dateStr] = (bool) $existingDaysByDate[$dateStr]->is_half_day;
+                }
+            }
+
+            $this->handleSplApproval($leaveRequest, $halfDayOverrides);
+
+            return;
+        }
+
+        if ($leaveRequest->leave_type === 'LOA') {
+            $this->handleLoaApproval($leaveRequest, $this->leaveCreditService);
+
+            return;
+        }
+
+        if ($leaveRequest->leave_type === 'IW') {
+            $this->handleIwApproval($leaveRequest);
+            $leaveRequest->update(['credits_deducted' => 0]);
+
+            return;
+        }
+
+        if ($leaveRequest->requiresCredits()) {
+            $daysToDeduct = $leaveRequest->has_partial_denial && $leaveRequest->approved_days !== null
+                ? (float) $leaveRequest->approved_days
+                : (float) $leaveRequest->days_requested;
+
+            $year = $leaveRequest->credits_year ?? Carbon::parse($leaveRequest->start_date)->year;
+            $this->leaveCreditService->deductCreditsByAmount($leaveRequest, $daysToDeduct, $year);
+        } else {
+            $leaveRequest->update(['credits_deducted' => 0]);
+        }
+
+        $this->updateAttendanceForApprovedLeave($leaveRequest);
+    }
+
+    /**
+     * Revert all auto-excused attendance points tied to a leave request.
+     */
+    protected function rollbackExcusedAttendancePointsForLeaveRequest(LeaveRequest $leaveRequest): int
+    {
+        $pointsToRevert = AttendancePoint::where('user_id', $leaveRequest->user_id)
+            ->where('is_excused', true)
+            ->where('excuse_reason', 'LIKE', "%Leave Request #{$leaveRequest->id}%")
+            ->get();
+
+        $count = 0;
+        foreach ($pointsToRevert as $point) {
+            $point->update([
+                'is_excused' => false,
+                'excused_by' => null,
+                'excused_at' => null,
+                'excuse_reason' => null,
+            ]);
+            $count++;
+        }
+
+        if ($count > 0) {
+            try {
+                $gbroService = app(GbroCalculationService::class);
+                $gbroService->cascadeRecalculateGbro($leaveRequest->user_id);
+            } catch (\Exception $e) {
+                Log::warning("Failed GBRO recalc after partial edit rollback: {$e->getMessage()}");
+            }
+        }
+
+        return $count;
+    }
+
+    /**
+     * Build SL/VL day statuses for approved partial-denial edits.
+     * Reuses existing date assignments where available and falls back to a safe default.
+     */
+    protected function buildDayStatusesForPartialEdit(
+        LeaveRequest $leaveRequest,
+        Collection $existingDaysByDate,
+        string $defaultStatus,
+        string $defaultNotes
+    ): array {
+        $approvedDates = $this->getApprovedWorkdayDates($leaveRequest);
+
+        $result = [];
+        foreach ($approvedDates as $dateStr) {
+            /** @var LeaveRequestDay|null $existingDay */
+            $existingDay = $existingDaysByDate->get($dateStr);
+
+            $result[] = [
+                'date' => $dateStr,
+                'status' => $existingDay?->day_status ?: $defaultStatus,
+                'is_half_day' => (bool) ($existingDay?->is_half_day ?? false),
+                'notes' => $existingDay?->notes ?: $defaultNotes,
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * Get approved weekday dates for the current leave range, excluding denied dates.
+     *
+     * @return array<int, string>
+     */
+    protected function getApprovedWorkdayDates(LeaveRequest $leaveRequest): array
+    {
+        $deniedDates = $leaveRequest->deniedDates()
+            ->pluck('denied_date')
+            ->map(fn ($date) => Carbon::parse($date)->format('Y-m-d'))
+            ->toArray();
+
+        $result = [];
+        $cursor = Carbon::parse($leaveRequest->start_date);
+        $end = Carbon::parse($leaveRequest->end_date);
+
+        while ($cursor->lte($end)) {
+            $dateStr = $cursor->format('Y-m-d');
+            if ($cursor->isWeekday() && ! in_array($dateStr, $deniedDates)) {
+                $result[] = $dateStr;
+            }
+            $cursor->addDay();
+        }
+
+        return $result;
     }
 
     /**

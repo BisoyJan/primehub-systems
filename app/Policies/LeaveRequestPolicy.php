@@ -127,6 +127,29 @@ class LeaveRequestPolicy
     }
 
     /**
+     * Determine whether Super Admin can edit denied dates on partial approvals.
+     *
+     * Scope is intentionally narrow: denied-date selection only, while request
+     * is still pending or already approved.
+     */
+    public function editPartialDenial(User $user, LeaveRequest $leaveRequest): bool
+    {
+        if (! $leaveRequest->has_partial_denial) {
+            return false;
+        }
+
+        if (! in_array($leaveRequest->status, ['pending', 'approved'])) {
+            return false;
+        }
+
+        if ($user->role !== 'Super Admin') {
+            return false;
+        }
+
+        return $this->permissionService->userHasPermission($user, 'leave.approve');
+    }
+
+    /**
      * Determine whether the user can approve leave requests.
      */
     public function approve(User $user): bool
