@@ -2305,7 +2305,7 @@ class LeaveCreditService
             'regularization_year' => $regularizationDate?->year,
             'is_regularized' => $isRegularized,
             'days_until_regularization' => $regularizationDate && ! $isRegularized
-                ? now()->diffInDays($regularizationDate, false)
+                ? (int) round(now()->diffInDays($regularizationDate, false))
                 : 0,
             'needs_first_transfer' => $this->needsFirstRegularizationTransfer($user, $year),
             'has_first_regularization' => (bool) $firstRegularizationCarryover,
