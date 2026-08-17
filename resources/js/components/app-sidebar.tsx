@@ -25,7 +25,7 @@ import { index as breakTimerIndex, dashboard as breakDashboard, reports as break
 import { index as breakPoliciesIndex } from '@/routes/break-timer/policies'
 import { index as databaseBackupsIndex } from '@/routes/database-backups'
 import { Link } from '@inertiajs/react';
-import { ArrowUpDown, CalendarCheck, ClipboardCheck, Computer, CpuIcon, CreditCard, Database, DatabaseBackup, LayoutGrid, Microchip, User, Wrench, Clock, Award, Plane, LucideIcon, AlertCircle, Pill, Activity, Settings, Shield, FileText, Timer, BarChart3, Coffee, UserMinus, Trophy } from 'lucide-react';
+import { ArrowUpDown, CalendarCheck, ClipboardCheck, Computer, CpuIcon, CreditCard, Database, DatabaseBackup, LayoutGrid, Microchip, User, Wrench, Clock, Award, Plane, LucideIcon, AlertCircle, Pill, Activity, Settings, Shield, FileText, Timer, BarChart3, Coffee, UserMinus, Trophy, MessageCircle } from 'lucide-react';
 import AppLogo from './app-logo';
 import { usePermission } from '@/hooks/useAuthorization';
 import type { NavItem } from '@/types';
@@ -470,6 +470,18 @@ export function AppSidebar() {
             </SidebarContent>
             <SidebarFooter className="shrink-0">
                 {/* <NavFooter items={footerNavItems} className="mt-auto" /> */}
+                {can('social_space.view') && (
+                    <SidebarMenu>
+                        <SidebarMenuItem>
+                            <SidebarMenuButton asChild>
+                                <Link href="/social-space" prefetch="mount">
+                                    <MessageCircle />
+                                    <span>Social Space</span>
+                                </Link>
+                            </SidebarMenuButton>
+                        </SidebarMenuItem>
+                    </SidebarMenu>
+                )}
                 <NavUser />
             </SidebarFooter>
         </Sidebar>

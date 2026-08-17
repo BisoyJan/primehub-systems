@@ -111,7 +111,7 @@ class PcSpecControllerTest extends TestCase
         $processorSpec = ProcessorSpec::factory()->create();
 
         $data = [
-            'pc_number' => 'PC-TEST-001',
+            'pc_number' => '1001',
             'manufacturer' => 'Dell',
             'memory_type' => 'DDR4',
             'ram_gb' => 16,
@@ -127,12 +127,12 @@ class PcSpecControllerTest extends TestCase
 
         $response->assertRedirect(route('pcspecs.index'));
         $this->assertDatabaseHas('pc_specs', [
-            'pc_number' => 'PC-TEST-001',
+            'pc_number' => '1001',
             'ram_gb' => 16,
             'disk_gb' => 512,
         ]);
 
-        $pcSpec = PcSpec::where('pc_number', 'PC-TEST-001')->first();
+        $pcSpec = PcSpec::where('pc_number', '1001')->first();
         $this->assertTrue($pcSpec->processorSpecs->contains($processorSpec));
     }
 
@@ -159,6 +159,7 @@ class PcSpecControllerTest extends TestCase
         $pcSpec->processorSpecs()->attach($processorSpec);
 
         $data = [
+            'pc_number' => '2002',
             'manufacturer' => 'Updated Manufacturer',
             'memory_type' => 'DDR5',
             'ram_gb' => 32,

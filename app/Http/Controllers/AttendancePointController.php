@@ -475,7 +475,7 @@ class AttendancePointController extends Controller
 
         $count = count($validated['user_ids']);
 
-        return $this->backWithFlash("{$count} employee" . ($count === 1 ? '' : 's') . ' excluded from the leaderboard.');
+        return $this->backWithFlash("{$count} employee".($count === 1 ? '' : 's').' excluded from the leaderboard.');
     }
 
     /**
@@ -781,6 +781,14 @@ class AttendancePointController extends Controller
                 ->where('is_expired', false);
         }
 
+        if ($request->filled('date_from')) {
+            $query->whereDate('shift_date', '>=', $request->date_from);
+        }
+
+        if ($request->filled('date_to')) {
+            $query->whereDate('shift_date', '<=', $request->date_to);
+        }
+
         return $query;
     }
 
@@ -807,6 +815,8 @@ class AttendancePointController extends Controller
             'campaign_id' => $request->campaign_id,
             'point_type' => $request->point_type,
             'status' => $request->status,
+            'date_from' => $request->date_from,
+            'date_to' => $request->date_to,
             'expiring_soon' => $request->boolean('expiring_soon') ? 'true' : null,
             'gbro_eligible' => $request->boolean('gbro_eligible') ? 'true' : null,
         ];

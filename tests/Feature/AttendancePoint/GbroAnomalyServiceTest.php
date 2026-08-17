@@ -36,11 +36,19 @@ class GbroAnomalyServiceTest extends TestCase
     #[Test]
     public function detect_returns_empty_collection_when_no_drift(): void
     {
+        $shiftDate = now()->subDays(10);
+
         AttendancePoint::factory()
             ->forUser($this->user)
             ->tardy()
-            ->onDate(now()->subDays(10))
-            ->create();
+            ->onDate($shiftDate)
+            ->create([
+                'eligible_for_gbro' => true,
+                'is_excused' => false,
+                'is_expired' => false,
+                'expires_at' => $shiftDate->copy()->addMonthsNoOverflow(6),
+                'gbro_expires_at' => $shiftDate->copy()->addDays(60),
+            ]);
 
         $this->assertCount(0, $this->service->detect());
     }
@@ -152,11 +160,19 @@ class GbroAnomalyServiceTest extends TestCase
     #[Test]
     public function repair_returns_zero_summary_when_clean(): void
     {
+        $shiftDate = now()->subDays(10);
+
         AttendancePoint::factory()
             ->forUser($this->user)
             ->tardy()
-            ->onDate(now()->subDays(10))
-            ->create();
+            ->onDate($shiftDate)
+            ->create([
+                'eligible_for_gbro' => true,
+                'is_excused' => false,
+                'is_expired' => false,
+                'expires_at' => $shiftDate->copy()->addMonthsNoOverflow(6),
+                'gbro_expires_at' => $shiftDate->copy()->addDays(60),
+            ]);
 
         $result = $this->service->repair();
 

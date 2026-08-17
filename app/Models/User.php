@@ -463,6 +463,48 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     /**
+     * Social groups this user belongs to.
+     */
+    public function socialGroups()
+    {
+        return $this->belongsToMany(SocialGroup::class, 'social_group_members')
+            ->withPivot(['role', 'joined_at', 'last_read_at'])
+            ->withTimestamps();
+    }
+
+    /**
+     * Social group memberships for this user.
+     */
+    public function socialGroupMemberships()
+    {
+        return $this->hasMany(SocialGroupMember::class);
+    }
+
+    /**
+     * Social messages authored by this user.
+     */
+    public function socialMessages()
+    {
+        return $this->hasMany(SocialMessage::class);
+    }
+
+    /**
+     * Social group invitations sent by this user.
+     */
+    public function sentSocialGroupInvites()
+    {
+        return $this->hasMany(SocialGroupInvite::class, 'invited_by');
+    }
+
+    /**
+     * Social group invitations received by this user.
+     */
+    public function receivedSocialGroupInvites()
+    {
+        return $this->hasMany(SocialGroupInvite::class, 'invited_user_id');
+    }
+
+    /**
      * Check if user has a specific permission
      */
     public function hasPermission(string $permission): bool

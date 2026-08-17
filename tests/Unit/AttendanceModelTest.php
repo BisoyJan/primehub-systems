@@ -3,18 +3,17 @@
 namespace Tests\Unit;
 
 use App\Models\Attendance;
-use App\Models\User;
 use App\Models\EmployeeSchedule;
 use App\Models\Site;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Tests\TestCase;
+use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\TestCase;
 
 class AttendanceModelTest extends TestCase
 {
     use RefreshDatabase;
-
 
     #[Test]
     public function it_has_fillable_attributes()
@@ -55,9 +54,10 @@ class AttendanceModelTest extends TestCase
             'undertime_approved_by',
             'undertime_approved_at',
             'undertime_approval_notes',
+            'is_critical_day',
         ];
 
-        $attendance = new Attendance();
+        $attendance = new Attendance;
         $this->assertEquals($fillable, $attendance->getFillable());
     }
 
@@ -173,7 +173,7 @@ class AttendanceModelTest extends TestCase
             'ncns',
             'undertime',
             'failed_bio_in',
-            'failed_bio_out'
+            'failed_bio_out',
         ];
 
         foreach ($issueStatuses as $status) {

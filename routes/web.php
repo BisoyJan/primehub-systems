@@ -32,6 +32,7 @@ use App\Http\Controllers\PcMaintenanceController;
 use App\Http\Controllers\PcSpecController;
 use App\Http\Controllers\PcTransferController;
 use App\Http\Controllers\ProcessorSpecsController;
+use App\Http\Controllers\SocialSpaceController;
 use App\Http\Controllers\Station\CampaignController;
 use App\Http\Controllers\Station\SiteController;
 use App\Http\Controllers\Station\StationController;
@@ -658,6 +659,97 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
         // Wildcard routes last
         Route::post('/{notification}/read', [NotificationController::class, 'markAsRead'])->name('mark-as-read');
         Route::delete('/{notification}', [NotificationController::class, 'destroy'])->name('destroy');
+    });
+
+    // Social Space
+    Route::prefix('social-space')->name('social-space.')->group(function () {
+        Route::get('/', [SocialSpaceController::class, 'index'])
+            ->middleware('permission:social_space.view')
+            ->name('index');
+        Route::post('/groups', [SocialSpaceController::class, 'storeGroup'])
+            ->middleware('permission:social_space.create_group')
+            ->name('groups.store');
+        Route::post('/groups/{socialGroup}/join', [SocialSpaceController::class, 'join'])
+            ->middleware('permission:social_space.message')
+            ->name('groups.join');
+        Route::delete('/groups/{socialGroup}/leave', [SocialSpaceController::class, 'leave'])
+            ->middleware('permission:social_space.message')
+            ->name('groups.leave');
+        Route::post('/groups/{socialGroup}/messages', [SocialSpaceController::class, 'storeMessage'])
+            ->middleware(['permission:social_space.message', 'throttle:120,1'])
+            ->name('messages.store');
+        Route::post('/people/{userToChat}/start', [SocialSpaceController::class, 'startDirectThread'])
+            ->middleware('permission:social_space.message')
+            ->name('people.start');
+        Route::post('/threads/group', [SocialSpaceController::class, 'storeDirectGroupThread'])
+            ->middleware(['permission:social_space.message', 'throttle:30,1'])
+            ->name('threads.group.store');
+        Route::post('/threads/{socialDirectThread}/messages', [SocialSpaceController::class, 'storeDirectMessage'])
+            ->middleware(['permission:social_space.message', 'throttle:120,1'])
+            ->name('threads.messages.store');
+        Route::patch('/groups/{socialGroup}/messages/{socialMessage}', [SocialSpaceController::class, 'updateGroupMessage'])
+            ->middleware(['permission:social_space.message', 'throttle:120,1'])
+            ->name('messages.update');
+        Route::delete('/groups/{socialGroup}/messages/{socialMessage}', [SocialSpaceController::class, 'deleteGroupMessage'])
+            ->middleware(['permission:social_space.message', 'throttle:120,1'])
+            ->name('messages.destroy');
+        Route::patch('/threads/{socialDirectThread}/messages/{socialDirectMessage}', [SocialSpaceController::class, 'updateDirectMessage'])
+            ->middleware(['permission:social_space.message', 'throttle:120,1'])
+            ->name('threads.messages.update');
+        Route::delete('/threads/{socialDirectThread}/messages/{socialDirectMessage}', [SocialSpaceController::class, 'deleteDirectMessage'])
+            ->middleware(['permission:social_space.message', 'throttle:120,1'])
+            ->name('threads.messages.destroy');
+        Route::post('/groups/{socialGroup}/messages/{socialMessage}/reactions', [SocialSpaceController::class, 'toggleGroupMessageReaction'])
+            ->middleware(['permission:social_space.message', 'throttle:180,1'])
+            ->name('messages.reactions.toggle');
+        Route::post('/threads/{socialDirectThread}/messages/{socialDirectMessage}/reactions', [SocialSpaceController::class, 'toggleDirectMessageReaction'])
+            ->middleware(['permission:social_space.message', 'throttle:180,1'])
+            ->name('threads.messages.reactions.toggle');
+        Route::post('/threads/{socialDirectThread}/read', [SocialSpaceController::class, 'markDirectThreadRead'])
+            ->middleware(['permission:social_space.message', 'throttle:180,1'])
+            ->name('threads.read');
+        Route::patch('/groups/{socialGroup}/theme', [SocialSpaceController::class, 'updateGroupTheme'])
+            ->middleware(['permission:social_space.message', 'throttle:60,1'])
+            ->name('groups.theme.update');
+        Route::patch('/threads/{socialDirectThread}/theme', [SocialSpaceController::class, 'updateDirectTheme'])
+            ->middleware(['permission:social_space.message', 'throttle:60,1'])
+            ->name('threads.theme.update');
+        Route::post('/groups/{socialGroup}/pin', [SocialSpaceController::class, 'toggleGroupPin'])
+            ->middleware('permission:social_space.message')
+            ->name('groups.pin.toggle');
+        Route::post('/threads/{socialDirectThread}/pin', [SocialSpaceController::class, 'toggleDirectPin'])
+            ->middleware('permission:social_space.message')
+            ->name('threads.pin.toggle');
+        Route::patch('/threads/{socialDirectThread}/name', [SocialSpaceController::class, 'updateDirectThreadName'])
+            ->middleware(['permission:social_space.message', 'throttle:30,1'])
+            ->name('threads.name.update');
+        Route::post('/threads/{socialDirectThread}/image', [SocialSpaceController::class, 'updateDirectThreadImage'])
+            ->middleware(['permission:social_space.message', 'throttle:10,1'])
+            ->name('threads.image.update');
+        Route::get('/attachments/{socialAttachment}', [SocialSpaceController::class, 'downloadAttachment'])
+            ->middleware('permission:social_space.message')
+            ->name('attachments.download');
+        Route::post('/groups/{socialGroup}/invites', [SocialSpaceController::class, 'invite'])
+            ->middleware('permission:social_space.manage_group')
+            ->name('invites.store');
+        Route::post('/groups/{socialGroup}/invites/{socialGroupInvite}/revoke', [SocialSpaceController::class, 'revokeInvite'])
+            ->middleware('permission:social_space.manage_group')
+            ->name('invites.revoke');
+        Route::post('/invites/{socialGroupInvite}/accept', [SocialSpaceController::class, 'acceptInvite'])
+            ->middleware('permission:social_space.message')
+            ->name('invites.accept');
+        Route::post('/invites/{socialGroupInvite}/decline', [SocialSpaceController::class, 'declineInvite'])
+            ->middleware('permission:social_space.message')
+            ->name('invites.decline');
+        Route::delete('/groups/{socialGroup}/members/{socialGroupMember}', [SocialSpaceController::class, 'removeMember'])
+            ->middleware('permission:social_space.manage_group')
+            ->name('members.remove');
+        Route::patch('/groups/{socialGroup}/members/{socialGroupMember}/role', [SocialSpaceController::class, 'updateMemberRole'])
+            ->middleware('permission:social_space.manage_group')
+            ->name('members.role');
+        Route::post('/groups/{socialGroup}/members/{socialGroupMember}/transfer-ownership', [SocialSpaceController::class, 'transferOwnership'])
+            ->middleware('permission:social_space.manage_group')
+            ->name('members.transfer-ownership');
     });
 
     // Notification Analytics

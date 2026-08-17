@@ -1,6 +1,8 @@
 <?php
 
 use App\Models\Attendance;
+use App\Models\SocialDirectThreadParticipant;
+use App\Models\SocialGroup;
 use App\Models\User;
 use Illuminate\Support\Facades\Broadcast;
 
@@ -27,6 +29,35 @@ Broadcast::channel('it-concerns', function (User $user) {
 // other users are editing. Returning an array makes the user a "member".
 Broadcast::channel('attendance.spreadsheet.presence', function (User $user) {
     if (! $user->can('viewAny', Attendance::class)) {
+        return null;
+    }
+
+    return [
+        'id' => $user->id,
+        'name' => $user->name,
+        'avatar_url' => $user->avatar_url,
+    ];
+});
+
+Broadcast::channel('social.group.{groupId}', function (User $user, int $groupId) {
+    $group = SocialGroup::query()->find($groupId);
+
+    if (! $group) {
+        return false;
+    }
+
+    return $user->can('view', $group);
+});
+
+Broadcast::channel('social.direct-thread.{threadId}', function (User $user, int $threadId) {
+    return SocialDirectThreadParticipant::query()
+        ->where('social_direct_thread_id', $threadId)
+        ->where('user_id', $user->id)
+        ->exists();
+});
+
+Broadcast::channel('social.presence', function (User $user) {
+    if (! $user->hasPermission('social_space.view')) {
         return null;
     }
 

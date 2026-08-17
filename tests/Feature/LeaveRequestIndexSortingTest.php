@@ -184,6 +184,12 @@ class LeaveRequestIndexSortingTest extends TestCase
     {
         [$teamLead, $campaign] = $this->createTeamLeadWithCampaign();
         $agent = $this->createUserWithRole('Agent');
+        EmployeeSchedule::factory()->create([
+            'user_id' => $agent->id,
+            'site_id' => Site::factory()->create()->id,
+            'campaign_id' => $campaign->id,
+            'is_active' => true,
+        ]);
 
         // TL's own leave (does not need TL approval)
         $ownLeave = LeaveRequest::factory()->pending()->create([

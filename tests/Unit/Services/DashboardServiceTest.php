@@ -799,6 +799,7 @@ class DashboardServiceTest extends TestCase
             'site_id' => $site->id,
             'is_active' => true,
         ]);
+        $tl->campaigns()->attach($campaign->id);
 
         // Agent in same campaign
         $sameCampaignAgent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);

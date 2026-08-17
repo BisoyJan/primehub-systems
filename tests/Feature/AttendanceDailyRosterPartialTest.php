@@ -48,7 +48,7 @@ class AttendanceDailyRosterPartialTest extends TestCase
     public function generate_creates_partially_verified_record_when_time_out_is_omitted(): void
     {
         [$user, $schedule] = $this->createNightShiftUser();
-        $shiftDate = '2026-05-08';
+        $shiftDate = now()->toDateString();
 
         $response = $this->actingAs($this->admin)->post('/attendance/generate', [
             'user_id' => $user->id,
@@ -74,13 +74,14 @@ class AttendanceDailyRosterPartialTest extends TestCase
     public function generate_creates_fully_verified_record_when_time_out_is_provided(): void
     {
         [$user] = $this->createNightShiftUser();
-        $shiftDate = '2026-05-08';
+        $shiftDate = now()->toDateString();
+        $nextShiftDate = now()->addDay()->toDateString();
 
         $this->actingAs($this->admin)->post('/attendance/generate', [
             'user_id' => $user->id,
             'shift_date' => $shiftDate,
             'actual_time_in' => $shiftDate.'T22:00',
-            'actual_time_out' => '2026-05-09T07:00',
+            'actual_time_out' => $nextShiftDate.'T07:00',
         ])->assertRedirect();
 
         $attendance = Attendance::where('user_id', $user->id)

@@ -155,6 +155,13 @@ return [
         'notifications.send' => 'Send Notifications to Users',
         'notifications.send_all' => 'Send Notifications to All Users',
 
+        // Social Space
+        'social_space.view' => 'Access Social Space',
+        'social_space.create_group' => 'Create Social Groups',
+        'social_space.manage_group' => 'Manage Social Groups',
+        'social_space.message' => 'Send Messages in Social Space',
+        'social_space.moderate' => 'Moderate Social Space',
+
         // Settings
         'settings.view' => 'Access Settings',
         'settings.account' => 'Manage Account Settings',
@@ -224,6 +231,7 @@ return [
             'medication_requests.view', 'medication_requests.create', 'medication_requests.update', 'medication_requests.delete',
             'form_requests.retention',
             'notifications.send', 'notifications.send_all',
+            'social_space.view', 'social_space.create_group', 'social_space.manage_group', 'social_space.message', 'social_space.moderate',
             'coaching.view_all', 'coaching.create', 'coaching.edit', 'coaching.delete', 'coaching.review', 'coaching.export', 'coaching.settings', 'coaching.manage_exclusions',
             'break_timer.view', 'break_timer.use', 'break_timer.dashboard', 'break_timer.reports', 'break_timer.manage_policy', 'break_timer.reset', 'break_timer.force_end', 'break_timer.restore', 'break_timer.void_session', 'break_timer.reimburse',
             'settings.view', 'settings.account', 'settings.password',
@@ -242,6 +250,7 @@ return [
             'coaching.view_own', 'coaching.view_team', 'coaching.create', 'coaching.edit', 'coaching.delete', 'coaching.acknowledge',
             'break_timer.view', 'break_timer.use', 'break_timer.dashboard', 'break_timer.reports', 'break_timer.reset', 'break_timer.force_end', 'break_timer.restore', 'break_timer.void_session', 'break_timer.reimburse',
             'notifications.send', 'notifications.send_all',
+            'social_space.view', 'social_space.create_group', 'social_space.manage_group', 'social_space.message',
             'settings.account', 'settings.password',
         ],
 
@@ -255,6 +264,7 @@ return [
             'medication_requests.view', 'medication_requests.create',
             'coaching.view_own', 'coaching.acknowledge',
             'break_timer.view', 'break_timer.use', 'break_timer.reset',
+            'social_space.view', 'social_space.create_group', 'social_space.message',
             'settings.account',
         ],
 
@@ -271,6 +281,7 @@ return [
             'coaching.view_all', 'coaching.review', 'coaching.export', 'coaching.manage_exclusions',
             'break_timer.view', 'break_timer.dashboard', 'break_timer.reports', 'break_timer.force_end', 'break_timer.restore',
             'notifications.send', 'notifications.send_all',
+            'social_space.view', 'social_space.create_group', 'social_space.manage_group', 'social_space.message', 'social_space.moderate',
             'settings.account', 'settings.password',
         ],
 
@@ -293,6 +304,7 @@ return [
             'form_requests.retention',
             'break_timer.view', 'break_timer.use', 'break_timer.dashboard', 'break_timer.force_end', 'break_timer.restore',
             'notifications.send', 'notifications.send_all',
+            'social_space.view', 'social_space.create_group', 'social_space.manage_group', 'social_space.message',
             'settings.account', 'settings.password',
         ],
 
@@ -303,6 +315,7 @@ return [
             'leave.view', 'leave.create', 'leave.cancel',
             'leave_credits.view_own',
             'settings.account',
+            'social_space.view', 'social_space.create_group', 'social_space.message',
         ],
     ],
 ];

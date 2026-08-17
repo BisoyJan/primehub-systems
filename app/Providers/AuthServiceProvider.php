@@ -15,6 +15,7 @@ use App\Models\PcMaintenance;
 use App\Models\PcSpec;
 use App\Models\PcTransfer;
 use App\Models\Site;
+use App\Models\SocialGroup;
 use App\Models\Station;
 use App\Models\User;
 use App\Policies\AccountPolicy;
@@ -31,6 +32,7 @@ use App\Policies\PcMaintenancePolicy;
 use App\Policies\PcSpecPolicy;
 use App\Policies\PcTransferPolicy;
 use App\Policies\SitePolicy;
+use App\Policies\SocialGroupPolicy;
 use App\Policies\StationPolicy;
 use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvider;
 
@@ -56,6 +58,7 @@ class AuthServiceProvider extends ServiceProvider
         PcSpec::class => PcSpecPolicy::class,
         PcTransfer::class => PcTransferPolicy::class,
         Site::class => SitePolicy::class,
+        SocialGroup::class => SocialGroupPolicy::class,
         Station::class => StationPolicy::class,
     ];
 
