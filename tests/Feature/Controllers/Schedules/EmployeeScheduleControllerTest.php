@@ -151,6 +151,35 @@ class EmployeeScheduleControllerTest extends TestCase
         ]);
     }
 
+    public function test_store_allows_flexible_schedule_without_fixed_working_hours(): void
+    {
+        $campaign = Campaign::factory()->create();
+        $site = Site::factory()->create();
+
+        $scheduleData = [
+            'user_id' => $this->employee->id,
+            'campaign_id' => $campaign->id,
+            'site_id' => $site->id,
+            'is_flexible' => true,
+            'grace_period_minutes' => 15,
+            'effective_date' => '2024-01-01',
+        ];
+
+        $response = $this->actingAs($this->user)
+            ->post(route('employee-schedules.store'), $scheduleData);
+
+        $response->assertRedirect(route('employee-schedules.index'))
+            ->assertSessionHas('type', 'success');
+
+        $this->assertDatabaseHas('employee_schedules', [
+            'user_id' => $this->employee->id,
+            'campaign_id' => $campaign->id,
+            'is_flexible' => true,
+            'scheduled_time_in' => null,
+            'scheduled_time_out' => null,
+        ]);
+    }
+
     public function test_store_deactivates_previous_active_schedules(): void
     {
         $previousSchedule = EmployeeSchedule::factory()->create([

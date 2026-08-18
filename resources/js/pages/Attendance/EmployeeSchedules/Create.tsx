@@ -116,6 +116,7 @@ export default function EmployeeScheduleCreate() {
         campaign_ids: [] as number[],
         site_id: null as number | null,
         is_utility: false,
+        is_flexible: false,
         scheduled_time_in: "22:00",
         scheduled_time_out: "07:00",
         work_days: ["monday", "tuesday", "wednesday", "thursday", "friday"],
@@ -147,7 +148,7 @@ export default function EmployeeScheduleCreate() {
     // Auto-fill effective_date from URL param (re-hire flow) handled above.
 
     // Derived shift type from current Time In + utility toggle.
-    const derivedShiftType = deriveShiftType(data.scheduled_time_in, data.is_utility);
+    const derivedShiftType = data.is_flexible ? "night_shift" : deriveShiftType(data.scheduled_time_in, data.is_utility);
     const derivedShiftMeta = SHIFT_META[derivedShiftType];
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -443,25 +444,52 @@ export default function EmployeeScheduleCreate() {
 
                                 {/* 24-Hour Utility Toggle (admin only) */}
                                 {!isRestrictedRole && (
-                                    <div className="flex items-center justify-between rounded-md border p-3">
-                                        <div className="space-y-0.5">
-                                            <Label htmlFor="is_utility" className="text-sm font-medium cursor-pointer">
-                                                24-Hour Utility Schedule
-                                            </Label>
-                                            <p className="text-xs text-muted-foreground">
-                                                Enable for roles without a fixed shift window (e.g. utility staff). Hours are tracked by total time worked.
-                                            </p>
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between rounded-md border p-3">
+                                            <div className="space-y-0.5">
+                                                <Label htmlFor="is_utility" className="text-sm font-medium cursor-pointer">
+                                                    24-Hour Utility Schedule
+                                                </Label>
+                                                <p className="text-xs text-muted-foreground">
+                                                    Enable for roles without a fixed shift window (e.g. utility staff). Hours are tracked by total time worked.
+                                                </p>
+                                            </div>
+                                            <Switch
+                                                id="is_utility"
+                                                checked={data.is_utility}
+                                                onCheckedChange={(checked) => setData("is_utility", checked)}
+                                            />
                                         </div>
-                                        <Switch
-                                            id="is_utility"
-                                            checked={data.is_utility}
-                                            onCheckedChange={(checked) => setData("is_utility", checked)}
-                                        />
+
+                                        <div className="flex items-center justify-between rounded-md border p-3">
+                                            <div className="space-y-0.5">
+                                                <Label htmlFor="is_flexible" className="text-sm font-medium cursor-pointer">
+                                                    Flexible / No Fixed Schedule
+                                                </Label>
+                                                <p className="text-xs text-muted-foreground">
+                                                    Use when the employee reports on office days without a recurring time or weekly day pattern.
+                                                </p>
+                                            </div>
+                                            <Switch
+                                                id="is_flexible"
+                                                checked={data.is_flexible}
+                                                onCheckedChange={(checked) => {
+                                                    setData("is_flexible", checked);
+                                                    if (checked) {
+                                                        setData("scheduled_time_in", "");
+                                                        setData("scheduled_time_out", "");
+                                                        setData("work_days", []);
+                                                    }
+                                                }}
+                                            />
+                                        </div>
                                     </div>
                                 )}
 
-                                {/* Shift Times */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {!data.is_flexible && (
+                                    <>
+                                        {/* Shift Times */}
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="space-y-2">
                                         <Label>
                                             Time In <span className="text-red-500">*</span>
@@ -501,45 +529,53 @@ export default function EmployeeScheduleCreate() {
                                     </div>
                                 </div>
 
-                                {/* Derived Shift Type (read-only badge) */}
-                                <div className="rounded-md border border-dashed bg-muted/40 p-3 flex items-center gap-3">
-                                    <span className="text-2xl leading-none" aria-hidden="true">{derivedShiftMeta.icon}</span>
-                                    <div className="flex-1">
-                                        <p className="text-sm font-medium">
-                                            Detected shift: {derivedShiftMeta.label}
-                                        </p>
-                                        <p className="text-xs text-muted-foreground">
-                                            {derivedShiftMeta.description}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                {/* Work Days */}
-                                <div className="space-y-2">
-                                    <Label>
-                                        Work Days <span className="text-red-500">*</span>
-                                    </Label>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                        {DAYS_OF_WEEK.map(day => (
-                                            <div key={day.value} className="flex items-center space-x-2">
-                                                <Checkbox
-                                                    id={day.value}
-                                                    checked={data.work_days.includes(day.value)}
-                                                    onCheckedChange={() => toggleWorkDay(day.value)}
-                                                />
-                                                <Label
-                                                    htmlFor={day.value}
-                                                    className="text-sm font-normal cursor-pointer"
-                                                >
-                                                    {day.label}
-                                                </Label>
+                                        {/* Derived Shift Type (read-only badge) */}
+                                        <div className="rounded-md border border-dashed bg-muted/40 p-3 flex items-center gap-3">
+                                            <span className="text-2xl leading-none" aria-hidden="true">{derivedShiftMeta.icon}</span>
+                                            <div className="flex-1">
+                                                <p className="text-sm font-medium">
+                                                    Detected shift: {derivedShiftMeta.label}
+                                                </p>
+                                                <p className="text-xs text-muted-foreground">
+                                                    {derivedShiftMeta.description}
+                                                </p>
                                             </div>
-                                        ))}
+                                        </div>
+
+                                        {/* Work Days */}
+                                        <div className="space-y-2">
+                                            <Label>
+                                                Work Days <span className="text-red-500">*</span>
+                                            </Label>
+                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                                {DAYS_OF_WEEK.map(day => (
+                                                    <div key={day.value} className="flex items-center space-x-2">
+                                                        <Checkbox
+                                                            id={day.value}
+                                                            checked={data.work_days.includes(day.value)}
+                                                            onCheckedChange={() => toggleWorkDay(day.value)}
+                                                        />
+                                                        <Label
+                                                            htmlFor={day.value}
+                                                            className="text-sm font-normal cursor-pointer"
+                                                        >
+                                                            {day.label}
+                                                        </Label>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            {errors.work_days && (
+                                                <p className="text-sm text-red-500">{errors.work_days}</p>
+                                            )}
+                                        </div>
+                                    </>
+                                )}
+
+                                {data.is_flexible && (
+                                    <div className="rounded-md border border-dashed bg-muted/40 p-3 text-sm text-muted-foreground">
+                                        Flexible schedule mode keeps recurring time and day rules empty so attendance can still be recorded without a fixed weekly pattern.
                                     </div>
-                                    {errors.work_days && (
-                                        <p className="text-sm text-red-500">{errors.work_days}</p>
-                                    )}
-                                </div>
+                                )}
 
                                 {/* Grace Period - Hidden for restricted roles */}
                                 {!isRestrictedRole && (

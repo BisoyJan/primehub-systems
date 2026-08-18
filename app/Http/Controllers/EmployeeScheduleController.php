@@ -242,14 +242,21 @@ class EmployeeScheduleController extends Controller
         $rules = [
             'user_id' => 'required|exists:users,id',
             'is_utility' => 'sometimes|boolean',
-            'scheduled_time_in' => 'required|date_format:H:i',
-            'scheduled_time_out' => 'required|date_format:H:i',
-            'work_days' => 'required|array',
+            'is_flexible' => 'sometimes|boolean',
+            'scheduled_time_in' => ['nullable', 'date_format:H:i'],
+            'scheduled_time_out' => ['nullable', 'date_format:H:i'],
+            'work_days' => ['nullable', 'array'],
             'work_days.*' => 'in:monday,tuesday,wednesday,thursday,friday,saturday,sunday',
             'grace_period_minutes' => 'required|integer|min:0|max:60',
             'effective_date' => 'required|date',
             'end_date' => 'nullable|date|after:effective_date',
         ];
+
+        if (! ($request->boolean('is_flexible') ?? false)) {
+            $rules['scheduled_time_in'] = ['required', 'date_format:H:i'];
+            $rules['scheduled_time_out'] = ['required', 'date_format:H:i'];
+            $rules['work_days'] = ['required', 'array'];
+        }
 
         // For Team Leads: campaign_id is derived from the first managed campaign.
         // The single Campaign dropdown is hidden in the UI; campaign_ids is the source of truth.
@@ -272,11 +279,20 @@ class EmployeeScheduleController extends Controller
         }
 
         $validated = $request->validate($rules);
+        $validated['is_flexible'] = (bool) ($validated['is_flexible'] ?? false);
 
-        $validated['shift_type'] = $this->deriveShiftType(
-            $validated['scheduled_time_in'],
-            (bool) ($validated['is_utility'] ?? false)
-        );
+        if ($validated['is_flexible']) {
+            $validated['scheduled_time_in'] = null;
+            $validated['scheduled_time_out'] = null;
+            $validated['work_days'] = [];
+            $validated['shift_type'] = 'night_shift';
+        } else {
+            $validated['shift_type'] = $this->deriveShiftType(
+                $validated['scheduled_time_in'],
+                (bool) ($validated['is_utility'] ?? false)
+            );
+        }
+
         unset($validated['is_utility']);
 
         // For Team Leads, derive the schedule's primary campaign_id from the
@@ -288,9 +304,13 @@ class EmployeeScheduleController extends Controller
 
         // Check for duplicate schedule (same site, shift type, time in, time out for this user)
         $duplicateQuery = EmployeeSchedule::where('user_id', $validated['user_id'])
-            ->where('shift_type', $validated['shift_type'])
-            ->where('scheduled_time_in', $validated['scheduled_time_in'])
-            ->where('scheduled_time_out', $validated['scheduled_time_out']);
+            ->where('is_flexible', $validated['is_flexible'])
+            ->where('shift_type', $validated['shift_type']);
+
+        if (! $validated['is_flexible']) {
+            $duplicateQuery->where('scheduled_time_in', $validated['scheduled_time_in'])
+                ->where('scheduled_time_out', $validated['scheduled_time_out']);
+        }
 
         // Check site_id (handle null values properly)
         if (isset($validated['site_id']) && $validated['site_id']) {
@@ -344,8 +364,9 @@ class EmployeeScheduleController extends Controller
 
         // Format time fields to H:i (remove seconds) for frontend compatibility
         $scheduleData = $employeeSchedule->toArray();
-        $scheduleData['scheduled_time_in'] = substr($employeeSchedule->scheduled_time_in, 0, 5);
-        $scheduleData['scheduled_time_out'] = substr($employeeSchedule->scheduled_time_out, 0, 5);
+        $scheduleData['scheduled_time_in'] = $employeeSchedule->scheduled_time_in ? substr($employeeSchedule->scheduled_time_in, 0, 5) : null;
+        $scheduleData['scheduled_time_out'] = $employeeSchedule->scheduled_time_out ? substr($employeeSchedule->scheduled_time_out, 0, 5) : null;
+        $scheduleData['work_days'] = $employeeSchedule->work_days ?? [];
         // Format date fields to Y-m-d for frontend compatibility
         $scheduleData['effective_date'] = $employeeSchedule->effective_date?->format('Y-m-d');
         $scheduleData['end_date'] = $employeeSchedule->end_date?->format('Y-m-d');
@@ -382,14 +403,21 @@ class EmployeeScheduleController extends Controller
             'campaign_ids.*' => 'exists:campaigns,id',
             'site_id' => 'nullable|exists:sites,id',
             'is_utility' => 'sometimes|boolean',
-            'scheduled_time_in' => 'required|date_format:H:i',
-            'scheduled_time_out' => 'required|date_format:H:i',
-            'work_days' => 'required|array',
+            'is_flexible' => 'sometimes|boolean',
+            'scheduled_time_in' => ['nullable', 'date_format:H:i'],
+            'scheduled_time_out' => ['nullable', 'date_format:H:i'],
+            'work_days' => ['nullable', 'array'],
             'work_days.*' => 'in:monday,tuesday,wednesday,thursday,friday,saturday,sunday',
             'grace_period_minutes' => 'required|integer|min:0|max:60',
             'is_active' => 'boolean',
             'end_date' => 'nullable|date|after:effective_date',
         ];
+
+        if (! ($request->boolean('is_flexible') ?? false)) {
+            $rules['scheduled_time_in'] = ['required', 'date_format:H:i'];
+            $rules['scheduled_time_out'] = ['required', 'date_format:H:i'];
+            $rules['work_days'] = ['required', 'array'];
+        }
 
         // Allow effective_date to be updated by admin roles
         if ($canEditEffectiveDate) {
@@ -397,11 +425,20 @@ class EmployeeScheduleController extends Controller
         }
 
         $validated = $request->validate($rules);
+        $validated['is_flexible'] = (bool) ($validated['is_flexible'] ?? false);
 
-        $validated['shift_type'] = $this->deriveShiftType(
-            $validated['scheduled_time_in'],
-            (bool) ($validated['is_utility'] ?? false)
-        );
+        if ($validated['is_flexible']) {
+            $validated['scheduled_time_in'] = null;
+            $validated['scheduled_time_out'] = null;
+            $validated['work_days'] = [];
+            $validated['shift_type'] = 'night_shift';
+        } else {
+            $validated['shift_type'] = $this->deriveShiftType(
+                $validated['scheduled_time_in'],
+                (bool) ($validated['is_utility'] ?? false)
+            );
+        }
+
         unset($validated['is_utility']);
 
         // For Team Leads, derive the schedule's primary campaign_id from the
@@ -415,8 +452,12 @@ class EmployeeScheduleController extends Controller
         $duplicateQuery = EmployeeSchedule::where('user_id', $employeeSchedule->user_id)
             ->where('id', '!=', $employeeSchedule->id)
             ->where('shift_type', $validated['shift_type'])
-            ->where('scheduled_time_in', $validated['scheduled_time_in'])
-            ->where('scheduled_time_out', $validated['scheduled_time_out']);
+            ->where('is_flexible', $validated['is_flexible']);
+
+        if (! $validated['is_flexible']) {
+            $duplicateQuery->where('scheduled_time_in', $validated['scheduled_time_in'])
+                ->where('scheduled_time_out', $validated['scheduled_time_out']);
+        }
 
         // Check site_id (handle null values properly)
         if (isset($validated['site_id']) && $validated['site_id']) {
@@ -574,9 +615,10 @@ class EmployeeScheduleController extends Controller
             'campaign_id' => 'required|exists:campaigns,id',
             'site_id' => 'required|exists:sites,id',
             'is_utility' => 'sometimes|boolean',
-            'scheduled_time_in' => 'required|date_format:H:i',
-            'scheduled_time_out' => 'required|date_format:H:i',
-            'work_days' => 'required|array',
+            'is_flexible' => 'sometimes|boolean',
+            'scheduled_time_in' => ['nullable', 'date_format:H:i'],
+            'scheduled_time_out' => ['nullable', 'date_format:H:i'],
+            'work_days' => ['nullable', 'array'],
             'work_days.*' => 'in:monday,tuesday,wednesday,thursday,friday,saturday,sunday',
             'effective_date' => 'required|date',
         ]);
@@ -585,17 +627,31 @@ class EmployeeScheduleController extends Controller
         $validated['user_id'] = $currentUser->id;
         $validated['grace_period_minutes'] = 0; // Default grace period for first-time setup
         $validated['is_active'] = true;
-        $validated['shift_type'] = $this->deriveShiftType(
-            $validated['scheduled_time_in'],
-            (bool) ($validated['is_utility'] ?? false)
-        );
+        $validated['is_flexible'] = (bool) ($validated['is_flexible'] ?? false);
+
+        if ($validated['is_flexible']) {
+            $validated['scheduled_time_in'] = null;
+            $validated['scheduled_time_out'] = null;
+            $validated['work_days'] = [];
+            $validated['shift_type'] = 'night_shift';
+        } else {
+            $validated['shift_type'] = $this->deriveShiftType(
+                $validated['scheduled_time_in'],
+                (bool) ($validated['is_utility'] ?? false)
+            );
+        }
+
         unset($validated['is_utility']);
 
         // Check for duplicate schedule (same site, shift type, time in, time out) - safeguard
         $duplicateQuery = EmployeeSchedule::where('user_id', $validated['user_id'])
             ->where('shift_type', $validated['shift_type'])
-            ->where('scheduled_time_in', $validated['scheduled_time_in'])
-            ->where('scheduled_time_out', $validated['scheduled_time_out']);
+            ->where('is_flexible', $validated['is_flexible']);
+
+        if (! $validated['is_flexible']) {
+            $duplicateQuery->where('scheduled_time_in', $validated['scheduled_time_in'])
+                ->where('scheduled_time_out', $validated['scheduled_time_out']);
+        }
 
         // Check site_id (handle null values properly)
         if (isset($validated['site_id']) && $validated['site_id']) {

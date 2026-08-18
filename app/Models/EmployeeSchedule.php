@@ -30,6 +30,7 @@ class EmployeeSchedule extends Model
         'scheduled_time_out',
         'work_days',
         'grace_period_minutes',
+        'is_flexible',
         'is_active',
         'effective_date',
         'end_date',
@@ -40,6 +41,7 @@ class EmployeeSchedule extends Model
         return [
             'work_days' => 'array',
             'is_active' => 'boolean',
+            'is_flexible' => 'boolean',
             'effective_date' => 'date:Y-m-d',
             'end_date' => 'date:Y-m-d',
             'grace_period_minutes' => 'integer',
@@ -108,6 +110,10 @@ class EmployeeSchedule extends Model
      */
     public function isNightShift(): bool
     {
+        if ($this->is_flexible || empty($this->scheduled_time_in)) {
+            return false;
+        }
+
         return $this->shift_type === 'night_shift' ||
                $this->scheduled_time_in >= '20:00:00';
     }
@@ -118,7 +124,11 @@ class EmployeeSchedule extends Model
      */
     public function isGraveyardShift(): bool
     {
-        return (int) substr($this->scheduled_time_in ?? '09:00:00', 0, 2) < 5;
+        if ($this->is_flexible || empty($this->scheduled_time_in)) {
+            return false;
+        }
+
+        return (int) substr($this->scheduled_time_in, 0, 2) < 5;
     }
 
     /**
@@ -126,6 +136,10 @@ class EmployeeSchedule extends Model
      */
     public function worksOnDay(string $dayName): bool
     {
-        return in_array(strtolower($dayName), $this->work_days);
+        if ($this->is_flexible) {
+            return true;
+        }
+
+        return in_array(strtolower($dayName), $this->work_days ?? []);
     }
 }
