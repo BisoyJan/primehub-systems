@@ -792,16 +792,17 @@ class DashboardServiceTest extends TestCase
         $otherCampaign = Campaign::factory()->create();
         $site = Site::factory()->create();
 
-        $tl = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
+        $tl = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true, 'is_active' => true]);
         EmployeeSchedule::factory()->create([
             'user_id' => $tl->id,
             'campaign_id' => $campaign->id,
             'site_id' => $site->id,
             'is_active' => true,
         ]);
+        $tl->campaigns()->attach($campaign->id);
 
         // Agent in same campaign
-        $sameCampaignAgent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        $sameCampaignAgent = User::factory()->create(['role' => 'Agent', 'is_approved' => true, 'is_active' => true]);
         EmployeeSchedule::factory()->create([
             'user_id' => $sameCampaignAgent->id,
             'campaign_id' => $campaign->id,
@@ -810,7 +811,7 @@ class DashboardServiceTest extends TestCase
         ]);
 
         // Agent in different campaign
-        $otherAgent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        $otherAgent = User::factory()->create(['role' => 'Agent', 'is_approved' => true, 'is_active' => true]);
         EmployeeSchedule::factory()->create([
             'user_id' => $otherAgent->id,
             'campaign_id' => $otherCampaign->id,

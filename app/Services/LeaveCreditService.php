@@ -1108,9 +1108,9 @@ class LeaveCreditService
             }
         }
 
-        // Check eligibility (6 months rule) for VL and BL only (SL can proceed without eligibility)
+        // Check eligibility (6 months rule) for VL only (SL/BL can proceed without blocking eligibility validation)
         // Check if user will be eligible BY the leave start date (not current date)
-        if (in_array($leaveType, ['VL', 'BL'])) {
+        if ($leaveType === 'VL') {
             if (! $this->isEligible($user, $startDate)) {
                 $eligibilityDate = $this->getEligibilityDate($user);
                 $errors[] = "You will not be eligible to use leave credits by the leave start date. You will be eligible on {$eligibilityDate->format('F j, Y')}.";

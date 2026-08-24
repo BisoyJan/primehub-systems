@@ -565,7 +565,7 @@ class LeaveRequestTest extends TestCase
 
         $leaveRequest = LeaveRequest::factory()->create([
             'user_id' => $this->employee->id,
-            'leave_type' => 'LOA', // LOA is truly non-credited (no credit deduction at all)
+            'leave_type' => 'BL', // BL is non-credited (no leave credit deduction)
             'days_requested' => 5.0,
             'status' => 'pending',
         ]);
@@ -573,13 +573,13 @@ class LeaveRequestTest extends TestCase
         // Admin approves first
         $this->actingAs($this->admin)
             ->post(route('leave-requests.approve', $leaveRequest), [
-                'review_notes' => 'Approved LOA request.',
+                'review_notes' => 'Approved BL request.',
             ]);
 
         // HR completes dual approval
         $this->actingAs($hr)
             ->post(route('leave-requests.approve', $leaveRequest), [
-                'review_notes' => 'HR approves LOA.',
+                'review_notes' => 'HR approves BL.',
             ]);
 
         $leaveRequest->refresh();
