@@ -56,6 +56,24 @@ class EmployeeScheduleTest extends TestCase
     }
 
     #[Test]
+    public function it_treats_flexible_schedules_as_working_every_day(): void
+    {
+        $user = User::factory()->create();
+
+        $schedule = EmployeeSchedule::factory()->create([
+            'user_id' => $user->id,
+            'is_flexible' => true,
+            'work_days' => [],
+            'scheduled_time_in' => null,
+            'scheduled_time_out' => null,
+        ]);
+
+        $this->assertTrue($schedule->worksOnDay('Monday'));
+        $this->assertFalse($schedule->isNightShift());
+        $this->assertFalse($schedule->isGraveyardShift());
+    }
+
+    #[Test]
     public function it_casts_is_active_to_boolean(): void
     {
         $user = User::factory()->create();

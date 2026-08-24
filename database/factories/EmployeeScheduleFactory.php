@@ -31,6 +31,7 @@ class EmployeeScheduleFactory extends Factory
             'scheduled_time_out' => '18:00:00',
             'work_days' => ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
             'grace_period_minutes' => 0,
+            'is_flexible' => false,
             'is_active' => true,
             'effective_date' => now()->subMonth(),
             'end_date' => null,
