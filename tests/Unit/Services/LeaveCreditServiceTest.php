@@ -556,6 +556,30 @@ class LeaveCreditServiceTest extends TestCase
     }
 
     #[Test]
+    public function it_does_not_block_bl_submission_when_employee_is_under_three_months(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'Agent',
+            'hired_date' => Carbon::now()->subMonths(2),
+        ]);
+
+        $startDate = Carbon::now()->addDays(2);
+        if ($startDate->isWeekend()) {
+            $startDate = $startDate->next(Carbon::MONDAY);
+        }
+
+        $result = $this->service->validateLeaveRequest($user, [
+            'leave_type' => 'BL',
+            'start_date' => $startDate->format('Y-m-d'),
+            'end_date' => $startDate->copy()->addDay()->format('Y-m-d'),
+            'days_requested' => 2,
+        ]);
+
+        $this->assertTrue($result['valid']);
+        $this->assertEmpty($result['errors']);
+    }
+
+    #[Test]
     public function it_does_not_block_sl_submission_regardless_of_credits(): void
     {
         $user = User::factory()->create([

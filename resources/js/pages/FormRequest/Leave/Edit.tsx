@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Head, router, useForm } from '@inertiajs/react';
-import { format, parseISO } from 'date-fns';
+import { format, isBefore, parseISO, subMonths } from 'date-fns';
 import { toast } from 'sonner';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -55,6 +55,7 @@ interface LeaveRequest {
     medical_cert_path: string | null;
     documents?: LeaveRequestDocument[];
     status: string;
+    created_at?: string;
     short_notice_override?: boolean;
     original_start_date?: string;
     original_end_date?: string;
@@ -262,7 +263,8 @@ export default function Edit({
         // Eligibility info is already shown in the "Not Eligible Yet" alert above the form
         // No need to duplicate it in validation warnings
 
-        //NOTE: SL is intentionally excluded from the eligibility warning since users can still submit and it will be handled at approval time with potential UPTO conversion. BL is included in the eligibility warning since it's a non-credited leave type and eligibility is a hard requirement.
+        // NOTE: SL/BL are intentionally excluded from blocking eligibility validation.
+        // Both can still submit, with any policy constraints shown as non-blocking warnings.
         // Check 2-week notice (only for VL, not SL/BL/ML as they are unpredictable)
         // Short notice override is handled at approval time on the Show page
         if (data.start_date && ['VL', 'UPTO'].includes(data.leave_type)) {
@@ -848,18 +850,30 @@ export default function Edit({
                                 {(() => {
                                     const showReminder = ['VL', 'UPTO', 'LOA', 'ML'].includes(data.leave_type);
                                     const showNotEligible = requiresCredits && !creditsSummary.is_eligible && !willBeEligibleByStartDate();
+                                    const blEligibilityDate = creditsSummary.eligibility_date
+                                        ? subMonths(parseISO(creditsSummary.eligibility_date), 3)
+                                        : null;
+                                    const filingDate = leaveRequest.created_at
+                                        ? parseISO(leaveRequest.created_at)
+                                        : new Date();
+                                    const isBlNotEligibleByFilingDate = data.leave_type === 'BL' && (
+                                        blEligibilityDate
+                                            ? isBefore(filingDate, blEligibilityDate)
+                                            : true
+                                    );
+                                    const showBlNotEligible = isBlNotEligibleByFilingDate;
                                     const showCreditError = !!creditError;
                                     const showWarnings = validationWarnings.length > 0;
                                     const loaAvailableCredits = Math.max(0, Math.floor(creditsSummary.balance - creditsSummary.pending_credits));
                                     const loaPotentialPaidDays = data.leave_type === 'LOA' ? Math.min(calculatedDays, loaAvailableCredits) : 0;
                                     const loaPotentialUnpaidDays = data.leave_type === 'LOA' ? Math.max(0, calculatedDays - loaPotentialPaidDays) : 0;
                                     const showLoaCreditPreview = data.leave_type === 'LOA' && calculatedDays > 0;
-                                    const totalNotices = [showReminder, showNotEligible, showCreditError, showWarnings, showLoaCreditPreview].filter(Boolean).length;
+                                    const totalNotices = [showReminder, showNotEligible, showBlNotEligible, showCreditError, showWarnings, showLoaCreditPreview].filter(Boolean).length;
 
                                     if (totalNotices === 0) return null;
 
                                     const hasError = showCreditError;
-                                    const hasWarning = showNotEligible || showWarnings;
+                                    const hasWarning = showNotEligible || showBlNotEligible || showWarnings;
 
                                     return (
                                         <Alert className={hasError
@@ -916,10 +930,31 @@ export default function Edit({
                                                         </>
                                                     )}
 
+                                                    {/* BL below 3 months - amber warning (non-blocking) */}
+                                                    {showBlNotEligible && (
+                                                        <>
+                                                            {(showReminder || showNotEligible) && <hr className="border-amber-200 dark:border-amber-700" />}
+                                                            <div className="text-sm text-amber-700 dark:text-amber-300">
+                                                                <p className="font-medium mb-1">Bereavement Leave Eligibility Notice</p>
+                                                                <p>
+                                                                    {blEligibilityDate ? (
+                                                                        <>
+                                                                            This agent is not yet eligible for Bereavement Leave (minimum 3 months employment).
+                                                                            Eligibility starts on <strong>{format(blEligibilityDate, 'MMMM d, yyyy')}</strong>.
+                                                                            {' '}You may still submit this request; reviewers will see this notice.
+                                                                        </>
+                                                                    ) : (
+                                                                        <>Unable to determine the 3-month eligibility date (missing hire date). You may still submit this request; reviewers will see this notice.</>
+                                                                    )}
+                                                                </p>
+                                                            </div>
+                                                        </>
+                                                    )}
+
                                                     {/* Insufficient VL Credits - red error (blocks submission) */}
                                                     {showCreditError && (
                                                         <>
-                                                            {(showReminder || showNotEligible) && <hr className="border-red-200 dark:border-red-700" />}
+                                                            {(showReminder || showNotEligible || showBlNotEligible) && <hr className="border-red-200 dark:border-red-700" />}
                                                             <div className="text-sm text-red-700 dark:text-red-300">
                                                                 <p className="font-medium mb-1">Insufficient Leave Credits</p>
                                                                 <p>{creditError}</p>
@@ -930,7 +965,7 @@ export default function Edit({
                                                     {/* Informational Warnings - collapsible when multiple */}
                                                     {showWarnings && (
                                                         <>
-                                                            {(showReminder || showNotEligible || showCreditError) && <hr className="border-amber-200 dark:border-amber-700" />}
+                                                            {(showReminder || showNotEligible || showBlNotEligible || showCreditError) && <hr className="border-amber-200 dark:border-amber-700" />}
                                                             <div className="text-sm text-amber-700 dark:text-amber-300">
                                                                 {validationWarnings.length <= 2 ? (
                                                                     <>
@@ -964,7 +999,7 @@ export default function Edit({
                                                     {/* LOA credit preview - informational only */}
                                                     {showLoaCreditPreview && (
                                                         <>
-                                                            {(showReminder || showNotEligible || showCreditError || showWarnings) && <hr className="border-amber-200 dark:border-amber-700" />}
+                                                            {(showReminder || showNotEligible || showBlNotEligible || showCreditError || showWarnings) && <hr className="border-amber-200 dark:border-amber-700" />}
                                                             <div className="text-sm text-amber-700 dark:text-amber-300">
                                                                 <p className="font-medium mb-1">LOA Credit Allocation Preview</p>
                                                                 <p>

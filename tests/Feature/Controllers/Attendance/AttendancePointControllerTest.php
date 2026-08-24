@@ -101,7 +101,7 @@ class AttendancePointControllerTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertInertia(fn ($page) =>
-            $page->has('points.data', 1)
+            $page->has('points.data', 2)
         );
     }
 

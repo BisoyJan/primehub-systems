@@ -55,6 +55,7 @@ class AttendanceModelTest extends TestCase
             'undertime_approved_by',
             'undertime_approved_at',
             'undertime_approval_notes',
+            'is_critical_day',
         ];
 
         $attendance = new Attendance();

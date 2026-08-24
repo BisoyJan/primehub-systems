@@ -20,6 +20,7 @@ class LeaveRequestIndexSortingTest extends TestCase
         return User::factory()->create([
             'role' => $role,
             'is_approved' => true,
+            'is_active' => true,
         ]);
     }
 
@@ -183,7 +184,22 @@ class LeaveRequestIndexSortingTest extends TestCase
     public function team_lead_sees_items_needing_tl_approval_first(): void
     {
         [$teamLead, $campaign] = $this->createTeamLeadWithCampaign();
+        $site = Site::factory()->create();
         $agent = $this->createUserWithRole('Agent');
+        EmployeeSchedule::factory()->create([
+            'user_id' => $agent->id,
+            'site_id' => $site->id,
+            'campaign_id' => $campaign->id,
+            'is_active' => true,
+        ]);
+        $agent->campaigns()->attach($campaign);
+        \DB::table('agent_team_lead')->insert([
+            'agent_id' => $agent->id,
+            'team_lead_id' => $teamLead->id,
+            'campaign_id' => $campaign->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
 
         // TL's own leave (does not need TL approval)
         $ownLeave = LeaveRequest::factory()->pending()->create([

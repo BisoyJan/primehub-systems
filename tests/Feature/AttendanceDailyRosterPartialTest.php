@@ -39,6 +39,8 @@ class AttendanceDailyRosterPartialTest extends TestCase
         $schedule = EmployeeSchedule::factory()->nightShift()->create([
             'user_id' => $user->id,
             'site_id' => $site->id,
+            'effective_date' => '2026-01-01',
+            'is_active' => true,
         ]);
 
         return [$user, $schedule, $site];

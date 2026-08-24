@@ -40,7 +40,12 @@ class GbroAnomalyServiceTest extends TestCase
             ->forUser($this->user)
             ->tardy()
             ->onDate(now()->subDays(10))
-            ->create();
+            ->create([
+                'eligible_for_gbro' => true,
+                'gbro_expires_at' => now()->addDays(50),
+                'is_expired' => false,
+                'is_excused' => false,
+            ]);
 
         $this->assertCount(0, $this->service->detect());
     }
@@ -156,7 +161,12 @@ class GbroAnomalyServiceTest extends TestCase
             ->forUser($this->user)
             ->tardy()
             ->onDate(now()->subDays(10))
-            ->create();
+            ->create([
+                'eligible_for_gbro' => true,
+                'gbro_expires_at' => now()->addDays(50),
+                'is_expired' => false,
+                'is_excused' => false,
+            ]);
 
         $result = $this->service->repair();
 

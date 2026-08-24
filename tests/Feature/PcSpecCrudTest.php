@@ -72,6 +72,7 @@ class PcSpecCrudTest extends TestCase
     public function it_creates_single_pc_spec()
     {
         $data = [
+            'pc_number' => '2001',
             'manufacturer' => 'ASUS',
             'memory_type' => 'DDR4',
             'ram_gb' => 32,
@@ -103,6 +104,7 @@ class PcSpecCrudTest extends TestCase
     public function it_creates_multiple_pc_specs_with_quantity()
     {
         $data = [
+            'pc_number' => '3001',
             'manufacturer' => 'Gigabyte',
             'memory_type' => 'DDR4',
             'ram_gb' => 16,
@@ -159,6 +161,7 @@ class PcSpecCrudTest extends TestCase
 
         $response = $this->actingAs($this->admin)
             ->put(route('pcspecs.update', $pcSpec), [
+                'pc_number' => '4001',
                 'manufacturer' => 'ASUS',
                 'memory_type' => $pcSpec->memory_type,
                 'ram_gb' => 16,
