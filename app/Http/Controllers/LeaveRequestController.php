@@ -920,6 +920,17 @@ class LeaveRequestController extends Controller
             );
         }
 
+        // Bereavement Leave 3-month eligibility notice (based on filing date, non-blocking)
+        $blEligibility = null;
+        if ($leaveRequest->leave_type === 'BL') {
+            $hiredDate = $leaveRequest->user->hired_date;
+            $eligibilityDate = $hiredDate ? Carbon::parse($hiredDate)->addMonths(3) : null;
+            $blEligibility = [
+                'is_eligible' => $eligibilityDate ? $leaveRequest->created_at->gte($eligibilityDate) : false,
+                'eligibility_date' => $eligibilityDate?->format('Y-m-d'),
+            ];
+        }
+
         // Get attendance points that were active AT THE TIME of the leave request submission
         // This includes points where:
         // 1. The shift_date (violation date) was before the request was submitted AND
@@ -1070,6 +1081,7 @@ class LeaveRequestController extends Controller
             'canViewMedicalCert' => $canViewMedicalCert,
             'earlierConflicts' => $earlierConflicts,
             'absenceWindowInfo' => $absenceWindowInfo,
+            'blEligibility' => $blEligibility,
             'activeAttendancePoints' => $activeAttendancePoints,
             'creditPreview' => $creditPreview,
             'splCreditPreview' => $splCreditPreview,

@@ -214,6 +214,7 @@ interface Props {
     canViewMedicalCert?: boolean;
     earlierConflicts?: EarlierConflict[];
     absenceWindowInfo?: AbsenceWindowInfo | null;
+    blEligibility?: { is_eligible: boolean; eligibility_date: string | null } | null;
     activeAttendancePoints?: ActiveAttendancePoint[];
     creditPreview?: CreditPreview | null;
     splCreditPreview?: { should_deduct: boolean; credits_to_deduct: number; available: number; insufficient: boolean } | null;
@@ -247,6 +248,7 @@ export default function Show({
     canViewMedicalCert = false,
     earlierConflicts = [],
     absenceWindowInfo = null,
+    blEligibility = null,
     activeAttendancePoints = [],
     creditPreview = null,
     splCreditsSummary = null,
@@ -1446,6 +1448,26 @@ export default function Show({
                                             Note: VL applications within 30 days of last absence may require additional review.
                                         </p>
                                     </div>
+                                </AlertDescription>
+                            </Alert>
+                        )}
+
+                        {/* Bereavement Leave 3-month eligibility notice - non-blocking, visible to owner/TL/admin */}
+                        {leaveRequest.leave_type === 'BL' && blEligibility && !blEligibility.is_eligible && leaveRequest.status !== 'cancelled' && (
+                            <Alert className="border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+                                <AlertTriangle className="h-4 w-4 text-amber-600" />
+                                <AlertDescription className="text-amber-800 dark:text-amber-200">
+                                    <p className="font-semibold">Bereavement Leave Eligibility Notice</p>
+                                    <p className="text-sm mt-1">
+                                        {blEligibility.eligibility_date ? (
+                                            <>
+                                                This employee was not yet eligible for Bereavement Leave (minimum 3 months employment) when this request was filed.
+                                                {' '}Eligibility started on <strong>{format(parseISO(blEligibility.eligibility_date), 'MMMM d, yyyy')}</strong>.
+                                            </>
+                                        ) : (
+                                            <>Unable to determine the 3-month eligibility date for this employee (missing hire date).</>
+                                        )}
+                                    </p>
                                 </AlertDescription>
                             </Alert>
                         )}
