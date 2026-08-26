@@ -147,6 +147,50 @@ class LeaveRequestControllerTest extends TestCase
     }
 
     #[Test]
+    public function it_counts_weekend_days_for_weekend_enabled_campaign()
+    {
+        $campaign = Campaign::factory()->create(['allows_weekend_leave' => true]);
+
+        $user = User::factory()->create([
+            'role' => 'Agent',
+            'is_approved' => true,
+            'hired_date' => now()->subYear(),
+        ]);
+
+        LeaveCredit::create([
+            'user_id' => $user->id,
+            'year' => now()->year,
+            'month' => now()->month,
+            'vacation_leave_balance' => 10,
+            'sick_leave_balance' => 10,
+            'credits_earned' => 10,
+            'credits_used' => 0,
+            'credits_balance' => 10,
+            'accrued_at' => now(),
+        ]);
+
+        // Saturday-Sunday range, at least 2 weeks out for VL
+        $startDate = now()->addWeeks(3)->next(Carbon::SATURDAY);
+        $endDate = $startDate->copy()->addDay(); // Sunday
+
+        $response = $this->actingAs($user)->post(route('leave-requests.store'), [
+            'leave_type' => 'VL',
+            'start_date' => $startDate->format('Y-m-d'),
+            'end_date' => $endDate->format('Y-m-d'),
+            'reason' => 'Weekend leave request for testing',
+            'campaign_department' => $campaign->name,
+        ]);
+
+        $response->assertRedirect();
+
+        $this->assertDatabaseHas('leave_requests', [
+            'user_id' => $user->id,
+            'campaign_department' => $campaign->name,
+            'days_requested' => 2.00,
+        ]);
+    }
+
+    #[Test]
     public function it_prevents_duplicate_pending_requests()
     {
         $user = $this->createAgentWithSchedule([

@@ -410,6 +410,18 @@ class LeaveCreditServiceTest extends TestCase
     }
 
     #[Test]
+    public function it_includes_weekends_when_campaign_allows_weekend_leave(): void
+    {
+        // Friday to Monday = 4 days when weekends are included
+        $startDate = Carbon::parse('2025-12-05'); // Friday
+        $endDate = Carbon::parse('2025-12-08'); // Monday
+
+        $days = $this->service->calculateDays($startDate, $endDate, includeWeekends: true);
+
+        $this->assertEquals(4, $days);
+    }
+
+    #[Test]
     public function it_allows_vl_submission_when_credits_insufficient_with_warning(): void
     {
         $user = User::factory()->create([

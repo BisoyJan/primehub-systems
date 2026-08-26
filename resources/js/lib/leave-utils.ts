@@ -39,6 +39,11 @@ export interface ExistingLeaveRequest {
     status: string;
 }
 
+export interface CampaignOption {
+    name: string;
+    allows_weekend_leave: boolean;
+}
+
 export interface CampaignConflict {
     id: number;
     user_name: string;
@@ -170,8 +175,8 @@ export function calculateFutureCredits(
     return monthsToAccrue * creditsSummary.monthly_rate;
 }
 
-/** Count working days (weekdays only) between two date strings */
-export function countWorkingDays(startDate: string, endDate: string): number {
+/** Count leave days between two date strings; weekends excluded unless includeWeekends is true */
+export function countWorkingDays(startDate: string, endDate: string, includeWeekends: boolean = false): number {
     const start = parseISO(startDate);
     const end = parseISO(endDate);
     let workingDays = 0;
@@ -179,7 +184,7 @@ export function countWorkingDays(startDate: string, endDate: string): number {
 
     while (currentDate <= end) {
         const dayOfWeek = currentDate.getDay();
-        if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+        if (includeWeekends || (dayOfWeek >= 1 && dayOfWeek <= 5)) {
             workingDays++;
         }
         currentDate.setDate(currentDate.getDate() + 1);

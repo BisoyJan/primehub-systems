@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Head, router } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -24,6 +25,7 @@ import { index as stationsIndexRoute } from '@/routes/stations';
 interface Campaign {
     id: number;
     name: string;
+    allows_weekend_leave: boolean;
 }
 
 interface TeamLeadOption {
@@ -78,6 +80,7 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
     const [formName, setFormName] = useState('');
+    const [formAllowsWeekendLeave, setFormAllowsWeekendLeave] = useState(false);
     const [formError, setFormError] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -150,6 +153,7 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
     const openCreateDialog = () => {
         setEditingCampaign(null);
         setFormName('');
+        setFormAllowsWeekendLeave(false);
         setFormError(null);
         setIsDialogOpen(true);
     };
@@ -157,6 +161,7 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
     const openEditDialog = (campaign: Campaign) => {
         setEditingCampaign(campaign);
         setFormName(campaign.name);
+        setFormAllowsWeekendLeave(campaign.allows_weekend_leave);
         setFormError(null);
         setIsDialogOpen(true);
     };
@@ -165,6 +170,7 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
         setIsDialogOpen(false);
         setEditingCampaign(null);
         setFormName('');
+        setFormAllowsWeekendLeave(false);
         setFormError(null);
     };
 
@@ -215,7 +221,7 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
 
         setIsSubmitting(true);
 
-        const payload = { name: trimmedName };
+        const payload = { name: trimmedName, allows_weekend_leave: formAllowsWeekendLeave };
         const requestOptions = {
             preserveState: true,
             preserveScroll: true,
@@ -428,13 +434,14 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
                                 <TableRow className="bg-muted/50">
                                     <TableHead>ID</TableHead>
                                     <TableHead>Name</TableHead>
+                                    <TableHead>Weekend Leave</TableHead>
                                     <TableHead className="text-right">Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {!hasResults ? (
                                     <TableRow>
-                                        <TableCell colSpan={3} className="py-8 text-center text-muted-foreground">
+                                        <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
                                             No campaigns found
                                         </TableCell>
                                     </TableRow>
@@ -443,6 +450,13 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
                                         <TableRow key={campaign.id}>
                                             <TableCell>{campaign.id}</TableCell>
                                             <TableCell className="font-medium">{campaign.name}</TableCell>
+                                            <TableCell>
+                                                {campaign.allows_weekend_leave ? (
+                                                    <span className="text-xs font-medium text-emerald-600">Yes</span>
+                                                ) : (
+                                                    <span className="text-xs text-muted-foreground">No</span>
+                                                )}
+                                            </TableCell>
                                             <TableCell className="text-right">
                                                 <div className="flex justify-end gap-2">
                                                     <Can permission="campaigns.edit">
@@ -502,6 +516,20 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
                                 placeholder="Campaign name"
                                 disabled={isSubmitting}
                                 required
+                            />
+                        </div>
+                        <div className="flex items-center justify-between rounded-md border p-3">
+                            <div className="space-y-0.5">
+                                <Label htmlFor="campaign-weekend-leave">Allow Weekend Leave</Label>
+                                <p className="text-xs text-muted-foreground">
+                                    Employees in this campaign can file leave requests covering Saturdays and Sundays.
+                                </p>
+                            </div>
+                            <Switch
+                                id="campaign-weekend-leave"
+                                checked={formAllowsWeekendLeave}
+                                onCheckedChange={setFormAllowsWeekendLeave}
+                                disabled={isSubmitting}
                             />
                         </div>
                         {formError && <p className="text-sm text-destructive">{formError}</p>}

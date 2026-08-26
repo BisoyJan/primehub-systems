@@ -31,6 +31,7 @@ import {
     type AttendanceViolation,
     type ExistingLeaveRequest,
     type CampaignConflict,
+    type CampaignOption,
     isWeekend,
     getDayName,
     getSplMinDate,
@@ -82,7 +83,7 @@ interface Props {
     hasRecentAbsence: boolean;
     nextEligibleLeaveDate: string | null;
     lastAbsenceDate: string | null;
-    campaigns: string[];
+    campaigns: CampaignOption[];
     twoWeeksFromNow: string;
     isAdmin: boolean;
     isSuperAdmin: boolean;
@@ -154,9 +155,12 @@ export default function Edit({
         setData('removed_documents', [...data.removed_documents, id]);
     };
 
+    // Whether the currently selected campaign allows leave to cover weekends
+    const selectedCampaignAllowsWeekends = campaigns.find(c => c.name === data.campaign_department)?.allows_weekend_leave ?? false;
+
     // Handle start date change with weekend validation
     const handleStartDateChange = (value: string) => {
-        if (isWeekend(value)) {
+        if (!selectedCampaignAllowsWeekends && isWeekend(value)) {
             setWeekendError(prev => ({ ...prev, start: `${getDayName(value)} is a weekend. Please select a weekday.` }));
         } else {
             setWeekendError(prev => ({ ...prev, start: null }));
@@ -178,7 +182,7 @@ export default function Edit({
 
     // Handle end date change with weekend validation
     const handleEndDateChange = (value: string) => {
-        if (isWeekend(value)) {
+        if (!selectedCampaignAllowsWeekends && isWeekend(value)) {
             setWeekendError(prev => ({ ...prev, end: `${getDayName(value)} is a weekend. Please select a weekday.` }));
         } else {
             setWeekendError(prev => ({ ...prev, end: null }));
@@ -192,11 +196,11 @@ export default function Edit({
         [creditsSummary.is_eligible, creditsSummary.eligibility_date, creditsSummary.monthly_rate],
     );
 
-    // Calculate working days when dates change (excluding weekends)
+    // Calculate working days when dates change (excluding weekends, unless campaign allows them)
     useEffect(() => {
         if (data.start_date && data.end_date) {
             try {
-                setCalculatedDays(countWorkingDays(data.start_date, data.end_date));
+                setCalculatedDays(countWorkingDays(data.start_date, data.end_date, selectedCampaignAllowsWeekends));
 
                 // Calculate future credits based on start date
                 const projectedCredits = calculateFutureCredits(data.start_date);
@@ -209,7 +213,20 @@ export default function Edit({
             setCalculatedDays(0);
             setFutureCredits(0);
         }
-    }, [data.start_date, data.end_date, creditsSummary.is_eligible, creditsSummary.monthly_rate, calculateFutureCredits]);
+    }, [data.start_date, data.end_date, creditsSummary.is_eligible, creditsSummary.monthly_rate, calculateFutureCredits, selectedCampaignAllowsWeekends]);
+
+    // Re-validate weekend errors if the selected campaign's weekend policy changes after dates are picked
+    useEffect(() => {
+        if (selectedCampaignAllowsWeekends) {
+            setWeekendError({ start: null, end: null });
+            return;
+        }
+        setWeekendError({
+            start: data.start_date && isWeekend(data.start_date) ? `${getDayName(data.start_date)} is a weekend. Please select a weekday.` : null,
+            end: data.end_date && isWeekend(data.end_date) ? `${getDayName(data.end_date)} is a weekend. Please select a weekday.` : null,
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedCampaignAllowsWeekends]);
 
     // Auto-generate SPL day settings when dates change
     useEffect(() => {
@@ -227,7 +244,7 @@ export default function Edit({
 
         while (currentDate <= end) {
             const dayOfWeek = currentDate.getDay();
-            if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+            if (selectedCampaignAllowsWeekends || (dayOfWeek >= 1 && dayOfWeek <= 5)) {
                 const dateStr = format(currentDate, 'yyyy-MM-dd');
                 // Preserve existing setting if date matches
                 const existing = data.spl_day_settings.find(s => s.date === dateStr);
@@ -246,7 +263,7 @@ export default function Edit({
             setData('spl_day_settings', newSettings);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [data.leave_type, data.start_date, data.end_date]);
+    }, [data.leave_type, data.start_date, data.end_date, selectedCampaignAllowsWeekends]);
 
     // Update calculatedDays for SPL based on half-day settings
     useEffect(() => {
@@ -1205,14 +1222,19 @@ export default function Edit({
                                     </SelectTrigger>
                                     <SelectContent>
                                         {campaigns.map((campaign) => (
-                                            <SelectItem key={campaign} value={campaign}>
-                                                {campaign}
+                                            <SelectItem key={campaign.name} value={campaign.name}>
+                                                {campaign.name}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
                                 {errors.campaign_department && (
                                     <p className="text-sm text-red-500">{errors.campaign_department}</p>
+                                )}
+                                {selectedCampaignAllowsWeekends && (
+                                    <p className="text-xs text-muted-foreground">
+                                        This campaign allows leave requests to cover weekends.
+                                    </p>
                                 )}
                             </div>
 

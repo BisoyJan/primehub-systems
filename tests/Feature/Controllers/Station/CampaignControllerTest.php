@@ -44,6 +44,28 @@ class CampaignControllerTest extends TestCase
         $this->assertDatabaseHas('campaigns', $data);
     }
 
+    public function test_store_creates_campaign_with_weekend_leave_flag()
+    {
+        $data = ['name' => 'Weekend Ops', 'allows_weekend_leave' => true];
+
+        $this->post(route('campaigns.store'), $data)
+            ->assertRedirect()
+            ->assertSessionHas('flash');
+
+        $this->assertDatabaseHas('campaigns', ['name' => 'Weekend Ops', 'allows_weekend_leave' => true]);
+    }
+
+    public function test_update_updates_weekend_leave_flag()
+    {
+        $campaign = Campaign::factory()->create(['allows_weekend_leave' => false]);
+
+        $this->put(route('campaigns.update', $campaign), ['name' => $campaign->name, 'allows_weekend_leave' => true])
+            ->assertRedirect()
+            ->assertSessionHas('flash');
+
+        $this->assertDatabaseHas('campaigns', ['id' => $campaign->id, 'allows_weekend_leave' => true]);
+    }
+
     public function test_update_updates_campaign()
     {
         $campaign = Campaign::factory()->create();

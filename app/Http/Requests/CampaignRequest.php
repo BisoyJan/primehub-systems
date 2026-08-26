@@ -15,6 +15,7 @@ class CampaignRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
+            'allows_weekend_leave' => ['sometimes', 'boolean'],
         ];
     }
 }

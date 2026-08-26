@@ -48,6 +48,26 @@ class LeaveRequestController extends Controller
     }
 
     /**
+     * Whether the given campaign/department name allows leave requests to cover weekends.
+     */
+    private function campaignAllowsWeekends(?string $campaignName): bool
+    {
+        if (! $campaignName) {
+            return false;
+        }
+
+        return (bool) Campaign::where('name', $campaignName)->value('allows_weekend_leave');
+    }
+
+    /**
+     * Whether the given date counts as a leave day, given the campaign's weekend policy.
+     */
+    private function isLeaveDay(Carbon $date, bool $allowsWeekends): bool
+    {
+        return $allowsWeekends || $date->isWeekday();
+    }
+
+    /**
      * Display a listing of leave requests.
      */
     public function index(Request $request)
@@ -484,8 +504,12 @@ class LeaveRequestController extends Controller
         $lastAbsenceDate = $leaveCreditService->getLastAbsenceDate($targetUser);
 
         // Campaign/Department options - fetch from database + add Management
-        $campaignsFromDb = Campaign::orderBy('name')->pluck('name')->toArray();
-        $campaigns = array_merge(['Management (For TL/Admin)'], $campaignsFromDb);
+        $campaignsFromDb = Campaign::orderBy('name')->get(['name', 'allows_weekend_leave'])
+            ->map(fn (Campaign $campaign) => [
+                'name' => $campaign->name,
+                'allows_weekend_leave' => $campaign->allows_weekend_leave,
+            ])->toArray();
+        $campaigns = array_merge([['name' => 'Management (For TL/Admin)', 'allows_weekend_leave' => false]], $campaignsFromDb);
 
         // Get employee's campaign from active schedule
         $selectedCampaign = null;
@@ -643,7 +667,8 @@ class LeaveRequestController extends Controller
         }
 
         // Calculate days
-        $daysRequested = $leaveCreditService->calculateDays($startDate, $endDate);
+        $allowsWeekends = $this->campaignAllowsWeekends($request->campaign_department);
+        $daysRequested = $leaveCreditService->calculateDays($startDate, $endDate, $allowsWeekends);
 
         // For SPL: validate solo parent status and calculate days accounting for half-days
         if ($request->leave_type === 'SPL') {
@@ -1090,6 +1115,7 @@ class LeaveRequestController extends Controller
             'suggestedDayStatuses' => $suggestedDayStatuses,
             'isShortNotice' => in_array($leaveRequest->leave_type, ['VL', 'UPTO']) && $leaveRequest->start_date->lt($leaveRequest->created_at->copy()->addWeeks(2)),
             'canOverrideShortNotice' => in_array($user->role, ['Super Admin', 'Admin']),
+            'allowsWeekendLeave' => $this->campaignAllowsWeekends($leaveRequest->campaign_department),
         ]);
     }
 
@@ -1208,8 +1234,12 @@ class LeaveRequestController extends Controller
         $lastAbsenceDate = $leaveCreditService->getLastAbsenceDate($targetUser);
 
         // Campaign/Department options
-        $campaignsFromDb = Campaign::orderBy('name')->pluck('name')->toArray();
-        $campaigns = array_merge(['Management (For TL/Admin)'], $campaignsFromDb);
+        $campaignsFromDb = Campaign::orderBy('name')->get(['name', 'allows_weekend_leave'])
+            ->map(fn (Campaign $campaign) => [
+                'name' => $campaign->name,
+                'allows_weekend_leave' => $campaign->allows_weekend_leave,
+            ])->toArray();
+        $campaigns = array_merge([['name' => 'Management (For TL/Admin)', 'allows_weekend_leave' => false]], $campaignsFromDb);
 
         // Calculate two weeks from the date the request was filed (created_at), not from today
         // This prevents false short notice warnings when editing an old request
@@ -1330,7 +1360,8 @@ class LeaveRequestController extends Controller
         // Calculate days
         $startDate = Carbon::parse($request->start_date);
         $endDate = Carbon::parse($request->end_date);
-        $daysRequested = $leaveCreditService->calculateDays($startDate, $endDate);
+        $allowsWeekends = $this->campaignAllowsWeekends($request->campaign_department);
+        $daysRequested = $leaveCreditService->calculateDays($startDate, $endDate, $allowsWeekends);
 
         // For SPL: validate solo parent status and calculate days accounting for half-days
         if ($request->leave_type === 'SPL') {
@@ -1484,7 +1515,8 @@ class LeaveRequestController extends Controller
         // Calculate new days
         $newStartDate = Carbon::parse($request->start_date);
         $newEndDate = Carbon::parse($request->end_date);
-        $newDaysRequested = $leaveCreditService->calculateDays($newStartDate, $newEndDate);
+        $allowsWeekends = $this->campaignAllowsWeekends($leaveRequest->campaign_department);
+        $newDaysRequested = $leaveCreditService->calculateDays($newStartDate, $newEndDate, $allowsWeekends);
         $oldDaysRequested = $leaveRequest->days_requested;
 
         $oldLeaveType = $leaveRequest->leave_type;
@@ -2168,10 +2200,11 @@ class LeaveRequestController extends Controller
                 }
 
                 // Calculate which dates are approved
+                $allowsWeekends = $this->campaignAllowsWeekends($leaveRequest->campaign_department);
                 $allWorkDays = [];
                 $current = $startDate->copy();
                 while ($current->lte($endDate)) {
-                    if ($current->dayOfWeek >= Carbon::MONDAY && $current->dayOfWeek <= Carbon::FRIDAY) {
+                    if ($this->isLeaveDay($current, $allowsWeekends)) {
                         $allWorkDays[] = $current->format('Y-m-d');
                     }
                     $current->addDay();
@@ -2518,11 +2551,11 @@ class LeaveRequestController extends Controller
         }
 
         // Calculate which dates are approved (total days minus denied dates)
+        $allowsWeekends = $this->campaignAllowsWeekends($leaveRequest->campaign_department);
         $allWorkDays = [];
         $current = $startDate->copy();
         while ($current->lte($endDate)) {
-            // Only count weekdays
-            if ($current->dayOfWeek >= Carbon::MONDAY && $current->dayOfWeek <= Carbon::FRIDAY) {
+            if ($this->isLeaveDay($current, $allowsWeekends)) {
                 $allWorkDays[] = $current->format('Y-m-d');
             }
             $current->addDay();
@@ -2819,10 +2852,11 @@ class LeaveRequestController extends Controller
             ? Carbon::parse($leaveRequest->original_end_date)
             : Carbon::parse($leaveRequest->end_date);
 
+        $allowsWeekends = $this->campaignAllowsWeekends($leaveRequest->campaign_department);
         $allWorkDays = [];
         $cursor = $rangeStart->copy();
         while ($cursor->lte($rangeEnd)) {
-            if ($cursor->isWeekday()) {
+            if ($this->isLeaveDay($cursor, $allowsWeekends)) {
                 $allWorkDays[] = $cursor->format('Y-m-d');
             }
             $cursor->addDay();
@@ -2840,7 +2874,7 @@ class LeaveRequestController extends Controller
                 return back()->withErrors(['error' => "Date {$date->format('M d, Y')} is not within the leave period."]);
             }
 
-            if (! $date->isWeekday()) {
+            if (! $this->isLeaveDay($date, $allowsWeekends)) {
                 return back()->withErrors(['error' => "Date {$date->format('M d, Y')} is a weekend and cannot be partially denied."]);
             }
         }
@@ -2964,9 +2998,11 @@ class LeaveRequestController extends Controller
             }
 
             // Calculate new days
+            $allowsWeekends = $this->campaignAllowsWeekends($leaveRequest->campaign_department);
             $newDays = $this->leaveCreditService->calculateDays(
                 $newStartDate,
-                $newEndDate
+                $newEndDate,
+                $allowsWeekends
             );
 
             $daysReduced = $originalDays - $newDays;
@@ -3313,13 +3349,15 @@ class LeaveRequestController extends Controller
         $request->validate([
             'start_date' => 'required|date',
             'end_date' => 'required|date|after_or_equal:start_date',
+            'campaign_department' => 'nullable|string',
         ]);
 
         $startDate = Carbon::parse($request->start_date);
         $endDate = Carbon::parse($request->end_date);
+        $allowsWeekends = $this->campaignAllowsWeekends($request->campaign_department);
 
         $leaveCreditService = $this->leaveCreditService;
-        $days = $leaveCreditService->calculateDays($startDate, $endDate);
+        $days = $leaveCreditService->calculateDays($startDate, $endDate, $allowsWeekends);
 
         return response()->json(['days' => $days]);
     }
@@ -3365,17 +3403,17 @@ class LeaveRequestController extends Controller
             $query->where('id', '!=', $excludeLeaveId);
         }
 
-        $conflicts = $query->get()->map(function ($leave) use ($startDate, $endDate) {
+        $conflicts = $query->get()->map(function ($leave) use ($startDate, $endDate, $campaign) {
             // Calculate overlapping dates
             $overlapStart = max($startDate->timestamp, Carbon::parse($leave->start_date)->timestamp);
             $overlapEnd = min($endDate->timestamp, Carbon::parse($leave->end_date)->timestamp);
             $overlappingDates = [];
 
+            $allowsWeekends = $this->campaignAllowsWeekends($campaign);
             $current = Carbon::createFromTimestamp($overlapStart);
             $end = Carbon::createFromTimestamp($overlapEnd);
             while ($current->lte($end)) {
-                // Only include weekdays
-                if ($current->isWeekday()) {
+                if ($this->isLeaveDay($current, $allowsWeekends)) {
                     $overlappingDates[] = $current->format('Y-m-d');
                 }
                 $current->addDay();
@@ -3427,10 +3465,11 @@ class LeaveRequestController extends Controller
                 $overlapEnd = min($endDate->timestamp, $leave->end_date->timestamp);
                 $overlappingDates = [];
 
+                $allowsWeekends = $this->campaignAllowsWeekends($leaveRequest->campaign_department);
                 $current = Carbon::createFromTimestamp($overlapStart);
                 $end = Carbon::createFromTimestamp($overlapEnd);
                 while ($current->lte($end)) {
-                    if ($current->isWeekday()) {
+                    if ($this->isLeaveDay($current, $allowsWeekends)) {
                         $overlappingDates[] = $current->format('Y-m-d');
                     }
                     $current->addDay();
@@ -3635,11 +3674,12 @@ class LeaveRequestController extends Controller
                 ->toArray();
         }
 
+        $allowsWeekends = $this->campaignAllowsWeekends($leaveRequest->campaign_department);
         $allDates = [];
         $currentDate = $startDate->copy();
         while ($currentDate->lte($endDate)) {
             $dateStr = $currentDate->format('Y-m-d');
-            if ($currentDate->isWeekday() && ! in_array($dateStr, $deniedDates)) {
+            if ($this->isLeaveDay($currentDate, $allowsWeekends) && ! in_array($dateStr, $deniedDates)) {
                 $allDates[] = $dateStr;
             }
             $currentDate->addDay();
@@ -3747,12 +3787,13 @@ class LeaveRequestController extends Controller
                 ->toArray();
         }
 
-        // Collect all valid weekday dates in the leave period (excluding weekends and already-denied dates)
+        // Collect all valid dates in the leave period (excluding weekends unless the campaign allows them, and already-denied dates)
+        $allowsWeekends = $this->campaignAllowsWeekends($leaveRequest->campaign_department);
         $allDates = [];
         $currentDate = $startDate->copy();
         while ($currentDate->lte($endDate)) {
             $dateStr = $currentDate->format('Y-m-d');
-            if ($currentDate->isWeekday() && ! in_array($dateStr, $existingDeniedDates)) {
+            if ($this->isLeaveDay($currentDate, $allowsWeekends) && ! in_array($dateStr, $existingDeniedDates)) {
                 $allDates[] = $dateStr;
             }
             $currentDate->addDay();
@@ -4854,7 +4895,7 @@ class LeaveRequestController extends Controller
     }
 
     /**
-     * Get approved weekday dates for the current leave range, excluding denied dates.
+     * Get approved leave dates for the current leave range, excluding denied dates.
      *
      * @return array<int, string>
      */
@@ -4865,13 +4906,14 @@ class LeaveRequestController extends Controller
             ->map(fn ($date) => Carbon::parse($date)->format('Y-m-d'))
             ->toArray();
 
+        $allowsWeekends = $this->campaignAllowsWeekends($leaveRequest->campaign_department);
         $result = [];
         $cursor = Carbon::parse($leaveRequest->start_date);
         $end = Carbon::parse($leaveRequest->end_date);
 
         while ($cursor->lte($end)) {
             $dateStr = $cursor->format('Y-m-d');
-            if ($cursor->isWeekday() && ! in_array($dateStr, $deniedDates)) {
+            if ($this->isLeaveDay($cursor, $allowsWeekends) && ! in_array($dateStr, $deniedDates)) {
                 $result[] = $dateStr;
             }
             $cursor->addDay();

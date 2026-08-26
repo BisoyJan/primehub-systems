@@ -1043,19 +1043,18 @@ class LeaveCreditService
     }
 
     /**
-     * Calculate number of working days between two dates (excluding weekends).
-     * Leave credits are only deducted for working days (Monday-Friday).
+     * Calculate number of leave days between two dates.
+     * Weekends are excluded unless the employee's campaign allows weekend leave.
      */
-    public function calculateDays(Carbon $startDate, Carbon $endDate): float
+    public function calculateDays(Carbon $startDate, Carbon $endDate, bool $includeWeekends = false): float
     {
         $workingDays = 0;
         $currentDate = $startDate->copy();
 
         // Loop through each day in the range
         while ($currentDate->lte($endDate)) {
-            // Count only weekdays (Monday = 1 to Friday = 5)
-            // Saturday = 6, Sunday = 7 are excluded
-            if ($currentDate->dayOfWeek >= Carbon::MONDAY && $currentDate->dayOfWeek <= Carbon::FRIDAY) {
+            // Weekdays always count; weekends count only when the campaign allows it
+            if ($includeWeekends || ($currentDate->dayOfWeek >= Carbon::MONDAY && $currentDate->dayOfWeek <= Carbon::FRIDAY)) {
                 $workingDays++;
             }
             $currentDate->addDay();

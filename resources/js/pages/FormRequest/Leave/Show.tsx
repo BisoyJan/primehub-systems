@@ -223,6 +223,7 @@ interface Props {
     suggestedDayStatuses?: SuggestedDayStatus[] | null;
     isShortNotice?: boolean;
     canOverrideShortNotice?: boolean;
+    allowsWeekendLeave?: boolean;
 }
 
 interface EarlierConflict {
@@ -256,6 +257,7 @@ export default function Show({
     suggestedDayStatuses = null,
     isShortNotice = false,
     canOverrideShortNotice = false,
+    allowsWeekendLeave = false,
 }: Props) {
     const [showApproveDialog, setShowApproveDialog] = useState(false);
     const [showDenyDialog, setShowDenyDialog] = useState(false);
@@ -350,7 +352,7 @@ export default function Show({
                 const start = parseISO(leaveRequest.start_date);
                 const end = parseISO(leaveRequest.end_date);
                 return eachDayOfInterval({ start, end })
-                    .filter((d) => !isWeekend(d))
+                    .filter((d) => allowsWeekendLeave || !isWeekend(d))
                     .map((d) => ({
                         date: format(d, 'yyyy-MM-dd'),
                         status: 'pending' as const,
@@ -628,16 +630,16 @@ export default function Show({
         return typeMap[type] || type;
     };
 
-    // Get list of working days (Mon-Fri) in leave period
+    // Get list of leave days in the leave period (weekends included only if the campaign allows it)
     const workDays = useMemo(() => {
         try {
             const start = parseISO(leaveRequest.start_date);
             const end = parseISO(leaveRequest.end_date);
-            return eachDayOfInterval({ start, end }).filter(date => !isWeekend(date));
+            return eachDayOfInterval({ start, end }).filter(date => allowsWeekendLeave || !isWeekend(date));
         } catch {
             return [];
         }
-    }, [leaveRequest.start_date, leaveRequest.end_date]);
+    }, [leaveRequest.start_date, leaveRequest.end_date, allowsWeekendLeave]);
 
     // Full original date range working days — used in Partial Deny dialog when a prior partial denial exists
     // so the next approver can see and re-select previously denied dates
@@ -646,13 +648,13 @@ export default function Show({
             try {
                 const start = parseISO(leaveRequest.original_start_date);
                 const end = parseISO(leaveRequest.original_end_date);
-                return eachDayOfInterval({ start, end }).filter(date => !isWeekend(date));
+                return eachDayOfInterval({ start, end }).filter(date => allowsWeekendLeave || !isWeekend(date));
             } catch {
                 return workDays;
             }
         }
         return workDays;
-    }, [leaveRequest.has_partial_denial, leaveRequest.original_start_date, leaveRequest.original_end_date, workDays]);
+    }, [leaveRequest.has_partial_denial, leaveRequest.original_start_date, leaveRequest.original_end_date, workDays, allowsWeekendLeave]);
 
     // Set of previously denied date strings for quick lookup
     const previouslyDeniedDateSet = useMemo(() => {
@@ -776,7 +778,7 @@ export default function Show({
         try {
             const start = parseISO(leaveRequest.start_date);
             const end = parseISO(leaveRequest.end_date);
-            return eachDayOfInterval({ start, end }).filter(date => !isWeekend(date));
+            return eachDayOfInterval({ start, end }).filter(date => allowsWeekendLeave || !isWeekend(date));
         } catch {
             return [];
         }
@@ -1387,8 +1389,8 @@ export default function Show({
                             </div>
                         )}
 
-                        {/* Attendance Points at Request - Highlighted if >= 6, hidden for ML */}
-                        {leaveRequest.leave_type !== 'ML' && (
+                        {/* Attendance Points at Request - Highlighted if >= 6, hidden for ML and BL */}
+                        {leaveRequest.leave_type !== 'ML' && leaveRequest.leave_type !== 'BL' && (
                             <div>
                                 <p className="text-sm font-medium text-muted-foreground">
                                     Attendance Points at Request
@@ -1419,8 +1421,8 @@ export default function Show({
                             </div>
                         )}
 
-                        {/* High Attendance Points Alert - Hidden for cancelled leaves and ML */}
-                        {Number(leaveRequest.attendance_points_at_request || 0) >= 6 && leaveRequest.status !== 'cancelled' && leaveRequest.leave_type !== 'ML' && (
+                        {/* High Attendance Points Alert - Hidden for cancelled leaves, ML, and BL */}
+                        {Number(leaveRequest.attendance_points_at_request || 0) >= 6 && leaveRequest.status !== 'cancelled' && leaveRequest.leave_type !== 'ML' && leaveRequest.leave_type !== 'BL' && (
                             <Alert className="border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950">
                                 <AlertDescription className="text-red-800 dark:text-red-200">
                                     <strong>⚠️ High Attendance Points:</strong>  <p>This employee has{' '}

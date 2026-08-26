@@ -20,7 +20,14 @@ class Campaign extends Model
             ->dontSubmitEmptyLogs();
     }
 
-    protected $fillable = ['name'];
+    protected $fillable = ['name', 'allows_weekend_leave'];
+
+    protected function casts(): array
+    {
+        return [
+            'allows_weekend_leave' => 'boolean',
+        ];
+    }
 
     // Scope for search functionality
     public function scopeSearch(Builder $query, ?string $search): Builder

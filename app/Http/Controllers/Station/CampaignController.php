@@ -25,6 +25,7 @@ class CampaignController extends Controller
         $items = $paginated->getCollection()->map(fn (Campaign $campaign) => [
             'id' => $campaign->id,
             'name' => $campaign->name,
+            'allows_weekend_leave' => $campaign->allows_weekend_leave,
             'created_at' => optional($campaign->created_at)->toDateTimeString(),
             'updated_at' => optional($campaign->updated_at)->toDateTimeString(),
         ])->toArray();
