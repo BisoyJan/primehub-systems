@@ -43,10 +43,7 @@ class ActivityLogController extends Controller
         }
 
         if ($causer) {
-            $query->whereHas('causer', function ($q) use ($causer) {
-                $q->where('first_name', 'like', "%{$causer}%")
-                    ->orWhere('last_name', 'like', "%{$causer}%");
-            });
+            $query->whereHas('causer', fn ($q) => $q->searchName($causer));
         }
 
         $activities = $query->paginate(20)
@@ -102,10 +99,7 @@ class ActivityLogController extends Controller
         }
 
         if ($causer) {
-            $query->whereHas('causer', function ($q) use ($causer) {
-                $q->where('first_name', 'like', "%{$causer}%")
-                    ->orWhere('last_name', 'like', "%{$causer}%");
-            });
+            $query->whereHas('causer', fn ($q) => $q->searchName($causer));
         }
 
         $filename = 'activity_logs_'.now()->format('Y-m-d_His').'.csv';

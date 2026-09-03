@@ -38,11 +38,8 @@ class AccountController extends Controller
         // Search by name or email
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
-                $q->where('first_name', 'like', "%{$search}%")
-                    ->orWhere('middle_name', 'like', "%{$search}%")
-                    ->orWhere('last_name', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%")
-                    ->orWhereRaw("CONCAT(first_name, ' ', COALESCE(middle_name, ''), ' ', last_name) LIKE ?", ["%{$search}%"]);
+                $q->searchName($search)
+                    ->orWhere('email', 'like', "%{$search}%");
             });
         }
 

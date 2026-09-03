@@ -33,10 +33,7 @@ class EmployeeScheduleController extends Controller
         // Search by employee name
         if ($request->has('search') && $request->search) {
             $search = $request->search;
-            $query->whereHas('user', function ($q) use ($search) {
-                $q->where('first_name', 'like', "%{$search}%")
-                    ->orWhere('last_name', 'like', "%{$search}%");
-            });
+            $query->whereHas('user', fn ($q) => $q->searchName($search));
         }
 
         // Filters

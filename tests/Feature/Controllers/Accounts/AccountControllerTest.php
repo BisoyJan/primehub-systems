@@ -58,6 +58,25 @@ class AccountControllerTest extends TestCase
             );
     }
 
+    public function test_index_search_is_diacritic_insensitive(): void
+    {
+        $user = User::factory()->create([
+            'first_name' => 'Ñoño',
+            'last_name' => 'Áéíóú',
+        ]);
+
+        foreach (['n', 'nono', 'aeiou', 'Ñoño'] as $search) {
+            $response = $this->actingAs($this->adminUser)
+                ->get(route('accounts.index', ['search' => $search]));
+
+            $response->assertStatus(200)
+                ->assertInertia(fn (Assert $page) => $page
+                    ->component('Account/Index')
+                    ->where('users.data', fn ($data) => collect($data)->pluck('id')->contains($user->id))
+                );
+        }
+    }
+
     public function test_index_filters_by_role(): void
     {
         User::factory()->create(['role' => 'Agent']);

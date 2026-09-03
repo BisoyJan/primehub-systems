@@ -75,8 +75,7 @@ class LeaveCreditController extends Controller
             } else {
                 // Search by name or email
                 $query->where(function ($q) use ($search) {
-                    $q->where('first_name', 'like', "%{$search}%")
-                        ->orWhere('last_name', 'like', "%{$search}%")
+                    $q->searchName($search)
                         ->orWhere('email', 'like', "%{$search}%");
                 });
             }

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Services\PermissionService;
+use App\Traits\HasNormalizedNameSearch;
 use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -18,7 +19,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
 class User extends Authenticatable implements MustVerifyEmail
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, LogsActivity, Notifiable, TwoFactorAuthenticatable;
+    use HasFactory, HasNormalizedNameSearch, LogsActivity, Notifiable, TwoFactorAuthenticatable;
 
     public function getActivitylogOptions(): LogOptions
     {
@@ -30,9 +31,20 @@ class User extends Authenticatable implements MustVerifyEmail
                 'two_factor_secret',
                 'two_factor_recovery_codes',
                 'two_factor_confirmed_at',
+                'name_search_index',
             ])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
+    }
+
+    /**
+     * Columns folded into name_search_index for diacritic-insensitive name search.
+     *
+     * @return list<string>
+     */
+    public function getNameSearchColumns(): array
+    {
+        return ['first_name', 'middle_name', 'last_name'];
     }
 
     /**

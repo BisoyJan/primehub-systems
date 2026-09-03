@@ -5,10 +5,8 @@ namespace App\Http\Controllers;
 use App\Enums\AttendanceStatus;
 use App\Events\AttendanceSpreadsheetUpdated;
 use App\Http\Requests\BatchVerifyAttendanceRequest;
-use App\Http\Requests\BulkStoreAttendanceRequest;
 use App\Http\Requests\CreateSpreadsheetCellAttendanceRequest;
 use App\Http\Requests\GenerateAttendanceRequest;
-use App\Http\Requests\StoreAttendanceRequest;
 use App\Http\Requests\VerifyAttendanceRequest;
 use App\Jobs\ProcessAttendanceUpload;
 use App\Models\Attendance;
@@ -277,11 +275,7 @@ class AttendanceController extends Controller
             // Search by employee name
             if ($request->has('search') && $request->search) {
                 $search = $request->search;
-                $query->whereHas('user', function ($q) use ($search) {
-                    $q->where('first_name', 'like', "%{$search}%")
-                        ->orWhere('last_name', 'like', "%{$search}%")
-                        ->orWhere(\DB::raw("CONCAT(first_name, ' ', last_name)"), 'like', "%{$search}%");
-                });
+                $query->whereHas('user', fn ($q) => $q->searchName($search));
             }
 
             // Allow user_id filter (supports multiple IDs comma-separated)
@@ -297,11 +291,7 @@ class AttendanceController extends Controller
             // Search by employee name (only for non-restricted roles)
             if ($request->has('search') && $request->search) {
                 $search = $request->search;
-                $query->whereHas('user', function ($q) use ($search) {
-                    $q->where('first_name', 'like', "%{$search}%")
-                        ->orWhere('last_name', 'like', "%{$search}%")
-                        ->orWhere(\DB::raw("CONCAT(first_name, ' ', last_name)"), 'like', "%{$search}%");
-                });
+                $query->whereHas('user', fn ($q) => $q->searchName($search));
             }
 
             // Allow user_id filter for non-restricted roles (supports multiple IDs comma-separated)
@@ -2069,10 +2059,8 @@ class AttendanceController extends Controller
             ->when($request->filled('search'), function ($query) use ($request) {
                 $search = $request->search;
                 $query->where(function ($q) use ($search) {
-                    $q->where('first_name', 'like', "%{$search}%")
-                        ->orWhere('last_name', 'like', "%{$search}%")
-                        ->orWhere('email', 'like', "%{$search}%")
-                        ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%{$search}%"]);
+                    $q->searchName($search)
+                        ->orWhere('email', 'like', "%{$search}%");
                 });
             })
             ->get()
@@ -2823,11 +2811,7 @@ class AttendanceController extends Controller
             $q->whereNull('hired_date')->orWhere('is_active', true);
         });
         if ($search !== '') {
-            $scopedIdsQuery->where(function ($q) use ($search) {
-                $q->where('first_name', 'like', "%{$search}%")
-                    ->orWhere('last_name', 'like', "%{$search}%")
-                    ->orWhere(\DB::raw("CONCAT(first_name, ' ', last_name)"), 'like', "%{$search}%");
-            });
+            $scopedIdsQuery->searchName($search);
         }
         $scopedEmployeeIds = $scopedIdsQuery->pluck('users.id')->all();
 

@@ -297,24 +297,9 @@ class CoachingSession extends Model
             return $query;
         }
 
-        $searchTerm = '%'.$search.'%';
-
-        return $query->where(function (Builder $q) use ($searchTerm) {
-            $q->whereHas('coachee', function (Builder $aq) use ($searchTerm) {
-                $aq->where(function ($q2) use ($searchTerm) {
-                    $q2->whereRaw("CONCAT(first_name, ' ', COALESCE(CONCAT(middle_name, '. '), ''), last_name) LIKE ?", [$searchTerm])
-                        ->orWhere('first_name', 'like', $searchTerm)
-                        ->orWhere('last_name', 'like', $searchTerm)
-                        ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", [$searchTerm]);
-                });
-            })->orWhereHas('coach', function (Builder $tq) use ($searchTerm) {
-                $tq->where(function ($q2) use ($searchTerm) {
-                    $q2->whereRaw("CONCAT(first_name, ' ', COALESCE(CONCAT(middle_name, '. '), ''), last_name) LIKE ?", [$searchTerm])
-                        ->orWhere('first_name', 'like', $searchTerm)
-                        ->orWhere('last_name', 'like', $searchTerm)
-                        ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", [$searchTerm]);
-                });
-            });
+        return $query->where(function (Builder $q) use ($search) {
+            $q->whereHas('coachee', fn (Builder $aq) => $aq->searchName($search))
+                ->orWhereHas('coach', fn (Builder $tq) => $tq->searchName($search));
         });
     }
 

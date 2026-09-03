@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Traits\HasNormalizedNameSearch;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -11,14 +12,25 @@ use Spatie\Activitylog\Traits\LogsActivity;
 
 class BiometricRecord extends Model
 {
-    use HasFactory, LogsActivity;
+    use HasFactory, HasNormalizedNameSearch, LogsActivity;
 
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
             ->logAll()
+            ->logExcept(['name_search_index'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
+    }
+
+    /**
+     * Columns folded into name_search_index for diacritic-insensitive name search.
+     *
+     * @return list<string>
+     */
+    public function getNameSearchColumns(): array
+    {
+        return ['employee_name'];
     }
 
     protected $fillable = [

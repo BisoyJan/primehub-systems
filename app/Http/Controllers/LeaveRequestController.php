@@ -166,17 +166,7 @@ class LeaveRequestController extends Controller
 
         // Filter by employee name (admin/TL only)
         if (($isAdmin || $isTeamLead) && $request->filled('employee_name')) {
-            $query->whereHas('user', function ($q) use ($request) {
-                $searchTerm = '%'.$request->employee_name.'%';
-                // Search across first_name, middle_name, and last_name
-                // Format: "First M. Last" or "First Last"
-                $q->where(function ($q2) use ($searchTerm) {
-                    $q2->whereRaw("CONCAT(first_name, ' ', COALESCE(CONCAT(middle_name, '. '), ''), last_name) LIKE ?", [$searchTerm])
-                        ->orWhere('first_name', 'like', $searchTerm)
-                        ->orWhere('last_name', 'like', $searchTerm)
-                        ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", [$searchTerm]);
-                });
-            });
+            $query->whereHas('user', fn ($q) => $q->searchName($request->employee_name));
         }
 
         // Filter by campaign/department - auto-filter for Team Leads

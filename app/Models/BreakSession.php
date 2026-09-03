@@ -100,8 +100,7 @@ class BreakSession extends Model
         return $query->where(function (Builder $q) use ($search) {
             $q->where('session_id', 'like', "%{$search}%")
                 ->orWhere('station', 'like', "%{$search}%")
-                ->orWhereHas('user', fn (Builder $uq) => $uq->where('first_name', 'like', "%{$search}%")
-                    ->orWhere('last_name', 'like', "%{$search}%"));
+                ->orWhereHas('user', fn (Builder $uq) => $uq->searchName($search));
         });
     }
 }

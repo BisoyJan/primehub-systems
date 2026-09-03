@@ -52,12 +52,8 @@ class BiometricRecordController extends Controller
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
-                $q->where('employee_name', 'like', "%{$search}%")
-                    ->orWhereHas('user', function ($userQuery) use ($search) {
-                        $userQuery->where('first_name', 'like', "%{$search}%")
-                            ->orWhere('last_name', 'like', "%{$search}%")
-                            ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%{$search}%"]);
-                    });
+                $q->searchName($search)
+                    ->orWhereHas('user', fn ($userQuery) => $userQuery->searchName($search));
             });
         }
 
