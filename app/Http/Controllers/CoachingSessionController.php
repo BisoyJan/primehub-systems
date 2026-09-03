@@ -41,7 +41,7 @@ class CoachingSessionController extends Controller
         $this->authorize('viewAny', CoachingSession::class);
 
         $user = auth()->user();
-        $isAdmin = in_array($user->role, ['Super Admin', 'Admin', 'HR']);
+        $isAdmin = in_array($user->role, ['Super Admin', 'Admin']);
         $isTeamLead = $user->role === 'Team Lead';
         $isAgent = $user->role === 'Agent';
 
@@ -70,25 +70,13 @@ class CoachingSessionController extends Controller
             $query->forCoachee($user->id);
         } elseif ($isTeamLead && ! $showDrafts) {
             $activeTab = $request->input('tab', 'team');
-            $managedAgentIds = $user->getManagedAgentIds($teamLeadCampaignIds);
 
             if ($activeTab === 'my') {
                 // "My Sessions" tab — only sessions where TL is the coachee
                 $query->forCoachee($user->id);
             } else {
-                // "Team Sessions" tab — sessions TL coached or for managed agents only.
-                if (! empty($managedAgentIds)) {
-                    $query->where('coachee_id', '!=', $user->id)
-                        ->where(function ($q) use ($user, $managedAgentIds) {
-                            $q->where('coach_id', $user->id)
-                                ->orWhere(function ($sub) use ($managedAgentIds) {
-                                    $sub->whereIn('coachee_id', $managedAgentIds)
-                                        ->whereHas('coachee', fn ($coachee) => $coachee->where('role', 'Agent'));
-                                });
-                        });
-                } else {
-                    $query->where('coach_id', $user->id);
-                }
+                // "Team Sessions" tab — only sessions this TL personally coached.
+                $query->forCoach($user->id);
             }
         } elseif ($isAdmin && ! $showDrafts) {
             $activeTab = $request->input('tab', 'all');
@@ -96,6 +84,9 @@ class CoachingSessionController extends Controller
             if ($activeTab === 'needs_review') {
                 $query->where('compliance_status', 'For_Review');
             }
+        } elseif (! $showDrafts) {
+            // Other roles (HR, IT, Utility...) — defense in depth: own records only
+            $query->forCoachee($user->id);
         }
 
         // Search filter
@@ -759,11 +750,18 @@ class CoachingSessionController extends Controller
         $canEdit = $user->can('update', $session);
         $canArchive = $user->can('archive', $session);
 
-        // Load all coaching sessions for the same coachee (excluding current, submitted only)
-        $coachingHistory = CoachingSession::where('coachee_id', $session->coachee_id)
+        // Load coaching sessions for the same coachee (excluding current, submitted only).
+        // TLs/non-admins who are not the coachee only see sessions they personally coached.
+        $historyQuery = CoachingSession::where('coachee_id', $session->coachee_id)
             ->where('id', '!=', $session->id)
             ->submitted()
-            ->orderByDesc('session_date')
+            ->orderByDesc('session_date');
+
+        if (! $user->hasPermission('coaching.view_all') && $session->coachee_id !== $user->id) {
+            $historyQuery->where('coach_id', $user->id);
+        }
+
+        $coachingHistory = $historyQuery
             ->select(['id', 'session_date', 'purpose', 'severity_flag', 'compliance_status', 'ack_status'])
             ->with(['coach:id,first_name,last_name'])
             ->get();

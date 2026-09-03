@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Head, router } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -93,6 +93,12 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
     const [assignmentTeamLeads, setAssignmentTeamLeads] = useState<TeamLeadOption[]>([]);
     const [assignmentAgents, setAssignmentAgents] = useState<AgentOption[]>([]);
     const [assignmentMap, setAssignmentMap] = useState<Record<number, number[]>>({});
+    const [initialAssignmentMap, setInitialAssignmentMap] = useState<Record<number, number[]>>({});
+    const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
+    const [leadSearch, setLeadSearch] = useState('');
+    const [agentSearch, setAgentSearch] = useState('');
+    const [agentFilter, setAgentFilter] = useState<'all' | 'assigned' | 'unassigned'>('all');
+    const [assignmentError, setAssignmentError] = useState<string | null>(null);
     const [isAssignmentLoading, setIsAssignmentLoading] = useState(false);
     const [isAssignmentSaving, setIsAssignmentSaving] = useState(false);
 
@@ -261,8 +267,86 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
         });
     };
 
+    const normalizeAssignmentMap = useCallback((map: Record<number, number[]>) => {
+        const normalized: Record<number, number[]> = {};
+
+        Object.entries(map ?? {}).forEach(([teamLeadId, agentIds]) => {
+            const ids = [...new Set((agentIds ?? []).map((id) => Number(id)).filter((id) => Number.isFinite(id)))].sort((a, b) => a - b);
+            if (ids.length > 0) {
+                normalized[Number(teamLeadId)] = ids;
+            }
+        });
+
+        return normalized;
+    }, []);
+
+    const assignmentHasChanges = useMemo(() => {
+        const normalizedCurrent = normalizeAssignmentMap(assignmentMap);
+        const normalizedInitial = normalizeAssignmentMap(initialAssignmentMap);
+
+        return JSON.stringify(normalizedCurrent) !== JSON.stringify(normalizedInitial);
+    }, [assignmentMap, initialAssignmentMap, normalizeAssignmentMap]);
+
+    const filteredTeamLeads = useMemo(() => {
+        const query = leadSearch.trim().toLowerCase();
+
+        return assignmentTeamLeads.filter((teamLead) => !query || teamLead.name.toLowerCase().includes(query));
+    }, [assignmentTeamLeads, leadSearch]);
+
+    const filteredAgents = useMemo(() => {
+        const query = agentSearch.trim().toLowerCase();
+
+        return assignmentAgents.filter((agent) => {
+            const matchesQuery = !query || agent.name.toLowerCase().includes(query);
+            const currentLeadAssignments = selectedLeadId ? assignmentMap[selectedLeadId] ?? [] : [];
+            const isAssigned = currentLeadAssignments.includes(agent.id);
+
+            if (agentFilter === 'assigned' && !isAssigned) {
+                return false;
+            }
+
+            if (agentFilter === 'unassigned' && isAssigned) {
+                return false;
+            }
+
+            return matchesQuery;
+        });
+    }, [agentFilter, agentSearch, assignmentAgents, assignmentMap, selectedLeadId]);
+
+    const selectedLead = assignmentTeamLeads.find((teamLead) => teamLead.id === selectedLeadId) ?? null;
+    const selectedLeadAssignments = selectedLead ? assignmentMap[selectedLead.id] ?? [] : [];
+    const totalAgentsCount = assignmentAgents.length;
+    const agentLeadNameMap = useMemo(() => {
+        const map: Record<number, string[]> = {};
+
+        Object.entries(assignmentMap).forEach(([teamLeadId, agentIds]) => {
+            const teamLead = assignmentTeamLeads.find((item) => item.id === Number(teamLeadId));
+            if (!teamLead) {
+                return;
+            }
+
+            agentIds.forEach((agentId) => {
+                if (!map[agentId]) {
+                    map[agentId] = [];
+                }
+
+                map[agentId].push(teamLead.name);
+            });
+        });
+
+        return map;
+    }, [assignmentMap, assignmentTeamLeads]);
+    const totalAssignedCount = useMemo(
+        () => Object.values(assignmentMap).reduce((total, agentIds) => total + agentIds.length, 0),
+        [assignmentMap],
+    );
+
     const openAssignmentDialog = async (campaign: Campaign) => {
         setAssignmentCampaign(campaign);
+        setAssignmentError(null);
+        setLeadSearch('');
+        setAgentSearch('');
+        setAgentFilter('all');
         setIsAssignDialogOpen(true);
         setIsAssignmentLoading(true);
 
@@ -283,18 +367,25 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
                 assignments: Record<string, number[]>;
             };
 
+            const normalized = normalizeAssignmentMap(
+                Object.fromEntries(
+                    Object.entries(payload.assignments ?? {}).map(([teamLeadId, agentIds]) => [Number(teamLeadId), agentIds ?? []]),
+                ) as Record<number, number[]>,
+            );
+
             setAssignmentTeamLeads(payload.teamLeads ?? []);
             setAssignmentAgents(payload.agents ?? []);
-
-            const normalized: Record<number, number[]> = {};
-            Object.entries(payload.assignments ?? {}).forEach(([teamLeadId, agentIds]) => {
-                normalized[Number(teamLeadId)] = (agentIds ?? []).map((id) => Number(id));
-            });
             setAssignmentMap(normalized);
+            setInitialAssignmentMap(normalized);
+            setSelectedLeadId((payload.teamLeads?.[0]?.id) ?? null);
+            setAssignmentError(null);
         } catch {
             setAssignmentTeamLeads([]);
             setAssignmentAgents([]);
             setAssignmentMap({});
+            setInitialAssignmentMap({});
+            setSelectedLeadId(null);
+            setAssignmentError('Unable to load team assignments. Please try again.');
         } finally {
             setIsAssignmentLoading(false);
         }
@@ -306,6 +397,12 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
         setAssignmentTeamLeads([]);
         setAssignmentAgents([]);
         setAssignmentMap({});
+        setInitialAssignmentMap({});
+        setSelectedLeadId(null);
+        setLeadSearch('');
+        setAgentSearch('');
+        setAgentFilter('all');
+        setAssignmentError(null);
     };
 
     const toggleAssignment = (teamLeadId: number, agentId: number) => {
@@ -315,7 +412,38 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
 
             return {
                 ...prev,
-                [teamLeadId]: exists ? current.filter((id) => id !== agentId) : [...current, agentId],
+                [teamLeadId]: exists ? current.filter((id) => id !== agentId) : [...current, agentId].sort((a, b) => a - b),
+            };
+        });
+    };
+
+    const toggleVisibleAgentsForLead = (teamLeadId: number, shouldSelect: boolean) => {
+        const visibleAgentIds = filteredAgents.map((agent) => agent.id);
+
+        setAssignmentMap((prev) => {
+            const current = prev[teamLeadId] ?? [];
+            const next = shouldSelect
+                ? [...new Set([...current, ...visibleAgentIds])].sort((a, b) => a - b)
+                : current.filter((agentId) => !visibleAgentIds.includes(agentId));
+
+            return {
+                ...prev,
+                [teamLeadId]: next,
+            };
+        });
+    };
+
+    const toggleAllAgentsForLead = (teamLeadId: number, shouldSelect: boolean) => {
+        setAssignmentMap((prev) => {
+            const current = prev[teamLeadId] ?? [];
+            const allAgentIds = assignmentAgents.map((agent) => agent.id);
+            const next = shouldSelect
+                ? [...new Set([...current, ...allAgentIds])].sort((a, b) => a - b)
+                : [];
+
+            return {
+                ...prev,
+                [teamLeadId]: next,
             };
         });
     };
@@ -325,16 +453,20 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
             return;
         }
 
+        setAssignmentError(null);
         setIsAssignmentSaving(true);
         router.put(
             `/campaigns/${assignmentCampaign.id}/team-assignments`,
-            { assignments: assignmentMap },
+            { assignments: normalizeAssignmentMap(assignmentMap) },
             {
                 preserveScroll: true,
                 preserveState: true,
                 onSuccess: () => {
                     closeAssignmentDialog();
                     setLastRefresh(new Date());
+                },
+                onError: () => {
+                    setAssignmentError('Unable to save team assignments. Please try again.');
                 },
                 onFinish: () => setIsAssignmentSaving(false),
             },
@@ -569,49 +701,181 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
             </Dialog>
 
             <Dialog open={isAssignDialogOpen} onOpenChange={(open) => !open && closeAssignmentDialog()}>
-                <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-4xl">
+                <DialogContent className="max-h-[85vh] overflow-hidden sm:max-w-5xl">
                     <DialogHeader>
                         <DialogTitle>
                             {assignmentCampaign ? `Team Assignments: ${assignmentCampaign.name}` : 'Team Assignments'}
                         </DialogTitle>
                     </DialogHeader>
 
-                    {isAssignmentLoading ? (
-                        <p className="text-sm text-muted-foreground">Loading assignments...</p>
-                    ) : assignmentTeamLeads.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No active team leads assigned to this campaign.</p>
-                    ) : assignmentAgents.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No active agents in this campaign.</p>
-                    ) : (
-                        <div className="space-y-5">
-                            {assignmentTeamLeads.map((teamLead) => (
-                                <div key={teamLead.id} className="rounded-md border p-3">
-                                    <p className="mb-2 text-sm font-semibold">{teamLead.name}</p>
-                                    <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                                        {assignmentAgents.map((agent) => {
-                                            const checked = (assignmentMap[teamLead.id] ?? []).includes(agent.id);
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between gap-3 text-sm">
+                            <span className="text-muted-foreground">
+                                {selectedLead
+                                    ? `${selectedLeadAssignments.length} assigned / ${totalAgentsCount} agents`
+                                    : `${totalAssignedCount} assignment${totalAssignedCount === 1 ? '' : 's'} across ${totalAgentsCount} agents`}
+                            </span>
+                            {assignmentHasChanges && (
+                                <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800 dark:bg-amber-950/70 dark:text-amber-200">
+                                    Unsaved changes
+                                </span>
+                            )}
+                        </div>
 
-                                            return (
-                                                <label key={`${teamLead.id}-${agent.id}`} className="flex items-center gap-2 text-sm">
-                                                    <Checkbox
-                                                        checked={checked}
-                                                        onCheckedChange={() => toggleAssignment(teamLead.id, agent.id)}
-                                                    />
-                                                    <span>{agent.name}</span>
-                                                </label>
-                                            );
-                                        })}
+                        {assignmentError && (
+                            <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/80 dark:bg-red-950/40 dark:text-red-300">
+                                {assignmentError}
+                            </p>
+                        )}
+
+                        {isAssignmentLoading ? (
+                            <p className="text-sm text-muted-foreground">Loading assignments...</p>
+                        ) : assignmentTeamLeads.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">No active team leads assigned to this campaign.</p>
+                        ) : assignmentAgents.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">No active agents in this campaign.</p>
+                        ) : (
+                            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
+                                <div className="rounded-md border bg-muted/20 p-3">
+                                    <div className="mb-3">
+                                        <Input
+                                            value={leadSearch}
+                                            onChange={(event) => setLeadSearch(event.target.value)}
+                                            placeholder="Search team leads..."
+                                        />
+                                    </div>
+
+                                    <div className="max-h-[52vh] space-y-2 overflow-y-auto pr-1">
+                                        {filteredTeamLeads.length === 0 ? (
+                                            <p className="text-sm text-muted-foreground">No team leads match your search.</p>
+                                        ) : (
+                                            filteredTeamLeads.map((teamLead) => {
+                                                const isSelected = selectedLeadId === teamLead.id;
+                                                const leadAssignmentCount = assignmentMap[teamLead.id]?.length ?? 0;
+
+                                                return (
+                                                    <button
+                                                        key={teamLead.id}
+                                                        type="button"
+                                                        onClick={() => setSelectedLeadId(teamLead.id)}
+                                                        className={`w-full rounded-md border p-3 text-left transition-colors ${isSelected
+                                                                ? 'border-primary bg-primary/5'
+                                                                : 'border-transparent bg-background hover:border-muted-foreground/30'
+                                                            }`}
+                                                    >
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <span className="font-medium">{teamLead.name}</span>
+                                                            <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
+                                                                {leadAssignmentCount}
+                                                            </span>
+                                                        </div>
+                                                    </button>
+                                                );
+                                            })
+                                        )}
                                     </div>
                                 </div>
-                            ))}
-                        </div>
-                    )}
+
+                                <div className="rounded-md border p-3">
+                                    {selectedLead ? (
+                                        <div className="space-y-4">
+                                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                                <div>
+                                                    <p className="font-semibold">{selectedLead.name}</p>
+                                                    <p className="text-xs text-muted-foreground">
+                                                        {selectedLeadAssignments.length} assigned agent{selectedLeadAssignments.length === 1 ? '' : 's'}
+                                                    </p>
+                                                </div>
+
+                                                <div className="flex flex-wrap gap-2">
+                                                    <Button type="button" variant="outline" size="sm" onClick={() => toggleAllAgentsForLead(selectedLead.id, true)}>
+                                                        Assign all
+                                                    </Button>
+                                                    <Button type="button" variant="outline" size="sm" onClick={() => toggleVisibleAgentsForLead(selectedLead.id, true)}>
+                                                        Select visible
+                                                    </Button>
+                                                    <Button type="button" variant="outline" size="sm" onClick={() => toggleVisibleAgentsForLead(selectedLead.id, false)}>
+                                                        Clear visible
+                                                    </Button>
+                                                    <Button type="button" variant="outline" size="sm" onClick={() => toggleAllAgentsForLead(selectedLead.id, false)}>
+                                                        Clear all
+                                                    </Button>
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-3">
+                                                <Input
+                                                    value={agentSearch}
+                                                    onChange={(event) => setAgentSearch(event.target.value)}
+                                                    placeholder="Search agents..."
+                                                />
+
+                                                <div className="flex flex-wrap gap-2">
+                                                    {(['all', 'assigned', 'unassigned'] as const).map((filter) => (
+                                                        <Button
+                                                            key={filter}
+                                                            type="button"
+                                                            variant={agentFilter === filter ? 'default' : 'outline'}
+                                                            size="sm"
+                                                            onClick={() => setAgentFilter(filter)}
+                                                        >
+                                                            {filter === 'all' ? 'All' : filter === 'assigned' ? 'Assigned' : 'Unassigned'}
+                                                        </Button>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            <div className="max-h-[52vh] space-y-2 overflow-y-auto pr-1">
+                                                {filteredAgents.length === 0 ? (
+                                                    <p className="text-sm text-muted-foreground">No agents match your current filter.</p>
+                                                ) : (
+                                                    filteredAgents.map((agent) => {
+                                                        const checked = selectedLeadAssignments.includes(agent.id);
+                                                        const existingLeadNames = (agentLeadNameMap[agent.id] ?? []).filter((name) => name !== selectedLead.name);
+
+                                                        return (
+                                                            <label
+                                                                key={`${selectedLead.id}-${agent.id}`}
+                                                                className="flex cursor-pointer items-center gap-2 rounded-md border p-2 text-sm hover:bg-muted/40"
+                                                            >
+                                                                <Checkbox
+                                                                    checked={checked}
+                                                                    onCheckedChange={() => toggleAssignment(selectedLead.id, agent.id)}
+                                                                />
+                                                                <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                                                                    <span className="truncate">{agent.name}</span>
+                                                                    {existingLeadNames.length > 0 && (
+                                                                        <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                                                                            {existingLeadNames.map((leadName) => (
+                                                                                <span
+                                                                                    key={`${agent.id}-${leadName}`}
+                                                                                    className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/60 dark:text-amber-200"
+                                                                                >
+                                                                                    {leadName}
+                                                                                </span>
+                                                                            ))}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </label>
+                                                        );
+                                                    })
+                                                )}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <p className="text-sm text-muted-foreground">Select a team lead to manage assignments.</p>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
 
                     <DialogFooter>
                         <Button type="button" variant="outline" onClick={closeAssignmentDialog} disabled={isAssignmentSaving}>
                             Cancel
                         </Button>
-                        <Button type="button" onClick={saveAssignments} disabled={isAssignmentSaving || isAssignmentLoading}>
+                        <Button type="button" onClick={saveAssignments} disabled={isAssignmentSaving || isAssignmentLoading || !assignmentHasChanges}>
                             {isAssignmentSaving ? 'Saving...' : 'Save Assignments'}
                         </Button>
                     </DialogFooter>

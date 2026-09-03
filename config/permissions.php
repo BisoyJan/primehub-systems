@@ -268,7 +268,7 @@ return [
             'leave.view', 'leave.create', 'leave.edit', 'leave.approve', 'leave.deny', 'leave.cancel', 'leave.delete', 'leave.view_all',
             'leave_credits.view_all', 'leave_credits.view_own', 'leave_credits.edit',
             'medication_requests.view', 'medication_requests.create', 'medication_requests.update', 'medication_requests.delete',
-            'coaching.view_all', 'coaching.review', 'coaching.export', 'coaching.manage_exclusions',
+            'coaching.review', 'coaching.export', 'coaching.manage_exclusions',
             'break_timer.view', 'break_timer.dashboard', 'break_timer.reports', 'break_timer.force_end', 'break_timer.restore',
             'notifications.send', 'notifications.send_all',
             'settings.account', 'settings.password',

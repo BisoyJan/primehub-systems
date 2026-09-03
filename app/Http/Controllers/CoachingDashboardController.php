@@ -65,7 +65,7 @@ class CoachingDashboardController extends Controller
             return $this->teamLeadDashboard($request);
         }
 
-        // Admin, HR, Super Admin → compliance/admin dashboard
+        // Super Admin / Admin → compliance/admin dashboard (HR no longer has see-all)
         return $this->complianceDashboard($request);
     }
 

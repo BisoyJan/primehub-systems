@@ -240,17 +240,13 @@ class CoachingDashboardControllerTest extends TestCase
     }
 
     #[Test]
-    public function hr_sees_compliance_coaching_dashboard(): void
+    public function hr_cannot_view_compliance_coaching_dashboard(): void
     {
         $hr = User::factory()->create(['role' => 'HR', 'is_approved' => true]);
 
-        $response = $this->actingAs($hr)
-            ->get(route('coaching.dashboard'));
-
-        $response->assertStatus(200)
-            ->assertInertia(fn (Assert $page) => $page
-                ->component('Coaching/Admin/Index')
-            );
+        $this->actingAs($hr)
+            ->get(route('coaching.dashboard'))
+            ->assertForbidden();
     }
 
     // ─── Settings ───────────────────────────────────────────────────

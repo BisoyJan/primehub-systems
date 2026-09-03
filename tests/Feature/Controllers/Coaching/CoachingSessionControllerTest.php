@@ -139,7 +139,7 @@ class CoachingSessionControllerTest extends TestCase
     }
 
     #[Test]
-    public function team_leads_in_same_campaign_only_see_assigned_agents_when_assignments_exist(): void
+    public function team_leads_cannot_see_admin_coached_sessions_of_assigned_agents(): void
     {
         $campaign = Campaign::factory()->create();
         $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
@@ -174,27 +174,33 @@ class CoachingSessionControllerTest extends TestCase
             ],
         ]);
 
-        $sessionA = CoachingSession::factory()->create([
+        // Admin-coached sessions of managed agents — no longer visible to TLs
+        CoachingSession::factory()->create([
             'coachee_id' => $agentA->id,
             'coach_id' => $admin->id,
         ]);
-        $sessionB = CoachingSession::factory()->create([
+        CoachingSession::factory()->create([
             'coachee_id' => $agentB->id,
             'coach_id' => $admin->id,
+        ]);
+
+        // TL-coached session (TL B coaches agent B)
+        $ownSessionB = CoachingSession::factory()->create([
+            'coachee_id' => $agentB->id,
+            'coach_id' => $teamLeadB->id,
         ]);
 
         $responseA = $this->actingAs($teamLeadA)->get(route('coaching.sessions.index'));
         $responseA->assertStatus(200)
             ->assertInertia(fn (Assert $page) => $page
-                ->has('sessions.data', 1)
-                ->where('sessions.data.0.id', $sessionA->id)
+                ->has('sessions.data', 0)
             );
 
         $responseB = $this->actingAs($teamLeadB)->get(route('coaching.sessions.index'));
         $responseB->assertStatus(200)
             ->assertInertia(fn (Assert $page) => $page
                 ->has('sessions.data', 1)
-                ->where('sessions.data.0.id', $sessionB->id)
+                ->where('sessions.data.0.id', $ownSessionB->id)
             );
     }
 

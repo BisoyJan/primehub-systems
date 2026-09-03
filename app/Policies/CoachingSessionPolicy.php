@@ -51,16 +51,7 @@ class CoachingSessionPolicy
             return $this->permissionService->userHasPermission($user, 'coaching.view_team');
         }
 
-        // Team Lead can view managed agent sessions only.
-        if ($user->role === 'Team Lead' && $coachingSession->coachee?->role === 'Agent') {
-            $managedAgentIds = $user->getManagedAgentIds();
-
-            if (in_array((int) $coachingSession->coachee_id, $managedAgentIds, true)) {
-                return $this->permissionService->userHasPermission($user, 'coaching.view_team');
-            }
-        }
-
-        // Admin/HR/Super Admin can view all
+        // Admin/Super Admin (with view_all) can view everything
         return $this->permissionService->userHasPermission($user, 'coaching.view_all');
     }
 
