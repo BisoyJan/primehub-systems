@@ -44,6 +44,28 @@ trait SanitizesHtmlInput
                 // Remove javascript: protocol from href/src attributes
                 $value = preg_replace('/(?:href|src)\s*=\s*(?:"javascript:[^"]*"|\'javascript:[^\']*\')/i', '', $value);
 
+                // Legacy <font color> (from execCommand('foreColor') in some browsers) isn't in
+                // ALLOWED_TAGS and would be silently dropped by strip_tags; normalize to <span> first.
+                $value = preg_replace_callback(
+                    '/<font\b([^>]*)>(.*?)<\/font>/is',
+                    function ($matches) {
+                        $attrs = $matches[1];
+                        $color = null;
+                        if (preg_match('/color\s*=\s*"([^"]*)"/i', $attrs, $m)) {
+                            $color = trim($m[1]);
+                        } elseif (preg_match('/color\s*:\s*([^;"]+)/i', $attrs, $m)) {
+                            $color = trim($m[1]);
+                        }
+
+                        $styleAttr = $color && $this->isSafeStyleValue($color)
+                            ? ' style="color: '.$color.'"'
+                            : '';
+
+                        return '<span'.$styleAttr.'>'.$matches[2].'</span>';
+                    },
+                    $value
+                );
+
                 // Strip all tags except allowed ones
                 $value = strip_tags($value, self::ALLOWED_TAGS);
 

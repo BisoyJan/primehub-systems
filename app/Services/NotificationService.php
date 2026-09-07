@@ -246,10 +246,19 @@ class NotificationService
     public function notifyUsersByRoleAndCampaign(string $role, int $campaignId, string $type, string $title, string $message, ?array $data = null, ?int $excludeUserId = null): int
     {
         $query = User::where('role', $role)
-            ->where('is_approved', true)
-            ->whereHas('activeSchedule', function ($q) use ($campaignId) {
+            ->where('is_approved', true);
+
+        // Team Leads are assigned to campaigns via the `campaign_user` pivot
+        // (User::campaigns()), not via employee_schedules like other roles.
+        if ($role === 'Team Lead') {
+            $query->whereHas('campaigns', function ($q) use ($campaignId) {
+                $q->where('campaigns.id', $campaignId);
+            });
+        } else {
+            $query->whereHas('activeSchedule', function ($q) use ($campaignId) {
                 $q->where('campaign_id', $campaignId);
             });
+        }
 
         if ($excludeUserId) {
             $query->where('id', '!=', $excludeUserId);

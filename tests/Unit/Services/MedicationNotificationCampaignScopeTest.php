@@ -65,22 +65,10 @@ class MedicationNotificationCampaignScopeTest extends TestCase
         $campaign2 = Campaign::factory()->create();
 
         $tl1 = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
-        EmployeeSchedule::factory()->create([
-            'user_id' => $tl1->id,
-            'campaign_id' => $campaign1->id,
-            'is_active' => true,
-            'effective_date' => now()->subMonth(),
-            'end_date' => null,
-        ]);
+        $tl1->campaigns()->attach($campaign1->id);
 
         $tl2 = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
-        EmployeeSchedule::factory()->create([
-            'user_id' => $tl2->id,
-            'campaign_id' => $campaign2->id,
-            'is_active' => true,
-            'effective_date' => now()->subMonth(),
-            'end_date' => null,
-        ]);
+        $tl2->campaigns()->attach($campaign2->id);
 
         $count = $this->service->notifyUsersByRoleAndCampaign(
             'Team Lead', $campaign1->id, 'medication_request', 'Title', 'Message'
@@ -97,13 +85,7 @@ class MedicationNotificationCampaignScopeTest extends TestCase
         $campaign = Campaign::factory()->create();
 
         $tl = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
-        EmployeeSchedule::factory()->create([
-            'user_id' => $tl->id,
-            'campaign_id' => $campaign->id,
-            'is_active' => true,
-            'effective_date' => now()->subMonth(),
-            'end_date' => null,
-        ]);
+        $tl->campaigns()->attach($campaign->id);
 
         $count = $this->service->notifyUsersByRoleAndCampaign(
             'Team Lead', $campaign->id, 'medication_request', 'Title', 'Message', null, $tl->id
@@ -146,23 +128,11 @@ class MedicationNotificationCampaignScopeTest extends TestCase
 
         // TL in same campaign
         $tlInCampaign = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
-        EmployeeSchedule::factory()->create([
-            'user_id' => $tlInCampaign->id,
-            'campaign_id' => $campaign->id,
-            'is_active' => true,
-            'effective_date' => now()->subMonth(),
-            'end_date' => null,
-        ]);
+        $tlInCampaign->campaigns()->attach($campaign->id);
 
         // TL in different campaign
         $tlOtherCampaign = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
-        EmployeeSchedule::factory()->create([
-            'user_id' => $tlOtherCampaign->id,
-            'campaign_id' => $otherCampaign->id,
-            'is_active' => true,
-            'effective_date' => now()->subMonth(),
-            'end_date' => null,
-        ]);
+        $tlOtherCampaign->campaigns()->attach($otherCampaign->id);
 
         // HR + Super Admin to receive global notifications
         $hr = User::factory()->create(['role' => 'HR', 'is_approved' => true]);
@@ -198,13 +168,7 @@ class MedicationNotificationCampaignScopeTest extends TestCase
 
         // Two TLs
         $tl1 = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
-        EmployeeSchedule::factory()->create([
-            'user_id' => $tl1->id,
-            'campaign_id' => $campaign->id,
-            'is_active' => true,
-            'effective_date' => now()->subMonth(),
-            'end_date' => null,
-        ]);
+        $tl1->campaigns()->attach($campaign->id);
 
         $tl2 = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
 
@@ -254,13 +218,7 @@ class MedicationNotificationCampaignScopeTest extends TestCase
         $campaign = Campaign::factory()->create();
 
         $tl = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
-        EmployeeSchedule::factory()->create([
-            'user_id' => $tl->id,
-            'campaign_id' => $campaign->id,
-            'is_active' => true,
-            'effective_date' => now()->subMonth(),
-            'end_date' => null,
-        ]);
+        $tl->campaigns()->attach($campaign->id);
 
         $anotherTl = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
         $hr = User::factory()->create(['role' => 'HR', 'is_approved' => true]);

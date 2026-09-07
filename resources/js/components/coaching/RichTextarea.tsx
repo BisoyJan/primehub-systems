@@ -335,7 +335,22 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
             exec('removeFormat');
             return;
         }
-        exec('foreColor', color);
+        editorRef.current?.focus();
+        // Chromium's foreColor produces legacy <font color> tags; rewrite to <span style="color">
+        // so the markup matches what the backend sanitizer and paste-cleaning allow.
+        document.execCommand('foreColor', false, color);
+        const editor = editorRef.current;
+        if (editor) {
+            editor.querySelectorAll('font[color]').forEach((font) => {
+                const span = document.createElement('span');
+                span.style.color = font.getAttribute('color') || color;
+                while (font.firstChild) {
+                    span.appendChild(font.firstChild);
+                }
+                font.replaceWith(span);
+            });
+        }
+        emitChange();
     };
     const handleHighlight = (color: string) => {
         editorRef.current?.focus();

@@ -133,4 +133,13 @@ class SanitizesHtmlInputTest extends TestCase
         $this->assertStringNotContainsString('margin-top', $result);
         $this->assertStringNotContainsString('line-height', $result);
     }
+
+    #[Test]
+    public function it_converts_legacy_font_color_tags_to_span_style(): void
+    {
+        $result = $this->sanitize('<font color="#ff0000">Colored</font>');
+
+        $this->assertStringNotContainsString('<font', $result);
+        $this->assertStringContainsString('<span style="color: #ff0000">Colored</span>', $result);
+    }
 }
