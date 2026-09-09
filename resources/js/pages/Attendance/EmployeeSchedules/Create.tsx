@@ -495,44 +495,44 @@ export default function EmployeeScheduleCreate() {
                                     <>
                                         {/* Shift Times */}
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label>
-                                            Time In <span className="text-red-500">*</span>
-                                        </Label>
-                                        {isRestrictedRole && (
-                                            <p className="text-xs text-muted-foreground mb-1">
-                                                If you're unsure about your shift time, please ask your admin or team lead.
-                                            </p>
-                                        )}
-                                        <Input
-                                            type="time"
-                                            value={data.scheduled_time_in}
-                                            onChange={e => setData("scheduled_time_in", e.target.value)}
-                                        />
-                                        {errors.scheduled_time_in && (
-                                            <p className="text-sm text-red-500">{errors.scheduled_time_in}</p>
-                                        )}
-                                    </div>
+                                            <div className="space-y-2">
+                                                <Label>
+                                                    Time In <span className="text-red-500">*</span>
+                                                </Label>
+                                                {isRestrictedRole && (
+                                                    <p className="text-xs text-muted-foreground mb-1">
+                                                        If you're unsure about your shift time, please ask your admin or team lead.
+                                                    </p>
+                                                )}
+                                                <Input
+                                                    type="time"
+                                                    value={data.scheduled_time_in}
+                                                    onChange={e => setData("scheduled_time_in", e.target.value)}
+                                                />
+                                                {errors.scheduled_time_in && (
+                                                    <p className="text-sm text-red-500">{errors.scheduled_time_in}</p>
+                                                )}
+                                            </div>
 
-                                    <div className="space-y-2">
-                                        <Label>
-                                            Time Out <span className="text-red-500">*</span>
-                                        </Label>
-                                        {isRestrictedRole && (
-                                            <p className="text-xs text-muted-foreground mb-1">
-                                                If you're unsure about your shift time, please ask your admin or team lead.
-                                            </p>
-                                        )}
-                                        <Input
-                                            type="time"
-                                            value={data.scheduled_time_out}
-                                            onChange={e => setData("scheduled_time_out", e.target.value)}
-                                        />
-                                        {errors.scheduled_time_out && (
-                                            <p className="text-sm text-red-500">{errors.scheduled_time_out}</p>
-                                        )}
-                                    </div>
-                                </div>
+                                            <div className="space-y-2">
+                                                <Label>
+                                                    Time Out <span className="text-red-500">*</span>
+                                                </Label>
+                                                {isRestrictedRole && (
+                                                    <p className="text-xs text-muted-foreground mb-1">
+                                                        If you're unsure about your shift time, please ask your admin or team lead.
+                                                    </p>
+                                                )}
+                                                <Input
+                                                    type="time"
+                                                    value={data.scheduled_time_out}
+                                                    onChange={e => setData("scheduled_time_out", e.target.value)}
+                                                />
+                                                {errors.scheduled_time_out && (
+                                                    <p className="text-sm text-red-500">{errors.scheduled_time_out}</p>
+                                                )}
+                                            </div>
+                                        </div>
 
                                         {/* Derived Shift Type (read-only badge) */}
                                         <div className="rounded-md border border-dashed bg-muted/40 p-3 flex items-center gap-3">
