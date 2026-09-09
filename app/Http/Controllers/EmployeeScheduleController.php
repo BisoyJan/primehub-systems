@@ -28,22 +28,20 @@ class EmployeeScheduleController extends Controller
             $teamLeadCampaignIds = $user->getCampaignIds();
         }
 
-        $query = EmployeeSchedule::with(['user', 'campaign', 'site']);
+        $scheduleFilters = $this->scheduleFilters($request, $user, $teamLeadCampaignIds);
+
+        $employeesQuery = User::query()
+            ->whereHas('employeeSchedules', $scheduleFilters)
+            ->with(['employeeSchedules' => function ($q) use ($scheduleFilters) {
+                $scheduleFilters($q);
+                $q->with(['campaign', 'site'])
+                    ->orderByDesc('employee_schedules.is_active')
+                    ->orderByDesc('employee_schedules.effective_date');
+            }]);
 
         // Search by employee name
         if ($request->has('search') && $request->search) {
-            $search = $request->search;
-            $query->whereHas('user', fn ($q) => $q->searchName($search));
-        }
-
-        // Filters
-        if ($request->has('user_id') && $request->user_id !== 'all' && $request->user_id) {
-            $userIds = is_array($request->user_id)
-                ? $request->user_id
-                : array_filter(explode(',', $request->user_id));
-            if (count($userIds) > 0) {
-                $query->whereIn('user_id', $userIds);
-            }
+            $employeesQuery->searchName($request->search);
         }
 
         if ($request->has('role') && $request->role !== 'all' && $request->role) {
@@ -51,59 +49,32 @@ class EmployeeScheduleController extends Controller
                 ? $request->role
                 : array_filter(explode(',', $request->role));
             if (count($roles) > 0) {
-                $query->whereHas('user', function ($q) use ($roles) {
-                    $q->whereIn('role', $roles);
-                });
+                $employeesQuery->whereIn('role', $roles);
             }
-        }
-
-        // Campaign filter - auto-filter for Team Leads
-        $campaignIdsToFilter = [];
-        if ($request->has('campaign_id') && $request->campaign_id !== 'all' && $request->campaign_id) {
-            $campaignIdsToFilter = is_array($request->campaign_id)
-                ? $request->campaign_id
-                : array_filter(explode(',', $request->campaign_id));
-        }
-        if (empty($campaignIdsToFilter) && $user->role === 'Team Lead' && ! empty($teamLeadCampaignIds)) {
-            $query->whereIn('campaign_id', $teamLeadCampaignIds);
-        } elseif (! empty($campaignIdsToFilter)) {
-            $query->whereIn('campaign_id', $campaignIdsToFilter);
-        }
-
-        if ($request->has('is_active') && $request->is_active !== 'all' && $request->is_active !== null && $request->is_active !== '') {
-            $statuses = is_array($request->is_active)
-                ? $request->is_active
-                : array_filter(explode(',', (string) $request->is_active), fn ($v) => $v !== '');
-            if (count($statuses) > 0) {
-                $query->whereIn('employee_schedules.is_active', $statuses);
-            }
-        }
-
-        if ($request->has('active_only') && $request->active_only) {
-            $query->active();
         }
 
         // Filter out resigned employees by default
         // Resigned = has hired_date AND is_active = false
         $showResigned = $request->has('show_resigned') && $request->show_resigned;
         if (! $showResigned) {
-            $query->whereHas('user', function ($q) {
-                $q->where(function ($subQuery) {
-                    // Either not hired yet (no hired_date) OR is active
-                    $subQuery->whereNull('hired_date')
-                        ->orWhere('is_active', true);
-                });
+            $employeesQuery->where(function ($q) {
+                $q->whereNull('hired_date')->orWhere('is_active', true);
             });
         }
 
-        // Order by user name first for grouping, then by effective_date
-        $schedules = $query->join('users', 'employee_schedules.user_id', '=', 'users.id')
-            ->select('employee_schedules.*')
-            ->orderBy('users.first_name')
-            ->orderBy('users.last_name')
-            ->orderBy('employee_schedules.effective_date', 'desc')
+        $employees = $employeesQuery
+            ->orderBy('first_name')
+            ->orderBy('last_name')
             ->paginate(25)
-            ->withQueryString();
+            ->withQueryString()
+            ->through(fn (User $employee) => [
+                'id' => $employee->id,
+                'first_name' => $employee->first_name,
+                'last_name' => $employee->last_name,
+                'name' => $employee->name,
+                'role' => $employee->role,
+                'schedules' => $employee->employeeSchedules,
+            ]);
 
         $users = User::orderBy('first_name')->get();
         $campaigns = Campaign::orderBy('name')->get();
@@ -164,7 +135,7 @@ class EmployeeScheduleController extends Controller
             });
 
         return Inertia::render('Attendance/EmployeeSchedules/Index', [
-            'schedules' => $schedules,
+            'employees' => $employees,
             'users' => $users,
             'campaigns' => $campaigns,
             'sites' => $sites,
@@ -175,6 +146,58 @@ class EmployeeScheduleController extends Controller
             'usersWithMultipleSchedules' => $usersWithMultipleSchedules,
             'filters' => $request->only(['search', 'user_id', 'role', 'campaign_id', 'is_active', 'active_only', 'show_resigned']),
         ]);
+    }
+
+    /**
+     * Build the schedule-level filter closure, reused for both the `whereHas`
+     * existence check and the eager-loaded schedule list so nested schedules
+     * match the applied filters.
+     */
+    private function scheduleFilters(Request $request, User $user, array $teamLeadCampaignIds): \Closure
+    {
+        $userIds = [];
+        if ($request->has('user_id') && $request->user_id !== 'all' && $request->user_id) {
+            $userIds = is_array($request->user_id)
+                ? $request->user_id
+                : array_filter(explode(',', $request->user_id));
+        }
+
+        $campaignIds = [];
+        if ($request->has('campaign_id') && $request->campaign_id !== 'all' && $request->campaign_id) {
+            $campaignIds = is_array($request->campaign_id)
+                ? $request->campaign_id
+                : array_filter(explode(',', $request->campaign_id));
+        }
+        if (empty($campaignIds) && $user->role === 'Team Lead' && ! empty($teamLeadCampaignIds)) {
+            $campaignIds = $teamLeadCampaignIds;
+        }
+
+        $statuses = [];
+        if ($request->has('is_active') && $request->is_active !== 'all' && $request->is_active !== null && $request->is_active !== '') {
+            $statuses = is_array($request->is_active)
+                ? $request->is_active
+                : array_filter(explode(',', (string) $request->is_active), fn ($v) => $v !== '');
+        }
+
+        $activeOnly = $request->has('active_only') && $request->active_only;
+
+        return function ($query) use ($userIds, $campaignIds, $statuses, $activeOnly) {
+            if (count($userIds) > 0) {
+                $query->whereIn('employee_schedules.user_id', $userIds);
+            }
+
+            if (count($campaignIds) > 0) {
+                $query->whereIn('employee_schedules.campaign_id', $campaignIds);
+            }
+
+            if (count($statuses) > 0) {
+                $query->whereIn('employee_schedules.is_active', $statuses);
+            }
+
+            if ($activeOnly) {
+                $query->active();
+            }
+        };
     }
 
     /**

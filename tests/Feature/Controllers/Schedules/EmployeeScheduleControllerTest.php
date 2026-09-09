@@ -43,10 +43,41 @@ class EmployeeScheduleControllerTest extends TestCase
         $response->assertStatus(200)
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Attendance/EmployeeSchedules/Index')
-                ->has('schedules')
+                ->has('employees')
                 ->has('users')
                 ->has('campaigns')
                 ->has('sites')
+            );
+    }
+
+    public function test_index_groups_multiple_schedules_under_one_employee(): void
+    {
+        EmployeeSchedule::factory()->count(3)->create(['user_id' => $this->employee->id]);
+
+        $response = $this->actingAs($this->user)
+            ->get(route('employee-schedules.index'));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('employees.data', 1)
+                ->where('employees.data.0.id', $this->employee->id)
+                ->has('employees.data.0.schedules', 3)
+            );
+    }
+
+    public function test_index_nested_schedules_respect_schedule_filters(): void
+    {
+        EmployeeSchedule::factory()->create(['user_id' => $this->employee->id, 'is_active' => true]);
+        EmployeeSchedule::factory()->create(['user_id' => $this->employee->id, 'is_active' => false]);
+
+        $response = $this->actingAs($this->user)
+            ->get(route('employee-schedules.index', ['is_active' => 1]));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('employees.data', 1)
+                ->has('employees.data.0.schedules', 1)
+                ->where('employees.data.0.schedules.0.is_active', true)
             );
     }
 
@@ -382,8 +413,8 @@ class EmployeeScheduleControllerTest extends TestCase
         $response->assertStatus(200)
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Attendance/EmployeeSchedules/Index')
-                ->has('schedules.data', 1) // Only 1 schedule (the active employee)
-                ->where('schedules.data.0.user.id', $activeEmployee->id)
+                ->has('employees.data', 1) // Only the active employee
+                ->where('employees.data.0.id', $activeEmployee->id)
             );
     }
 
@@ -411,7 +442,7 @@ class EmployeeScheduleControllerTest extends TestCase
         $response->assertStatus(200)
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Attendance/EmployeeSchedules/Index')
-                ->has('schedules.data', 2) // Both schedules should be visible
+                ->has('employees.data', 2) // Both employees should be visible
                 ->where('filters.show_resigned', '1')
             );
     }
@@ -432,8 +463,8 @@ class EmployeeScheduleControllerTest extends TestCase
         $response->assertStatus(200)
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Attendance/EmployeeSchedules/Index')
-                ->has('schedules.data', 1) // Should be visible (no hired_date)
-                ->where('schedules.data.0.user.id', $notHiredEmployee->id)
+                ->has('employees.data', 1) // Should be visible (no hired_date)
+                ->where('employees.data.0.id', $notHiredEmployee->id)
             );
     }
 

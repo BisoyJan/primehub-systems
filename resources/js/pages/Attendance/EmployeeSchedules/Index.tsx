@@ -10,16 +10,7 @@ import { formatTime, formatDate } from "@/lib/utils";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue
-} from "@/components/ui/select";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Check, ChevronsUpDown, Users } from "lucide-react";
+import { Users, ChevronRight, ChevronDown, ChevronUp, Clock } from "lucide-react";
 import { MultiSelectFilter, parseMultiSelectParam, multiSelectToParam } from "@/components/multi-select-filter";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -63,7 +54,7 @@ interface Site {
 
 interface Schedule {
     id: number;
-    user: User;
+    user?: User;
     campaign?: Campaign;
     site?: Site;
     shift_type: string;
@@ -71,13 +62,23 @@ interface Schedule {
     scheduled_time_out: string;
     work_days: string[];
     grace_period_minutes: number;
+    is_flexible?: boolean;
     is_active: boolean;
     effective_date: string;
     end_date?: string;
 }
 
-interface SchedulePayload {
-    data: Schedule[];
+interface EmployeeRow {
+    id: number;
+    first_name: string;
+    last_name: string;
+    name: string;
+    role?: string;
+    schedules: Schedule[];
+}
+
+interface EmployeePayload {
+    data: EmployeeRow[];
     links: PaginationLink[];
     // Laravel pagination properties at root level
     current_page: number;
@@ -94,7 +95,7 @@ interface SchedulePayload {
 }
 
 interface PageProps extends SharedData {
-    schedules: SchedulePayload;
+    employees: EmployeePayload;
     users: Array<{ id: number; name: string }>;
     sites: Array<{ id: number; name: string }>;
     campaigns: Array<{ id: number; name: string }>;
@@ -131,48 +132,47 @@ const getShiftTypeBadge = (shiftType: string) => {
     return <Badge className={className}>{label}</Badge>;
 };
 
-// Group schedules by user and count schedules per user
-const groupSchedulesByUser = (schedules: Schedule[]) => {
-    const userScheduleCount: Record<number, number> = {};
-    const userGroupIndex: Record<number, number> = {};
-    let groupCounter = 0;
+// Schedules arrive ordered active-first, newest-first
+const getPrimarySchedule = (schedules: Schedule[]): Schedule | undefined =>
+    schedules.find(s => s.is_active) ?? schedules[0];
 
-    // First pass: count schedules per user
-    schedules.forEach(schedule => {
-        userScheduleCount[schedule.user.id] = (userScheduleCount[schedule.user.id] || 0) + 1;
-    });
+const FlexibleBadge = () => (
+    <Badge variant="outline" className="gap-1 border-teal-500 text-teal-700 dark:text-teal-300">
+        <Clock className="h-3 w-3" />
+        Flexible
+    </Badge>
+);
 
-    // Second pass: assign group index to each user (for alternating colors)
-    let lastUserId: number | null = null;
-    schedules.forEach(schedule => {
-        if (schedule.user.id !== lastUserId) {
-            userGroupIndex[schedule.user.id] = groupCounter++;
-            lastUserId = schedule.user.id;
-        }
-    });
-
-    return { userScheduleCount, userGroupIndex };
-};
+const renderScheduleTime = (schedule: Schedule) =>
+    schedule.is_flexible ? <FlexibleBadge /> : `${formatTime(schedule.scheduled_time_in)} - ${formatTime(schedule.scheduled_time_out)}`;
 
 export default function EmployeeSchedulesIndex() {
-    const { schedules, users, campaigns = [], roles = [], filters, usersWithoutSchedules = [], usersWithInactiveSchedules = [], usersWithMultipleSchedules = [], teamLeadCampaignIds } = usePage<PageProps>().props;
-    const scheduleData = {
-        data: schedules?.data ?? [],
-        links: schedules?.links ?? [],
+    const { employees, users, campaigns = [], roles = [], filters, usersWithoutSchedules = [], usersWithInactiveSchedules = [], usersWithMultipleSchedules = [], teamLeadCampaignIds } = usePage<PageProps>().props;
+    const employeeData = {
+        data: employees?.data ?? [],
+        links: employees?.links ?? [],
         meta: {
-            current_page: schedules?.current_page ?? 1,
-            last_page: schedules?.last_page ?? 1,
-            per_page: schedules?.per_page ?? 50,
-            total: schedules?.total ?? 0,
+            current_page: employees?.current_page ?? 1,
+            last_page: employees?.last_page ?? 1,
+            per_page: employees?.per_page ?? 25,
+            total: employees?.total ?? 0,
         },
     };
     const appliedFilters = filters ?? {};
 
-    // Group schedules by user for visual grouping
-    const { userScheduleCount, userGroupIndex } = useMemo(
-        () => groupSchedulesByUser(scheduleData.data),
-        [scheduleData.data]
-    );
+    const [expandedUserIds, setExpandedUserIds] = useState<Set<number>>(new Set());
+
+    const toggleExpanded = (userId: number) => {
+        setExpandedUserIds(prev => {
+            const next = new Set(prev);
+            if (next.has(userId)) {
+                next.delete(userId);
+            } else {
+                next.add(userId);
+            }
+            return next;
+        });
+    };
 
     const { title, breadcrumbs } = usePageMeta({
         title: "Employee Schedules",
@@ -212,11 +212,13 @@ export default function EmployeeSchedulesIndex() {
     const [scheduleToDelete, setScheduleToDelete] = useState<number | null>(null);
     const [toggleDialogOpen, setToggleDialogOpen] = useState(false);
     const [scheduleToToggle, setScheduleToToggle] = useState<Schedule | null>(null);
+    const [toggleUserName, setToggleUserName] = useState<string>("");
     const [noScheduleDialogOpen, setNoScheduleDialogOpen] = useState(false);
     const [noScheduleSearch, setNoScheduleSearch] = useState("");
     const [scheduleDialogTab, setScheduleDialogTab] = useState<'no-schedule' | 'inactive' | 'multiple'>('no-schedule');
     const [scheduleDetailsDialogOpen, setScheduleDetailsDialogOpen] = useState(false);
     const [selectedUserSchedules, setSelectedUserSchedules] = useState<Schedule[]>([]);
+    const [selectedUserName, setSelectedUserName] = useState<string>("");
 
     const handleSearch = () => {
         const params: Record<string, string> = {};
@@ -262,7 +264,7 @@ export default function EmployeeSchedulesIndex() {
                 preserveState: true,
                 preserveScroll: true,
                 replace: true,
-                only: ['schedules'],
+                only: ['employees'],
                 onSuccess: () => setLastRefresh(new Date()),
                 onFinish: () => { isPollingRef.current = false; },
             });
@@ -300,10 +302,11 @@ export default function EmployeeSchedulesIndex() {
         });
     };
 
-    const handleToggleActive = (schedule: Schedule) => {
+    const handleToggleActive = (schedule: Schedule, userName = "") => {
         // If activating, show confirmation dialog (will deactivate other schedules)
         if (!schedule.is_active) {
             setScheduleToToggle(schedule);
+            setToggleUserName(userName || schedule.user?.name || "this employee");
             setToggleDialogOpen(true);
         } else {
             // Deactivating - no confirmation needed
@@ -390,13 +393,13 @@ export default function EmployeeSchedulesIndex() {
         );
     }, [employeesWithMultipleSchedules, noScheduleSearch]);
 
-    const handleViewEmployeeSchedules = async (userId: number) => {
-        // Check if user has schedules in current page data
-        const userSchedules = scheduleData.data.filter(s => s.user.id === userId);
+    const handleViewEmployeeSchedules = async (userId: number, userName = "") => {
+        // Check if user's schedules are already on the current page
+        const employee = employeeData.data.find(e => e.id === userId);
 
-        if (userSchedules.length > 0) {
-            // User schedules found in current page
-            setSelectedUserSchedules(userSchedules);
+        if (employee && employee.schedules.length > 0) {
+            setSelectedUserSchedules(employee.schedules);
+            setSelectedUserName(employee.name);
             setScheduleDetailsDialogOpen(true);
         } else {
             // User schedules not in current page, need to fetch from API
@@ -412,6 +415,7 @@ export default function EmployeeSchedulesIndex() {
                 if (response.ok) {
                     const schedules = await response.json();
                     setSelectedUserSchedules(schedules);
+                    setSelectedUserName(userName || schedules[0]?.user?.name || "");
                     setScheduleDetailsDialogOpen(true);
                 } else {
                     console.error('Failed to fetch user schedules');
@@ -555,8 +559,8 @@ export default function EmployeeSchedulesIndex() {
 
                 <div className="flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        Showing {scheduleData.data.length} of {scheduleData.meta.total} schedule
-                        {scheduleData.meta.total === 1 ? "" : "s"}
+                        Showing {employeeData.data.length} of {employeeData.meta.total} employee
+                        {employeeData.meta.total === 1 ? "" : "s"}
                         {showClearFilters ? " (filtered)" : ""}
                     </div>
                     <div className="text-xs">
@@ -569,6 +573,7 @@ export default function EmployeeSchedulesIndex() {
                         <Table>
                             <TableHeader>
                                 <TableRow className="bg-muted/50">
+                                    <TableHead className="w-10" />
                                     <TableHead>Employee</TableHead>
                                     <TableHead>Campaign</TableHead>
                                     <TableHead>Site</TableHead>
@@ -580,96 +585,186 @@ export default function EmployeeSchedulesIndex() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {scheduleData.data.map(schedule => {
-                                    const scheduleCount = userScheduleCount[schedule.user.id] || 1;
-                                    const groupIndex = userGroupIndex[schedule.user.id] || 0;
+                                {employeeData.data.map(employee => {
+                                    const scheduleCount = employee.schedules.length;
                                     const hasMultipleSchedules = scheduleCount > 1;
-                                    const isEvenGroup = groupIndex % 2 === 0;
+                                    const primary = getPrimarySchedule(employee.schedules);
+                                    const isExpanded = expandedUserIds.has(employee.id);
 
                                     return (
-                                        <TableRow
-                                            key={schedule.id}
-                                            className={hasMultipleSchedules ? (isEvenGroup ? "bg-blue-50/50 dark:bg-blue-950/20" : "bg-amber-50/50 dark:bg-amber-950/20") : ""}
-                                        >
-                                            <TableCell className="font-medium">
-                                                <div className="flex items-center gap-2">
-                                                    {hasMultipleSchedules ? (
-                                                        <button
-                                                            onClick={() => handleViewEmployeeSchedules(schedule.user.id)}
-                                                            className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer text-left"
+                                        <React.Fragment key={employee.id}>
+                                            <TableRow
+                                                className={hasMultipleSchedules ? "cursor-pointer" : ""}
+                                                onClick={hasMultipleSchedules ? () => toggleExpanded(employee.id) : undefined}
+                                                aria-expanded={hasMultipleSchedules ? isExpanded : undefined}
+                                            >
+                                                <TableCell className="w-10 p-0 text-center">
+                                                    {hasMultipleSchedules && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-8 w-8"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                toggleExpanded(employee.id);
+                                                            }}
+                                                            title={isExpanded ? "Hide schedules" : "Show all schedules"}
                                                         >
-                                                            {schedule.user.name}
-                                                        </button>
-                                                    ) : (
-                                                        schedule.user.name
+                                                            {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                                        </Button>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell className="font-medium">
+                                                    <div className="flex items-center gap-2">
+                                                        {employee.name}
+                                                        {hasMultipleSchedules && (
+                                                            <Badge variant="outline" className="text-xs px-1.5 py-0 h-5 gap-1">
+                                                                <Users className="h-3 w-3" />
+                                                                {scheduleCount}
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell>{primary?.campaign?.name || "-"}</TableCell>
+                                                <TableCell>{primary?.site?.name || "-"}</TableCell>
+                                                <TableCell>{primary ? getShiftTypeBadge(primary.shift_type) : "-"}</TableCell>
+                                                <TableCell className="whitespace-nowrap">
+                                                    {primary ? renderScheduleTime(primary) : "-"}
+                                                </TableCell>
+                                                <TableCell className="text-xs">
+                                                    {primary && !primary.is_flexible && (
+                                                        <>
+                                                            {primary.work_days.slice(0, 3).map(day => day.substring(0, 3)).join(", ")}
+                                                            {primary.work_days.length > 3 && ` +${primary.work_days.length - 3}`}
+                                                        </>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell onClick={(e) => e.stopPropagation()}>
+                                                    {primary && (
+                                                        <div className="flex items-center gap-2">
+                                                            <Can permission="schedules.toggle">
+                                                                <Switch
+                                                                    checked={primary.is_active}
+                                                                    onCheckedChange={() => handleToggleActive(primary, employee.name)}
+                                                                    aria-label="Toggle schedule active status"
+                                                                />
+                                                            </Can>
+                                                            {primary.is_active ? (
+                                                                <Badge className="bg-green-500">
+                                                                    Active
+                                                                </Badge>
+                                                            ) : (
+                                                                <Badge variant="secondary">
+                                                                    Inactive
+                                                                </Badge>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell onClick={(e) => e.stopPropagation()}>
+                                                    {primary && !hasMultipleSchedules && (
+                                                        <div className="flex gap-2">
+                                                            <Can permission="schedules.edit">
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="icon"
+                                                                    onClick={() => router.get(employeeSchedulesEdit({ employee_schedule: primary.id }).url)}
+                                                                    title="Edit Schedule"
+                                                                >
+                                                                    <Edit className="h-4 w-4" />
+                                                                </Button>
+                                                            </Can>
+                                                            <Can permission="schedules.delete">
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="icon"
+                                                                    onClick={() => handleDelete(primary.id)}
+                                                                    title="Delete Schedule"
+                                                                    className="text-red-600 hover:text-red-700 border-red-300"
+                                                                >
+                                                                    <Trash2 className="h-4 w-4" />
+                                                                </Button>
+                                                            </Can>
+                                                        </div>
                                                     )}
                                                     {hasMultipleSchedules && (
-                                                        <Badge variant="outline" className="text-xs px-1.5 py-0 h-5 gap-1">
-                                                            <Users className="h-3 w-3" />
-                                                            {scheduleCount}
-                                                        </Badge>
+                                                        <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                                            Expand to manage
+                                                        </span>
                                                     )}
-                                                </div>
-                                            </TableCell>
-                                            <TableCell>{schedule.campaign?.name || "-"}</TableCell>
-                                            <TableCell>{schedule.site?.name || "-"}</TableCell>
-                                            <TableCell>{getShiftTypeBadge(schedule.shift_type)}</TableCell>
-                                            <TableCell className="whitespace-nowrap">{formatTime(schedule.scheduled_time_in)} - {formatTime(schedule.scheduled_time_out)}</TableCell>
-                                            <TableCell className="text-xs">
-                                                {schedule.work_days.slice(0, 3).map(day => day.substring(0, 3)).join(", ")}
-                                                {schedule.work_days.length > 3 && ` +${schedule.work_days.length - 3}`}
-                                            </TableCell>
-                                            <TableCell>
-                                                <div className="flex items-center gap-2">
-                                                    <Can permission="schedules.toggle">
-                                                        <Switch
-                                                            checked={schedule.is_active}
-                                                            onCheckedChange={() => handleToggleActive(schedule)}
-                                                            aria-label="Toggle schedule active status"
-                                                        />
-                                                    </Can>
-                                                    {schedule.is_active ? (
-                                                        <Badge className="bg-green-500">
-                                                            Active
-                                                        </Badge>
-                                                    ) : (
-                                                        <Badge variant="secondary">
-                                                            Inactive
-                                                        </Badge>
-                                                    )}
-                                                </div>
-                                            </TableCell>
-                                            <TableCell>
-                                                <div className="flex gap-2">
-                                                    <Can permission="schedules.edit">
-                                                        <Button
-                                                            variant="outline"
-                                                            size="icon"
-                                                            onClick={() => router.get(employeeSchedulesEdit({ employee_schedule: schedule.id }).url)}
-                                                            title="Edit Schedule"
-                                                        >
-                                                            <Edit className="h-4 w-4" />
-                                                        </Button>
-                                                    </Can>
-                                                    <Can permission="schedules.delete">
-                                                        <Button
-                                                            variant="outline"
-                                                            size="icon"
-                                                            onClick={() => handleDelete(schedule.id)}
-                                                            title="Delete Schedule"
-                                                            className="text-red-600 hover:text-red-700 border-red-300"
-                                                        >
-                                                            <Trash2 className="h-4 w-4" />
-                                                        </Button>
-                                                    </Can>
-                                                </div>
-                                            </TableCell>
-                                        </TableRow>
+                                                </TableCell>
+                                            </TableRow>
+
+                                            {hasMultipleSchedules && isExpanded && (
+                                                <TableRow className="hover:bg-transparent">
+                                                    <TableCell colSpan={9} className="bg-muted/30 p-0">
+                                                        <div className="divide-y">
+                                                            {employee.schedules.map(schedule => (
+                                                                <div
+                                                                    key={schedule.id}
+                                                                    className={`flex flex-wrap items-center gap-3 py-2.5 pr-4 pl-10 border-l-4 ${schedule.is_active ? "border-l-green-500" : "border-l-transparent"}`}
+                                                                >
+                                                                    {schedule.is_active ? (
+                                                                        <Badge className="bg-green-500">Active</Badge>
+                                                                    ) : (
+                                                                        <Badge variant="secondary">Inactive</Badge>
+                                                                    )}
+                                                                    {getShiftTypeBadge(schedule.shift_type)}
+                                                                    <span className="text-sm whitespace-nowrap">
+                                                                        {renderScheduleTime(schedule)}
+                                                                    </span>
+                                                                    <span className="text-sm text-muted-foreground">
+                                                                        {schedule.campaign?.name || "No Campaign"} / {schedule.site?.name || "No Site"}
+                                                                    </span>
+                                                                    <span className="text-xs text-muted-foreground">
+                                                                        {schedule.is_flexible ? "No fixed work days" : schedule.work_days.map(day => day.substring(0, 3)).join(", ")}
+                                                                    </span>
+                                                                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                                                        {formatDate(schedule.effective_date)} &rarr; {schedule.end_date ? formatDate(schedule.end_date) : "Ongoing"}
+                                                                    </span>
+                                                                    <div className="ml-auto flex items-center gap-2">
+                                                                        <Can permission="schedules.toggle">
+                                                                            <Switch
+                                                                                checked={schedule.is_active}
+                                                                                onCheckedChange={() => handleToggleActive(schedule, employee.name)}
+                                                                                aria-label="Toggle schedule active status"
+                                                                            />
+                                                                        </Can>
+                                                                        <Can permission="schedules.edit">
+                                                                            <Button
+                                                                                variant="outline"
+                                                                                size="icon"
+                                                                                className="h-8 w-8"
+                                                                                onClick={() => router.get(employeeSchedulesEdit({ employee_schedule: schedule.id }).url)}
+                                                                                title="Edit Schedule"
+                                                                            >
+                                                                                <Edit className="h-4 w-4" />
+                                                                            </Button>
+                                                                        </Can>
+                                                                        <Can permission="schedules.delete">
+                                                                            <Button
+                                                                                variant="outline"
+                                                                                size="icon"
+                                                                                className="h-8 w-8 text-red-600 hover:text-red-700 border-red-300"
+                                                                                onClick={() => handleDelete(schedule.id)}
+                                                                                title="Delete Schedule"
+                                                                            >
+                                                                                <Trash2 className="h-4 w-4" />
+                                                                            </Button>
+                                                                        </Can>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </TableCell>
+                                                </TableRow>
+                                            )}
+                                        </React.Fragment>
                                     );
                                 })}
-                                {scheduleData.data.length === 0 && !loading && (
+                                {employeeData.data.length === 0 && !loading && (
                                     <TableRow>
-                                        <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                                        <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
                                             No employee schedules found
                                         </TableCell>
                                     </TableRow>
@@ -680,35 +775,18 @@ export default function EmployeeSchedulesIndex() {
                 </div>
 
                 <div className="md:hidden space-y-4">
-                    {scheduleData.data.map(schedule => {
-                        const scheduleCount = userScheduleCount[schedule.user.id] || 1;
-                        const groupIndex = userGroupIndex[schedule.user.id] || 0;
+                    {employeeData.data.map(employee => {
+                        const scheduleCount = employee.schedules.length;
                         const hasMultipleSchedules = scheduleCount > 1;
-                        const isEvenGroup = groupIndex % 2 === 0;
+                        const primary = getPrimarySchedule(employee.schedules);
+                        const isExpanded = expandedUserIds.has(employee.id);
 
                         return (
-                            <div
-                                key={schedule.id}
-                                className={`border rounded-lg p-4 shadow-sm space-y-3 ${hasMultipleSchedules
-                                    ? isEvenGroup
-                                        ? "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800"
-                                        : "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800"
-                                    : "bg-card"
-                                    }`}
-                            >
+                            <div key={employee.id} className="border rounded-lg p-4 shadow-sm space-y-3 bg-card">
                                 <div className="flex justify-between items-start">
                                     <div>
                                         <div className="flex items-center gap-2">
-                                            {hasMultipleSchedules ? (
-                                                <button
-                                                    onClick={() => handleViewEmployeeSchedules(schedule.user.id)}
-                                                    className="text-lg font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer text-left"
-                                                >
-                                                    {schedule.user.name}
-                                                </button>
-                                            ) : (
-                                                <span className="text-lg font-semibold">{schedule.user.name}</span>
-                                            )}
+                                            <span className="text-lg font-semibold">{employee.name}</span>
                                             {hasMultipleSchedules && (
                                                 <Badge variant="outline" className="text-xs px-1.5 py-0 h-5 gap-1">
                                                     <Users className="h-3 w-3" />
@@ -717,72 +795,155 @@ export default function EmployeeSchedulesIndex() {
                                             )}
                                         </div>
                                         <div className="text-sm text-muted-foreground">
-                                            {schedule.campaign?.name || "No Campaign"}
+                                            {primary?.campaign?.name || "No Campaign"}
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                        <Can permission="schedules.toggle">
-                                            <Switch
-                                                checked={schedule.is_active}
-                                                onCheckedChange={() => handleToggleActive(schedule)}
-                                                aria-label="Toggle schedule active status"
-                                            />
+                                    {primary && (
+                                        <div className="flex items-center gap-2">
+                                            <Can permission="schedules.toggle">
+                                                <Switch
+                                                    checked={primary.is_active}
+                                                    onCheckedChange={() => handleToggleActive(primary, employee.name)}
+                                                    aria-label="Toggle schedule active status"
+                                                />
+                                            </Can>
+                                            {primary.is_active ? (
+                                                <Badge className="bg-green-500">Active</Badge>
+                                            ) : (
+                                                <Badge variant="secondary">Inactive</Badge>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {primary && (
+                                    <div className="space-y-2 text-sm">
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-medium">Shift:</span>
+                                            {getShiftTypeBadge(primary.shift_type)}
+                                        </div>
+                                        <div>
+                                            <span className="font-medium">Time:</span>{" "}
+                                            {renderScheduleTime(primary)}
+                                        </div>
+                                        <div>
+                                            <span className="font-medium">Work Days:</span>{" "}
+                                            {primary.is_flexible ? "No fixed work days" : primary.work_days.map(day => day.substring(0, 3)).join(", ")}
+                                        </div>
+                                        <div>
+                                            <span className="font-medium">Site:</span> {primary.site?.name || "-"}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {primary && !hasMultipleSchedules && (
+                                    <div className="flex gap-2 pt-2 border-t">
+                                        <Can permission="schedules.edit">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="flex-1"
+                                                onClick={() => router.get(employeeSchedulesEdit({ employee_schedule: primary.id }).url)}
+                                            >
+                                                <Edit className="mr-2 h-4 w-4" />
+                                                Edit
+                                            </Button>
                                         </Can>
-                                        {schedule.is_active ? (
-                                            <Badge className="bg-green-500">Active</Badge>
-                                        ) : (
-                                            <Badge variant="secondary">Inactive</Badge>
+                                        <Can permission="schedules.delete">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => handleDelete(primary.id)}
+                                                className="text-red-600 hover:text-red-700 border-red-300"
+                                            >
+                                                <Trash2 className="mr-2 h-4 w-4" />
+                                                Delete
+                                            </Button>
+                                        </Can>
+                                    </div>
+                                )}
+
+                                {hasMultipleSchedules && (
+                                    <>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="w-full"
+                                            onClick={() => toggleExpanded(employee.id)}
+                                            aria-expanded={isExpanded}
+                                        >
+                                            {isExpanded ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />}
+                                            {isExpanded ? "Hide schedules" : `Show all ${scheduleCount} schedules`}
+                                        </Button>
+
+                                        {isExpanded && (
+                                            <div className="space-y-3">
+                                                {employee.schedules.map(schedule => (
+                                                    <div
+                                                        key={schedule.id}
+                                                        className={`rounded-md border p-3 space-y-2 text-sm ${schedule.is_active ? "border-green-500 bg-green-50 dark:bg-green-950/20" : "bg-muted/30"}`}
+                                                    >
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            {schedule.is_active ? (
+                                                                <Badge className="bg-green-500">Active</Badge>
+                                                            ) : (
+                                                                <Badge variant="secondary">Inactive</Badge>
+                                                            )}
+                                                            {getShiftTypeBadge(schedule.shift_type)}
+                                                        </div>
+                                                        <div>
+                                                            {renderScheduleTime(schedule)}
+                                                        </div>
+                                                        <div className="text-muted-foreground">
+                                                            {schedule.campaign?.name || "No Campaign"} / {schedule.site?.name || "No Site"}
+                                                        </div>
+                                                        <div className="text-xs text-muted-foreground">
+                                                            {schedule.is_flexible ? "No fixed work days" : schedule.work_days.map(day => day.substring(0, 3)).join(", ")}
+                                                        </div>
+                                                        <div className="text-xs text-muted-foreground">
+                                                            {formatDate(schedule.effective_date)} &rarr; {schedule.end_date ? formatDate(schedule.end_date) : "Ongoing"}
+                                                        </div>
+                                                        <div className="flex items-center gap-2 pt-2 border-t">
+                                                            <Can permission="schedules.toggle">
+                                                                <Switch
+                                                                    checked={schedule.is_active}
+                                                                    onCheckedChange={() => handleToggleActive(schedule, employee.name)}
+                                                                    aria-label="Toggle schedule active status"
+                                                                />
+                                                            </Can>
+                                                            <Can permission="schedules.edit">
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="sm"
+                                                                    className="flex-1"
+                                                                    onClick={() => router.get(employeeSchedulesEdit({ employee_schedule: schedule.id }).url)}
+                                                                >
+                                                                    <Edit className="mr-2 h-4 w-4" />
+                                                                    Edit
+                                                                </Button>
+                                                            </Can>
+                                                            <Can permission="schedules.delete">
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="sm"
+                                                                    onClick={() => handleDelete(schedule.id)}
+                                                                    className="text-red-600 hover:text-red-700 border-red-300"
+                                                                >
+                                                                    <Trash2 className="h-4 w-4" />
+                                                                </Button>
+                                                            </Can>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
                                         )}
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2 text-sm">
-                                    <div className="flex items-center gap-2">
-                                        <span className="font-medium">Shift:</span>
-                                        {getShiftTypeBadge(schedule.shift_type)}
-                                    </div>
-                                    <div>
-                                        <span className="font-medium">Time:</span>{" "}
-                                        {formatTime(schedule.scheduled_time_in)} - {formatTime(schedule.scheduled_time_out)}
-                                    </div>
-                                    <div>
-                                        <span className="font-medium">Work Days:</span>{" "}
-                                        {schedule.work_days.map(day => day.substring(0, 3)).join(", ")}
-                                    </div>
-                                    <div>
-                                        <span className="font-medium">Site:</span> {schedule.site?.name || "-"}
-                                    </div>
-                                </div>
-
-                                <div className="flex gap-2 pt-2 border-t">
-                                    <Can permission="schedules.edit">
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="flex-1"
-                                            onClick={() => router.get(employeeSchedulesEdit({ employee_schedule: schedule.id }).url)}
-                                        >
-                                            <Edit className="mr-2 h-4 w-4" />
-                                            Edit
-                                        </Button>
-                                    </Can>
-                                    <Can permission="schedules.delete">
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => handleDelete(schedule.id)}
-                                            className="text-red-600 hover:text-red-700 border-red-300"
-                                        >
-                                            <Trash2 className="mr-2 h-4 w-4" />
-                                            Delete
-                                        </Button>
-                                    </Can>
-                                </div>
+                                    </>
+                                )}
                             </div>
                         );
                     })}
 
-                    {scheduleData.data.length === 0 && !loading && (
+                    {employeeData.data.length === 0 && !loading && (
                         <div className="py-12 text-center text-gray-500 border rounded-lg bg-card">
                             No employee schedules found
                         </div>
@@ -790,8 +951,8 @@ export default function EmployeeSchedulesIndex() {
                 </div>
 
                 <div className="flex justify-center mt-4">
-                    {scheduleData.links && scheduleData.links.length > 0 && (
-                        <PaginationNav links={scheduleData.links} only={["schedules"]} />
+                    {employeeData.links && employeeData.links.length > 0 && (
+                        <PaginationNav links={employeeData.links} only={["employees"]} />
                     )}
                 </div>
 
@@ -802,7 +963,7 @@ export default function EmployeeSchedulesIndex() {
                             <AlertDialogDescription>
                                 {scheduleToToggle && (
                                     <>
-                                        Are you sure you want to activate this schedule for <strong>{scheduleToToggle.user.name}</strong>?
+                                        Are you sure you want to activate this schedule for <strong>{toggleUserName}</strong>?
                                         <br /><br />
                                         <span className="text-amber-600 dark:text-amber-400">
                                             Note: This will automatically deactivate any other active schedules for this employee.
@@ -1008,7 +1169,7 @@ export default function EmployeeSchedulesIndex() {
                                                             className="flex-1 sm:flex-none"
                                                             onClick={() => {
                                                                 setNoScheduleDialogOpen(false);
-                                                                handleViewEmployeeSchedules(user.id);
+                                                                handleViewEmployeeSchedules(user.id, user.name);
                                                             }}
                                                         >
                                                             View Schedules
@@ -1089,7 +1250,7 @@ export default function EmployeeSchedulesIndex() {
                                                             className="flex-1 sm:flex-none"
                                                             onClick={() => {
                                                                 setNoScheduleDialogOpen(false);
-                                                                handleViewEmployeeSchedules(user.id);
+                                                                handleViewEmployeeSchedules(user.id, user.name);
                                                             }}
                                                         >
                                                             <Users className="h-4 w-4 mr-1" />
@@ -1143,7 +1304,7 @@ export default function EmployeeSchedulesIndex() {
                         <AlertDialogHeader>
                             <AlertDialogTitle className="flex flex-wrap items-center gap-2 text-base sm:text-lg">
                                 <Users className="h-4 w-4 sm:h-5 sm:w-5" />
-                                <span className="truncate">{selectedUserSchedules[0]?.user.name} - All Schedules</span>
+                                <span className="truncate">{selectedUserName} - All Schedules</span>
                                 <Badge className="ml-0 sm:ml-2">{selectedUserSchedules.length}</Badge>
                             </AlertDialogTitle>
                             <AlertDialogDescription>
@@ -1168,6 +1329,7 @@ export default function EmployeeSchedulesIndex() {
                                                 </div>
                                                 <div className="flex flex-wrap items-center gap-2">
                                                     {getShiftTypeBadge(schedule.shift_type)}
+                                                    {schedule.is_flexible && <FlexibleBadge />}
                                                     <div className="flex items-center gap-2">
                                                         <Can permission="schedules.toggle">
                                                             <Switch
@@ -1175,7 +1337,7 @@ export default function EmployeeSchedulesIndex() {
                                                                 onCheckedChange={() => {
                                                                     // Close dialog and trigger toggle
                                                                     setScheduleDetailsDialogOpen(false);
-                                                                    handleToggleActive(schedule);
+                                                                    handleToggleActive(schedule, selectedUserName);
                                                                 }}
                                                                 aria-label="Toggle schedule active status"
                                                             />
@@ -1230,15 +1392,15 @@ export default function EmployeeSchedulesIndex() {
                                             </div>
                                             <div>
                                                 <span className="font-medium text-muted-foreground">Time In:</span>
-                                                <p className="mt-1">{formatTime(schedule.scheduled_time_in)}</p>
+                                                <p className="mt-1">{schedule.is_flexible ? "Flexible" : formatTime(schedule.scheduled_time_in)}</p>
                                             </div>
                                             <div>
                                                 <span className="font-medium text-muted-foreground">Time Out:</span>
-                                                <p className="mt-1">{formatTime(schedule.scheduled_time_out)}</p>
+                                                <p className="mt-1">{schedule.is_flexible ? "Flexible" : formatTime(schedule.scheduled_time_out)}</p>
                                             </div>
                                             <div>
                                                 <span className="font-medium text-muted-foreground">Work Days:</span>
-                                                <p className="mt-1">{schedule.work_days.map(day => day.charAt(0).toUpperCase() + day.slice(1)).join(", ")}</p>
+                                                <p className="mt-1">{schedule.is_flexible ? "No fixed work days" : schedule.work_days.map(day => day.charAt(0).toUpperCase() + day.slice(1)).join(", ")}</p>
                                             </div>
                                             <div>
                                                 <span className="font-medium text-muted-foreground">Grace Period:</span>

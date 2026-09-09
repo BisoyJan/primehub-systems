@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
-import { ArrowLeft, Pencil, Printer, CheckCircle2, ShieldCheck, ShieldX, Archive, ZoomIn, ZoomOut, RotateCcw, History, SendHorizonal } from 'lucide-react';
+import { ArrowLeft, Pencil, Printer, CheckCircle2, ShieldCheck, ShieldX, Archive, FileText, ZoomIn, ZoomOut, RotateCcw, History, SendHorizonal } from 'lucide-react';
 import DOMPurify from 'dompurify';
 
 import AppLayout from '@/layouts/app-layout';
@@ -103,6 +103,10 @@ function CheckItem({ checked, label }: { checked: boolean; label: string }) {
             <span className={checked ? '' : 'text-muted-foreground/60'}>{label}</span>
         </div>
     );
+}
+
+function isImageAttachment(mimeType: string, filename: string): boolean {
+    return mimeType.startsWith('image/') || /\.(jpe?g|png|gif|webp)$/i.test(filename);
 }
 
 function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
@@ -342,27 +346,28 @@ export default function CoachingSessionsShow() {
                     <SectionCard title="Attachments">
                         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
                             {session.attachments.map((attachment) => (
-                                <button
-                                    key={attachment.id}
-                                    type="button"
-                                    className="group relative aspect-square overflow-hidden rounded-lg border bg-muted/50 focus:outline-none focus:ring-2 focus:ring-ring"
-                                    onClick={() => {
-                                        setSelectedAttachment(attachment);
-                                        setImageZoom(100);
-                                    }}
-                                >
-                                    <img
-                                        src={sessionsAttachment({ session: session.id, attachment: attachment.id }).url}
-                                        alt={attachment.original_filename}
-                                        className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                                    />
-                                    <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/20">
-                                        <ZoomIn className="h-6 w-6 text-white opacity-0 transition-opacity group-hover:opacity-100" />
-                                    </div>
-                                    <p className="absolute bottom-0 left-0 right-0 truncate bg-black/50 px-2 py-1 text-xs text-white">
-                                        {attachment.original_filename}
-                                    </p>
-                                </button>
+                                isImageAttachment(attachment.mime_type, attachment.original_filename) ? (
+                                    <button
+                                        key={attachment.id}
+                                        type="button"
+                                        className="group relative aspect-square overflow-hidden rounded-lg border bg-muted/50 focus:outline-none focus:ring-2 focus:ring-ring"
+                                        onClick={() => {
+                                            setSelectedAttachment(attachment);
+                                            setImageZoom(100);
+                                        }}
+                                    >
+                                        <img src={sessionsAttachment({ session: session.id, attachment: attachment.id }).url} alt={attachment.original_filename} className="h-full w-full object-cover transition-transform group-hover:scale-105" />
+                                        <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/20">
+                                            <ZoomIn className="h-6 w-6 text-white opacity-0 transition-opacity group-hover:opacity-100" />
+                                        </div>
+                                        <p className="absolute bottom-0 left-0 right-0 truncate bg-black/50 px-2 py-1 text-xs text-white">{attachment.original_filename}</p>
+                                    </button>
+                                ) : (
+                                    <a key={attachment.id} href={sessionsAttachment({ session: session.id, attachment: attachment.id }).url} className="flex aspect-square flex-col items-center justify-center gap-2 rounded-lg border bg-muted/50 p-3 text-center text-muted-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring">
+                                        <FileText className="h-8 w-8" />
+                                        <span className="line-clamp-2 text-xs">{attachment.original_filename}</span>
+                                    </a>
+                                )
                             ))}
                         </div>
                         <p className="mt-2 text-xs text-muted-foreground">

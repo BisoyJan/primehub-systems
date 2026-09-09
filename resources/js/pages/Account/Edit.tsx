@@ -14,7 +14,7 @@ import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
 import { index as accountsIndex, edit as accountsEdit, update as accountsUpdate, toggleActive } from "@/routes/accounts";
 import { Switch } from "@/components/ui/switch";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Eye, EyeOff } from "lucide-react";
 
 interface User {
     id: number;
@@ -36,6 +36,8 @@ export default function AccountEdit() {
 
     const [employeeStatus, setEmployeeStatus] = useState(user.is_active);
     const [toggleActiveDialogOpen, setToggleActiveDialogOpen] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
+    const [showPasswordConfirmation, setShowPasswordConfirmation] = useState(false);
 
     const { title, breadcrumbs } = usePageMeta({
         title: `Edit ${fullName}`,
@@ -268,25 +270,55 @@ export default function AccountEdit() {
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
                                         <Label htmlFor="password">New Password</Label>
-                                        <Input
-                                            id="password"
-                                            type="password"
-                                            value={data.password}
-                                            onChange={e => setData("password", e.target.value)}
-                                            placeholder="••••••••"
-                                        />
+                                        <div className="relative">
+                                            <Input
+                                                id="password"
+                                                type={showPassword ? "text" : "password"}
+                                                value={data.password}
+                                                onChange={e => setData("password", e.target.value)}
+                                                placeholder="••••••••"
+                                                className="pr-10"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowPassword(!showPassword)}
+                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                                aria-label={showPassword ? "Hide password" : "Show password"}
+                                            >
+                                                {showPassword ? (
+                                                    <EyeOff className="h-4 w-4" />
+                                                ) : (
+                                                    <Eye className="h-4 w-4" />
+                                                )}
+                                            </button>
+                                        </div>
                                         {errors.password && <p className="text-red-600 text-sm mt-1">{errors.password}</p>}
                                     </div>
 
                                     <div>
                                         <Label htmlFor="password_confirmation">Confirm New Password</Label>
-                                        <Input
-                                            id="password_confirmation"
-                                            type="password"
-                                            value={data.password_confirmation}
-                                            onChange={e => setData("password_confirmation", e.target.value)}
-                                            placeholder="••••••••"
-                                        />
+                                        <div className="relative">
+                                            <Input
+                                                id="password_confirmation"
+                                                type={showPasswordConfirmation ? "text" : "password"}
+                                                value={data.password_confirmation}
+                                                onChange={e => setData("password_confirmation", e.target.value)}
+                                                placeholder="••••••••"
+                                                className="pr-10"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowPasswordConfirmation(!showPasswordConfirmation)}
+                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                                aria-label={showPasswordConfirmation ? "Hide password confirmation" : "Show password confirmation"}
+                                            >
+                                                {showPasswordConfirmation ? (
+                                                    <EyeOff className="h-4 w-4" />
+                                                ) : (
+                                                    <Eye className="h-4 w-4" />
+                                                )}
+                                            </button>
+                                        </div>
                                         {errors.password_confirmation && <p className="text-red-600 text-sm mt-1">{errors.password_confirmation}</p>}
                                     </div>
                                 </div>

@@ -144,12 +144,37 @@ class CoachingSessionAttachmentTest extends TestCase
     }
 
     #[Test]
-    public function store_rejects_non_image_files(): void
+    public function store_accepts_document_attachments(): void
     {
         $team = $this->createTeamWithCampaign();
         $data = $this->validSessionData($team['agent']->id);
         $data['attachments'] = [
             UploadedFile::fake()->create('document.pdf', 100, 'application/pdf'),
+            UploadedFile::fake()->create('document.doc', 100, 'application/msword'),
+            UploadedFile::fake()->create('document.docx', 100, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
+        ];
+
+        $response = $this->actingAs($team['teamLead'])
+            ->post(route('coaching.sessions.store'), $data);
+
+        $response->assertRedirect(route('coaching.sessions.index'));
+
+        $session = CoachingSession::first();
+        $this->assertNotNull($session);
+        $this->assertCount(3, $session->attachments);
+
+        foreach ($session->attachments as $attachment) {
+            Storage::disk('local')->assertExists($attachment->file_path);
+        }
+    }
+
+    #[Test]
+    public function store_rejects_unsupported_files(): void
+    {
+        $team = $this->createTeamWithCampaign();
+        $data = $this->validSessionData($team['agent']->id);
+        $data['attachments'] = [
+            UploadedFile::fake()->create('script.exe', 100, 'application/octet-stream'),
         ];
 
         $response = $this->actingAs($team['teamLead'])
@@ -159,12 +184,12 @@ class CoachingSessionAttachmentTest extends TestCase
     }
 
     #[Test]
-    public function store_rejects_files_over_4mb(): void
+    public function store_rejects_files_over_9mb(): void
     {
         $team = $this->createTeamWithCampaign();
         $data = $this->validSessionData($team['agent']->id);
         $data['attachments'] = [
-            UploadedFile::fake()->image('large.jpg')->size(5000),
+            UploadedFile::fake()->create('large.pdf', 10_000, 'application/pdf'),
         ];
 
         $response = $this->actingAs($team['teamLead'])

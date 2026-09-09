@@ -25,7 +25,7 @@ import {
     CommandItem,
     CommandList,
 } from '@/components/ui/command';
-import { AlertTriangle, Check, ChevronsUpDown, ImagePlus, Users, X, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { AlertTriangle, Check, ChevronsUpDown, FileText, Paperclip, Users, X, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import {
     Dialog,
     DialogContent,
@@ -59,8 +59,26 @@ interface CoachingFormFieldsProps {
 }
 
 const MAX_ATTACHMENTS = 10;
-const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4MB
-const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+const MAX_FILE_SIZE = 9 * 1024 * 1024;
+const IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+const DOCUMENT_TYPES = [
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+];
+const ALLOWED_TYPES = [...IMAGE_TYPES, ...DOCUMENT_TYPES];
+const ACCEPTED_FILES = '.jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx';
+
+function isImageAttachment(file: Pick<File, 'type' | 'name'> | { mime_type: string; original_filename: string }): boolean {
+    const type = 'mime_type' in file ? file.mime_type : file.type;
+    const name = 'original_filename' in file ? file.original_filename : file.name;
+
+    return IMAGE_TYPES.includes(type) || /\.(jpe?g|png|gif|webp)$/i.test(name);
+}
+
+function isAllowedFile(file: File): boolean {
+    return ALLOWED_TYPES.includes(file.type) || /\.(jpe?g|png|gif|webp|pdf|docx?)$/i.test(file.name);
+}
 
 function ImageAttachments({
     data,
@@ -94,28 +112,28 @@ function ImageAttachments({
             const availableSlots = MAX_ATTACHMENTS - currentTotal;
 
             if (availableSlots <= 0) {
-                setWarning(`Maximum of ${MAX_ATTACHMENTS} images allowed. You already have ${currentTotal}.`);
+                setWarning(`Maximum of ${MAX_ATTACHMENTS} attachments allowed. You already have ${currentTotal}.`);
                 return;
             }
 
-            const validFiles = files.filter((f) => ALLOWED_TYPES.includes(f.type) && f.size <= MAX_FILE_SIZE);
+            const validFiles = files.filter((file) => isAllowedFile(file) && file.size <= MAX_FILE_SIZE);
             const skippedCount = files.length - validFiles.length;
             const excessCount = Math.max(0, validFiles.length - availableSlots);
             const filesToAdd = validFiles.slice(0, availableSlots);
 
             const warnings: string[] = [];
             if (excessCount > 0) {
-                warnings.push(`${excessCount} image${excessCount > 1 ? 's were' : ' was'} not added — limit is ${MAX_ATTACHMENTS}.`);
+                warnings.push(`${excessCount} attachment${excessCount > 1 ? 's were' : ' was'} not added - limit is ${MAX_ATTACHMENTS}.`);
             }
             if (skippedCount > 0) {
-                warnings.push(`${skippedCount} file${skippedCount > 1 ? 's were' : ' was'} skipped (invalid type or exceeds 4MB).`);
+                warnings.push(`${skippedCount} file${skippedCount > 1 ? 's were' : ' was'} skipped (invalid type or exceeds 9MB).`);
             }
             if (warnings.length > 0) {
                 setWarning(warnings.join(' '));
             }
 
             if (filesToAdd.length > 0) {
-                const newPreviewUrls = filesToAdd.map((f) => URL.createObjectURL(f));
+                const newPreviewUrls = filesToAdd.map((file) => isImageAttachment(file) ? URL.createObjectURL(file) : '');
                 setData('attachments', [...currentFiles, ...filesToAdd]);
                 setPreviews((prev) => [...prev, ...newPreviewUrls]);
             }
@@ -152,7 +170,7 @@ function ImageAttachments({
 
             const imageFiles: File[] = [];
             for (const item of Array.from(items)) {
-                if (item.kind === 'file' && ALLOWED_TYPES.includes(item.type)) {
+                if (item.kind === 'file' && IMAGE_TYPES.includes(item.type)) {
                     const file = item.getAsFile();
                     if (file) {
                         const ext = file.type.split('/')[1] || 'png';
@@ -181,7 +199,7 @@ function ImageAttachments({
 
             setPreviews((prev) => {
                 const updated = [...prev];
-                URL.revokeObjectURL(updated[index]);
+                if (updated[index]) URL.revokeObjectURL(updated[index]);
                 updated.splice(index, 1);
                 return updated;
             });
@@ -199,7 +217,7 @@ function ImageAttachments({
     return (
         <section className="space-y-4">
             <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide border-b pb-2">
-                Image Attachments
+                Attachments
                 <span className="ml-2 text-xs font-normal normal-case text-muted-foreground">
                     ({totalCount}/{MAX_ATTACHMENTS})
                 </span>
@@ -210,27 +228,30 @@ function ImageAttachments({
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                     {/* Existing Attachments */}
                     {activeExisting.map((attachment) => (
-                        <div key={`existing-${attachment.id}`} className="group relative aspect-square rounded-lg border bg-muted/30 overflow-hidden">
-                            <button
-                                type="button"
-                                className="h-full w-full"
-                                onClick={() => {
-                                    setPreviewImage({
-                                        src: attachmentViewUrl ? attachmentViewUrl(attachment.coaching_session_id, attachment.id) : '#',
-                                        name: attachment.original_filename,
-                                    });
-                                    setImageZoom(100);
-                                }}
-                            >
-                                <img
-                                    src={attachmentViewUrl ? attachmentViewUrl(attachment.coaching_session_id, attachment.id) : '#'}
-                                    alt={attachment.original_filename}
-                                    className="h-full w-full object-cover"
-                                />
-                                <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/20">
-                                    <ZoomIn className="h-5 w-5 text-white opacity-0 transition-opacity group-hover:opacity-100" />
-                                </div>
-                            </button>
+                        <div key={`existing-${attachment.id}`} className="group relative aspect-square overflow-hidden rounded-lg border bg-muted/30">
+                            {isImageAttachment(attachment) ? (
+                                <button
+                                    type="button"
+                                    className="h-full w-full"
+                                    onClick={() => {
+                                        setPreviewImage({
+                                            src: attachmentViewUrl ? attachmentViewUrl(attachment.coaching_session_id, attachment.id) : '#',
+                                            name: attachment.original_filename,
+                                        });
+                                        setImageZoom(100);
+                                    }}
+                                >
+                                    <img src={attachmentViewUrl ? attachmentViewUrl(attachment.coaching_session_id, attachment.id) : '#'} alt={attachment.original_filename} className="h-full w-full object-cover" />
+                                    <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/20">
+                                        <ZoomIn className="h-5 w-5 text-white opacity-0 transition-opacity group-hover:opacity-100" />
+                                    </div>
+                                </button>
+                            ) : (
+                                <a href={attachmentViewUrl ? attachmentViewUrl(attachment.coaching_session_id, attachment.id) : '#'} className="flex h-full w-full flex-col items-center justify-center gap-2 p-3 text-center text-muted-foreground hover:bg-muted">
+                                    <FileText className="h-8 w-8" />
+                                    <span className="line-clamp-2 text-xs">{attachment.original_filename}</span>
+                                </a>
+                            )}
                             {onRemoveExistingAttachment && (
                                 <button
                                     type="button"
@@ -247,35 +268,35 @@ function ImageAttachments({
                         </div>
                     ))}
 
-                    {/* New File Previews */}
-                    {previews.map((previewUrl, index) => (
+                    {/* New Attachments */}
+                    {newFiles.map((file, index) => (
                         <div key={`new-${index}`} className="group relative aspect-square rounded-lg border bg-muted/30 overflow-hidden">
-                            <button
-                                type="button"
-                                className="h-full w-full"
-                                onClick={() => {
-                                    setPreviewImage({
-                                        src: previewUrl,
-                                        name: newFiles[index]?.name ?? 'New image',
-                                    });
+                            {isImageAttachment(file) ? (
+                                <button type="button" className="h-full w-full" onClick={() => {
+                                    setPreviewImage({ src: previews[index], name: file.name });
                                     setImageZoom(100);
-                                }}
-                            >
-                                <img src={previewUrl} alt={newFiles[index]?.name ?? 'Preview'} className="h-full w-full object-cover" />
-                                <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/20">
-                                    <ZoomIn className="h-5 w-5 text-white opacity-0 transition-opacity group-hover:opacity-100" />
+                                }}>
+                                    <img src={previews[index]} alt={file.name} className="h-full w-full object-cover" />
+                                    <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/20">
+                                        <ZoomIn className="h-5 w-5 text-white opacity-0 transition-opacity group-hover:opacity-100" />
+                                    </div>
+                                </button>
+                            ) : (
+                                <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-3 text-center text-muted-foreground">
+                                    <FileText className="h-8 w-8" />
+                                    <span className="line-clamp-2 text-xs">{file.name}</span>
                                 </div>
-                            </button>
+                            )}
                             <button
                                 type="button"
-                                title="Remove image"
+                                title="Remove attachment"
                                 onClick={() => handleRemoveNewFile(index)}
                                 className="absolute top-1 right-1 rounded-full bg-red-600 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100 z-10"
                             >
                                 <X className="h-3 w-3" />
                             </button>
                             <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-1.5 py-0.5 text-[10px] text-white truncate pointer-events-none">
-                                {newFiles[index]?.name ?? 'New image'}
+                                {file.name}
                             </div>
                         </div>
                     ))}
@@ -285,11 +306,11 @@ function ImageAttachments({
             {/* Upload Button */}
             {canAddMore && (
                 <div className="flex flex-wrap items-center gap-2">
-                    <label htmlFor="coaching-attachments" className="sr-only">Upload image attachments</label>
+                    <label htmlFor="coaching-attachments" className="sr-only">Upload attachments</label>
                     <input
                         ref={fileInputRef}
                         type="file"
-                        accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                        accept={ACCEPTED_FILES}
                         multiple
                         onChange={handleFileSelect}
                         className="hidden"
@@ -301,11 +322,11 @@ function ImageAttachments({
                         onClick={() => fileInputRef.current?.click()}
                         className="gap-2"
                     >
-                        <ImagePlus className="h-4 w-4" />
-                        Add Images
+                        <Paperclip className="h-4 w-4" />
+                        Add Attachments
                     </Button>
                     <p className="text-xs text-muted-foreground">
-                        JPEG, PNG, GIF, or WebP. Max 4MB per image. You can also <kbd className="rounded border bg-muted px-1 py-0.5 text-[10px] font-mono">Ctrl+V</kbd> to paste screenshots.
+                        Images, PDF, DOC, or DOCX. Max 9MB per file. You can also <kbd className="rounded border bg-muted px-1 py-0.5 text-[10px] font-mono">Ctrl+V</kbd> to paste screenshots.
                     </p>
                 </div>
             )}
