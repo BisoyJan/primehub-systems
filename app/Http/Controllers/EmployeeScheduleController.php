@@ -301,6 +301,13 @@ class EmployeeScheduleController extends Controller
         $validated = $request->validate($rules);
         $validated['is_flexible'] = (bool) ($validated['is_flexible'] ?? false);
 
+        // effective_date is the employee's hired date, so it must stay identical
+        // across every schedule they own.
+        $targetUser = User::find($validated['user_id']);
+        if ($targetUser?->hired_date) {
+            $validated['effective_date'] = $targetUser->hired_date->format('Y-m-d');
+        }
+
         if ($validated['is_flexible']) {
             $validated['scheduled_time_in'] = null;
             $validated['scheduled_time_out'] = null;
@@ -356,8 +363,11 @@ class EmployeeScheduleController extends Controller
 
         $schedule = EmployeeSchedule::create($validated);
 
+        if ($targetUser && ! $targetUser->hired_date) {
+            $targetUser->update(['hired_date' => $validated['effective_date']]);
+        }
+
         // Sync campaign_user pivot for Team Leads
-        $targetUser = User::find($validated['user_id']);
         if ($targetUser && $targetUser->role === 'Team Lead' && ! empty($validated['campaign_ids'])) {
             $targetUser->campaigns()->syncWithoutDetaching($validated['campaign_ids']);
         }
@@ -503,8 +513,14 @@ class EmployeeScheduleController extends Controller
 
         $employeeSchedule->update($validated);
 
-        // Sync campaign_user pivot for Team Leads
+        // The hired date is owned by the employee; UserObserver cascades the new
+        // value to their other schedules.
         $scheduleOwner = $employeeSchedule->user;
+        if ($canEditEffectiveDate && ! empty($validated['effective_date']) && $scheduleOwner) {
+            $scheduleOwner->update(['hired_date' => $employeeSchedule->effective_date->format('Y-m-d')]);
+        }
+
+        // Sync campaign_user pivot for Team Leads
         if ($scheduleOwner && $scheduleOwner->role === 'Team Lead' && isset($validated['campaign_ids'])) {
             $scheduleOwner->campaigns()->sync($validated['campaign_ids']);
         }

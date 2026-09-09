@@ -197,6 +197,15 @@ export default function EmployeeScheduleCreate() {
     // Get selected user for display
     const selectedUser = data.user_id ? users.find(user => user.id === Number(data.user_id)) : undefined;
 
+    // Hired date belongs to the employee record, not the individual schedule, so
+    // it must follow the selection however it was made (picker or ?user_id= param).
+    useEffect(() => {
+        if (!isRestrictedRole && selectedUser?.hired_date) {
+            setData("effective_date", selectedUser.hired_date);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedUser?.id, selectedUser?.hired_date, isRestrictedRole]);
+
     // Check if the selected user is a Team Lead (for multi-campaign assignment)
     const isSelectedUserTeamLead = isRestrictedRole
         ? currentUser.role === 'Team Lead'
@@ -296,10 +305,6 @@ export default function EmployeeScheduleCreate() {
                                                                     value={`${user.name} ${user.email || ''}`}
                                                                     onSelect={() => {
                                                                         setData("user_id", String(user.id));
-                                                                        // Auto-fill hired_date if user already has one
-                                                                        if (user.hired_date) {
-                                                                            setData("effective_date", user.hired_date);
-                                                                        }
                                                                         setIsEmployeePopoverOpen(false);
                                                                         setEmployeeSearchQuery("");
                                                                     }}

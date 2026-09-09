@@ -4,7 +4,9 @@ namespace App\Providers;
 
 use App\Listeners\LogAuthentication;
 use App\Models\AttendancePoint;
+use App\Models\User;
 use App\Observers\AttendancePointObserver;
+use App\Observers\UserObserver;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
@@ -27,6 +29,7 @@ class AppServiceProvider extends ServiceProvider
         Event::subscribe(LogAuthentication::class);
 
         AttendancePoint::observe(AttendancePointObserver::class);
+        User::observe(UserObserver::class);
 
         // Force HTTPS when behind a proxy (like ngrok) or in production
         if ($this->app->environment('production')) {

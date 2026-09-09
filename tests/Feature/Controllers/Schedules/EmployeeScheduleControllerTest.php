@@ -211,6 +211,50 @@ class EmployeeScheduleControllerTest extends TestCase
         ]);
     }
 
+    public function test_store_forces_effective_date_to_existing_hired_date(): void
+    {
+        $this->employee->update(['hired_date' => '2025-01-20']);
+        EmployeeSchedule::factory()->create([
+            'user_id' => $this->employee->id,
+            'effective_date' => '2025-01-20',
+        ]);
+
+        $this->actingAs($this->user)
+            ->post(route('employee-schedules.store'), [
+                'user_id' => $this->employee->id,
+                'site_id' => Site::factory()->create()->id,
+                'is_flexible' => true,
+                'grace_period_minutes' => 15,
+                'effective_date' => '2026-01-20',
+            ])
+            ->assertRedirect(route('employee-schedules.index'));
+
+        $this->assertDatabaseHas('employee_schedules', [
+            'user_id' => $this->employee->id,
+            'is_flexible' => true,
+            'effective_date' => '2025-01-20',
+        ]);
+    }
+
+    public function test_store_sets_hired_date_when_employee_has_none(): void
+    {
+        $this->employee->update(['hired_date' => null]);
+
+        $this->actingAs($this->user)
+            ->post(route('employee-schedules.store'), [
+                'user_id' => $this->employee->id,
+                'site_id' => Site::factory()->create()->id,
+                'scheduled_time_in' => '08:00',
+                'scheduled_time_out' => '17:00',
+                'work_days' => ['monday'],
+                'grace_period_minutes' => 15,
+                'effective_date' => '2025-03-10',
+            ])
+            ->assertRedirect(route('employee-schedules.index'));
+
+        $this->assertSame('2025-03-10', $this->employee->fresh()->hired_date->format('Y-m-d'));
+    }
+
     public function test_store_deactivates_previous_active_schedules(): void
     {
         $previousSchedule = EmployeeSchedule::factory()->create([
@@ -291,6 +335,33 @@ class EmployeeScheduleControllerTest extends TestCase
             'shift_type' => 'night_shift',
             'grace_period_minutes' => 20,
         ]);
+    }
+
+    public function test_update_propagates_effective_date_to_hired_date_and_sibling_schedules(): void
+    {
+        $this->employee->update(['hired_date' => '2025-01-20']);
+
+        $schedule = EmployeeSchedule::factory()->create([
+            'user_id' => $this->employee->id,
+            'effective_date' => '2025-01-20',
+        ]);
+        $sibling = EmployeeSchedule::factory()->create([
+            'user_id' => $this->employee->id,
+            'effective_date' => '2025-01-20',
+        ]);
+
+        $this->actingAs($this->user)
+            ->put(route('employee-schedules.update', $schedule), [
+                'scheduled_time_in' => '22:00',
+                'scheduled_time_out' => '06:00',
+                'work_days' => ['monday'],
+                'grace_period_minutes' => 20,
+                'effective_date' => '2024-06-01',
+            ])
+            ->assertRedirect(route('employee-schedules.index'));
+
+        $this->assertSame('2024-06-01', $this->employee->fresh()->hired_date->format('Y-m-d'));
+        $this->assertSame('2024-06-01', $sibling->fresh()->effective_date->format('Y-m-d'));
     }
 
     public function test_destroy_deletes_employee_schedule(): void
