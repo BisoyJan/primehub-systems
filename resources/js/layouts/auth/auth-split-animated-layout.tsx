@@ -25,6 +25,19 @@ export default function AuthSplitAnimatedLayout({
 
     useEffect(() => {
         const ctx = gsap.context(() => {
+            if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                gsap.set([
+                    logoContainerRef.current,
+                    cubeRef.current,
+                    logoRef.current,
+                    titleRef.current,
+                    taglineRef.current,
+                    formContainerRef.current,
+                    dividerRef.current,
+                ], { clearProps: 'all' });
+                return;
+            }
+
             // Animate logo container from left
             gsap.from(logoContainerRef.current, {
                 x: -100,
@@ -103,7 +116,7 @@ export default function AuthSplitAnimatedLayout({
     }, []);
 
     return (
-        <div className="dark flex min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-black relative">
+        <div className="dark flex min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-black relative motion-reduce:**:animate-none!">
             {/* Left Side - Logo and Branding */}
             <div
                 ref={logoContainerRef}
@@ -182,10 +195,10 @@ export default function AuthSplitAnimatedLayout({
             />
 
             {/* Right Side - Login Form */}
-            <div className="w-full lg:w-1/2 flex items-center justify-center p-8">
+            <div className="w-full lg:w-1/2 flex items-center justify-center p-5 sm:p-8">
                 <div
                     ref={formContainerRef}
-                    className="w-full max-w-md"
+                    className="w-full max-w-lg"
                 >
                     {/* Mobile Logo */}
                     <div className="lg:hidden flex justify-center mb-8">
@@ -199,7 +212,7 @@ export default function AuthSplitAnimatedLayout({
                     </div>
 
                     {/* Glass Morphism Card Container */}
-                    <div className="bg-white/5 backdrop-blur-2xl rounded-3xl shadow-2xl p-8 border border-white/10">
+                    <div className="bg-white/5 backdrop-blur-2xl rounded-3xl shadow-2xl p-6 sm:p-8 border border-white/10">
                         {/* Title and Description */}
                         <div className="space-y-3 mb-8">
                             <h2 className="text-3xl font-bold tracking-tight text-white">

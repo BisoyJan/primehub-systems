@@ -62,7 +62,7 @@ export default function Login({ status, canResetPassword }: LoginProps) {
                                         <TextLink
                                             href={request()}
                                             className="ml-auto text-sm"
-                                            tabIndex={5}
+                                            tabIndex={4}
                                         >
                                             Forgot password?
                                         </TextLink>
@@ -82,9 +82,8 @@ export default function Login({ status, canResetPassword }: LoginProps) {
                                     <button
                                         type="button"
                                         onClick={() => setShowPassword(!showPassword)}
-                                        tabIndex={-1}
                                         aria-label={showPassword ? 'Hide password' : 'Show password'}
-                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-300 hover:text-gray-700 dark:hover:text-white"
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 rounded-sm p-1 text-gray-400 outline-none transition-colors hover:text-gray-700 focus-visible:ring-2 focus-visible:ring-ring dark:text-gray-300 dark:hover:text-white"
                                     >
                                         {showPassword ? (
                                             <EyeOff className="h-4 w-4" />
@@ -107,8 +106,8 @@ export default function Login({ status, canResetPassword }: LoginProps) {
 
                             <Button
                                 type="submit"
-                                className="mt-4 w-full"
-                                tabIndex={4}
+                                className="mt-2 w-full"
+                                tabIndex={5}
                                 disabled={processing}
                                 data-test="login-button"
                             >
@@ -121,7 +120,7 @@ export default function Login({ status, canResetPassword }: LoginProps) {
 
                         <div className="text-center text-sm text-gray-400">
                             Don't have an account?{' '}
-                            <TextLink href={register()} tabIndex={5}>
+                            <TextLink href={register()} tabIndex={6}>
                                 Sign up
                             </TextLink>
                         </div>
@@ -130,7 +129,7 @@ export default function Login({ status, canResetPassword }: LoginProps) {
             </Form>
 
             {status && (
-                <div className="mb-4 text-center text-sm font-medium text-green-600">
+                <div className="mt-4 text-center text-sm font-medium text-green-600">
                     {status}
                 </div>
             )}
