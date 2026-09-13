@@ -6,6 +6,7 @@ use App\Http\Middleware\CheckUserApproved;
 use App\Http\Middleware\EnsureUserHasSchedule;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\UpdateLastActivity;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -26,9 +27,10 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 
-        // Trust all proxies (needed for ngrok, load balancers, etc.)
+        // Trust only the load balancer / proxy hops expected in deployment.
+        // Include localhost for local development and trusted reverse proxies.
         $middleware->trustProxies(
-            at: '*',
+            at: ['127.0.0.1', '::1'],
             headers: Symfony\Component\HttpFoundation\Request::HEADER_X_FORWARDED_FOR |
                     Symfony\Component\HttpFoundation\Request::HEADER_X_FORWARDED_HOST |
                     Symfony\Component\HttpFoundation\Request::HEADER_X_FORWARDED_PORT |
@@ -37,6 +39,7 @@ return Application::configure(basePath: dirname(__DIR__))
         );
 
         $middleware->web(append: [
+            SecurityHeaders::class,
             HandleAppearance::class,
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
