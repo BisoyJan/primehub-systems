@@ -49,9 +49,6 @@ export default function Login({ status, canResetPassword }: LoginProps) {
                                     placeholder="email@primehubmail.com"
                                     className="text-white"
                                 />
-                                <p className="text-xs text-muted-foreground">
-                                    Only @primehubmail.com and @prmhubsolutions.com emails are accepted.
-                                </p>
                                 <InputError message={errors.email} />
                             </div>
 
