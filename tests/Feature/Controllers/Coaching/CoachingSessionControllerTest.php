@@ -1147,6 +1147,89 @@ class CoachingSessionControllerTest extends TestCase
             );
     }
 
+    #[Test]
+    public function super_admin_can_filter_sessions_by_specific_coach(): void
+    {
+        $superAdmin = User::factory()->create(['role' => 'Super Admin', 'is_approved' => true]);
+        $otherSuperAdmin = User::factory()->create(['role' => 'Super Admin', 'is_approved' => true]);
+        $team = $this->createTeamWithCampaign();
+
+        CoachingSession::factory()->create([
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $otherSuperAdmin->id,
+        ]);
+        CoachingSession::factory()->create([
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $superAdmin->id,
+        ]);
+
+        $response = $this->actingAs($superAdmin)
+            ->get(route('coaching.sessions.index', ['coach_id' => $otherSuperAdmin->id]));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Coaching/Sessions/Index')
+                ->has('sessions.data', 1)
+                ->where('sessions.data.0.coach_id', $otherSuperAdmin->id)
+                ->where('filters.coach_id', (string) $otherSuperAdmin->id)
+                ->where('isSuperAdmin', true)
+                ->has('coaches', 2)
+            );
+    }
+
+    #[Test]
+    public function super_admin_can_view_own_coaching_records(): void
+    {
+        $superAdmin = User::factory()->create(['role' => 'Super Admin', 'is_approved' => true]);
+        $team = $this->createTeamWithCampaign();
+
+        CoachingSession::factory()->create([
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $superAdmin->id,
+        ]);
+        CoachingSession::factory()->create([
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $team['teamLead']->id,
+        ]);
+
+        $response = $this->actingAs($superAdmin)
+            ->get(route('coaching.sessions.index', ['coach_id' => $superAdmin->id]));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Coaching/Sessions/Index')
+                ->has('sessions.data', 1)
+                ->where('sessions.data.0.coach_id', $superAdmin->id)
+                ->where('filters.coach_id', (string) $superAdmin->id)
+            );
+    }
+
+    #[Test]
+    public function non_super_admin_cannot_use_coach_id_filter(): void
+    {
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+        $team = $this->createTeamWithCampaign();
+
+        CoachingSession::factory()->create([
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $team['teamLead']->id,
+        ]);
+        CoachingSession::factory()->create([
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $admin->id,
+        ]);
+
+        $response = $this->actingAs($admin)
+            ->get(route('coaching.sessions.index', ['coach_id' => $team['teamLead']->id]));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Coaching/Sessions/Index')
+                ->has('sessions.data', 2)
+                ->where('isSuperAdmin', false)
+            );
+    }
+
     // ─── Team Lead as Coachee Tests ─────────────────────────────────
 
     #[Test]

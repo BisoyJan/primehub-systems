@@ -41,6 +41,7 @@ class CoachingSessionController extends Controller
         $this->authorize('viewAny', CoachingSession::class);
 
         $user = auth()->user();
+        $isSuperAdmin = $user->role === 'Super Admin';
         $isAdmin = in_array($user->role, ['Super Admin', 'Admin']);
         $isTeamLead = $user->role === 'Team Lead';
         $isAgent = $user->role === 'Agent';
@@ -133,8 +134,13 @@ class CoachingSessionController extends Controller
         }
 
         // Team lead (coach) filter (admin only)
-        if ($request->filled('team_lead_id') && $isAdmin) {
+        if ($request->filled('team_lead_id') && $isAdmin && ! $isSuperAdmin) {
             $query->where('coach_id', $request->team_lead_id);
+        }
+
+        // Coach filter (Super Admin only)
+        if ($request->filled('coach_id') && $isSuperAdmin) {
+            $query->where('coach_id', $request->coach_id);
         }
 
         // Date range filter (not applied to drafts — show all own drafts regardless of date)
@@ -154,7 +160,7 @@ class CoachingSessionController extends Controller
 
         // Get team leads for filter dropdown (admin only)
         $teamLeads = collect();
-        if ($isAdmin) {
+        if ($isAdmin && ! $isSuperAdmin) {
             $teamLeads = User::where('role', 'Team Lead')
                 ->where('is_approved', true)
                 ->where('is_active', true)
@@ -171,6 +177,18 @@ class CoachingSessionController extends Controller
                         'campaign_ids' => $tl->campaigns->pluck('id')->map(fn ($id) => (int) $id)->values()->all(),
                     ];
                 });
+        }
+
+        $coaches = collect();
+        if ($isSuperAdmin) {
+            $coaches = User::whereIn('role', ['Super Admin', 'Admin', 'Team Lead'])
+                ->where('is_approved', true)
+                ->where('is_active', true)
+                ->notCoachingExcluded()
+                ->whereHas('coachingSessionsAsCoach')
+                ->orderBy('first_name')
+                ->orderBy('last_name')
+                ->get(['id', 'first_name', 'last_name', 'role']);
         }
 
         // Get all agents for the search combobox (for admin/TL)
@@ -222,10 +240,12 @@ class CoachingSessionController extends Controller
             'campaigns' => $campaigns,
             'allAgents' => $allAgents,
             'teamLeads' => $teamLeads,
+            'coaches' => $coaches,
             'filters' => $request->only([
                 'search', 'ack_status', 'compliance_status', 'purpose',
-                'campaign_id', 'date_from', 'date_to', 'coachee_role', 'team_lead_id',
+                'campaign_id', 'date_from', 'date_to', 'coachee_role', 'team_lead_id', 'coach_id',
             ]),
+            'isSuperAdmin' => $isSuperAdmin,
             'isAdmin' => $isAdmin,
             'isTeamLead' => $isTeamLead,
             'isAgent' => $isAgent,

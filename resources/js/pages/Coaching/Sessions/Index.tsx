@@ -86,6 +86,7 @@ interface Filters {
     date_to?: string;
     coachee_role?: string;
     team_lead_id?: string;
+    coach_id?: string;
 }
 
 interface Props extends InertiaPageProps {
@@ -94,7 +95,9 @@ interface Props extends InertiaPageProps {
     campaigns: Campaign[];
     allAgents: User[];
     teamLeads: User[];
+    coaches: User[];
     filters: Filters;
+    isSuperAdmin: boolean;
     isAdmin: boolean;
     isTeamLead: boolean;
     isAgent: boolean;
@@ -139,7 +142,9 @@ export default function CoachingSessionsIndex() {
         campaigns,
         allAgents,
         teamLeads,
+        coaches,
         filters: initialFilters,
+        isSuperAdmin,
         isAdmin,
         isTeamLead,
         isAgent,
@@ -163,6 +168,9 @@ export default function CoachingSessionsIndex() {
     const [teamLeadId, setTeamLeadId] = useState(initialFilters.team_lead_id || '');
     const [teamLeadSearchOpen, setTeamLeadSearchOpen] = useState(false);
     const [teamLeadSearchQuery, setTeamLeadSearchQuery] = useState('');
+    const [coachId, setCoachId] = useState(initialFilters.coach_id || '');
+    const [coachSearchOpen, setCoachSearchOpen] = useState(false);
+    const [coachSearchQuery, setCoachSearchQuery] = useState('');
     const [ackStatus, setAckStatus] = useState(initialFilters.ack_status || '');
     const [complianceStatus, setComplianceStatus] = useState(initialFilters.compliance_status || '');
     const [purpose, setPurpose] = useState(initialFilters.purpose || '');
@@ -178,7 +186,7 @@ export default function CoachingSessionsIndex() {
 
     const deleteForm = useForm({});
 
-    const activeFilterCount = [search, ackStatus, complianceStatus, purpose, campaignIds.length > 0 ? '1' : '', coacheeRole, teamLeadId, dateFrom, dateTo].filter(Boolean).length;
+    const activeFilterCount = [search, ackStatus, complianceStatus, purpose, campaignIds.length > 0 ? '1' : '', coacheeRole, teamLeadId, coachId, dateFrom, dateTo].filter(Boolean).length;
 
     const statusSummary = useMemo(() => {
         const counts: Record<string, number> = {};
@@ -264,11 +272,32 @@ export default function CoachingSessionsIndex() {
             .slice(0, 50);
     }, [teamLeads, teamLeadSearchQuery]);
 
+    const groupedCoaches = useMemo(() => {
+        const roleOrder = ['Super Admin', 'Admin', 'Team Lead'];
+        const q = coachSearchQuery.toLowerCase();
+
+        return roleOrder
+            .map((role) => [
+                role,
+                coaches
+                    .filter((coach) => coach.role === role)
+                    .filter((coach) => !q || `${coach.first_name} ${coach.last_name}`.toLowerCase().includes(q))
+                    .slice(0, 50),
+            ] as const)
+            .filter(([, roleCoaches]) => roleCoaches.length > 0);
+    }, [coaches, coachSearchQuery]);
+
     const selectedTeamLeadName = useMemo(() => {
         if (!teamLeadId) return null;
         const tl = teamLeads.find((t) => String(t.id) === teamLeadId);
         return tl ? `${tl.first_name} ${tl.last_name}` : null;
     }, [teamLeads, teamLeadId]);
+
+    const selectedCoachName = useMemo(() => {
+        if (!coachId) return null;
+        const coach = coaches.find((item) => String(item.id) === coachId);
+        return coach ? `${coach.first_name} ${coach.last_name}` : null;
+    }, [coaches, coachId]);
 
     const selectTeamLead = (newTeamLeadId: string) => {
         setTeamLeadId(newTeamLeadId);
@@ -303,7 +332,9 @@ export default function CoachingSessionsIndex() {
                 date_from: dateFrom || undefined,
                 date_to: dateTo || undefined,
                 coachee_role: coacheeRole || undefined,
-                team_lead_id: teamLeadId || undefined,
+                ...(isSuperAdmin
+                    ? { coach_id: coachId || undefined }
+                    : { team_lead_id: teamLeadId || undefined }),
             },
             { preserveState: true, preserveScroll: true },
         );
@@ -319,6 +350,7 @@ export default function CoachingSessionsIndex() {
         setDateTo('');
         setCoacheeRole('');
         setTeamLeadId('');
+        setCoachId('');
         router.get(sessionsIndex().url, (isTeamLead || isAdmin) && activeTab ? { tab: activeTab } : {});
     };
 
@@ -335,7 +367,9 @@ export default function CoachingSessionsIndex() {
                 date_from: dateFrom || undefined,
                 date_to: dateTo || undefined,
                 coachee_role: coacheeRole || undefined,
-                team_lead_id: teamLeadId || undefined,
+                ...(isSuperAdmin
+                    ? { coach_id: coachId || undefined }
+                    : { team_lead_id: teamLeadId || undefined }),
             },
             { preserveState: false },
         );
@@ -547,7 +581,7 @@ export default function CoachingSessionsIndex() {
                                 </PopoverContent>
                             </Popover>
                         )}
-                        {isAdmin && (
+                        {isAdmin && !isSuperAdmin && (
                             <Popover open={teamLeadSearchOpen} onOpenChange={setTeamLeadSearchOpen}>
                                 <PopoverTrigger asChild>
                                     <Button
@@ -599,6 +633,73 @@ export default function CoachingSessionsIndex() {
                                                     );
                                                 })}
                                             </CommandGroup>
+                                        </CommandList>
+                                    </Command>
+                                </PopoverContent>
+                            </Popover>
+                        )}
+                        {isSuperAdmin && (
+                            <Popover open={coachSearchOpen} onOpenChange={setCoachSearchOpen}>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        role="combobox"
+                                        aria-expanded={coachSearchOpen}
+                                        className="w-full justify-between font-normal"
+                                    >
+                                        <span className="truncate">
+                                            {selectedCoachName || 'All Coaches'}
+                                        </span>
+                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-full p-0" align="start">
+                                    <Command shouldFilter={false}>
+                                        <CommandInput
+                                            placeholder="Search coach..."
+                                            value={coachSearchQuery}
+                                            onValueChange={setCoachSearchQuery}
+                                        />
+                                        <CommandList>
+                                            <CommandEmpty>No coach found.</CommandEmpty>
+                                            <CommandGroup>
+                                                <CommandItem
+                                                    value="all"
+                                                    onSelect={() => {
+                                                        setCoachId('');
+                                                        setCoachSearchOpen(false);
+                                                        setCoachSearchQuery('');
+                                                    }}
+                                                    className="cursor-pointer"
+                                                >
+                                                    <Check className={`mr-2 h-4 w-4 ${!coachId ? 'opacity-100' : 'opacity-0'}`} />
+                                                    All Coaches
+                                                </CommandItem>
+                                            </CommandGroup>
+                                            {groupedCoaches.map(([role, roleCoaches]) => (
+                                                <CommandGroup key={role} heading={role}>
+                                                    {roleCoaches.map((coach) => {
+                                                        const name = `${coach.first_name} ${coach.last_name}`;
+                                                        return (
+                                                            <CommandItem
+                                                                key={coach.id}
+                                                                value={String(coach.id)}
+                                                                onSelect={() => {
+                                                                    setCoachId(String(coach.id));
+                                                                    setCoachSearchOpen(false);
+                                                                    setCoachSearchQuery('');
+                                                                }}
+                                                                className="cursor-pointer"
+                                                            >
+                                                                <Check
+                                                                    className={`mr-2 h-4 w-4 ${coachId === String(coach.id) ? 'opacity-100' : 'opacity-0'}`}
+                                                                />
+                                                                {name}
+                                                            </CommandItem>
+                                                        );
+                                                    })}
+                                                </CommandGroup>
+                                            ))}
                                         </CommandList>
                                     </Command>
                                 </PopoverContent>
