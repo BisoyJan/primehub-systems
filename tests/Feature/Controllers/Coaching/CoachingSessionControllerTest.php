@@ -1178,6 +1178,112 @@ class CoachingSessionControllerTest extends TestCase
     }
 
     #[Test]
+    public function super_admin_coach_filter_includes_former_team_lead_with_records(): void
+    {
+        $superAdmin = User::factory()->create([
+            'role' => 'Super Admin',
+            'first_name' => 'Super',
+            'is_approved' => true,
+        ]);
+        $formerTeamLead = User::factory()->create([
+            'role' => 'Team Lead',
+            'first_name' => 'Former',
+            'is_approved' => false,
+            'is_active' => false,
+            'resigned_at' => now(),
+        ]);
+        $team = $this->createTeamWithCampaign();
+
+        CoachingSession::factory()->create([
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $formerTeamLead->id,
+        ]);
+        CoachingSession::factory()->create([
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $superAdmin->id,
+        ]);
+
+        $response = $this->actingAs($superAdmin)
+            ->get(route('coaching.sessions.index'));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Coaching/Sessions/Index')
+                ->has('coaches', 2)
+                ->where('coaches.0.id', $formerTeamLead->id)
+                ->where('coaches.0.role', 'Team Lead')
+            );
+    }
+
+    #[Test]
+    public function super_admin_can_combine_all_coaches_with_coachee_role_filter(): void
+    {
+        $superAdmin = User::factory()->create(['role' => 'Super Admin', 'is_approved' => true]);
+        $team = $this->createTeamWithCampaign();
+        $otherCoach = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+        $teamLeadCoachee = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
+
+        CoachingSession::factory()->create([
+            'coachee_id' => $teamLeadCoachee->id,
+            'coach_id' => $team['teamLead']->id,
+        ]);
+        CoachingSession::factory()->create([
+            'coachee_id' => $teamLeadCoachee->id,
+            'coach_id' => $otherCoach->id,
+        ]);
+        CoachingSession::factory()->create([
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $superAdmin->id,
+        ]);
+
+        $response = $this->actingAs($superAdmin)
+            ->get(route('coaching.sessions.index', [
+                'coach_id' => 'all',
+                'coachee_role' => 'Team Lead',
+                'tab' => 'all',
+            ]));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Coaching/Sessions/Index')
+                ->has('sessions.data', 2)
+                ->where('sessions.data.0.coachee_id', $teamLeadCoachee->id)
+                ->where('sessions.data.1.coachee_id', $teamLeadCoachee->id)
+            );
+    }
+
+    #[Test]
+    public function super_admin_combined_coach_and_coachee_role_filters_intersect(): void
+    {
+        $superAdmin = User::factory()->create(['role' => 'Super Admin', 'is_approved' => true]);
+        $team = $this->createTeamWithCampaign();
+        $teamLeadCoachee = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
+
+        CoachingSession::factory()->create([
+            'coachee_id' => $teamLeadCoachee->id,
+            'coach_id' => $superAdmin->id,
+        ]);
+        CoachingSession::factory()->create([
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $superAdmin->id,
+        ]);
+
+        $response = $this->actingAs($superAdmin)
+            ->get(route('coaching.sessions.index', [
+                'coach_id' => $superAdmin->id,
+                'coachee_role' => 'Team Lead',
+            ]));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Coaching/Sessions/Index')
+                ->has('sessions.data', 1)
+                ->where('sessions.data.0.coach_id', $superAdmin->id)
+                ->where('sessions.data.0.coachee_id', $teamLeadCoachee->id)
+            );
+    }
+
+    #[Test]
     public function super_admin_can_view_own_coaching_records(): void
     {
         $superAdmin = User::factory()->create(['role' => 'Super Admin', 'is_approved' => true]);

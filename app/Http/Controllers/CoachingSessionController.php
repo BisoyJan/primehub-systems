@@ -138,9 +138,9 @@ class CoachingSessionController extends Controller
             $query->where('coach_id', $request->team_lead_id);
         }
 
-        // Coach filter (Super Admin only)
-        if ($request->filled('coach_id') && $isSuperAdmin) {
-            $query->where('coach_id', $request->coach_id);
+        // Coach filter (Super Admin only). Treat the UI's All Coaches value as no filter.
+        if ($isSuperAdmin && $request->filled('coach_id') && is_numeric($request->coach_id)) {
+            $query->where('coach_id', (int) $request->coach_id);
         }
 
         // Date range filter (not applied to drafts — show all own drafts regardless of date)
@@ -182,10 +182,18 @@ class CoachingSessionController extends Controller
         $coaches = collect();
         if ($isSuperAdmin) {
             $coaches = User::whereIn('role', ['Super Admin', 'Admin', 'Team Lead'])
-                ->where('is_approved', true)
-                ->where('is_active', true)
                 ->notCoachingExcluded()
                 ->whereHas('coachingSessionsAsCoach')
+                ->where(function ($query) {
+                    $query->where(function ($activeQuery) {
+                        $activeQuery
+                            ->whereIn('role', ['Super Admin', 'Admin'])
+                            ->where('is_approved', true)
+                            ->where('is_active', true);
+                    })->orWhere(function ($teamLeadQuery) {
+                        $teamLeadQuery->where('role', 'Team Lead');
+                    });
+                })
                 ->orderBy('first_name')
                 ->orderBy('last_name')
                 ->get(['id', 'first_name', 'last_name', 'role']);
