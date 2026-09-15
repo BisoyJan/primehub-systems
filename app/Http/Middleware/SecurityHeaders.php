@@ -38,9 +38,21 @@ class SecurityHeaders
     protected function buildContentSecurityPolicy(Request $request): string
     {
         $connectSources = "'self'";
+        $scriptSources = "'self' 'unsafe-inline' 'unsafe-eval'";
 
         if (config('app.env') === 'local' || ! $request->isSecure()) {
-            $connectSources .= ' http://localhost:5173 ws://localhost:5173 http://127.0.0.1:5173 ws://127.0.0.1:5173';
+            // Vite picks the next free port (5173+) when the default is taken.
+            $viteHosts = collect(range(5173, 5180))
+                ->flatMap(fn (int $port) => [
+                    "http://localhost:{$port}",
+                    "ws://localhost:{$port}",
+                    "http://127.0.0.1:{$port}",
+                    "ws://127.0.0.1:{$port}",
+                ])
+                ->implode(' ');
+
+            $connectSources .= ' '.$viteHosts;
+            $scriptSources .= ' '.$viteHosts;
         }
 
         $basePolicy = implode('; ', [
@@ -49,10 +61,10 @@ class SecurityHeaders
             "form-action 'self'",
             "frame-ancestors 'none'",
             "object-src 'none'",
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-            "style-src 'self' 'unsafe-inline'",
+            "script-src {$scriptSources}",
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
             "img-src 'self' data: blob:",
-            "font-src 'self' data:",
+            "font-src 'self' data: https://fonts.gstatic.com",
             "connect-src {$connectSources}",
             "media-src 'self'",
             "worker-src 'self' blob:",
