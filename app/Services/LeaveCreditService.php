@@ -1320,7 +1320,11 @@ class LeaveCreditService
         // Check credits balance — always use actual accrued balance only.
         // Future projected credits are NOT counted; approval is only allowed
         // when the agent has actually accrued enough credits.
-        $year = $startDate->year;
+        // A request filed in December for January-March of the next year still
+        // draws from the current filing year (e.g. Dec 2026 request for Jan 2027
+        // uses the 2026 credits pool), so we must use the persisted credits_year
+        // instead of the calendar year of the leave start date.
+        $year = $leaveRequest->credits_year ?? $startDate->year;
         $balance = $this->getBalance($user, $year);
 
         // First-approved-gets-priority: no pending credit reservation.

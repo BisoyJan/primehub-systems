@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use Carbon\Carbon;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -37,8 +38,15 @@ class LeaveRequestRequest extends FormRequest
             $maxEndDate = now()->addYear()->format('Y-m-d');
             $startDateRule = ['required', 'date', 'before_or_equal:'.$maxEndDate];
             $endDateRule = ['required', 'date', 'after_or_equal:start_date', 'before_or_equal:'.$maxEndDate];
+        } elseif ($leaveType === 'VL') {
+            // Vacation Leave: any request filed during the current year may continue
+            // through March 31 of the following year, which matches the carryover
+            // cash-conversion window for the same credit pool.
+            $maxEndDate = Carbon::create(now()->year + 1, 3, 31)->format('Y-m-d');
+            $startDateRule = ['required', 'date', 'before_or_equal:'.$maxEndDate];
+            $endDateRule = ['required', 'date', 'after_or_equal:start_date', 'before_or_equal:'.$maxEndDate];
         } else {
-            // Other leave types (VL, SL, BL, LOA, LDV, UPTO): no minimum start date or maximum end date restriction
+            // Other leave types (SL, BL, LOA, LDV, UPTO): no minimum start date or maximum end date restriction
             $startDateRule = ['required', 'date'];
             $endDateRule = ['required', 'date', 'after_or_equal:start_date'];
         }
@@ -85,14 +93,18 @@ class LeaveRequestRequest extends FormRequest
             'leave_type.in' => 'Invalid leave type selected.',
             'start_date.required' => 'Start date is required.',
             'start_date.after_or_equal' => 'Start date is outside the allowed range.',
-            'start_date.before_or_equal' => $this->input('leave_type') === 'ML'
-                ? 'Start date cannot exceed 1 year from today.'
-                : 'Start date cannot exceed 1 month from today.',
+            'start_date.before_or_equal' => match ($this->input('leave_type')) {
+                'ML' => 'Start date cannot exceed 1 year from today.',
+                'VL' => 'Start date cannot go beyond March 31 of the following year.',
+                default => 'Start date cannot exceed 1 month from today.',
+            },
             'end_date.required' => 'End date is required.',
             'end_date.after_or_equal' => 'End date must be on or after the start date.',
-            'end_date.before_or_equal' => $this->input('leave_type') === 'ML'
-                ? 'End date cannot exceed 1 year from today.'
-                : 'End date cannot exceed 1 month from today.',
+            'end_date.before_or_equal' => match ($this->input('leave_type')) {
+                'ML' => 'End date cannot exceed 1 year from today.',
+                'VL' => 'End date cannot go beyond March 31 of the following year.',
+                default => 'End date cannot exceed 1 month from today.',
+            },
             'reason.required' => 'Please provide a reason for your leave request.',
             'reason.min' => 'Reason must be at least 10 characters.',
             'reason.max' => 'Reason cannot exceed 1000 characters.',

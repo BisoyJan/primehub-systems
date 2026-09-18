@@ -3540,7 +3540,7 @@ class LeaveRequestController extends Controller
         $user = $leaveRequest->user;
         $startDate = Carbon::parse($leaveRequest->start_date);
         $endDate = Carbon::parse($leaveRequest->end_date);
-        $year = $startDate->year;
+        $year = $leaveRequest->credits_year ?? $startDate->year;
 
         // Get denied dates if this is a partial denial
         $deniedDates = [];

@@ -6,6 +6,7 @@ namespace Tests\Unit\Requests;
 
 use App\Http\Requests\LeaveRequestRequest;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Validator;
 use PHPUnit\Framework\Attributes\Test;
@@ -144,6 +145,47 @@ class LeaveRequestRequestTest extends TestCase
         ];
 
         $request = new LeaveRequestRequest;
+        $validator = Validator::make($data, $request->rules());
+
+        $this->assertTrue($validator->fails());
+        $this->assertArrayHasKey('end_date', $validator->errors()->toArray());
+    }
+
+    #[Test]
+    public function it_allows_vl_to_extend_into_january_to_march_of_next_year(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-12-10'));
+
+        $data = [
+            'leave_type' => 'VL',
+            'start_date' => '2026-12-29',
+            'end_date' => '2027-01-05',
+            'reason' => 'Planned leave for early next year',
+            'campaign_department' => 'Campaign A',
+        ];
+
+        $request = new LeaveRequestRequest;
+        $request->merge($data);
+        $validator = Validator::make($data, $request->rules());
+
+        $this->assertFalse($validator->fails());
+    }
+
+    #[Test]
+    public function it_rejects_vl_past_march_31_of_the_following_year(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-12-10'));
+
+        $data = [
+            'leave_type' => 'VL',
+            'start_date' => '2027-04-01',
+            'end_date' => '2027-04-03',
+            'reason' => 'Leave beyond the valid credit window',
+            'campaign_department' => 'Campaign A',
+        ];
+
+        $request = new LeaveRequestRequest;
+        $request->merge($data);
         $validator = Validator::make($data, $request->rules());
 
         $this->assertTrue($validator->fails());

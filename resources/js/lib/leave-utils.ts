@@ -99,6 +99,15 @@ export function getMlMaxEndDate(): string {
     return format(date, 'yyyy-MM-dd');
 }
 
+/** Vacation Leave: rolling max end date for a given filing year.
+ *  A request filed during that year may extend through March 31 of the following year.
+ *  Defaults to the current year when no filing year is supplied.
+ */
+export function getVlMaxEndDate(filingYear?: number): string {
+    const year = filingYear ?? new Date().getFullYear();
+    return format(new Date(year + 1, 2, 31), 'yyyy-MM-dd');
+}
+
 // ─── Credit Calculation Helpers ─────────────────────────────────────
 
 /** Check if user will be eligible for leave credits by a given start date */
@@ -114,12 +123,16 @@ export function willBeEligibleByStartDate(
     return start >= eligibility;
 }
 
-/** Calculate projected leave credit balance for a future date */
+/** Calculate projected leave credit balance for a future date.
+ *  When creditYear is provided, accrual is capped at December of that year because
+ *  a request draws only from its filing-year credit pool (no next-year borrowing).
+ */
 export function getProjectedBalance(
     startDate: string,
     eligibilityDate: string | null,
     monthlyRate: number,
     pendingRegularization?: PendingRegularizationCredits,
+    creditYear?: number,
 ): number {
     if (!startDate || !eligibilityDate) return 0;
 
@@ -135,8 +148,13 @@ export function getProjectedBalance(
 
     const eligMonth = eligibility.getMonth();
     const eligYear = eligibility.getFullYear();
-    const leaveMonth = start.getMonth();
-    const leaveYear = start.getFullYear();
+    let leaveMonth = start.getMonth();
+    let leaveYear = start.getFullYear();
+
+    if (creditYear !== undefined && leaveYear > creditYear) {
+        leaveYear = creditYear;
+        leaveMonth = 11;
+    }
 
     const monthsOfCredits = (leaveYear - eligYear) * 12 + (leaveMonth - eligMonth);
     projectedBalance += Math.max(0, monthsOfCredits) * monthlyRate;
@@ -167,9 +185,15 @@ export function calculateFutureCredits(
     const leaveMonth = leaveStart.getMonth();
     const leaveYear = leaveStart.getFullYear();
 
+    // A request draws from the filing-year credit pool, so only accruals that land
+    // within the current year (through December) are available to it. Next-year
+    // leaves filed this year cannot borrow next-year accrual.
+    const effectiveYear = leaveYear > currentYear ? currentYear : leaveYear;
+    const effectiveMonth = leaveYear > currentYear ? 11 : leaveMonth;
+
     let monthsToAccrue = 0;
-    if (leaveYear > currentYear || (leaveYear === currentYear && leaveMonth > currentMonth)) {
-        monthsToAccrue = (leaveYear - currentYear) * 12 + (leaveMonth - currentMonth);
+    if (effectiveYear === currentYear && effectiveMonth > currentMonth) {
+        monthsToAccrue = effectiveMonth - currentMonth;
     }
 
     return monthsToAccrue * creditsSummary.monthly_rate;

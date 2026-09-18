@@ -37,6 +37,7 @@ import {
     getSplMinDate,
     getSplMaxEndDate,
     getMlMaxEndDate,
+    getVlMaxEndDate,
     willBeEligibleByStartDate as checkEligibleByStartDate,
     getProjectedBalance as calcProjectedBalance,
     calculateFutureCredits as calcFutureCredits,
@@ -114,7 +115,7 @@ export default function Create({
         checkEligibleByStartDate(data.start_date, creditsSummary.is_eligible, creditsSummary.eligibility_date);
 
     const getProjectedBalance = () =>
-        calcProjectedBalance(data.start_date, creditsSummary.eligibility_date, creditsSummary.monthly_rate, creditsSummary.pending_regularization_credits);
+        calcProjectedBalance(data.start_date, creditsSummary.eligibility_date, creditsSummary.monthly_rate, creditsSummary.pending_regularization_credits, creditsSummary.year);
 
     // Whether the currently selected campaign allows leave to cover weekends
     const selectedCampaignAllowsWeekends = campaigns.find(c => c.name === data.campaign_department)?.allows_weekend_leave ?? false;
@@ -642,7 +643,9 @@ export default function Create({
                                                                         {(() => {
                                                                             const startDate = parseISO(data.start_date);
                                                                             const eligibilityDate = parseISO(creditsSummary.eligibility_date!);
-                                                                            const monthsAfterReg = (startDate.getFullYear() - eligibilityDate.getFullYear()) * 12 + (startDate.getMonth() - eligibilityDate.getMonth());
+                                                                            const cappedYear = startDate.getFullYear() > creditsSummary.year ? creditsSummary.year : startDate.getFullYear();
+                                                                            const cappedMonth = startDate.getFullYear() > creditsSummary.year ? 11 : startDate.getMonth();
+                                                                            const monthsAfterReg = (cappedYear - eligibilityDate.getFullYear()) * 12 + (cappedMonth - eligibilityDate.getMonth());
                                                                             const postRegCredits = Math.max(0, monthsAfterReg) * creditsSummary.monthly_rate;
                                                                             return postRegCredits > 0 ? ` + ${postRegCredits.toFixed(2)} from ${creditsSummary.year} (${monthsAfterReg} months after regularization)` : '';
                                                                         })()}
@@ -1114,7 +1117,13 @@ export default function Create({
                                         placeholder="Select start date"
                                         className={weekendError.start ? 'border-red-500' : ''}
                                         minDate={data.leave_type === 'SPL' ? getSplMinDate() : undefined}
-                                        maxDate={data.leave_type === 'SPL' ? getSplMaxEndDate() : data.leave_type === 'ML' ? getMlMaxEndDate() : undefined}
+                                        maxDate={data.leave_type === 'SPL'
+                                            ? getSplMaxEndDate()
+                                            : data.leave_type === 'ML'
+                                                ? getMlMaxEndDate()
+                                                : data.leave_type === 'VL'
+                                                    ? getVlMaxEndDate()
+                                                    : undefined}
                                     />
                                     {weekendError.start && (
                                         <p className="text-sm text-red-500">{weekendError.start}</p>
@@ -1126,6 +1135,8 @@ export default function Create({
                                         <p className="text-xs text-muted-foreground">Solo Parent Leave: Select from last 2 weeks to 1 month ahead</p>
                                     ) : data.leave_type === 'ML' ? (
                                         <p className="text-xs text-muted-foreground">Maternity Leave: Up to 1 year ahead</p>
+                                    ) : data.leave_type === 'VL' ? (
+                                        <p className="text-xs text-muted-foreground">Vacation Leave: Up to March 31 of next year (uses this year's credits)</p>
                                     ) : (
                                         <p className="text-xs text-muted-foreground">Weekends (Sat/Sun) are not allowed</p>
                                     )}
@@ -1141,7 +1152,13 @@ export default function Create({
                                         placeholder="Select end date"
                                         className={weekendError.end ? 'border-red-500' : ''}
                                         minDate={data.start_date || (data.leave_type === 'SPL' ? getSplMinDate() : undefined)}
-                                        maxDate={data.leave_type === 'SPL' ? getSplMaxEndDate() : data.leave_type === 'ML' ? getMlMaxEndDate() : undefined}
+                                        maxDate={data.leave_type === 'SPL'
+                                            ? getSplMaxEndDate()
+                                            : data.leave_type === 'ML'
+                                                ? getMlMaxEndDate()
+                                                : data.leave_type === 'VL'
+                                                    ? getVlMaxEndDate()
+                                                    : undefined}
                                         defaultMonth={data.start_date || undefined}
                                     />
                                     {weekendError.end && (
@@ -1154,6 +1171,8 @@ export default function Create({
                                         <p className="text-xs text-muted-foreground">Solo Parent Leave: Up to 1 month from today</p>
                                     ) : data.leave_type === 'ML' ? (
                                         <p className="text-xs text-muted-foreground">Maternity Leave: Up to 1 year from today</p>
+                                    ) : data.leave_type === 'VL' ? (
+                                        <p className="text-xs text-muted-foreground">Vacation Leave: Up to March 31 of next year (uses this year's credits)</p>
                                     ) : (
                                         <p className="text-xs text-muted-foreground">Weekends (Sat/Sun) are not allowed</p>
                                     )}

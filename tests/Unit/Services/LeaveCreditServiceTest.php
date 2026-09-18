@@ -386,6 +386,90 @@ class LeaveCreditServiceTest extends TestCase
     }
 
     #[Test]
+    public function it_uses_current_year_credit_bucket_for_december_to_january_march_vl_requests(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-12-10'));
+
+        $user = User::factory()->create([
+            'role' => 'Agent',
+            'hired_date' => Carbon::parse('2025-01-01'),
+        ]);
+
+        LeaveCredit::factory()->create([
+            'user_id' => $user->id,
+            'year' => 2026,
+            'month' => 1,
+            'credits_earned' => 2.0,
+            'credits_used' => 0,
+            'credits_balance' => 2.0,
+        ]);
+
+        $leaveRequest = LeaveRequest::factory()->create([
+            'user_id' => $user->id,
+            'leave_type' => 'VL',
+            'start_date' => '2027-01-04',
+            'end_date' => '2027-01-06',
+            'days_requested' => 3,
+            'credits_year' => 2026,
+            'status' => 'pending',
+        ]);
+
+        $result = $this->service->checkVlCreditDeduction($user, $leaveRequest);
+
+        $this->assertTrue($result['should_deduct']);
+        $this->assertEquals(2, $result['credits_to_deduct']);
+        $this->assertEquals(1, $result['upto_days']);
+    }
+
+    #[Test]
+    public function it_draws_from_filing_year_pool_for_a_cross_year_february_to_march_vl_request(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-09-19'));
+
+        $user = User::factory()->create([
+            'role' => 'Agent',
+            'hired_date' => Carbon::parse('2025-01-01'),
+        ]);
+
+        // 2026 pool has enough for the full request
+        LeaveCredit::factory()->create([
+            'user_id' => $user->id,
+            'year' => 2026,
+            'month' => 1,
+            'credits_earned' => 5.0,
+            'credits_used' => 0,
+            'credits_balance' => 5.0,
+        ]);
+
+        // A 2027 pool must NOT be consulted for this request
+        LeaveCredit::factory()->create([
+            'user_id' => $user->id,
+            'year' => 2027,
+            'month' => 1,
+            'credits_earned' => 10.0,
+            'credits_used' => 0,
+            'credits_balance' => 10.0,
+        ]);
+
+        // Feb 25 (Thu) - Mar 2 (Mon) 2027 = 4 working days, filed in 2026
+        $leaveRequest = LeaveRequest::factory()->create([
+            'user_id' => $user->id,
+            'leave_type' => 'VL',
+            'start_date' => '2027-02-25',
+            'end_date' => '2027-03-02',
+            'days_requested' => 4,
+            'credits_year' => 2026,
+            'status' => 'pending',
+        ]);
+
+        $result = $this->service->checkVlCreditDeduction($user, $leaveRequest);
+
+        $this->assertTrue($result['should_deduct']);
+        $this->assertEquals(4, $result['credits_to_deduct']);
+        $this->assertEquals(0, $result['upto_days']);
+    }
+
+    #[Test]
     public function it_calculates_working_days_excluding_weekends(): void
     {
         // Monday to Friday = 5 working days
