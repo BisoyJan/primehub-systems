@@ -180,6 +180,14 @@ class LeaveRequestController extends Controller
             $query->whereIn('campaign_department', $campaignFilterValues);
         }
 
+        // Count cross-year VL requests within the current visibility/filters (for the badge)
+        $crossYearCount = $query->clone()->crossYear()->count();
+
+        // Filter to only cross-year VL requests (filed one year for the next)
+        if ($request->boolean('cross_year')) {
+            $query->crossYear();
+        }
+
         // Compute status counts before applying the status filter
         $baseQuery = $query->clone();
         $upcomingThreshold = now()->addDays(3)->toDateString();
@@ -284,7 +292,7 @@ class LeaveRequestController extends Controller
 
         return Inertia::render('FormRequest/Leave/Index', [
             'leaveRequests' => $leaveRequests,
-            'filters' => $request->only(['status', 'type', 'period', 'user_id', 'employee_name', 'campaign_department']),
+            'filters' => $request->only(['status', 'type', 'period', 'user_id', 'employee_name', 'campaign_department', 'cross_year']),
             'statusCounts' => $statusCounts,
             'campaigns' => $campaigns,
             'allEmployees' => $allEmployees,
@@ -292,6 +300,7 @@ class LeaveRequestController extends Controller
             'isTeamLead' => $isTeamLead,
             'teamLeadCampaignNames' => $teamLeadCampaignNames,
             'hasPendingRequests' => $hasPendingRequests,
+            'crossYearCount' => $crossYearCount,
         ]);
     }
 

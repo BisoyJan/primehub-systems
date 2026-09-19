@@ -70,6 +70,7 @@ interface LeaveRequest {
     approved_days: number | null;
     campaign_department: string;
     status: string;
+    credits_year: number | null;
     admin_approved_at: string | null;
     hr_approved_at: string | null;
     requires_tl_approval: boolean;
@@ -123,11 +124,13 @@ interface Props {
         employee_name?: string;
         campaign_department?: string;
         user_id?: string;
+        cross_year?: string | boolean;
     };
     statusCounts: StatusCounts;
     isAdmin: boolean;
     isTeamLead?: boolean;
     hasPendingRequests: boolean;
+    crossYearCount?: number;
     auth: {
         user: {
             id: number;
@@ -148,7 +151,14 @@ const statusTabs: { key: StatusTab; label: string; icon: React.ComponentType<{ c
     { key: 'cancelled', label: 'Cancelled', icon: Ban },
 ];
 
-export default function Index({ leaveRequests, filters, statusCounts, isAdmin, isTeamLead, auth, campaigns = [], allEmployees = [], teamLeadCampaignNames }: Props) {
+/** Cross-year VL: filed in one year for leave starting in a later calendar year. */
+const isCrossYearRequest = (r: LeaveRequest): boolean => {
+    if (r.leave_type !== 'VL') return false;
+    const filingYear = r.credits_year ?? getYear(parseISO(r.created_at));
+    return getYear(parseISO(r.start_date)) > filingYear;
+};
+
+export default function Index({ leaveRequests, filters, statusCounts, isAdmin, isTeamLead, auth, campaigns = [], allEmployees = [], teamLeadCampaignNames, crossYearCount = 0 }: Props) {
     // Show employee column for admins and team leads (who can see other users' requests)
     const showEmployeeColumn = isAdmin || isTeamLead;
 
@@ -169,6 +179,7 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
     const [filterPeriod, setFilterPeriod] = useState(filters.period || 'all');
     const [selectedUserIds, setSelectedUserIds] = useState<string[]>(parseMultiSelectParam(filters.user_id));
     const [selectedCampaigns, setSelectedCampaigns] = useState<string[]>(parseMultiSelectParam(filters.campaign_department));
+    const [crossYearOnly, setCrossYearOnly] = useState<boolean>(filters.cross_year === true || filters.cross_year === '1' || filters.cross_year === 'true');
     const [showCancelDialog, setShowCancelDialog] = useState(false);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
     const [selectedLeaveId, setSelectedLeaveId] = useState<number | null>(null);
@@ -191,7 +202,7 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
     const paginationLinks = leaveRequests.links || [];
 
     // Filter employees based on search query (from all employees list)
-    const showClearFilters = activeTab !== 'all' || selectedTypes.length > 0 || selectedUserIds.length > 0 || selectedCampaigns.length > 0 || filterPeriod !== 'all';
+    const showClearFilters = activeTab !== 'all' || selectedTypes.length > 0 || selectedUserIds.length > 0 || selectedCampaigns.length > 0 || filterPeriod !== 'all' || crossYearOnly;
 
     const buildFilterParams = React.useCallback((overrideStatus?: StatusTab) => {
         const params: Record<string, string> = {};
@@ -214,8 +225,11 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
         if (filterPeriod !== 'all') {
             params.period = filterPeriod;
         }
+        if (crossYearOnly) {
+            params.cross_year = '1';
+        }
         return params;
-    }, [activeTab, selectedTypes, selectedUserIds, selectedCampaigns, filterPeriod]);
+    }, [activeTab, selectedTypes, selectedUserIds, selectedCampaigns, filterPeriod, crossYearOnly]);
 
     const requestWithFilters = (params: Record<string, string>) => {
         router.get(leaveIndexRoute().url, params, {
@@ -228,6 +242,18 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
 
     const handleFilter = () => {
         requestWithFilters(buildFilterParams());
+    };
+
+    const toggleCrossYear = () => {
+        const next = !crossYearOnly;
+        setCrossYearOnly(next);
+        const params = buildFilterParams();
+        if (next) {
+            params.cross_year = '1';
+        } else {
+            delete params.cross_year;
+        }
+        requestWithFilters(params);
     };
 
     const handleManualRefresh = () => {
@@ -265,6 +291,7 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
         setSelectedUserIds([]);
         setSelectedCampaigns([]);
         setFilterPeriod('all');
+        setCrossYearOnly(false);
         requestWithFilters({});
     };
 
@@ -592,6 +619,21 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
                                 Filter
                             </Button>
 
+                            {(crossYearCount > 0 || crossYearOnly) && (
+                                <Button
+                                    variant={crossYearOnly ? 'default' : 'outline'}
+                                    onClick={toggleCrossYear}
+                                    className="flex-1 sm:flex-none"
+                                    title="Show only Vacation Leave filed for the following year"
+                                >
+                                    <Calendar className="mr-2 h-4 w-4" />
+                                    Next-Year VL
+                                    {crossYearCount > 0 && (
+                                        <Badge variant="secondary" className="ml-2">{crossYearCount}</Badge>
+                                    )}
+                                </Button>
+                            )}
+
                             {showClearFilters && (
                                 <Button variant="outline" onClick={clearFilters} className="flex-1 sm:flex-none">
                                     Reset
@@ -723,7 +765,20 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
                                                             {request.campaign_department}
                                                         </TableCell>
                                                     )}
-                                                    <TableCell>{getLeaveTypeBadge(request.leave_type)}</TableCell>
+                                                    <TableCell>
+                                                        <div className="flex items-center gap-1.5">
+                                                            {getLeaveTypeBadge(request.leave_type)}
+                                                            {isCrossYearRequest(request) && (
+                                                                <Badge
+                                                                    variant="outline"
+                                                                    className="border-amber-500 text-amber-600 dark:text-amber-400"
+                                                                    title={`Filed ${request.credits_year ?? getYear(parseISO(request.created_at))} for ${getYear(parseISO(request.start_date))} (uses ${request.credits_year ?? getYear(parseISO(request.created_at))} credits)`}
+                                                                >
+                                                                    {request.credits_year ?? getYear(parseISO(request.created_at))} credits
+                                                                </Badge>
+                                                            )}
+                                                        </div>
+                                                    </TableCell>
                                                     <TableCell className="whitespace-nowrap">
                                                         {(() => {
                                                             const start = parseISO(request.start_date);
@@ -841,6 +896,15 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
                                         )}
                                         <div className="flex items-center gap-2 mt-1">
                                             {getLeaveTypeBadge(request.leave_type)}
+                                            {isCrossYearRequest(request) && (
+                                                <Badge
+                                                    variant="outline"
+                                                    className="border-amber-500 text-amber-600 dark:text-amber-400"
+                                                    title={`Filed ${request.credits_year ?? getYear(parseISO(request.created_at))} for ${getYear(parseISO(request.start_date))} (uses ${request.credits_year ?? getYear(parseISO(request.created_at))} credits)`}
+                                                >
+                                                    {request.credits_year ?? getYear(parseISO(request.created_at))} credits
+                                                </Badge>
+                                            )}
                                         </div>
                                     </div>
                                     {getStatusBadge(request.status, request.admin_approved_at, request.hr_approved_at, request.requires_tl_approval, request.tl_approved_at, request.tl_rejected)}

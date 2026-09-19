@@ -339,6 +339,16 @@ class LeaveRequest extends Model
     }
 
     /**
+     * Scope for cross-year VL requests: filed in one year for leave that starts
+     * in a later calendar year (e.g. filed Dec 2026 for Jan–Mar 2027).
+     */
+    public function scopeCrossYear($query)
+    {
+        return $query->where('leave_type', 'VL')
+            ->whereRaw('YEAR(start_date) > COALESCE(credits_year, YEAR(created_at))');
+    }
+
+    /**
      * Scope to filter by date range.
      */
     public function scopeDateRange($query, $startDate, $endDate)
