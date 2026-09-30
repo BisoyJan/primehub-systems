@@ -154,6 +154,13 @@ class LeaveRequestController extends Controller
             };
         }
 
+        // Filter by specific date: show requests whose period covers that date
+        if ($request->filled('date')) {
+            $date = $request->date;
+            $query->where('start_date', '<=', $date)
+                ->where('end_date', '>=', $date);
+        }
+
         // Filter by user (admin or TL) — accepts single value or CSV/array
         if (($isAdmin || $isTeamLead) && $request->filled('user_id')) {
             $userIds = is_array($request->user_id)
@@ -212,45 +219,51 @@ class LeaveRequestController extends Controller
             }
         }
 
-        // Role-aware priority sorting:
-        // 1. Items needing the logged-in user's approval appear first
-        // 2. Among pending, upcoming leaves (start_date >= today) appear before past
-        // 3. Upcoming sorted by soonest start_date, then newest created_at
-        $today = now()->toDateString();
-        $readyForAdminHr = '(requires_tl_approval = 0 OR tl_approved_by IS NOT NULL)';
+        // Date filter view: group by campaign, first-come-first-serve within each group.
+        if ($request->filled('date')) {
+            $query->orderBy('campaign_department', 'asc')
+                ->orderBy('created_at', 'asc');
+        } else {
+            // Role-aware priority sorting:
+            // 1. Items needing the logged-in user's approval appear first
+            // 2. Among pending, upcoming leaves (start_date >= today) appear before past
+            // 3. Upcoming sorted by soonest start_date, then newest created_at
+            $today = now()->toDateString();
+            $readyForAdminHr = '(requires_tl_approval = 0 OR tl_approved_by IS NOT NULL)';
 
-        if ($isSuperAdmin) {
-            // Super Admin: any pending needing admin OR hr approval
+            if ($isSuperAdmin) {
+                // Super Admin: any pending needing admin OR hr approval
+                $query->orderByRaw("
+                    CASE WHEN status = 'pending' AND (admin_approved_by IS NULL OR hr_approved_by IS NULL) AND {$readyForAdminHr} THEN 0 ELSE 1 END ASC
+                ");
+            } elseif ($isAdminRole) {
+                // Admin: pending needing admin approval specifically
+                $query->orderByRaw("
+                    CASE WHEN status = 'pending' AND admin_approved_by IS NULL AND {$readyForAdminHr} THEN 0 ELSE 1 END ASC
+                ");
+            } elseif ($isHr) {
+                // HR: pending needing HR approval specifically
+                $query->orderByRaw("
+                    CASE WHEN status = 'pending' AND hr_approved_by IS NULL AND {$readyForAdminHr} THEN 0 ELSE 1 END ASC
+                ");
+            } elseif ($isTeamLead) {
+                // Team Lead: pending needing TL approval
+                $query->orderByRaw("
+                    CASE WHEN status = 'pending' AND requires_tl_approval = 1 AND tl_approved_by IS NULL AND tl_rejected = 0 THEN 0 ELSE 1 END ASC
+                ");
+            }
+
+            // Secondary: upcoming pending before past pending, then non-pending last
             $query->orderByRaw("
-                CASE WHEN status = 'pending' AND (admin_approved_by IS NULL OR hr_approved_by IS NULL) AND {$readyForAdminHr} THEN 0 ELSE 1 END ASC
-            ");
-        } elseif ($isAdminRole) {
-            // Admin: pending needing admin approval specifically
-            $query->orderByRaw("
-                CASE WHEN status = 'pending' AND admin_approved_by IS NULL AND {$readyForAdminHr} THEN 0 ELSE 1 END ASC
-            ");
-        } elseif ($isHr) {
-            // HR: pending needing HR approval specifically
-            $query->orderByRaw("
-                CASE WHEN status = 'pending' AND hr_approved_by IS NULL AND {$readyForAdminHr} THEN 0 ELSE 1 END ASC
-            ");
-        } elseif ($isTeamLead) {
-            // Team Lead: pending needing TL approval
-            $query->orderByRaw("
-                CASE WHEN status = 'pending' AND requires_tl_approval = 1 AND tl_approved_by IS NULL AND tl_rejected = 0 THEN 0 ELSE 1 END ASC
-            ");
+                CASE WHEN status = 'pending' AND start_date >= ? THEN 0
+                     WHEN status = 'pending' THEN 1
+                     ELSE 2 END ASC
+            ", [$today]);
+
+            // Tertiary: soonest start_date first among upcoming, then newest created_at
+            $query->orderBy('start_date', 'asc')
+                ->orderBy('created_at', 'desc');
         }
-
-        // Secondary: upcoming pending before past pending, then non-pending last
-        $query->orderByRaw("
-            CASE WHEN status = 'pending' AND start_date >= ? THEN 0
-                 WHEN status = 'pending' THEN 1
-                 ELSE 2 END ASC
-        ", [$today]);
-
-        // Tertiary: soonest start_date first among upcoming, then newest created_at
-        $query->orderBy('start_date', 'asc')
-            ->orderBy('created_at', 'desc');
 
         $leaveRequests = $query->paginate(25)
             ->withQueryString();
@@ -292,7 +305,7 @@ class LeaveRequestController extends Controller
 
         return Inertia::render('FormRequest/Leave/Index', [
             'leaveRequests' => $leaveRequests,
-            'filters' => $request->only(['status', 'type', 'period', 'user_id', 'employee_name', 'campaign_department', 'cross_year']),
+            'filters' => $request->only(['status', 'type', 'period', 'user_id', 'employee_name', 'campaign_department', 'cross_year', 'date']),
             'statusCounts' => $statusCounts,
             'campaigns' => $campaigns,
             'allEmployees' => $allEmployees,

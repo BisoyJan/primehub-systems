@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { format, parseISO, getYear } from 'date-fns';
 import AppLayout from '@/layouts/app-layout';
@@ -53,6 +53,8 @@ import {
 } from '@/components/ui/dialog';
 import { index as leaveIndexRoute, create as leaveCreateRoute, show as leaveShowRoute, cancel as leaveCancelRoute, destroy as leaveDestroyRoute, edit as leaveEditRoute } from '@/routes/leave-requests';
 import { MultiSelectFilter, parseMultiSelectParam, multiSelectToParam } from '@/components/multi-select-filter';
+import { Calendar as CalendarPicker } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 interface User {
     id: number;
@@ -125,6 +127,7 @@ interface Props {
         campaign_department?: string;
         user_id?: string;
         cross_year?: string | boolean;
+        date?: string;
     };
     statusCounts: StatusCounts;
     isAdmin: boolean;
@@ -180,6 +183,7 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
     const [selectedUserIds, setSelectedUserIds] = useState<string[]>(parseMultiSelectParam(filters.user_id));
     const [selectedCampaigns, setSelectedCampaigns] = useState<string[]>(parseMultiSelectParam(filters.campaign_department));
     const [crossYearOnly, setCrossYearOnly] = useState<boolean>(filters.cross_year === true || filters.cross_year === '1' || filters.cross_year === 'true');
+    const [filterDate, setFilterDate] = useState<Date | undefined>(filters.date ? parseISO(filters.date) : undefined);
     const [showCancelDialog, setShowCancelDialog] = useState(false);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
     const [selectedLeaveId, setSelectedLeaveId] = useState<number | null>(null);
@@ -201,8 +205,30 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
     };
     const paginationLinks = leaveRequests.links || [];
 
+    // When a specific date is selected, rows arrive pre-ordered by campaign then created_at.
+    const isDateFiltered = !!filterDate;
+    const groupedRequests = useMemo(() => {
+        if (!isDateFiltered) return [];
+        const groups: { campaign: string; rows: LeaveRequest[] }[] = [];
+        for (const req of leaveRequests.data) {
+            const campaign = req.campaign_department || 'Unassigned';
+            const last = groups[groups.length - 1];
+            if (last && last.campaign === campaign) {
+                last.rows.push(req);
+            } else {
+                groups.push({ campaign, rows: [req] });
+            }
+        }
+        return groups;
+    }, [isDateFiltered, leaveRequests.data]);
+
+    // Unified render source: date view shows campaign headers, otherwise a single flat group.
+    const displayGroups = isDateFiltered
+        ? groupedRequests.map((g) => ({ ...g, showHeader: true }))
+        : [{ campaign: '', rows: leaveRequests.data, showHeader: false }];
+
     // Filter employees based on search query (from all employees list)
-    const showClearFilters = activeTab !== 'all' || selectedTypes.length > 0 || selectedUserIds.length > 0 || selectedCampaigns.length > 0 || filterPeriod !== 'all' || crossYearOnly;
+    const showClearFilters = activeTab !== 'all' || selectedTypes.length > 0 || selectedUserIds.length > 0 || selectedCampaigns.length > 0 || filterPeriod !== 'all' || crossYearOnly || !!filterDate;
 
     const buildFilterParams = React.useCallback((overrideStatus?: StatusTab) => {
         const params: Record<string, string> = {};
@@ -228,8 +254,11 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
         if (crossYearOnly) {
             params.cross_year = '1';
         }
+        if (filterDate) {
+            params.date = format(filterDate, 'yyyy-MM-dd');
+        }
         return params;
-    }, [activeTab, selectedTypes, selectedUserIds, selectedCampaigns, filterPeriod, crossYearOnly]);
+    }, [activeTab, selectedTypes, selectedUserIds, selectedCampaigns, filterPeriod, crossYearOnly, filterDate]);
 
     const requestWithFilters = (params: Record<string, string>) => {
         router.get(leaveIndexRoute().url, params, {
@@ -258,6 +287,17 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
 
     const handleManualRefresh = () => {
         requestWithFilters(buildFilterParams());
+    };
+
+    const handleDateSelect = (date?: Date) => {
+        setFilterDate(date);
+        const params = buildFilterParams();
+        if (date) {
+            params.date = format(date, 'yyyy-MM-dd');
+        } else {
+            delete params.date;
+        }
+        requestWithFilters(params);
     };
 
     // Auto-refresh every 30 seconds
@@ -292,6 +332,7 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
         setSelectedCampaigns([]);
         setFilterPeriod('all');
         setCrossYearOnly(false);
+        setFilterDate(undefined);
         requestWithFilters({});
     };
 
@@ -557,8 +598,8 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
                 />
 
                 <div className="flex flex-col gap-4">
-                    <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
-                        <div className="w-full sm:w-auto flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div className="flex flex-col gap-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
 
                             {showEmployeeColumn && (
                                 <MultiSelectFilter
@@ -611,9 +652,38 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
                                     <SelectItem value="past">Past</SelectItem>
                                 </SelectContent>
                             </Select>
+
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button variant="outline" className="w-full justify-start font-normal">
+                                        <Calendar className="mr-2 h-4 w-4" />
+                                        {filterDate ? format(filterDate, 'MMM d, yyyy') : 'Filter by date'}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0" align="start">
+                                    <CalendarPicker
+                                        mode="single"
+                                        selected={filterDate}
+                                        onSelect={handleDateSelect}
+                                        autoFocus
+                                    />
+                                    {filterDate && (
+                                        <div className="border-t p-2">
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="w-full"
+                                                onClick={() => handleDateSelect(undefined)}
+                                            >
+                                                Clear date
+                                            </Button>
+                                        </div>
+                                    )}
+                                </PopoverContent>
+                            </Popover>
                         </div>
 
-                        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                        <div className="flex flex-wrap gap-2 w-full sm:justify-end">
                             <Button variant="outline" onClick={handleFilter} className="flex-1 sm:flex-none">
                                 <Filter className="mr-2 h-4 w-4" />
                                 Filter
@@ -753,118 +823,130 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
                                                 </TableCell>
                                             </TableRow>
                                         ) : (
-                                            leaveRequests.data.map((request) => (
-                                                <TableRow key={request.id}>
-                                                    {showEmployeeColumn && (
-                                                        <TableCell className="font-medium">
-                                                            {request.user.name}
-                                                        </TableCell>
+                                            displayGroups.map((group) => (
+                                                <React.Fragment key={group.campaign || 'all'}>
+                                                    {group.showHeader && (
+                                                        <TableRow className="bg-muted/40 hover:bg-muted/40">
+                                                            <TableCell colSpan={showEmployeeColumn ? 8 : 6} className="py-2 text-sm font-semibold">
+                                                                {group.campaign}
+                                                                <span className="ml-2 text-xs font-normal text-muted-foreground">({group.rows.length})</span>
+                                                            </TableCell>
+                                                        </TableRow>
                                                     )}
-                                                    {showEmployeeColumn && (
-                                                        <TableCell className="text-sm">
-                                                            {request.campaign_department}
-                                                        </TableCell>
-                                                    )}
-                                                    <TableCell>
-                                                        <div className="flex items-center gap-1.5">
-                                                            {getLeaveTypeBadge(request.leave_type)}
-                                                            {isCrossYearRequest(request) && (
-                                                                <Badge
-                                                                    variant="outline"
-                                                                    className="border-amber-500 text-amber-600 dark:text-amber-400"
-                                                                    title={`Filed ${request.credits_year ?? getYear(parseISO(request.created_at))} for ${getYear(parseISO(request.start_date))} (uses ${request.credits_year ?? getYear(parseISO(request.created_at))} credits)`}
-                                                                >
-                                                                    {request.credits_year ?? getYear(parseISO(request.created_at))} credits
-                                                                </Badge>
+                                                    {group.rows.map((request) => (
+                                                        <TableRow key={request.id}>
+                                                            {showEmployeeColumn && (
+                                                                <TableCell className="font-medium">
+                                                                    {request.user.name}
+                                                                </TableCell>
                                                             )}
-                                                        </div>
-                                                    </TableCell>
-                                                    <TableCell className="whitespace-nowrap">
-                                                        {(() => {
-                                                            const start = parseISO(request.start_date);
-                                                            const end = parseISO(request.end_date);
-                                                            return getYear(start) === getYear(end)
-                                                                ? `${format(start, 'MMM dd')} - ${format(end, 'MMM dd, yyyy')}`
-                                                                : `${format(start, 'MMM dd, yyyy')} - ${format(end, 'MMM dd, yyyy')}`;
-                                                        })()}
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        {request.has_partial_denial && request.approved_days !== null ? (
-                                                            <span className="text-orange-600" title={`${request.approved_days} of ${Math.floor(request.days_requested)} days approved`}>
-                                                                {Math.floor(request.approved_days)} {Math.floor(request.approved_days) === 1 ? 'day' : 'days'}
-                                                                <span className="text-xs text-muted-foreground ml-1">(partial)</span>
-                                                            </span>
-                                                        ) : (
-                                                            <>{Math.floor(request.days_requested)} {Math.floor(request.days_requested) === 1 ? 'day' : 'days'}</>
-                                                        )}
-                                                    </TableCell>
-                                                    <TableCell>{getStatusBadge(request.status, request.admin_approved_at, request.hr_approved_at, request.requires_tl_approval, request.tl_approved_at, request.tl_rejected)}</TableCell>
-                                                    <TableCell className="text-sm text-muted-foreground">
-                                                        {format(parseISO(request.created_at), 'MMM d, yyyy')}
-                                                    </TableCell>
-                                                    <TableCell className="text-right">
-                                                        <div className="flex justify-end gap-2">
-                                                            <Link href={leaveShowRoute(request.id).url}>
-                                                                <Button size="icon" variant="outline" title="View Details">
-                                                                    <Eye className="h-4 w-4" />
-                                                                </Button>
-                                                            </Link>
-                                                            {/* Medical/Supporting Document Button - For SL, BL, UPTO, and IW with uploaded document */}
-                                                            {(request.leave_type === 'SL' || request.leave_type === 'BL' || request.leave_type === 'UPTO' || request.leave_type === 'IW') && ((request.documents_count ?? 0) > 0 || request.medical_cert_path) && (auth.user.id === request.user.id || isAdmin || isTeamLead) && (
-                                                                <Link href={leaveShowRoute(request.id).url}>
-                                                                    <Button
-                                                                        size="icon"
-                                                                        variant="outline"
-                                                                        title={`View ${request.leave_type === 'SL' ? 'Medical Certificate' : request.leave_type === 'BL' ? 'Death Certificate' : 'Supporting Document'}`}
-                                                                        className="text-green-600 hover:text-green-700 border-green-300"
-                                                                    >
-                                                                        <FileImage className="h-4 w-4" />
-                                                                    </Button>
-                                                                </Link>
+                                                            {showEmployeeColumn && (
+                                                                <TableCell className="text-sm">
+                                                                    {request.campaign_department}
+                                                                </TableCell>
                                                             )}
-                                                            {request.status === 'pending' && (auth.user.id === request.user.id || can('leave.edit')) && (
-                                                                <Link href={leaveEditRoute({ leaveRequest: request.id }).url}>
-                                                                    <Button size="icon" variant="outline" title="Edit Request">
-                                                                        <Pencil className="h-4 w-4" />
-                                                                    </Button>
-                                                                </Link>
-                                                            )}
-                                                            {(request.status === 'pending' || (request.status === 'approved' && (request.has_partial_denial || new Date(request.start_date + 'T00:00:00') > new Date()))) && auth.user.id === request.user.id && (
-                                                                <Button
-                                                                    size="icon"
-                                                                    variant="outline"
-                                                                    onClick={() => handleCancelRequest(request.id)}
-                                                                    title="Cancel Request"
-                                                                    className="text-orange-600 hover:text-orange-700 border-orange-300"
-                                                                >
-                                                                    <Ban className="h-4 w-4" />
-                                                                </Button>
-                                                            )}
-                                                            {can('leave.cancel') && auth.user.id !== request.user.id && (request.status === 'pending' || (request.status === 'approved' && new Date(request.end_date + 'T23:59:59') >= new Date())) && (
-                                                                <Button
-                                                                    size="icon"
-                                                                    variant="outline"
-                                                                    onClick={() => handleCancelRequest(request.id)}
-                                                                    title="Cancel Request"
-                                                                    className="text-red-600 hover:text-red-700 border-red-300"
-                                                                >
-                                                                    <Ban className="h-4 w-4" />
-                                                                </Button>
-                                                            )}
-                                                            {(can('leave.delete') || (auth.user.id === request.user.id && (request.status === 'cancelled' || request.status === 'denied'))) && (
-                                                                <Button
-                                                                    size="icon"
-                                                                    variant="outline"
-                                                                    onClick={() => handleDeleteRequest(request.id)}
-                                                                    title="Delete Request"
-                                                                    className="text-red-600 hover:text-red-700 border-red-300"
-                                                                >
-                                                                    <Trash2 className="h-4 w-4" />
-                                                                </Button>
-                                                            )}
-                                                        </div>
-                                                    </TableCell>
-                                                </TableRow>
+                                                            <TableCell>
+                                                                <div className="flex items-center gap-1.5">
+                                                                    {getLeaveTypeBadge(request.leave_type)}
+                                                                    {isCrossYearRequest(request) && (
+                                                                        <Badge
+                                                                            variant="outline"
+                                                                            className="border-amber-500 text-amber-600 dark:text-amber-400"
+                                                                            title={`Filed ${request.credits_year ?? getYear(parseISO(request.created_at))} for ${getYear(parseISO(request.start_date))} (uses ${request.credits_year ?? getYear(parseISO(request.created_at))} credits)`}
+                                                                        >
+                                                                            {request.credits_year ?? getYear(parseISO(request.created_at))} credits
+                                                                        </Badge>
+                                                                    )}
+                                                                </div>
+                                                            </TableCell>
+                                                            <TableCell className="whitespace-nowrap">
+                                                                {(() => {
+                                                                    const start = parseISO(request.start_date);
+                                                                    const end = parseISO(request.end_date);
+                                                                    return getYear(start) === getYear(end)
+                                                                        ? `${format(start, 'MMM dd')} - ${format(end, 'MMM dd, yyyy')}`
+                                                                        : `${format(start, 'MMM dd, yyyy')} - ${format(end, 'MMM dd, yyyy')}`;
+                                                                })()}
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                {request.has_partial_denial && request.approved_days !== null ? (
+                                                                    <span className="text-orange-600" title={`${request.approved_days} of ${Math.floor(request.days_requested)} days approved`}>
+                                                                        {Math.floor(request.approved_days)} {Math.floor(request.approved_days) === 1 ? 'day' : 'days'}
+                                                                        <span className="text-xs text-muted-foreground ml-1">(partial)</span>
+                                                                    </span>
+                                                                ) : (
+                                                                    <>{Math.floor(request.days_requested)} {Math.floor(request.days_requested) === 1 ? 'day' : 'days'}</>
+                                                                )}
+                                                            </TableCell>
+                                                            <TableCell>{getStatusBadge(request.status, request.admin_approved_at, request.hr_approved_at, request.requires_tl_approval, request.tl_approved_at, request.tl_rejected)}</TableCell>
+                                                            <TableCell className="text-sm text-muted-foreground">
+                                                                {format(parseISO(request.created_at), 'MMM d, yyyy')}
+                                                            </TableCell>
+                                                            <TableCell className="text-right">
+                                                                <div className="flex justify-end gap-2">
+                                                                    <Link href={leaveShowRoute(request.id).url}>
+                                                                        <Button size="icon" variant="outline" title="View Details">
+                                                                            <Eye className="h-4 w-4" />
+                                                                        </Button>
+                                                                    </Link>
+                                                                    {/* Medical/Supporting Document Button - For SL, BL, UPTO, and IW with uploaded document */}
+                                                                    {(request.leave_type === 'SL' || request.leave_type === 'BL' || request.leave_type === 'UPTO' || request.leave_type === 'IW') && ((request.documents_count ?? 0) > 0 || request.medical_cert_path) && (auth.user.id === request.user.id || isAdmin || isTeamLead) && (
+                                                                        <Link href={leaveShowRoute(request.id).url}>
+                                                                            <Button
+                                                                                size="icon"
+                                                                                variant="outline"
+                                                                                title={`View ${request.leave_type === 'SL' ? 'Medical Certificate' : request.leave_type === 'BL' ? 'Death Certificate' : 'Supporting Document'}`}
+                                                                                className="text-green-600 hover:text-green-700 border-green-300"
+                                                                            >
+                                                                                <FileImage className="h-4 w-4" />
+                                                                            </Button>
+                                                                        </Link>
+                                                                    )}
+                                                                    {request.status === 'pending' && (auth.user.id === request.user.id || can('leave.edit')) && (
+                                                                        <Link href={leaveEditRoute({ leaveRequest: request.id }).url}>
+                                                                            <Button size="icon" variant="outline" title="Edit Request">
+                                                                                <Pencil className="h-4 w-4" />
+                                                                            </Button>
+                                                                        </Link>
+                                                                    )}
+                                                                    {(request.status === 'pending' || (request.status === 'approved' && (request.has_partial_denial || new Date(request.start_date + 'T00:00:00') > new Date()))) && auth.user.id === request.user.id && (
+                                                                        <Button
+                                                                            size="icon"
+                                                                            variant="outline"
+                                                                            onClick={() => handleCancelRequest(request.id)}
+                                                                            title="Cancel Request"
+                                                                            className="text-orange-600 hover:text-orange-700 border-orange-300"
+                                                                        >
+                                                                            <Ban className="h-4 w-4" />
+                                                                        </Button>
+                                                                    )}
+                                                                    {can('leave.cancel') && auth.user.id !== request.user.id && (request.status === 'pending' || (request.status === 'approved' && new Date(request.end_date + 'T23:59:59') >= new Date())) && (
+                                                                        <Button
+                                                                            size="icon"
+                                                                            variant="outline"
+                                                                            onClick={() => handleCancelRequest(request.id)}
+                                                                            title="Cancel Request"
+                                                                            className="text-red-600 hover:text-red-700 border-red-300"
+                                                                        >
+                                                                            <Ban className="h-4 w-4" />
+                                                                        </Button>
+                                                                    )}
+                                                                    {(can('leave.delete') || (auth.user.id === request.user.id && (request.status === 'cancelled' || request.status === 'denied'))) && (
+                                                                        <Button
+                                                                            size="icon"
+                                                                            variant="outline"
+                                                                            onClick={() => handleDeleteRequest(request.id)}
+                                                                            title="Delete Request"
+                                                                            className="text-red-600 hover:text-red-700 border-red-300"
+                                                                        >
+                                                                            <Trash2 className="h-4 w-4" />
+                                                                        </Button>
+                                                                    )}
+                                                                </div>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                </React.Fragment>
                                             ))
                                         )}
                                     </TableBody>
@@ -887,126 +969,136 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
                             No leave requests found
                         </div>
                     ) : (
-                        leaveRequests.data.map((request) => (
-                            <div key={request.id} className="bg-card border rounded-lg p-4 shadow-sm space-y-3">
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        {showEmployeeColumn && (
-                                            <div className="text-lg font-semibold">{request.user.name}</div>
-                                        )}
-                                        <div className="flex items-center gap-2 mt-1">
-                                            {getLeaveTypeBadge(request.leave_type)}
-                                            {isCrossYearRequest(request) && (
-                                                <Badge
+                        displayGroups.map((group) => (
+                            <React.Fragment key={group.campaign || 'all'}>
+                                {group.showHeader && (
+                                    <div className="flex items-center gap-2 px-1 pt-2 text-sm font-semibold">
+                                        {group.campaign}
+                                        <span className="text-xs font-normal text-muted-foreground">({group.rows.length})</span>
+                                    </div>
+                                )}
+                                {group.rows.map((request) => (
+                                    <div key={request.id} className="bg-card border rounded-lg p-4 shadow-sm space-y-3">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                {showEmployeeColumn && (
+                                                    <div className="text-lg font-semibold">{request.user.name}</div>
+                                                )}
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    {getLeaveTypeBadge(request.leave_type)}
+                                                    {isCrossYearRequest(request) && (
+                                                        <Badge
+                                                            variant="outline"
+                                                            className="border-amber-500 text-amber-600 dark:text-amber-400"
+                                                            title={`Filed ${request.credits_year ?? getYear(parseISO(request.created_at))} for ${getYear(parseISO(request.start_date))} (uses ${request.credits_year ?? getYear(parseISO(request.created_at))} credits)`}
+                                                        >
+                                                            {request.credits_year ?? getYear(parseISO(request.created_at))} credits
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            {getStatusBadge(request.status, request.admin_approved_at, request.hr_approved_at, request.requires_tl_approval, request.tl_approved_at, request.tl_rejected)}
+                                        </div>
+
+                                        <div className="space-y-2 text-sm">
+                                            {showEmployeeColumn && (
+                                                <div className="flex justify-between">
+                                                    <span className="text-muted-foreground">Campaign:</span>
+                                                    <span className="font-medium">{request.campaign_department}</span>
+                                                </div>
+                                            )}
+                                            <div className="flex justify-between">
+                                                <span className="text-muted-foreground">Period:</span>
+                                                <span className="font-medium">
+                                                    {(() => {
+                                                        const start = parseISO(request.start_date);
+                                                        const end = parseISO(request.end_date);
+                                                        return getYear(start) === getYear(end)
+                                                            ? `${format(start, 'MMM dd')} - ${format(end, 'MMM dd, yyyy')}`
+                                                            : `${format(start, 'MMM dd, yyyy')} - ${format(end, 'MMM dd, yyyy')}`;
+                                                    })()}
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-muted-foreground">{request.has_partial_denial ? 'Days Approved:' : 'Days Requested:'}</span>
+                                                {request.has_partial_denial && request.approved_days !== null ? (
+                                                    <span className="font-medium text-orange-600">
+                                                        {request.approved_days} of {Math.floor(request.days_requested)} {Math.floor(request.days_requested) === 1 ? 'day' : 'days'}
+                                                    </span>
+                                                ) : (
+                                                    <span className="font-medium">{Math.floor(request.days_requested)} {Math.floor(request.days_requested) === 1 ? 'day' : 'days'}</span>
+                                                )}
+                                            </div>
+                                            <div className="text-xs text-muted-foreground pt-1">
+                                                Submitted: {format(parseISO(request.created_at), 'MMM d, yyyy')}
+                                            </div>
+                                        </div>
+
+                                        <div className="flex flex-wrap gap-2 pt-2 border-t">
+                                            <Link href={leaveShowRoute(request.id).url} className="flex-1">
+                                                <Button size="sm" variant="outline" className="w-full">
+                                                    <Eye className="mr-2 h-4 w-4" />
+                                                    View
+                                                </Button>
+                                            </Link>
+                                            {/* Medical/Supporting Document Button - Mobile */}
+                                            {(request.leave_type === 'SL' || request.leave_type === 'BL' || request.leave_type === 'UPTO' || request.leave_type === 'IW') && ((request.documents_count ?? 0) > 0 || request.medical_cert_path) && (auth.user.id === request.user.id || isAdmin || isTeamLead) && (
+                                                <Link href={leaveShowRoute(request.id).url} className="flex-1">
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        className="w-full"
+                                                    >
+                                                        <FileImage className="mr-2 h-4 w-4 text-green-600" />
+                                                        {request.leave_type === 'SL' ? 'Med Cert' : request.leave_type === 'BL' ? 'Death Cert' : 'Document'}
+                                                    </Button>
+                                                </Link>
+                                            )}
+                                            {request.status === 'pending' && (auth.user.id === request.user.id || can('leave.edit')) && (
+                                                <Link href={leaveEditRoute({ leaveRequest: request.id }).url} className="flex-1">
+                                                    <Button size="sm" variant="outline" className="w-full">
+                                                        <Pencil className="mr-2 h-4 w-4" />
+                                                        Edit
+                                                    </Button>
+                                                </Link>
+                                            )}
+                                            {(request.status === 'pending' || (request.status === 'approved' && (request.has_partial_denial || new Date(request.start_date + 'T00:00:00') > new Date()))) && auth.user.id === request.user.id && (
+                                                <Button
+                                                    size="sm"
                                                     variant="outline"
-                                                    className="border-amber-500 text-amber-600 dark:text-amber-400"
-                                                    title={`Filed ${request.credits_year ?? getYear(parseISO(request.created_at))} for ${getYear(parseISO(request.start_date))} (uses ${request.credits_year ?? getYear(parseISO(request.created_at))} credits)`}
+                                                    onClick={() => handleCancelRequest(request.id)}
+                                                    className="flex-1 text-orange-600 hover:text-orange-700 border-orange-300"
                                                 >
-                                                    {request.credits_year ?? getYear(parseISO(request.created_at))} credits
-                                                </Badge>
+                                                    <Ban className="mr-2 h-4 w-4" />
+                                                    Cancel
+                                                </Button>
+                                            )}
+                                            {can('leave.cancel') && auth.user.id !== request.user.id && (request.status === 'pending' || (request.status === 'approved' && new Date(request.end_date + 'T23:59:59') >= new Date())) && (
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => handleCancelRequest(request.id)}
+                                                    className="flex-1 text-red-600 hover:text-red-700 border-red-300"
+                                                >
+                                                    <Ban className="mr-2 h-4 w-4" />
+                                                    Cancel
+                                                </Button>
+                                            )}
+                                            {(can('leave.delete') || (auth.user.id === request.user.id && (request.status === 'cancelled' || request.status === 'denied'))) && (
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => handleDeleteRequest(request.id)}
+                                                    className="flex-1 text-red-600 hover:text-red-700 border-red-300"
+                                                >
+                                                    <Trash2 className="mr-2 h-4 w-4" />
+                                                    Delete
+                                                </Button>
                                             )}
                                         </div>
                                     </div>
-                                    {getStatusBadge(request.status, request.admin_approved_at, request.hr_approved_at, request.requires_tl_approval, request.tl_approved_at, request.tl_rejected)}
-                                </div>
-
-                                <div className="space-y-2 text-sm">
-                                    {showEmployeeColumn && (
-                                        <div className="flex justify-between">
-                                            <span className="text-muted-foreground">Campaign:</span>
-                                            <span className="font-medium">{request.campaign_department}</span>
-                                        </div>
-                                    )}
-                                    <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Period:</span>
-                                        <span className="font-medium">
-                                            {(() => {
-                                                const start = parseISO(request.start_date);
-                                                const end = parseISO(request.end_date);
-                                                return getYear(start) === getYear(end)
-                                                    ? `${format(start, 'MMM dd')} - ${format(end, 'MMM dd, yyyy')}`
-                                                    : `${format(start, 'MMM dd, yyyy')} - ${format(end, 'MMM dd, yyyy')}`;
-                                            })()}
-                                        </span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-muted-foreground">{request.has_partial_denial ? 'Days Approved:' : 'Days Requested:'}</span>
-                                        {request.has_partial_denial && request.approved_days !== null ? (
-                                            <span className="font-medium text-orange-600">
-                                                {request.approved_days} of {Math.floor(request.days_requested)} {Math.floor(request.days_requested) === 1 ? 'day' : 'days'}
-                                            </span>
-                                        ) : (
-                                            <span className="font-medium">{Math.floor(request.days_requested)} {Math.floor(request.days_requested) === 1 ? 'day' : 'days'}</span>
-                                        )}
-                                    </div>
-                                    <div className="text-xs text-muted-foreground pt-1">
-                                        Submitted: {format(parseISO(request.created_at), 'MMM d, yyyy')}
-                                    </div>
-                                </div>
-
-                                <div className="flex flex-wrap gap-2 pt-2 border-t">
-                                    <Link href={leaveShowRoute(request.id).url} className="flex-1">
-                                        <Button size="sm" variant="outline" className="w-full">
-                                            <Eye className="mr-2 h-4 w-4" />
-                                            View
-                                        </Button>
-                                    </Link>
-                                    {/* Medical/Supporting Document Button - Mobile */}
-                                    {(request.leave_type === 'SL' || request.leave_type === 'BL' || request.leave_type === 'UPTO' || request.leave_type === 'IW') && ((request.documents_count ?? 0) > 0 || request.medical_cert_path) && (auth.user.id === request.user.id || isAdmin || isTeamLead) && (
-                                        <Link href={leaveShowRoute(request.id).url} className="flex-1">
-                                            <Button
-                                                size="sm"
-                                                variant="outline"
-                                                className="w-full"
-                                            >
-                                                <FileImage className="mr-2 h-4 w-4 text-green-600" />
-                                                {request.leave_type === 'SL' ? 'Med Cert' : request.leave_type === 'BL' ? 'Death Cert' : 'Document'}
-                                            </Button>
-                                        </Link>
-                                    )}
-                                    {request.status === 'pending' && (auth.user.id === request.user.id || can('leave.edit')) && (
-                                        <Link href={leaveEditRoute({ leaveRequest: request.id }).url} className="flex-1">
-                                            <Button size="sm" variant="outline" className="w-full">
-                                                <Pencil className="mr-2 h-4 w-4" />
-                                                Edit
-                                            </Button>
-                                        </Link>
-                                    )}
-                                    {(request.status === 'pending' || (request.status === 'approved' && (request.has_partial_denial || new Date(request.start_date + 'T00:00:00') > new Date()))) && auth.user.id === request.user.id && (
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => handleCancelRequest(request.id)}
-                                            className="flex-1 text-orange-600 hover:text-orange-700 border-orange-300"
-                                        >
-                                            <Ban className="mr-2 h-4 w-4" />
-                                            Cancel
-                                        </Button>
-                                    )}
-                                    {can('leave.cancel') && auth.user.id !== request.user.id && (request.status === 'pending' || (request.status === 'approved' && new Date(request.end_date + 'T23:59:59') >= new Date())) && (
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => handleCancelRequest(request.id)}
-                                            className="flex-1 text-red-600 hover:text-red-700 border-red-300"
-                                        >
-                                            <Ban className="mr-2 h-4 w-4" />
-                                            Cancel
-                                        </Button>
-                                    )}
-                                    {(can('leave.delete') || (auth.user.id === request.user.id && (request.status === 'cancelled' || request.status === 'denied'))) && (
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => handleDeleteRequest(request.id)}
-                                            className="flex-1 text-red-600 hover:text-red-700 border-red-300"
-                                        >
-                                            <Trash2 className="mr-2 h-4 w-4" />
-                                            Delete
-                                        </Button>
-                                    )}
-                                </div>
-                            </div>
+                                ))}
+                            </React.Fragment>
                         ))
                     )}
 

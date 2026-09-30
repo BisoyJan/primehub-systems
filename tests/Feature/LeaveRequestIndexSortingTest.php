@@ -402,4 +402,82 @@ class LeaveRequestIndexSortingTest extends TestCase
             'Upcoming pending should appear before approved for agents'
         );
     }
+
+    #[Test]
+    public function date_filter_returns_only_requests_covering_that_date(): void
+    {
+        $admin = $this->createUserWithRole('Admin');
+        $agent = $this->createUserWithRole('Agent');
+
+        // Covers Nov 26 (Nov 24-28)
+        $covering = LeaveRequest::factory()->fullyApproved()->create([
+            'user_id' => $agent->id,
+            'start_date' => '2026-11-24',
+            'end_date' => '2026-11-28',
+            'leave_type' => 'BL',
+        ]);
+
+        // Does not cover Nov 26 (Nov 20-22)
+        $notCovering = LeaveRequest::factory()->fullyApproved()->create([
+            'user_id' => $agent->id,
+            'start_date' => '2026-11-20',
+            'end_date' => '2026-11-22',
+            'leave_type' => 'BL',
+        ]);
+
+        $response = $this->actingAs($admin)
+            ->get(route('leave-requests.index', ['date' => '2026-11-26']));
+
+        $response->assertOk();
+        $ids = $this->getLeaveRequestIds($response);
+
+        $this->assertContains($covering->id, $ids);
+        $this->assertNotContains($notCovering->id, $ids);
+    }
+
+    #[Test]
+    public function date_filter_orders_by_campaign_then_first_come_first_serve(): void
+    {
+        $admin = $this->createUserWithRole('Admin');
+        $agent = $this->createUserWithRole('Agent');
+
+        // Campaign B, filed second
+        $bLate = LeaveRequest::factory()->fullyApproved()->create([
+            'user_id' => $agent->id,
+            'start_date' => '2026-11-24',
+            'end_date' => '2026-11-28',
+            'leave_type' => 'BL',
+            'campaign_department' => 'Campaign B',
+            'created_at' => now()->subHours(1),
+        ]);
+
+        // Campaign A, filed second
+        $aLate = LeaveRequest::factory()->fullyApproved()->create([
+            'user_id' => $agent->id,
+            'start_date' => '2026-11-25',
+            'end_date' => '2026-11-27',
+            'leave_type' => 'BL',
+            'campaign_department' => 'Campaign A',
+            'created_at' => now()->subHours(2),
+        ]);
+
+        // Campaign A, filed first (should be top of Campaign A group)
+        $aEarly = LeaveRequest::factory()->fullyApproved()->create([
+            'user_id' => $agent->id,
+            'start_date' => '2026-11-26',
+            'end_date' => '2026-11-26',
+            'leave_type' => 'BL',
+            'campaign_department' => 'Campaign A',
+            'created_at' => now()->subHours(3),
+        ]);
+
+        $response = $this->actingAs($admin)
+            ->get(route('leave-requests.index', ['date' => '2026-11-26']));
+
+        $response->assertOk();
+        $ids = $this->getLeaveRequestIds($response);
+
+        // Campaign A group first (alphabetical), earliest created_at on top within group
+        $this->assertSame([$aEarly->id, $aLate->id, $bLate->id], $ids);
+    }
 }

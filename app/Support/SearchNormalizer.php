@@ -35,7 +35,8 @@ class SearchNormalizer
 
         $folded = strtr($value, self::CHAR_MAP);
         $lower = mb_strtolower($folded);
-        $collapsed = preg_replace('/\s+/', ' ', trim($lower));
+        $stripped = preg_replace('/[^\p{L}\p{N}\s]+/u', ' ', $lower);
+        $collapsed = preg_replace('/\s+/', ' ', trim($stripped ?? ''));
 
         return mb_substr($collapsed ?? '', 0, 255);
     }

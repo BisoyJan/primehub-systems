@@ -254,12 +254,13 @@ export default function CoachingSessionsIndex() {
 
     const filteredAgents = useMemo(() => {
         if (!agentSearchQuery) return agentsInScope.slice(0, 50);
-        const q = agentSearchQuery.toLowerCase();
+        const tokens = agentSearchQuery.toLowerCase().split(/\s+/).filter(Boolean);
         return agentsInScope
             .filter((a) => {
-                const name = `${a.first_name} ${a.last_name}`.toLowerCase();
+                const middle = (a as Record<string, unknown>).middle_name as string | null | undefined;
+                const name = `${a.first_name} ${middle ?? ''} ${a.last_name}`.toLowerCase();
                 const campaign = getAgentCampaign(a)?.toLowerCase() ?? '';
-                return name.includes(q) || campaign.includes(q);
+                return tokens.every((t) => name.includes(t) || campaign.includes(t));
             })
             .slice(0, 50);
     }, [agentsInScope, agentSearchQuery]);

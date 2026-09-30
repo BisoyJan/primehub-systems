@@ -27,6 +27,16 @@ trait HasNormalizedNameSearch
             return $query;
         }
 
-        return $query->where('name_search_index', 'like', '%'.SearchNormalizer::normalize($search).'%');
+        $tokens = array_filter(explode(' ', SearchNormalizer::normalize($search)));
+
+        if ($tokens === []) {
+            return $query;
+        }
+
+        return $query->where(function (Builder $q) use ($tokens) {
+            foreach ($tokens as $token) {
+                $q->where('name_search_index', 'like', '%'.$token.'%');
+            }
+        });
     }
 }

@@ -80,6 +80,7 @@ const leaveTypeColors: Record<string, string> = {
 export default function LeaveCalendar() {
     const { leaves, campaigns, teamLeadCampaignIds, filters, isRestrictedRole } = usePage<PageProps>().props;
     const [hoveredLeaveId, setHoveredLeaveId] = useState<number | null>(null);
+    const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
     const { title, breadcrumbs } = usePageMeta({
         title: "Leave Calendar",
@@ -92,11 +93,111 @@ export default function LeaveCalendar() {
     useFlashMessage();
     const isPageLoading = usePageLoading();
 
+    const renderLeaveItem = (leave: Leave) => {
+        const content = (
+            <>
+                <div className="flex items-start justify-between gap-2 mb-1">
+                    <div>
+                        <span className="font-medium">{leave.user_name}</span>
+                        <div className="text-xs text-muted-foreground">{leave.campaign_name}</div>
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                        <Badge
+                            variant="outline"
+                            className={`text-xs shrink-0 text-white border-0 ${leaveTypeColors[leave.leave_type] || 'bg-gray-500'}`}
+                        >
+                            {leave.leave_type}
+                        </Badge>
+                        <Badge
+                            variant="outline"
+                            className={`text-xs shrink-0 text-white border-0 ${leave.status === 'approved' ? 'bg-green-500' : 'bg-yellow-500'}`}
+                        >
+                            {leave.status === 'approved' ? 'Approved' : 'Pending'}
+                        </Badge>
+                    </div>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                    {Number(leave.days_requested) === 1
+                        ? `${format(parseISO(leave.start_date), 'MMM d')} (1 day)`
+                        : `${format(parseISO(leave.start_date), 'MMM d')} - ${format(parseISO(leave.end_date), 'MMM d')} (${Math.round(Number(leave.days_requested))} days)`
+                    }
+                </div>
+                <div className="text-xs text-muted-foreground">
+                    Requested: {format(parseISO(leave.requested_at), 'MMM d, yyyy, h:mm a')}
+                </div>
+                {!isRestrictedRole && leave.reason && (
+                    <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                        {leave.reason}
+                    </div>
+                )}
+            </>
+        );
+
+        if (isRestrictedRole) {
+            return (
+                <div
+                    key={leave.id}
+                    className={`block p-3 border rounded-lg text-sm ${hoveredLeaveId === leave.id ? 'bg-accent border-primary' : ''}`}
+                    onMouseEnter={() => setHoveredLeaveId(leave.id)}
+                    onMouseLeave={() => setHoveredLeaveId(null)}
+                >
+                    {content}
+                </div>
+            );
+        }
+
+        return (
+            <a
+                key={leave.id}
+                href={`/form-requests/leave-requests/${leave.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`block p-3 border rounded-lg cursor-pointer transition-colors text-sm ${hoveredLeaveId === leave.id ? 'bg-accent border-primary' : 'hover:bg-accent/50'}`}
+                onMouseEnter={() => setHoveredLeaveId(leave.id)}
+                onMouseLeave={() => setHoveredLeaveId(null)}
+            >
+                {content}
+            </a>
+        );
+    };
+
     // Parse current month
     const currentMonth = useMemo(() => {
         const [year, month] = filters.month.split('-').map(Number);
         return new Date(year, month - 1, 1);
     }, [filters.month]);
+
+    // Leaves covering the selected calendar date (YYYY-MM-DD strings compare lexicographically).
+    const displayedLeaves = useMemo(() => {
+        if (!selectedDate) return leaves;
+        return leaves.filter((leave) => {
+            const start = leave.start_date.split('T')[0];
+            const end = leave.end_date.split('T')[0];
+            return start <= selectedDate && selectedDate <= end;
+        });
+    }, [leaves, selectedDate]);
+
+    // When a date is selected, group by campaign and order first-come-first-serve within each group.
+    const displayGroups = useMemo(() => {
+        if (!selectedDate) {
+            return [{ campaign: '', showHeader: false, rows: displayedLeaves }];
+        }
+        const sorted = [...displayedLeaves].sort((a, b) =>
+            a.campaign_name !== b.campaign_name
+                ? a.campaign_name.localeCompare(b.campaign_name)
+                : a.requested_at.localeCompare(b.requested_at)
+        );
+        const groups: { campaign: string; showHeader: boolean; rows: Leave[] }[] = [];
+        for (const leave of sorted) {
+            const last = groups[groups.length - 1];
+            if (last && last.campaign === leave.campaign_name) {
+                last.rows.push(leave);
+            } else {
+                groups.push({ campaign: leave.campaign_name, showHeader: true, rows: [leave] });
+            }
+        }
+        return groups;
+    }, [displayedLeaves, selectedDate]);
 
     const handleFilterChange = (key: string, value: string | null) => {
         router.get('/form-requests/leave-requests/calendar', {
@@ -219,14 +320,16 @@ export default function LeaveCalendar() {
                         return (
                             <div
                                 key={day}
+                                onClick={() => setSelectedDate((prev) => (prev === dateKey ? null : dateKey))}
                                 className={`
                                     ${isCompact ? 'aspect-square p-0.5' : 'aspect-square p-1'}
-                                    rounded flex items-center justify-center text-xs relative transition-all duration-150
+                                    rounded flex items-center justify-center text-xs relative transition-all duration-150 cursor-pointer select-none
                                     ${hasApprovedLeaves ? 'bg-green-500 dark:bg-green-600 font-semibold text-white' : ''}
                                     ${hasPendingLeaves && !hasApprovedLeaves ? 'bg-yellow-500 dark:bg-yellow-600 font-semibold text-white' : ''}
                                     ${hasApprovedLeaves && hasPendingLeaves ? 'bg-gradient-to-br from-green-500 to-yellow-500 font-semibold text-white' : ''}
-                                    ${!hasLeaves ? 'text-muted-foreground' : ''}
+                                    ${!hasLeaves ? 'text-muted-foreground hover:bg-accent' : ''}
                                     ${isToday ? 'ring-2 ring-primary' : ''}
+                                    ${selectedDate === dateKey ? 'ring-2 ring-blue-600 ring-offset-2 ring-offset-background' : ''}
                                     ${isHoveredLeaveDay ? 'ring-2 ring-offset-1 ring-offset-background ring-primary shadow-lg' : ''}
                                 `}
                                 title={hasLeaves ? `${approvedCount} approved, ${pendingCount} pending` : undefined}
@@ -417,83 +520,40 @@ export default function LeaveCalendar() {
                     {/* Leave List */}
                     <Card className="lg:col-span-2">
                         <CardHeader>
-                            <CardTitle>Leave Requests ({leaves.length})</CardTitle>
-                            <CardDescription>Hover to highlight dates</CardDescription>
+                            <div className="flex items-start justify-between gap-2">
+                                <div>
+                                    <CardTitle>Leave Requests ({displayedLeaves.length})</CardTitle>
+                                    <CardDescription>
+                                        {selectedDate
+                                            ? `On ${format(parseISO(selectedDate), 'MMM d, yyyy')} · grouped by campaign`
+                                            : 'Click a date to filter · hover to highlight'}
+                                    </CardDescription>
+                                </div>
+                                {selectedDate && (
+                                    <Button variant="outline" size="sm" onClick={() => setSelectedDate(null)}>
+                                        Clear
+                                    </Button>
+                                )}
+                            </div>
                         </CardHeader>
                         <CardContent>
                             <div className="space-y-2 max-h-[600px] overflow-y-auto pr-2">
-                                {leaves.length === 0 ? (
+                                {displayedLeaves.length === 0 ? (
                                     <div className="text-center text-muted-foreground py-8">
-                                        No leaves in this period
+                                        {selectedDate ? 'No leaves on this date' : 'No leaves in this period'}
                                     </div>
                                 ) : (
-                                    leaves.map((leave) => {
-                                        const content = (
-                                            <>
-                                                <div className="flex items-start justify-between gap-2 mb-1">
-                                                    <div>
-                                                        <span className="font-medium">{leave.user_name}</span>
-                                                        <div className="text-xs text-muted-foreground">{leave.campaign_name}</div>
-                                                    </div>
-                                                    <div className="flex flex-col items-end gap-1">
-                                                        <Badge
-                                                            variant="outline"
-                                                            className={`text-xs shrink-0 text-white border-0 ${leaveTypeColors[leave.leave_type] || 'bg-gray-500'}`}
-                                                        >
-                                                            {leave.leave_type}
-                                                        </Badge>
-                                                        <Badge
-                                                            variant="outline"
-                                                            className={`text-xs shrink-0 text-white border-0 ${leave.status === 'approved' ? 'bg-green-500' : 'bg-yellow-500'}`}
-                                                        >
-                                                            {leave.status === 'approved' ? 'Approved' : 'Pending'}
-                                                        </Badge>
-                                                    </div>
+                                    displayGroups.map((group) => (
+                                        <React.Fragment key={group.campaign || 'all'}>
+                                            {group.showHeader && (
+                                                <div className="flex items-center gap-2 px-1 pt-2 text-sm font-semibold">
+                                                    {group.campaign}
+                                                    <span className="text-xs font-normal text-muted-foreground">({group.rows.length})</span>
                                                 </div>
-                                                <div className="text-xs text-muted-foreground">
-                                                    {Number(leave.days_requested) === 1
-                                                        ? `${format(parseISO(leave.start_date), 'MMM d')} (1 day)`
-                                                        : `${format(parseISO(leave.start_date), 'MMM d')} - ${format(parseISO(leave.end_date), 'MMM d')} (${Math.round(Number(leave.days_requested))} days)`
-                                                    }
-                                                </div>
-                                                <div className="text-xs text-muted-foreground">
-                                                    Requested: {format(parseISO(leave.requested_at), 'MMM d, yyyy, h:mm a')}
-                                                </div>
-                                                {!isRestrictedRole && leave.reason && (
-                                                    <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                                                        {leave.reason}
-                                                    </div>
-                                                )}
-                                            </>
-                                        );
-
-                                        // For restricted roles (Agent, Utility), render non-clickable div
-                                        if (isRestrictedRole) {
-                                            return (
-                                                <div
-                                                    key={leave.id}
-                                                    className={`block p-3 border rounded-lg text-sm ${hoveredLeaveId === leave.id ? 'bg-accent border-primary' : ''}`}
-                                                    onMouseEnter={() => setHoveredLeaveId(leave.id)}
-                                                    onMouseLeave={() => setHoveredLeaveId(null)}
-                                                >
-                                                    {content}
-                                                </div>
-                                            );
-                                        }
-
-                                        // For non-restricted roles (TL, HR, Admin, Super Admin), render clickable Link
-                                        return (
-                                            <Link
-                                                key={leave.id}
-                                                href={`/form-requests/leave-requests/${leave.id}`}
-                                                className={`block p-3 border rounded-lg cursor-pointer transition-colors text-sm ${hoveredLeaveId === leave.id ? 'bg-accent border-primary' : 'hover:bg-accent/50'}`}
-                                                onMouseEnter={() => setHoveredLeaveId(leave.id)}
-                                                onMouseLeave={() => setHoveredLeaveId(null)}
-                                            >
-                                                {content}
-                                            </Link>
-                                        );
-                                    })
+                                            )}
+                                            {group.rows.map(renderLeaveItem)}
+                                        </React.Fragment>
+                                    ))
                                 )}
                             </div>
                         </CardContent>
