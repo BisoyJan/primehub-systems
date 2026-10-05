@@ -92,6 +92,50 @@ class AccountControllerTest extends TestCase
             );
     }
 
+    public function test_index_pending_status_excludes_resigned_employees(): void
+    {
+        $pendingApplicant = User::factory()->create([
+            'is_approved' => false,
+            'hired_date' => null,
+        ]);
+        $resignedEmployee = User::factory()->create([
+            'is_approved' => false,
+            'hired_date' => now()->subYear(),
+        ]);
+
+        $response = $this->actingAs($this->adminUser)
+            ->get(route('accounts.index', ['status' => 'pending']));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Account/Index')
+                ->where('users.data', fn ($data) => collect($data)->pluck('id')->contains($pendingApplicant->id)
+                    && ! collect($data)->pluck('id')->contains($resignedEmployee->id))
+            );
+    }
+
+    public function test_index_resigned_status_returns_only_resigned_employees(): void
+    {
+        $pendingApplicant = User::factory()->create([
+            'is_approved' => false,
+            'hired_date' => null,
+        ]);
+        $resignedEmployee = User::factory()->create([
+            'is_approved' => false,
+            'hired_date' => now()->subYear(),
+        ]);
+
+        $response = $this->actingAs($this->adminUser)
+            ->get(route('accounts.index', ['status' => 'resigned']));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Account/Index')
+                ->where('users.data', fn ($data) => collect($data)->pluck('id')->contains($resignedEmployee->id)
+                    && ! collect($data)->pluck('id')->contains($pendingApplicant->id))
+            );
+    }
+
     public function test_create_displays_create_form(): void
     {
         $response = $this->actingAs($this->adminUser)

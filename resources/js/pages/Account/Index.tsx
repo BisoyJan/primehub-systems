@@ -779,6 +779,7 @@ export default function AccountIndex() {
                             <SelectContent>
                                 <SelectItem value="all">All Account Statuses</SelectItem>
                                 <SelectItem value="pending">Pending</SelectItem>
+                                <SelectItem value="resigned">Resigned</SelectItem>
                                 <SelectItem value="approved">Approved</SelectItem>
                                 <SelectItem value="pending_deletion">Pending Deletion</SelectItem>
                                 <SelectItem value="deleted">Deleted</SelectItem>
