@@ -128,6 +128,11 @@ class LeaveRequest extends Model
     const NON_CREDITED_LEAVE_TYPES = ['BL', 'SPL', 'LOA', 'LDV', 'UPTO', 'ML', 'IW'];
 
     /**
+     * Leave types that allow uploading supporting documents.
+     */
+    const DOCUMENT_UPLOAD_LEAVE_TYPES = ['SL', 'BL', 'UPTO', 'IW', 'LOA'];
+
+    /**
      * Get the user who submitted the leave request.
      */
     public function user(): BelongsTo

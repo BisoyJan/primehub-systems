@@ -124,6 +124,69 @@ class LeaveRequestDocumentUploadTest extends TestCase
     }
 
     #[Test]
+    public function it_stores_supporting_documents_for_leave_of_absence(): void
+    {
+        Mail::fake();
+        Storage::fake('local');
+
+        $user = User::factory()->create(['role' => 'HR', 'is_approved' => true, 'hired_date' => now()->subYears(1)]);
+
+        $this->actingAs($user)
+            ->post(route('leave-requests.store'), $this->payload([
+                'leave_type' => 'LOA',
+                'reason' => 'Leave of absence for an extended personal matter.',
+                'medical_cert_files' => [
+                    UploadedFile::fake()->image('loa1.jpg'),
+                    UploadedFile::fake()->create('loa2.pdf', 100, 'application/pdf'),
+                ],
+            ]))
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $leaveRequest = LeaveRequest::firstOrFail();
+
+        $this->assertSame('LOA', $leaveRequest->leave_type);
+        $this->assertSame(2, $leaveRequest->documents()->count());
+        $this->assertTrue((bool) $leaveRequest->medical_cert_submitted);
+
+        foreach ($leaveRequest->documents as $document) {
+            Storage::disk('local')->assertExists($document->file_path);
+        }
+    }
+
+    #[Test]
+    public function it_adds_supporting_documents_to_leave_of_absence_on_update(): void
+    {
+        Mail::fake();
+        Storage::fake('local');
+
+        $user = User::factory()->create(['role' => 'HR', 'is_approved' => true, 'hired_date' => now()->subYears(1)]);
+
+        $loaPayload = [
+            'leave_type' => 'LOA',
+            'reason' => 'Leave of absence for an extended personal matter.',
+        ];
+
+        $this->actingAs($user)
+            ->post(route('leave-requests.store'), $this->payload($loaPayload))
+            ->assertSessionHasNoErrors();
+
+        $leaveRequest = LeaveRequest::firstOrFail();
+        $this->assertSame(0, $leaveRequest->documents()->count());
+
+        $this->actingAs($user)
+            ->put(route('leave-requests.update', $leaveRequest), $this->payload(array_merge($loaPayload, [
+                'medical_cert_files' => [UploadedFile::fake()->image('loa.jpg')],
+            ])))
+            ->assertSessionHasNoErrors();
+
+        $leaveRequest->refresh();
+
+        $this->assertSame(1, $leaveRequest->documents()->count());
+        $this->assertTrue((bool) $leaveRequest->medical_cert_submitted);
+    }
+
+    #[Test]
     public function it_allows_viewing_an_uploaded_document(): void
     {
         Mail::fake();

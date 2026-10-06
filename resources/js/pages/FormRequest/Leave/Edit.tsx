@@ -1246,8 +1246,8 @@ export default function Edit({
                                 )}
                             </div>
 
-                            {/* Medical/Supporting Document (for SL, BL, UPTO, and IW) */}
-                            {(data.leave_type === 'SL' || data.leave_type === 'BL' || data.leave_type === 'UPTO' || data.leave_type === 'IW') && (
+                            {/* Medical/Supporting Document (for SL, BL, UPTO, IW, and LOA) */}
+                            {['SL', 'BL', 'UPTO', 'IW', 'LOA'].includes(data.leave_type) && (
                                 <div className="space-y-3">
                                     <LeaveDocumentsUpload
                                         leaveType={data.leave_type}

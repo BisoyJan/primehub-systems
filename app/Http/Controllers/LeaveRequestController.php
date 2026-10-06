@@ -756,9 +756,9 @@ class LeaveRequestController extends Controller
                 }
             }
 
-            // Handle supporting document uploads for Sick Leave, Bereavement Leave, UPTO, and Incomplete Workday
+            // Handle supporting document uploads for SL, BL, UPTO, IW, and LOA
             $documentFiles = [];
-            if (in_array($request->leave_type, ['SL', 'BL', 'UPTO', 'IW']) && $request->hasFile('medical_cert_files')) {
+            if (in_array($request->leave_type, LeaveRequest::DOCUMENT_UPLOAD_LEAVE_TYPES) && $request->hasFile('medical_cert_files')) {
                 $documentFiles = $request->file('medical_cert_files');
             }
 
@@ -1413,7 +1413,7 @@ class LeaveRequestController extends Controller
 
         DB::beginTransaction();
         try {
-            $documentsEnabled = in_array($request->leave_type, ['SL', 'BL', 'UPTO', 'IW']);
+            $documentsEnabled = in_array($request->leave_type, LeaveRequest::DOCUMENT_UPLOAD_LEAVE_TYPES);
 
             // Remove documents the user chose to delete
             if ($documentsEnabled && $request->filled('removed_documents')) {

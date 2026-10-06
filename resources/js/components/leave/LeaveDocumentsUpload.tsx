@@ -40,6 +40,9 @@ function getDescription(leaveType: string): string {
     if (leaveType === 'IW') {
         return 'Upload supporting document(s) (e.g., appointment slip, event proof) to auto-excuse attendance points.';
     }
+    if (leaveType === 'LOA') {
+        return 'Optionally upload any supporting document(s) for your leave of absence request.';
+    }
     return 'Upload any supporting document(s) for your unpaid time off request.';
 }
 

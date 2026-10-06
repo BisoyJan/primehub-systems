@@ -1231,8 +1231,8 @@ export default function Show({
                             </Alert>
                         )}
 
-                        {/* Document (for SL, BL, UPTO, IW) */}
-                        {(leaveRequest.leave_type === 'SL' || leaveRequest.leave_type === 'BL' || leaveRequest.leave_type === 'UPTO' || leaveRequest.leave_type === 'IW') && (
+                        {/* Document (for SL, BL, UPTO, IW, LOA) */}
+                        {['SL', 'BL', 'UPTO', 'IW', 'LOA'].includes(leaveRequest.leave_type) && (
                             <div className="space-y-2">
                                 <p className="text-sm font-medium text-muted-foreground">
                                     {leaveRequest.leave_type === 'SL' ? 'Medical Certificate' : leaveRequest.leave_type === 'BL' ? 'Death Certificate' : 'Supporting Document'}
