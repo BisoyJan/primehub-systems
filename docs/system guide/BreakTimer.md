@@ -18,7 +18,7 @@ This is the main timer page — a circular countdown clock in the center of the 
 
 1. **Station** — Type your workstation number (e.g., ST-01, PC-05). *Required for Agents and Team Leads. If you leave it blank, the system will show an error.*
 
-2. **Theme** — Click the theme dropdown (top-right) to choose a visual background. **16 themes available**: Default, Cozy Cafe, Rainy Window, Sakura, Ocean Tide, Neon City, Golden Hour, Deep Forest, Snowfall, Moonlit, Aurora, Cyberpunk, Synthwave, Tetris Arcade, Pac-Man Arcade, Desktop Goose.
+2. **Theme** — Click the theme dropdown (top-right) to choose a visual background. **17 themes available**: Default, Cozy Cafe, Rainy Window, Sakura, Ocean Tide, Neon City, Golden Hour, Deep Forest, Snowfall, Moonlit, Aurora, Cyberpunk, Synthwave, Tetris Arcade, Pac-Man Arcade, Snake Arcade, Desktop Goose.
 
 3. **Alarm Sound** — Click the alarm dropdown to choose what sound plays when time runs out. Options: No Sound, Zen Bell, Corporate, 8-Bit, Beep, Urgent, Chime, Alert, Buzzer.
 
@@ -202,6 +202,7 @@ Click **Export Excel** to download filtered data as .xlsx.
 | **Synthwave** 🌇 | Retro sun, grid, palm trees |
 | **Tetris Arcade** 🕹️ | Cascading neon tetrominoes |
 | **Pac-Man Arcade** 🟡 | Self-playing neon Pac-Man animation |
+| **Snake Arcade** 🐍 | Self-playing neon snake that hunts food and auto-restarts |
 | **Desktop Goose** 🪿 | Interactive goose that chases cursor, honks, panics during overage |
 
 Select from the dropdown on the main timer page.

@@ -511,7 +511,38 @@ export const THEMES: TimerTheme[] = [
         btnResume: { from: '#ffe600', to: '#ccb700' },
         btnEnd: { from: '#1f0640', to: '#12042a' },
     },
-    // 15. Desktop Goose — Interactive goose that roams and chases cursor
+    // 15. Snake Arcade — self-playing neon snake
+    {
+        id: 'snake',
+        name: 'Snake Arcade',
+        icon: '🐍',
+        quote: 'Keep growing, one bite at a time',
+        alwaysDark: true,
+        bgLight: 'radial-gradient(circle at 50% 50%, #04210d 0%, #04140a 65%, #020806 100%)',
+        bgDark: 'radial-gradient(circle at 50% 50%, #04210d 0%, #04140a 65%, #020806 100%)',
+        glassLight: 'rgba(6, 30, 16, 0.5)',
+        glassDark: 'rgba(6, 30, 16, 0.5)',
+        ringActive: '#39ff14', // Snake green
+        ringPaused: '#00e5ff', // Neon cyan
+        ringOverage: '#ffe600', // Golden apple
+        ringDanger: '#ff2d95', // Hot pink
+        ringTrack: 'rgba(57, 255, 20, 0.15)',
+        ringTrackDark: 'rgba(57, 255, 20, 0.15)',
+        ringGlow: true,
+        ringAnimated: false,
+        statusActive: ['#39ff14', '#39ff14'],
+        statusPaused: ['#00e5ff', '#00e5ff'],
+        statusOverage: ['#ffe600', '#ffe600'],
+        statusDanger: ['#ff2d95', '#ff2d95'],
+        btnBreak: { from: '#39ff14', to: '#2ecc10' },
+        btnLunch: { from: '#ffe600', to: '#ccb800' },
+        btnCombined: { from: '#00e5ff', to: '#00b4cc' },
+        btnCombinedBreak: { from: '#b026ff', to: '#8a1fcc' },
+        btnPause: { from: '#00e5ff', to: '#00b4cc' },
+        btnResume: { from: '#39ff14', to: '#2ecc10' },
+        btnEnd: { from: '#0b3d1c', to: '#062513' },
+    },
+    // 16. Desktop Goose — Interactive goose that roams and chases cursor
     {
         id: 'desktop-goose',
         name: 'Desktop Goose',

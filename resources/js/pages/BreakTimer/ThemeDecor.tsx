@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import type { TimerTheme } from './themes';
 import { TetrisEngine } from './TetrisEngine';
 import { PacmanEngine } from './PacmanEngine';
+import { SnakeEngine } from './SnakeEngine';
 
 interface ThemeDecorProps {
     theme: TimerTheme;
@@ -48,6 +49,8 @@ function ThemeDecorInner({ theme, isDark, timerOver, overageSeconds }: ThemeDeco
             return <TetrisEngine opacity={o} />;
         case 'pacman':
             return <PacmanEngine opacity={o} />;
+        case 'snake':
+            return <SnakeEngine opacity={o} />;
         case 'desktop-goose':
             return <DesktopGooseDecor opacity={o} isDark={isDark} timerOver={timerOver} overageSeconds={overageSeconds} />;
         default:
