@@ -105,11 +105,8 @@ export default function Register() {
                                         tabIndex={4}
                                         autoComplete="email"
                                         name="email"
-                                        placeholder="email@primehubmail.com"
+                                        placeholder="Company email address"
                                     />
-                                    <p className="text-xs text-muted-foreground">
-                                        Only @primehubmail.com and @prmhubsolutions.com emails are accepted.
-                                    </p>
                                     <InputError message={errors.email} />
                                 </div>
 

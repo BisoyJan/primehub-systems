@@ -46,7 +46,7 @@ export default function Login({ status, canResetPassword }: LoginProps) {
                                     autoFocus
                                     tabIndex={1}
                                     autoComplete="email"
-                                    placeholder="email@primehubmail.com"
+                                    placeholder="Email address"
                                     className="text-white"
                                 />
                                 <InputError message={errors.email} />

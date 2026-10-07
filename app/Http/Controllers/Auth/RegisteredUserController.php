@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -26,7 +27,7 @@ class RegisteredUserController extends Controller
     /**
      * Handle an incoming registration request.
      *
-     * @throws \Illuminate\Validation\ValidationException
+     * @throws ValidationException
      */
     public function store(Request $request): RedirectResponse
     {
@@ -45,8 +46,8 @@ class RegisteredUserController extends Controller
                 'unique:'.User::class,
                 function ($attribute, $value, $fail) use ($allowedDomains) {
                     $domain = substr(strrchr($value, '@'), 1);
-                    if (!in_array($domain, $allowedDomains)) {
-                        $fail('Only @primehubmail.com and @prmhubsolutions.com email addresses are allowed.');
+                    if (! in_array($domain, $allowedDomains)) {
+                        $fail('Please use your company email address.');
                     }
                 },
             ],
