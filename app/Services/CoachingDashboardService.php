@@ -579,8 +579,8 @@ class CoachingDashboardService
      *     expected_so_far_per_agent: int,
      *     weeks_elapsed: int,
      *     period_label: string,
-     *     campaigns: array<int, array{account: string, total: int, eligible: int, excluded: int, capped_sessions: int, expected_sessions: int, total_sessions_this_month: int, fully_coached: int, behind_weekly: int, at_risk: int, rate: int, health: string}>,
-     *     totals: array{total: int, eligible: int, excluded: int, capped_sessions: int, expected_sessions: int, total_sessions_this_month: int, fully_coached: int, behind_weekly: int, at_risk: int, rate: int, health: string}
+     *     campaigns: array<int, array{account: string, total: int, eligible: int, excluded: int, capped_sessions: int, expected_sessions: int, total_sessions_this_month: int, fully_coached: int, behind_weekly: int, at_risk: int, behind_agents: array<int, array<string, mixed>>, at_risk_agents: array<int, array<string, mixed>>, rate: int, health: string}>,
+     *     totals: array{total: int, eligible: int, excluded: int, capped_sessions: int, expected_sessions: int, total_sessions_this_month: int, fully_coached: int, behind_weekly: int, at_risk: int, behind_agents: array<int, array<string, mixed>>, at_risk_agents: array<int, array<string, mixed>>, rate: int, health: string}
      * }
      */
     public function buildCampaignCompletion(array $dashboardData, ?array $filters = null): array
@@ -624,6 +624,8 @@ class CoachingDashboardService
             'behind_weekly' => 0,
             'at_risk' => 0,
         ];
+        $allBehindAgents = [];
+        $allAtRiskAgents = [];
 
         foreach ($groups as $account => $agents) {
             $excludedCoaching = $agents->filter(fn ($a) => ! empty($a['is_coaching_excluded']))->count();
@@ -644,8 +646,16 @@ class CoachingDashboardService
             $cappedSessions = (int) $eligible->sum(fn ($a) => min((int) ($a['sessions_this_month'] ?? 0), $monthlyTarget));
             $expectedSessions = $eligibleCount * $monthlyTarget;
             $fullyCoached = $eligible->filter(fn ($a) => (int) ($a['sessions_this_month'] ?? 0) >= $monthlyTarget)->count();
-            $behindWeekly = $eligible->filter(fn ($a) => (int) ($a['sessions_this_month'] ?? 0) < $expectedSoFarPerAgent)->count();
-            $atRisk = $eligible->filter(fn ($a) => in_array($a['coaching_status'] ?? null, $atRiskStatuses, true))->count();
+            $behindAgents = $this->breakdownAgentList(
+                $eligible->filter(fn ($a) => (int) ($a['sessions_this_month'] ?? 0) < $expectedSoFarPerAgent)
+            );
+            $atRiskAgents = $this->breakdownAgentList(
+                $eligible->filter(fn ($a) => in_array($a['coaching_status'] ?? null, $atRiskStatuses, true))
+            );
+            $behindWeekly = count($behindAgents);
+            $atRisk = count($atRiskAgents);
+            array_push($allBehindAgents, ...$behindAgents);
+            array_push($allAtRiskAgents, ...$atRiskAgents);
             $rate = $expectedSessions > 0 ? (int) round(($cappedSessions / $expectedSessions) * 100) : 0;
 
             $campaigns[] = [
@@ -661,6 +671,8 @@ class CoachingDashboardService
                 'fully_coached' => $fullyCoached,
                 'behind_weekly' => $behindWeekly,
                 'at_risk' => $atRisk,
+                'behind_agents' => $behindAgents,
+                'at_risk_agents' => $atRiskAgents,
                 'rate' => $rate,
                 'health' => $this->healthLevel($rate),
             ];
@@ -688,6 +700,8 @@ class CoachingDashboardService
             : 0;
 
         $totals = $totalAccumulator + [
+            'behind_agents' => $this->sortBreakdownAgents($allBehindAgents),
+            'at_risk_agents' => $this->sortBreakdownAgents($allAtRiskAgents),
             'rate' => $totalsRate,
             'health' => $this->healthLevel($totalsRate),
         ];
@@ -700,6 +714,38 @@ class CoachingDashboardService
             'campaigns' => $campaigns,
             'totals' => $totals,
         ];
+    }
+
+    /**
+     * Map dashboard agent rows to the lightweight shape used by the completion breakdown modal.
+     *
+     * @param  Collection<int, array<string, mixed>>  $agents
+     * @return array<int, array{id: int, name: string, account: string, coaching_status: string|null, status_color: string|null, sessions_this_month: int, last_coached_date: string|null}>
+     */
+    protected function breakdownAgentList(Collection $agents): array
+    {
+        return $this->sortBreakdownAgents($agents->map(fn ($a) => [
+            'id' => (int) $a['id'],
+            'name' => (string) ($a['name'] ?? ''),
+            'account' => (string) ($a['account'] ?? 'No Campaign'),
+            'coaching_status' => $a['coaching_status'] ?? null,
+            'status_color' => $a['status_color'] ?? null,
+            'sessions_this_month' => (int) ($a['sessions_this_month'] ?? 0),
+            'last_coached_date' => $a['last_coached_date'] ?? null,
+        ])->values()->all());
+    }
+
+    /**
+     * Sort breakdown agents by fewest sessions this month, then by name.
+     *
+     * @param  array<int, array{name: string, sessions_this_month: int}>  $agents
+     * @return array<int, array{name: string, sessions_this_month: int}>
+     */
+    protected function sortBreakdownAgents(array $agents): array
+    {
+        usort($agents, fn ($a, $b) => [$a['sessions_this_month'], $a['name']] <=> [$b['sessions_this_month'], $b['name']]);
+
+        return $agents;
     }
 
     /**

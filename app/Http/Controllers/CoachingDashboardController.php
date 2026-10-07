@@ -187,7 +187,7 @@ class CoachingDashboardController extends Controller
         // Server-side, cached campaign-completion stats (only for the agent dataset).
         $campaignCompletion = null;
         if ($coacheeRole !== 'Team Lead') {
-            $cacheKey = 'coaching_campaign_completion:'.md5(json_encode($filters));
+            $cacheKey = 'coaching_campaign_completion:v2:'.md5(json_encode($filters));
             $campaignCompletion = Cache::remember(
                 $cacheKey,
                 now()->addMinutes(5),

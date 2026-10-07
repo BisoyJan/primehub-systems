@@ -157,8 +157,26 @@ interface CampaignCompletionRow {
     fully_coached: number;
     behind_weekly: number;
     at_risk: number;
+    behind_agents?: CompletionBreakdownAgent[];
+    at_risk_agents?: CompletionBreakdownAgent[];
     rate: number;
     health: 'green' | 'amber' | 'red';
+}
+
+interface CompletionBreakdownAgent {
+    id: number;
+    name: string;
+    account: string;
+    coaching_status: CoachingStatusLabel | null;
+    status_color: string | null;
+    sessions_this_month: number;
+    last_coached_date: string | null;
+}
+
+interface CompletionBreakdown {
+    type: 'behind' | 'at_risk';
+    scope: string;
+    agents: CompletionBreakdownAgent[];
 }
 
 interface CampaignCompletionData {
@@ -224,6 +242,8 @@ export default function CoachingAdminIndex() {
         return window.localStorage.getItem('coaching:campaignCompletionOpen') === '1';
     });
     const [exportingCompletion, setExportingCompletion] = useState(false);
+    const [completionBreakdown, setCompletionBreakdown] = useState<CompletionBreakdown | null>(null);
+    const [breakdownSearch, setBreakdownSearch] = useState('');
     const [selectedForReview, setSelectedForReview] = useState<number[]>([]);
     const [campaignIds, setCampaignIds] = useState<string[]>(() => {
         const v = initialFilters.campaign_id;
@@ -336,6 +356,22 @@ export default function CoachingAdminIndex() {
             window.localStorage.setItem('coaching:campaignCompletionOpen', open ? '1' : '0');
         }
     };
+
+    const openCompletionBreakdown = (type: CompletionBreakdown['type'], scope: string, row: CampaignCompletionRow) => {
+        setBreakdownSearch('');
+        setCompletionBreakdown({
+            type,
+            scope,
+            agents: (type === 'behind' ? row.behind_agents : row.at_risk_agents) ?? [],
+        });
+    };
+
+    const filteredBreakdownAgents = useMemo(() => {
+        const agents = completionBreakdown?.agents ?? [];
+        const term = breakdownSearch.trim().toLowerCase();
+        if (!term) return agents;
+        return agents.filter((a) => a.name.toLowerCase().includes(term) || a.account.toLowerCase().includes(term));
+    }, [completionBreakdown, breakdownSearch]);
 
     const drillIntoCampaign = (accountName: string) => {
         const target = campaigns.find((c) => c.name === accountName);
@@ -590,19 +626,43 @@ export default function CoachingAdminIndex() {
                                             </div>
                                             <span className="w-12 text-right text-xs font-bold">{totalsRow.rate}%</span>
                                             {totalsRow.behind_weekly > 0 && (
-                                                <Badge variant="secondary" className="text-[10px]">{totalsRow.behind_weekly} behind</Badge>
+                                                <Badge asChild variant="secondary" className="cursor-pointer text-[10px] hover:opacity-80">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => openCompletionBreakdown('behind', 'All Campaigns', totalsRow)}
+                                                        title="View agents behind schedule"
+                                                    >
+                                                        {totalsRow.behind_weekly} behind
+                                                    </button>
+                                                </Badge>
                                             )}
                                             {totalsRow.at_risk > 0 && (
-                                                <Badge variant="destructive" className="text-[10px]">{totalsRow.at_risk} at risk</Badge>
+                                                <Badge asChild variant="destructive" className="cursor-pointer text-[10px] hover:opacity-80">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => openCompletionBreakdown('at_risk', 'All Campaigns', totalsRow)}
+                                                        title="View at-risk agents"
+                                                    >
+                                                        {totalsRow.at_risk} at risk
+                                                    </button>
+                                                </Badge>
                                             )}
                                         </div>
                                     )}
                                     {teamLeadSummary.map((tl) => (
-                                        <button
+                                        <div
                                             key={tl.account}
-                                            type="button"
+                                            role="button"
+                                            tabIndex={0}
                                             onClick={() => drillIntoCampaign(tl.account)}
-                                            className="flex w-full items-center gap-3 rounded-md p-1 text-left transition-colors hover:bg-muted/50"
+                                            onKeyDown={(e) => {
+                                                if (e.target !== e.currentTarget) return;
+                                                if (e.key === 'Enter' || e.key === ' ') {
+                                                    e.preventDefault();
+                                                    drillIntoCampaign(tl.account);
+                                                }
+                                            }}
+                                            className="flex w-full cursor-pointer items-center gap-3 rounded-md p-1 text-left transition-colors hover:bg-muted/50"
                                             title={`Filter dashboard by ${tl.account}`}
                                         >
                                             <span className="w-32 truncate text-sm font-medium">{tl.account}</span>
@@ -621,14 +681,34 @@ export default function CoachingAdminIndex() {
                                             </div>
                                             <span className="w-12 text-right text-xs font-medium">{tl.rate}%</span>
                                             {tl.behind_weekly > 0 && (
-                                                <Badge variant="secondary" className="text-[10px]" title={`Agents below ${expectedSoFarPerAgent} session(s) so far this month`}>
-                                                    {tl.behind_weekly} behind
+                                                <Badge asChild variant="secondary" className="cursor-pointer text-[10px] hover:opacity-80">
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            openCompletionBreakdown('behind', tl.account, tl);
+                                                        }}
+                                                        title={`Agents below ${expectedSoFarPerAgent} session(s) so far this month — click to view`}
+                                                    >
+                                                        {tl.behind_weekly} behind
+                                                    </button>
                                                 </Badge>
                                             )}
                                             {tl.at_risk > 0 && (
-                                                <Badge variant="destructive" className="text-[10px]">{tl.at_risk} at risk</Badge>
+                                                <Badge asChild variant="destructive" className="cursor-pointer text-[10px] hover:opacity-80">
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            openCompletionBreakdown('at_risk', tl.account, tl);
+                                                        }}
+                                                        title="View at-risk agents"
+                                                    >
+                                                        {tl.at_risk} at risk
+                                                    </button>
+                                                </Badge>
                                             )}
-                                        </button>
+                                        </div>
                                     ))}
                                 </div>}
                             </div>
@@ -1110,6 +1190,88 @@ export default function CoachingAdminIndex() {
                     </Tabs>
                 )}
             </div>
+
+            <Dialog open={completionBreakdown !== null} onOpenChange={(open) => { if (!open) setCompletionBreakdown(null); }}>
+                <DialogContent className="max-w-[95vw] sm:max-w-3xl lg:max-w-4xl">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            {completionBreakdown?.type === 'at_risk'
+                                ? <AlertTriangle className="h-4 w-4 text-red-500" />
+                                : <Clock className="h-4 w-4 text-muted-foreground" />}
+                            {completionBreakdown?.type === 'at_risk' ? 'At-Risk Agents' : 'Agents Behind Schedule'} — {completionBreakdown?.scope}
+                        </DialogTitle>
+                        <DialogDescription>
+                            {completionBreakdown?.type === 'at_risk'
+                                ? 'Agents with status Please Coach ASAP, Badly Needs Coaching, or No Record.'
+                                : `Agents with fewer than ${expectedSoFarPerAgent} session(s) so far in ${periodLabel} (week ${weeksElapsed}).`}
+                            {' '}({completionBreakdown?.agents.length ?? 0} total)
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <Input
+                        value={breakdownSearch}
+                        onChange={(e) => setBreakdownSearch(e.target.value)}
+                        placeholder="Search name or campaign..."
+                    />
+
+                    <div className="max-h-[60vh] overflow-y-auto rounded-md border">
+                        {filteredBreakdownAgents.length === 0 ? (
+                            <p className="p-6 text-center text-sm text-muted-foreground">No agents found.</p>
+                        ) : (
+                            <>
+                                <div className="hidden md:block">
+                                    <Table>
+                                        <TableHeader className="sticky top-0 z-10 bg-muted">
+                                            <TableRow>
+                                                <TableHead>Agent</TableHead>
+                                                {completionBreakdown?.scope === 'All Campaigns' && <TableHead>Campaign</TableHead>}
+                                                <TableHead>Status</TableHead>
+                                                <TableHead className="text-center">Sessions</TableHead>
+                                                <TableHead>Last Coached</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {filteredBreakdownAgents.map((agent) => (
+                                                <TableRow key={agent.id}>
+                                                    <TableCell className="whitespace-normal font-medium">{agent.name}</TableCell>
+                                                    {completionBreakdown?.scope === 'All Campaigns' && (
+                                                        <TableCell className="whitespace-normal text-muted-foreground">{agent.account}</TableCell>
+                                                    )}
+                                                    <TableCell>
+                                                        {agent.coaching_status && <CoachingStatusBadge status={agent.coaching_status} />}
+                                                    </TableCell>
+                                                    <TableCell className="text-center">{agent.sessions_this_month}/{sessionTarget}</TableCell>
+                                                    <TableCell className="whitespace-nowrap">
+                                                        {agent.last_coached_date ? formatDate(agent.last_coached_date) : 'Never'}
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                                <div className="divide-y md:hidden">
+                                    {filteredBreakdownAgents.map((agent) => (
+                                        <div key={agent.id} className="space-y-1 p-3">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="text-sm font-medium">{agent.name}</span>
+                                                {agent.coaching_status && <CoachingStatusBadge status={agent.coaching_status} />}
+                                            </div>
+                                            <div className="text-xs text-muted-foreground">
+                                                {completionBreakdown?.scope === 'All Campaigns' && `${agent.account} · `}
+                                                {agent.sessions_this_month}/{sessionTarget} sessions · Last: {agent.last_coached_date ? formatDate(agent.last_coached_date) : 'Never'}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </>
+                        )}
+                    </div>
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setCompletionBreakdown(null)}>Close</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </AppLayout>
     );
 }

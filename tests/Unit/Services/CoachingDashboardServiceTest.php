@@ -8,6 +8,7 @@ use App\Models\CoachingStatusSetting;
 use App\Models\EmployeeSchedule;
 use App\Models\User;
 use App\Services\CoachingDashboardService;
+use Database\Seeders\CoachingStatusSettingSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -22,7 +23,7 @@ class CoachingDashboardServiceTest extends TestCase
     {
         parent::setUp();
         $this->service = app(CoachingDashboardService::class);
-        $this->seed(\Database\Seeders\CoachingStatusSettingSeeder::class);
+        $this->seed(CoachingStatusSettingSeeder::class);
     }
 
     // ─── Status Calculation Tests (Threshold-Based) ──────────────
@@ -367,5 +368,41 @@ class CoachingDashboardServiceTest extends TestCase
         $data = $this->service->getTeamLeadCoachingData(['campaign_id' => $campaign->id]);
 
         $this->assertEquals(1, $data['total_agents']);
+    }
+
+    #[Test]
+    public function campaign_completion_includes_behind_and_at_risk_agent_breakdowns(): void
+    {
+        $agentRow = fn (int $id, string $name, string $account, string $status, int $sessions): array => [
+            'id' => $id,
+            'name' => $name,
+            'account' => $account,
+            'coaching_status' => $status,
+            'status_color' => 'gray',
+            'sessions_this_month' => $sessions,
+            'last_coached_date' => null,
+            'schedule_effective_date' => null,
+            'is_coaching_excluded' => false,
+        ];
+
+        $dashboardData = ['agents' => collect([
+            $agentRow(1, 'Zed Behind', 'Survey', CoachingDashboardService::STATUS_PLEASE_COACH_ASAP, 0),
+            $agentRow(2, 'Amy OnTrack', 'Survey', CoachingDashboardService::STATUS_COACHING_DONE, 4),
+            $agentRow(3, 'Bob NoRecord', 'Sales', CoachingDashboardService::STATUS_NO_RECORD, 0),
+            ['is_coaching_excluded' => true] + $agentRow(4, 'Excluded Guy', 'Sales', CoachingDashboardService::STATUS_NO_RECORD, 0),
+        ])];
+
+        $result = $this->service->buildCampaignCompletion($dashboardData, ['date_to' => now()->endOfMonth()->toDateString()]);
+
+        $survey = collect($result['campaigns'])->firstWhere('account', 'Survey');
+        $this->assertSame([1], array_column($survey['behind_agents'], 'id'));
+        $this->assertSame([1], array_column($survey['at_risk_agents'], 'id'));
+        $this->assertSame($survey['behind_weekly'], count($survey['behind_agents']));
+        $this->assertSame($survey['at_risk'], count($survey['at_risk_agents']));
+
+        $this->assertSame(['Bob NoRecord', 'Zed Behind'], array_column($result['totals']['behind_agents'], 'name'));
+        $this->assertSame([3, 1], array_column($result['totals']['at_risk_agents'], 'id'));
+        $this->assertSame(2, $result['totals']['at_risk']);
+        $this->assertSame('Sales', $result['totals']['at_risk_agents'][0]['account']);
     }
 }
