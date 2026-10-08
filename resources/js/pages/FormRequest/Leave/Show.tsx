@@ -1231,9 +1231,8 @@ export default function Show({
                             </Alert>
                         )}
 
-                        {/* Document (for SL, BL, UPTO, IW, LOA) */}
-                        {['SL', 'BL', 'UPTO', 'IW', 'LOA'].includes(leaveRequest.leave_type) && (
-                            <div className="space-y-2">
+                        {/* Document (available for all leave types) */}
+                        <div className="space-y-2">
                                 <p className="text-sm font-medium text-muted-foreground">
                                     {leaveRequest.leave_type === 'SL' ? 'Medical Certificate' : leaveRequest.leave_type === 'BL' ? 'Death Certificate' : 'Supporting Document'}
                                 </p>
@@ -1317,7 +1316,6 @@ export default function Show({
                                     </Badge>
                                 )}
                             </div>
-                        )}
 
                         {/* Credits Info */}
                         {Boolean(leaveRequest.credits_deducted !== null && leaveRequest.credits_deducted !== undefined && Number(leaveRequest.credits_deducted) > 0) && (

@@ -1362,9 +1362,8 @@ export default function Create({
                                 </div>
                             )}
 
-                            {/* Medical/Supporting Document (for SL, BL, UPTO, IW, and LOA) */}
-                            {['SL', 'BL', 'UPTO', 'IW', 'LOA'].includes(data.leave_type) && (
-                                <div className="space-y-4">
+                            {/* Medical/Supporting Document (available for all leave types) */}
+                            <div className="space-y-4">
                                     <LeaveDocumentsUpload
                                         leaveType={data.leave_type}
                                         files={data.medical_cert_files}
@@ -1394,7 +1393,6 @@ export default function Create({
                                         </Alert>
                                     )}
                                 </div>
-                            )}
 
                             {/* Reason */}
                             <div className="space-y-2">

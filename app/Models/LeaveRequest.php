@@ -130,7 +130,7 @@ class LeaveRequest extends Model
     /**
      * Leave types that allow uploading supporting documents.
      */
-    const DOCUMENT_UPLOAD_LEAVE_TYPES = ['SL', 'BL', 'UPTO', 'IW', 'LOA'];
+    const DOCUMENT_UPLOAD_LEAVE_TYPES = ['VL', 'SL', 'BL', 'SPL', 'LOA', 'LDV', 'UPTO', 'ML', 'IW'];
 
     /**
      * Get the user who submitted the leave request.

@@ -3,6 +3,7 @@
 namespace Tests\Feature\Controllers\Accounts;
 
 use App\Models\Attendance;
+use App\Models\Campaign;
 use App\Models\EmployeeSchedule;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -133,6 +134,244 @@ class AccountControllerTest extends TestCase
                 ->component('Account/Index')
                 ->where('users.data', fn ($data) => collect($data)->pluck('id')->contains($resignedEmployee->id)
                     && ! collect($data)->pluck('id')->contains($pendingApplicant->id))
+            );
+    }
+
+    public function test_index_filters_by_hired_date_range(): void
+    {
+        $inRange = User::factory()->create(['hired_date' => '2024-03-15']);
+        $beforeRange = User::factory()->create(['hired_date' => '2023-12-31']);
+        $afterRange = User::factory()->create(['hired_date' => '2024-07-01']);
+        $noHiredDate = User::factory()->create(['hired_date' => null]);
+
+        $response = $this->actingAs($this->adminUser)
+            ->get(route('accounts.index', ['hired_from' => '2024-01-01', 'hired_to' => '2024-06-30']));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Account/Index')
+                ->where('filters.hired_from', '2024-01-01')
+                ->where('filters.hired_to', '2024-06-30')
+                ->where('users.data', function ($data) use ($inRange, $beforeRange, $afterRange, $noHiredDate) {
+                    $ids = collect($data)->pluck('id');
+
+                    return $ids->contains($inRange->id)
+                        && ! $ids->contains($beforeRange->id)
+                        && ! $ids->contains($afterRange->id)
+                        && ! $ids->contains($noHiredDate->id);
+                })
+            );
+    }
+
+    public function test_index_filters_by_hired_from_only(): void
+    {
+        $recent = User::factory()->create(['hired_date' => '2024-05-01']);
+        $older = User::factory()->create(['hired_date' => '2023-05-01']);
+
+        $response = $this->actingAs($this->adminUser)
+            ->get(route('accounts.index', ['hired_from' => '2024-01-01']));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('users.data', fn ($data) => collect($data)->pluck('id')->contains($recent->id)
+                    && ! collect($data)->pluck('id')->contains($older->id))
+            );
+    }
+
+    public function test_index_ignores_invalid_hired_date_values(): void
+    {
+        User::factory()->create(['hired_date' => '2024-05-01']);
+
+        $response = $this->actingAs($this->adminUser)
+            ->get(route('accounts.index', ['hired_from' => 'not-a-date', 'hired_to' => '2024-13-45']));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('filters.hired_from', '')
+                ->where('filters.hired_to', '')
+                ->where('users.meta.total', 2)
+            );
+    }
+
+    public function test_index_filters_users_without_hired_date(): void
+    {
+        $noHiredDate = User::factory()->create(['hired_date' => null]);
+        $hired = User::factory()->create(['hired_date' => '2024-01-01']);
+
+        $response = $this->actingAs($this->adminUser)
+            ->get(route('accounts.index', [
+                'hired_status' => 'no_hired_date',
+                'hired_from' => '2020-01-01',
+            ]));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('filters.hired_status', 'no_hired_date')
+                ->where('filters.hired_from', '')
+                ->where('users.data', fn ($data) => collect($data)->pluck('id')->contains($noHiredDate->id)
+                    && ! collect($data)->pluck('id')->contains($hired->id))
+            );
+    }
+
+    public function test_index_filters_by_campaign_via_active_schedule(): void
+    {
+        $campaignA = Campaign::factory()->create(['name' => 'Alpha']);
+        $campaignB = Campaign::factory()->create(['name' => 'Beta']);
+
+        $agentA = User::factory()->create(['role' => 'Agent']);
+        EmployeeSchedule::factory()->create(['user_id' => $agentA->id, 'campaign_id' => $campaignA->id]);
+
+        $agentB = User::factory()->create(['role' => 'Agent']);
+        EmployeeSchedule::factory()->create(['user_id' => $agentB->id, 'campaign_id' => $campaignB->id]);
+
+        $response = $this->actingAs($this->adminUser)
+            ->get(route('accounts.index', ['campaign_id' => $campaignA->id]));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('filters.campaign_id', (string) $campaignA->id)
+                ->where('users.data', function ($data) use ($agentA, $agentB) {
+                    $rows = collect($data);
+                    $ids = $rows->pluck('id');
+                    $agentRow = $rows->firstWhere('id', $agentA->id);
+
+                    return $ids->contains($agentA->id)
+                        && ! $ids->contains($agentB->id)
+                        && $agentRow['campaign_names'] === ['Alpha']
+                        && $agentRow['campaign_active'] === true;
+                })
+            );
+    }
+
+    public function test_index_campaign_filter_matches_inactive_schedules(): void
+    {
+        $campaignA = Campaign::factory()->create(['name' => 'Alpha']);
+
+        $inactiveInA = User::factory()->create(['role' => 'Agent']);
+        EmployeeSchedule::factory()->inactive()->create(['user_id' => $inactiveInA->id, 'campaign_id' => $campaignA->id]);
+
+        $response = $this->actingAs($this->adminUser)
+            ->get(route('accounts.index', ['campaign_id' => $campaignA->id]));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('users.data', function ($data) use ($inactiveInA) {
+                    $row = collect($data)->firstWhere('id', $inactiveInA->id);
+
+                    return $row !== null
+                        && $row['campaign_names'] === ['Alpha']
+                        && $row['campaign_active'] === false;
+                })
+            );
+    }
+
+    public function test_index_prefers_active_schedule_campaign_over_inactive(): void
+    {
+        $activeCampaign = Campaign::factory()->create(['name' => 'Active One']);
+        $oldCampaign = Campaign::factory()->create(['name' => 'Old One']);
+
+        $agent = User::factory()->create(['role' => 'Agent']);
+        EmployeeSchedule::factory()->inactive()->create([
+            'user_id' => $agent->id,
+            'campaign_id' => $oldCampaign->id,
+            'effective_date' => now()->subYear(),
+        ]);
+        EmployeeSchedule::factory()->create([
+            'user_id' => $agent->id,
+            'campaign_id' => $activeCampaign->id,
+        ]);
+
+        $response = $this->actingAs($this->adminUser)
+            ->get(route('accounts.index', ['user_id' => $agent->id]));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('users.data', function ($data) use ($agent) {
+                    $row = collect($data)->firstWhere('id', $agent->id);
+
+                    return $row['campaign_names'] === ['Active One']
+                        && $row['campaign_active'] === true;
+                })
+            );
+    }
+
+    public function test_index_filters_by_campaign_via_team_lead_pivot(): void
+    {
+        $campaignA = Campaign::factory()->create(['name' => 'Alpha']);
+        $campaignB = Campaign::factory()->create(['name' => 'Beta']);
+
+        $teamLead = User::factory()->create(['role' => 'Team Lead']);
+        $teamLead->campaigns()->attach([$campaignA->id, $campaignB->id]);
+
+        $otherTeamLead = User::factory()->create(['role' => 'Team Lead']);
+        $otherTeamLead->campaigns()->attach($campaignB->id);
+
+        $response = $this->actingAs($this->adminUser)
+            ->get(route('accounts.index', ['campaign_id' => $campaignA->id]));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('users.data', function ($data) use ($teamLead, $otherTeamLead) {
+                    $rows = collect($data);
+                    $ids = $rows->pluck('id');
+                    $tlRow = $rows->firstWhere('id', $teamLead->id);
+
+                    return $ids->contains($teamLead->id)
+                        && ! $ids->contains($otherTeamLead->id)
+                        && $tlRow['campaign_names'] === ['Alpha', 'Beta'];
+                })
+            );
+    }
+
+    public function test_index_filters_users_without_campaign(): void
+    {
+        $campaign = Campaign::factory()->create();
+
+        $noCampaign = User::factory()->create(['role' => 'Agent']);
+
+        $withSchedule = User::factory()->create(['role' => 'Agent']);
+        EmployeeSchedule::factory()->create(['user_id' => $withSchedule->id, 'campaign_id' => $campaign->id]);
+
+        $teamLeadWithPivot = User::factory()->create(['role' => 'Team Lead']);
+        $teamLeadWithPivot->campaigns()->attach($campaign->id);
+
+        $inactiveScheduleOnly = User::factory()->create(['role' => 'Agent']);
+        EmployeeSchedule::factory()->inactive()->create(['user_id' => $inactiveScheduleOnly->id, 'campaign_id' => $campaign->id]);
+
+        $response = $this->actingAs($this->adminUser)
+            ->get(route('accounts.index', ['campaign_id' => 'none']));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('filters.campaign_id', 'none')
+                ->where('users.data', function ($data) use ($noCampaign, $withSchedule, $teamLeadWithPivot, $inactiveScheduleOnly) {
+                    $rows = collect($data);
+                    $ids = $rows->pluck('id');
+
+                    return $ids->contains($noCampaign->id)
+                        && ! $ids->contains($inactiveScheduleOnly->id)
+                        && ! $ids->contains($withSchedule->id)
+                        && ! $ids->contains($teamLeadWithPivot->id)
+                        && $rows->firstWhere('id', $noCampaign->id)['campaign_names'] === [];
+                })
+            );
+    }
+
+    public function test_index_provides_campaigns_for_filter_dropdown(): void
+    {
+        Campaign::factory()->create(['name' => 'Zeta']);
+        Campaign::factory()->create(['name' => 'Alpha']);
+
+        $response = $this->actingAs($this->adminUser)
+            ->get(route('accounts.index'));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('campaigns', 2)
+                ->where('campaigns.0.name', 'Alpha')
+                ->where('campaigns.1.name', 'Zeta')
+                ->where('filters.campaign_id', '')
+                ->where('filters.hired_status', '')
             );
     }
 

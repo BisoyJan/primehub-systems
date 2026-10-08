@@ -43,7 +43,10 @@ function getDescription(leaveType: string): string {
     if (leaveType === 'LOA') {
         return 'Optionally upload any supporting document(s) for your leave of absence request.';
     }
-    return 'Upload any supporting document(s) for your unpaid time off request.';
+    if (leaveType === 'UPTO') {
+        return 'Upload any supporting document(s) for your unpaid time off request.';
+    }
+    return 'Optionally upload any supporting document(s) for your leave request.';
 }
 
 export function LeaveDocumentsUpload({

@@ -70,12 +70,19 @@ interface User {
     deletion_confirmed_at: string | null;
     avatar?: string;
     avatar_url?: string;
+    campaign_names?: string[];
+    campaign_active?: boolean;
 }
 
 interface UserOption {
     id: number;
     name: string;
     email: string;
+}
+
+interface CampaignOption {
+    id: number;
+    name: string;
 }
 
 interface EmployeeSchedule {
@@ -120,10 +127,26 @@ interface Filters {
     status: string;
     employee_status: string;
     user_ids: string[];
+    hired_from: string;
+    hired_to: string;
+    hired_status: string;
+    campaign_id: string;
+}
+
+interface FilterState {
+    search: string;
+    userIds: string[];
+    role: string;
+    status: string;
+    employeeStatus: string;
+    hiredStatus: string;
+    hiredFrom: string;
+    hiredTo: string;
+    campaignId: string;
 }
 
 export default function AccountIndex() {
-    const { users, allUsers = [], filters, staleCount = 0 } = usePage<{ users: UsersPayload; allUsers: UserOption[]; filters: Filters; staleCount: number }>().props;
+    const { users, allUsers = [], campaigns = [], filters, staleCount = 0 } = usePage<{ users: UsersPayload; allUsers: UserOption[]; campaigns: CampaignOption[]; filters: Filters; staleCount: number }>().props;
 
     const to12Hour = (time: string) => {
         const [h, m] = time.split(':').map(Number);
@@ -142,6 +165,12 @@ export default function AccountIndex() {
     const [roleFilter, setRoleFilter] = useState(filters.role || "all");
     const [statusFilter, setStatusFilter] = useState(filters.status || "all");
     const [employeeStatusFilter, setEmployeeStatusFilter] = useState(filters.employee_status || "all");
+    const [hiredStatusFilter, setHiredStatusFilter] = useState(
+        filters.hired_status === "no_hired_date" ? "no_hired_date" : (filters.hired_from || filters.hired_to) ? "range" : "all"
+    );
+    const [hiredFrom, setHiredFrom] = useState(filters.hired_from || "");
+    const [hiredTo, setHiredTo] = useState(filters.hired_to || "");
+    const [campaignFilter, setCampaignFilter] = useState(filters.campaign_id || "all");
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
     const [selectedApproveIds, setSelectedApproveIds] = useState<number[]>([]);
@@ -236,7 +265,7 @@ export default function AccountIndex() {
         const interval = setInterval(() => {
             if (isPollingRef.current) return;
             isPollingRef.current = true;
-            router.get(accountsIndex().url, buildFilterParams(search, selectedUserIds, roleFilter, statusFilter, employeeStatusFilter), {
+            router.get(accountsIndex().url, buildFilterParams(currentFilters), {
                 preserveState: true,
                 preserveScroll: true,
                 replace: true,
@@ -247,24 +276,41 @@ export default function AccountIndex() {
         }, 30000);
 
         return () => clearInterval(interval);
-    }, [autoRefreshEnabled, search, selectedUserIds, roleFilter, statusFilter, employeeStatusFilter]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [autoRefreshEnabled, search, selectedUserIds, roleFilter, statusFilter, employeeStatusFilter, hiredStatusFilter, hiredFrom, hiredTo, campaignFilter]);
 
-    const showClearFilters = roleFilter !== "all" || statusFilter !== "all" || employeeStatusFilter !== "all" || Boolean(search) || selectedUserIds.length > 0;
+    const showClearFilters = roleFilter !== "all" || statusFilter !== "all" || employeeStatusFilter !== "all"
+        || hiredStatusFilter !== "all" || campaignFilter !== "all" || Boolean(search) || selectedUserIds.length > 0;
+
+    const currentFilters: FilterState = {
+        search,
+        userIds: selectedUserIds,
+        role: roleFilter,
+        status: statusFilter,
+        employeeStatus: employeeStatusFilter,
+        hiredStatus: hiredStatusFilter,
+        hiredFrom,
+        hiredTo,
+        campaignId: campaignFilter,
+    };
 
     const buildFilterParams = (
-        searchValue: string,
-        userIdValues: string[],
-        roleValue: string,
-        statusValue: string,
-        employeeStatusValue: string,
+        state: FilterState,
         options: { resetPage?: boolean } = {}
     ) => {
         const params: Record<string, string | number | string[]> = {};
-        if (searchValue) params.search = searchValue;
-        if (userIdValues.length > 0) params.user_ids = userIdValues;
-        if (roleValue && roleValue !== "all") params.role = roleValue;
-        if (statusValue && statusValue !== "all") params.status = statusValue;
-        if (employeeStatusValue && employeeStatusValue !== "all") params.employee_status = employeeStatusValue;
+        if (state.search) params.search = state.search;
+        if (state.userIds.length > 0) params.user_ids = state.userIds;
+        if (state.role && state.role !== "all") params.role = state.role;
+        if (state.status && state.status !== "all") params.status = state.status;
+        if (state.employeeStatus && state.employeeStatus !== "all") params.employee_status = state.employeeStatus;
+        if (state.hiredStatus === "no_hired_date") {
+            params.hired_status = "no_hired_date";
+        } else if (state.hiredStatus === "range") {
+            if (state.hiredFrom) params.hired_from = state.hiredFrom;
+            if (state.hiredTo) params.hired_to = state.hiredTo;
+        }
+        if (state.campaignId && state.campaignId !== "all") params.campaign_id = state.campaignId;
         if (options.resetPage) params.page = 1;
         return params;
     };
@@ -276,7 +322,7 @@ export default function AccountIndex() {
     };
 
     const handleSearch = () => {
-        const params = buildFilterParams(search, selectedUserIds, roleFilter, statusFilter, employeeStatusFilter, { resetPage: true });
+        const params = buildFilterParams(currentFilters, { resetPage: true });
         setLoading(true);
         router.get(accountsIndex().url, params, {
             preserveState: true,
@@ -521,6 +567,10 @@ export default function AccountIndex() {
         setRoleFilter("all");
         setStatusFilter("all");
         setEmployeeStatusFilter("all");
+        setHiredStatusFilter("all");
+        setHiredFrom("");
+        setHiredTo("");
+        setCampaignFilter("all");
         // Trigger a reload with cleared filters
         setLoading(true);
         router.get(accountsIndex().url, {}, {
@@ -534,7 +584,7 @@ export default function AccountIndex() {
 
     const handleManualRefresh = () => {
         setLoading(true);
-        router.get(accountsIndex().url, buildFilterParams(search, selectedUserIds, roleFilter, statusFilter, employeeStatusFilter), {
+        router.get(accountsIndex().url, buildFilterParams(currentFilters), {
             preserveState: true,
             preserveScroll: true,
             replace: true,
@@ -595,7 +645,7 @@ export default function AccountIndex() {
 
     const handlePageChange = (page: number) => {
         setLoading(true);
-        router.get(accountsIndex().url, { ...buildFilterParams(search, selectedUserIds, roleFilter, statusFilter, employeeStatusFilter), page }, {
+        router.get(accountsIndex().url, { ...buildFilterParams(currentFilters), page }, {
             preserveState: true,
             preserveScroll: true,
             only: ["users"],
@@ -668,7 +718,8 @@ export default function AccountIndex() {
                 />
 
                 <div className="flex flex-col gap-3">
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                    <div className="flex flex-col flex-wrap gap-3 sm:flex-row sm:items-end">
+                        <div className="w-full sm:w-56">
                         <Popover open={isUserPopoverOpen} onOpenChange={setIsUserPopoverOpen}>
                             <PopoverTrigger asChild>
                                 <Button
@@ -687,7 +738,7 @@ export default function AccountIndex() {
                                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                 </Button>
                             </PopoverTrigger>
-                            <PopoverContent className="w-full p-0" align="start">
+                            <PopoverContent className="w-80 max-w-[calc(100vw-2rem)] p-0" align="start">
                                 <Command shouldFilter={false}>
                                     <CommandInput
                                         placeholder="Search employee..."
@@ -727,9 +778,9 @@ export default function AccountIndex() {
                                                             onCheckedChange={() => toggleSelectedUserId(idStr)}
                                                             onClick={(e) => e.stopPropagation()}
                                                         />
-                                                        <div className="flex flex-col">
-                                                            <span>{user.name}</span>
-                                                            <span className="text-xs text-muted-foreground">{user.email}</span>
+                                                        <div className="flex min-w-0 flex-col">
+                                                            <span className="break-words">{user.name}</span>
+                                                            <span className="text-xs text-muted-foreground break-all">{user.email}</span>
                                                         </div>
                                                     </CommandItem>
                                                 );
@@ -755,7 +806,9 @@ export default function AccountIndex() {
                                 )}
                             </PopoverContent>
                         </Popover>
+                        </div>
 
+                        <div className="w-full sm:w-40">
                         <Select value={roleFilter} onValueChange={setRoleFilter}>
                             <SelectTrigger className="w-full">
                                 <SelectValue placeholder="Filter by Role" />
@@ -771,7 +824,9 @@ export default function AccountIndex() {
                                 <SelectItem value="Utility">Utility</SelectItem>
                             </SelectContent>
                         </Select>
+                        </div>
 
+                        <div className="w-full sm:w-48">
                         <Select value={statusFilter} onValueChange={setStatusFilter}>
                             <SelectTrigger className="w-full">
                                 <SelectValue placeholder="Filter by Account Status" />
@@ -785,7 +840,9 @@ export default function AccountIndex() {
                                 <SelectItem value="deleted">Deleted</SelectItem>
                             </SelectContent>
                         </Select>
+                        </div>
 
+                        <div className="w-full sm:w-48">
                         <Select value={employeeStatusFilter} onValueChange={setEmployeeStatusFilter}>
                             <SelectTrigger className="w-full">
                                 <SelectValue placeholder="Filter by Employee Status" />
@@ -796,7 +853,75 @@ export default function AccountIndex() {
                                 <SelectItem value="inactive">Inactive Employees</SelectItem>
                             </SelectContent>
                         </Select>
+                        </div>
 
+                        <div className="w-full sm:w-44">
+                        <Select value={campaignFilter} onValueChange={setCampaignFilter}>
+                            <SelectTrigger className="w-full">
+                                <SelectValue placeholder="Filter by Campaign" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Campaigns</SelectItem>
+                                <SelectItem value="none">No Campaign</SelectItem>
+                                {campaigns.map((campaign) => (
+                                    <SelectItem key={campaign.id} value={String(campaign.id)}>
+                                        {campaign.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        </div>
+
+                        <div className="w-full sm:w-44">
+                        <Select
+                            value={hiredStatusFilter}
+                            onValueChange={(value) => {
+                                setHiredStatusFilter(value);
+                                if (value !== "range") {
+                                    setHiredFrom("");
+                                    setHiredTo("");
+                                }
+                            }}
+                        >
+                            <SelectTrigger className="w-full">
+                                <SelectValue placeholder="Filter by Hired Date" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Hired Dates</SelectItem>
+                                <SelectItem value="range">Hired Date Range</SelectItem>
+                                <SelectItem value="no_hired_date">No Hired Date</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        </div>
+
+                        {hiredStatusFilter === "range" && (
+                            <>
+                                <div className="flex w-full flex-col gap-1 sm:w-40">
+                                    <Label htmlFor="hired-from" className="text-xs text-muted-foreground">Hired From</Label>
+                                    <Input
+                                        id="hired-from"
+                                        type="date"
+                                        value={hiredFrom}
+                                        max={hiredTo || undefined}
+                                        onChange={e => setHiredFrom(e.target.value)}
+                                        className="w-full"
+                                    />
+                                </div>
+                                <div className="flex w-full flex-col gap-1 sm:w-40">
+                                    <Label htmlFor="hired-to" className="text-xs text-muted-foreground">Hired To</Label>
+                                    <Input
+                                        id="hired-to"
+                                        type="date"
+                                        value={hiredTo}
+                                        min={hiredFrom || undefined}
+                                        onChange={e => setHiredTo(e.target.value)}
+                                        className="w-full"
+                                    />
+                                </div>
+                            </>
+                        )}
+
+                        <div className="w-full sm:w-64">
                         <Input
                             type="search"
                             placeholder="Search by name or email..."
@@ -805,6 +930,7 @@ export default function AccountIndex() {
                             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                             className="w-full"
                         />
+                        </div>
                     </div>
 
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -914,7 +1040,7 @@ export default function AccountIndex() {
                 {/* Desktop Table */}
                 <div className="hidden md:block shadow rounded-md overflow-hidden">
                     {isPageLoading ? (
-                        <TableSkeleton columns={9} rows={8} />
+                        <TableSkeleton columns={10} rows={8} />
                     ) : (
                         <div className="overflow-x-auto">
                             <Table>
@@ -947,6 +1073,7 @@ export default function AccountIndex() {
                                         <TableHead>Role</TableHead>
                                         <TableHead>Employee Status</TableHead>
                                         <TableHead>Account Status</TableHead>
+                                        <TableHead>Campaign</TableHead>
                                         <TableHead>Hired Date</TableHead>
                                         <TableHead>Created At</TableHead>
                                         <TableHead className="text-right">Actions</TableHead>
@@ -1020,6 +1147,20 @@ export default function AccountIndex() {
                                                     <span className={`px-3 py-1 rounded-full text-xs font-medium border ${statusBadge.className}`}>
                                                         {statusBadge.label}
                                                     </span>
+                                                </TableCell>
+                                                <TableCell>
+                                                    {user.campaign_names && user.campaign_names.length > 0 ? (
+                                                        <span className="inline-flex items-center gap-1.5">
+                                                            <span className={user.campaign_active === false ? 'text-muted-foreground' : ''}>
+                                                                {user.campaign_names.join(', ')}
+                                                            </span>
+                                                            {user.campaign_active === false && (
+                                                                <span className="px-2 py-0.5 rounded-full text-[10px] font-medium border bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700">
+                                                                    Inactive
+                                                                </span>
+                                                            )}
+                                                        </span>
+                                                    ) : '-'}
                                                 </TableCell>
                                                 <TableCell>
                                                     {user.hired_date ? new Date(user.hired_date).toLocaleDateString() : '-'}
@@ -1158,7 +1299,7 @@ export default function AccountIndex() {
                                     })}
                                     {users.data.length === 0 && !loading && (
                                         <TableRow>
-                                            <TableCell colSpan={10} className="py-8 text-center text-gray-500">
+                                            <TableCell colSpan={11} className="py-8 text-center text-gray-500">
                                                 No user accounts found
                                             </TableCell>
                                         </TableRow>
@@ -1238,6 +1379,11 @@ export default function AccountIndex() {
                                             {statusBadge.label}
                                         </span>
                                     </div>
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                    Campaign: {user.campaign_names && user.campaign_names.length > 0
+                                        ? `${user.campaign_names.join(', ')}${user.campaign_active === false ? ' (Inactive)' : ''}`
+                                        : 'None'}
                                 </div>
                                 <div className="text-xs text-gray-500">
                                     Hired: {user.hired_date ? new Date(user.hired_date).toLocaleDateString() : 'Not set'}

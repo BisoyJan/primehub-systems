@@ -889,8 +889,8 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
                                                                             <Eye className="h-4 w-4" />
                                                                         </Button>
                                                                     </Link>
-                                                                    {/* Medical/Supporting Document Button - For SL, BL, UPTO, and IW with uploaded document */}
-                                                                    {(request.leave_type === 'SL' || request.leave_type === 'BL' || request.leave_type === 'UPTO' || request.leave_type === 'IW') && ((request.documents_count ?? 0) > 0 || request.medical_cert_path) && (auth.user.id === request.user.id || isAdmin || isTeamLead) && (
+                                                                    {/* Medical/Supporting Document Button - any leave type with an uploaded document */}
+                                                                    {((request.documents_count ?? 0) > 0 || request.medical_cert_path) && (auth.user.id === request.user.id || isAdmin || isTeamLead) && (
                                                                         <Link href={leaveShowRoute(request.id).url}>
                                                                             <Button
                                                                                 size="icon"
@@ -1041,8 +1041,8 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
                                                     View
                                                 </Button>
                                             </Link>
-                                            {/* Medical/Supporting Document Button - Mobile */}
-                                            {(request.leave_type === 'SL' || request.leave_type === 'BL' || request.leave_type === 'UPTO' || request.leave_type === 'IW') && ((request.documents_count ?? 0) > 0 || request.medical_cert_path) && (auth.user.id === request.user.id || isAdmin || isTeamLead) && (
+                                            {/* Medical/Supporting Document Button - Mobile - any leave type with an uploaded document */}
+                                            {((request.documents_count ?? 0) > 0 || request.medical_cert_path) && (auth.user.id === request.user.id || isAdmin || isTeamLead) && (
                                                 <Link href={leaveShowRoute(request.id).url} className="flex-1">
                                                     <Button
                                                         size="sm"

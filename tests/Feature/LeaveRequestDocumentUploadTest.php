@@ -210,4 +210,63 @@ class LeaveRequestDocumentUploadTest extends TestCase
             ]))
             ->assertOk();
     }
+
+    #[Test]
+    public function it_stores_supporting_documents_for_maternity_leave(): void
+    {
+        Mail::fake();
+        Storage::fake('local');
+
+        $user = User::factory()->create(['role' => 'HR', 'is_approved' => true, 'hired_date' => now()->subYears(1)]);
+
+        $this->actingAs($user)
+            ->post(route('leave-requests.store'), $this->payload([
+                'leave_type' => 'ML',
+                'reason' => 'Maternity leave supporting medical records attached.',
+                'medical_cert_files' => [
+                    UploadedFile::fake()->image('ml1.jpg'),
+                    UploadedFile::fake()->create('ml2.pdf', 100, 'application/pdf'),
+                ],
+            ]))
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $leaveRequest = LeaveRequest::firstOrFail();
+
+        $this->assertSame('ML', $leaveRequest->leave_type);
+        $this->assertSame(2, $leaveRequest->documents()->count());
+        $this->assertTrue((bool) $leaveRequest->medical_cert_submitted);
+
+        foreach ($leaveRequest->documents as $document) {
+            Storage::disk('local')->assertExists($document->file_path);
+        }
+    }
+
+    #[Test]
+    public function it_stores_supporting_documents_for_vacation_leave(): void
+    {
+        Mail::fake();
+        Storage::fake('local');
+
+        $user = User::factory()->create(['role' => 'HR', 'is_approved' => true, 'hired_date' => now()->subYears(1)]);
+
+        $this->actingAs($user)
+            ->post(route('leave-requests.store'), $this->payload([
+                'leave_type' => 'VL',
+                'reason' => 'Vacation leave with supporting travel documents attached.',
+                'medical_cert_files' => [UploadedFile::fake()->image('vl1.jpg')],
+            ]))
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $leaveRequest = LeaveRequest::firstOrFail();
+
+        $this->assertSame('VL', $leaveRequest->leave_type);
+        $this->assertSame(1, $leaveRequest->documents()->count());
+        $this->assertTrue((bool) $leaveRequest->medical_cert_submitted);
+
+        foreach ($leaveRequest->documents as $document) {
+            Storage::disk('local')->assertExists($document->file_path);
+        }
+    }
 }

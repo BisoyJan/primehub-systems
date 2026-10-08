@@ -326,6 +326,19 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     /**
+     * Get the latest employee schedule that has a campaign, regardless of
+     * active state. Used as a fallback to surface a user's campaign when no
+     * schedule is currently active.
+     */
+    public function latestCampaignSchedule()
+    {
+        return $this->hasOne(EmployeeSchedule::class)
+            ->whereNotNull('campaign_id')
+            ->orderByDesc('effective_date')
+            ->orderByDesc('id');
+    }
+
+    /**
      * Get the attendances for the user.
      */
     public function attendances()

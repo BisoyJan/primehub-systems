@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Mail\EmployeeAccessRevoked;
+use App\Models\Campaign;
 use App\Models\EmployeeSchedule;
 use App\Models\User;
 use App\Services\NotificationService;
@@ -85,9 +86,59 @@ class AccountController extends Controller
             $query->where('is_active', false);
         }
 
-        $users = $query->orderBy('created_at', 'desc')
+        // Filter by hired date (range or missing)
+        $hiredStatus = $request->query('hired_status');
+        $hiredFrom = $this->parseDateFilter($request->query('hired_from'));
+        $hiredTo = $this->parseDateFilter($request->query('hired_to'));
+        if ($hiredStatus === 'no_hired_date') {
+            $query->whereNull('hired_date');
+            $hiredFrom = null;
+            $hiredTo = null;
+        } else {
+            $hiredStatus = '';
+            if ($hiredFrom) {
+                $query->whereDate('hired_date', '>=', $hiredFrom);
+            }
+            if ($hiredTo) {
+                $query->whereDate('hired_date', '<=', $hiredTo);
+            }
+        }
+
+        // Filter by campaign (Team Leads via pivot, others via any schedule)
+        $campaignId = $request->query('campaign_id');
+        if ($campaignId === 'none') {
+            $query->whereDoesntHave('campaigns')
+                ->whereDoesntHave('employeeSchedules', fn ($q) => $q->whereNotNull('campaign_id'));
+        } elseif (is_numeric($campaignId)) {
+            $campaignId = (int) $campaignId;
+            $query->where(function ($q) use ($campaignId) {
+                $q->whereHas('campaigns', fn ($c) => $c->where('campaigns.id', $campaignId))
+                    ->orWhereHas('employeeSchedules', fn ($s) => $s->where('campaign_id', $campaignId));
+            });
+        } else {
+            $campaignId = '';
+        }
+
+        $users = $query->with([
+            'activeSchedule.campaign:id,name',
+            'latestCampaignSchedule.campaign:id,name',
+            'campaigns:id,name',
+        ])
+            ->orderBy('created_at', 'desc')
             ->paginate(25)
             ->withQueryString();
+
+        $userItems = collect($users->items())->map(function (User $user) {
+            $campaign = $this->resolveUserCampaign($user);
+            $data = $user->toArray();
+            $data['campaign_names'] = $campaign['names'];
+            $data['campaign_active'] = $campaign['active'];
+            unset($data['active_schedule'], $data['latest_campaign_schedule'], $data['campaigns']);
+
+            return $data;
+        })->values()->all();
+
+        $campaigns = Campaign::orderBy('name')->get(['id', 'name']);
 
         // Get all users for employee dropdown (only basic info)
         $allUsers = User::select('id', 'first_name', 'middle_name', 'last_name', 'email')
@@ -109,7 +160,7 @@ class AccountController extends Controller
 
         return Inertia::render('Account/Index', [
             'users' => [
-                'data' => $users->items(),
+                'data' => $userItems,
                 'links' => $users->toArray()['links'] ?? [],
                 'meta' => [
                     'current_page' => $users->currentPage(),
@@ -119,15 +170,64 @@ class AccountController extends Controller
                 ],
             ],
             'allUsers' => $allUsers,
+            'campaigns' => $campaigns,
             'filters' => [
                 'search' => $search ?? '',
                 'role' => $role ?? '',
                 'status' => $status ?? '',
                 'employee_status' => $employeeStatus ?? '',
                 'user_ids' => array_values(array_map('strval', $userIds)),
+                'hired_from' => $hiredFrom ?? '',
+                'hired_to' => $hiredTo ?? '',
+                'hired_status' => $hiredStatus,
+                'campaign_id' => (string) $campaignId,
             ],
             'staleCount' => $staleCount,
         ]);
+    }
+
+    /**
+     * Normalize a Y-m-d date filter value, returning null when invalid.
+     */
+    protected function parseDateFilter(mixed $value): ?string
+    {
+        if (! is_string($value) || $value === '') {
+            return null;
+        }
+
+        try {
+            $date = Carbon::createFromFormat('Y-m-d', $value);
+
+            return $date && $date->format('Y-m-d') === $value ? $value : null;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Resolve campaign names and active state for a user.
+     *
+     * Team Leads derive campaigns from the campaign_user pivot. Other users
+     * derive their campaign from the active schedule when present, otherwise
+     * from the latest schedule that has a campaign (flagged as inactive).
+     *
+     * @return array{names: array<int, string>, active: bool}
+     */
+    protected function resolveUserCampaign(User $user): array
+    {
+        if ($user->role === 'Team Lead' && $user->campaigns->isNotEmpty()) {
+            return ['names' => $user->campaigns->pluck('name')->values()->all(), 'active' => true];
+        }
+
+        if ($name = $user->activeSchedule?->campaign?->name) {
+            return ['names' => [$name], 'active' => true];
+        }
+
+        if ($name = $user->latestCampaignSchedule?->campaign?->name) {
+            return ['names' => [$name], 'active' => false];
+        }
+
+        return ['names' => [], 'active' => true];
     }
 
     /**
