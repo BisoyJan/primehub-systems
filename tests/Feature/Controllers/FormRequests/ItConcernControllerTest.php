@@ -2,17 +2,18 @@
 
 namespace Tests\Feature\Controllers\FormRequests;
 
-use Tests\TestCase;
 use App\Events\ItConcernCreated;
 use App\Models\EmployeeSchedule;
-use App\Models\User;
 use App\Models\ItConcern;
+use App\Models\Notification;
 use App\Models\Site;
+use App\Models\User;
 use App\Services\NotificationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
-use PHPUnit\Framework\Attributes\Test;
 use Inertia\Testing\AssertableInertia as Assert;
+use PHPUnit\Framework\Attributes\Test;
+use Tests\TestCase;
 
 class ItConcernControllerTest extends TestCase
 {
@@ -25,7 +26,7 @@ class ItConcernControllerTest extends TestCase
         $this->mock(NotificationService::class, function ($mock) {
             $mock->shouldReceive('notifyItRolesAboutNewConcern')->andReturnNull();
             $mock->shouldReceive('notifyItRolesAboutConcernUpdate')->andReturnNull();
-            $mock->shouldReceive('notifyItConcernStatusChange')->andReturn(\Mockery::mock(\App\Models\Notification::class));
+            $mock->shouldReceive('notifyItConcernStatusChange')->andReturn(\Mockery::mock(Notification::class));
             $mock->shouldReceive('notifyItRolesAboutConcernDeletion')->andReturnNull();
         });
     }
@@ -37,7 +38,7 @@ class ItConcernControllerTest extends TestCase
         $site = Site::factory()->create();
         $concern = ItConcern::factory()->create([
             'user_id' => $user->id,
-            'site_id' => $site->id
+            'site_id' => $site->id,
         ]);
 
         $response = $this->actingAs($user)->get(route('it-concerns.index'));
@@ -124,7 +125,7 @@ class ItConcernControllerTest extends TestCase
         $site = Site::factory()->create();
         $concern = ItConcern::factory()->create([
             'user_id' => $user->id,
-            'site_id' => $site->id
+            'site_id' => $site->id,
         ]);
 
         $response = $this->actingAs($user)->get(route('it-concerns.show', $concern));
@@ -145,7 +146,7 @@ class ItConcernControllerTest extends TestCase
         $concern = ItConcern::factory()->create([
             'user_id' => $user->id,
             'site_id' => $site->id,
-            'description' => 'Old description'
+            'description' => 'Old description',
         ]);
 
         $response = $this->actingAs($user)->get(route('it-concerns.edit', $concern));
@@ -169,6 +170,61 @@ class ItConcernControllerTest extends TestCase
     }
 
     #[Test]
+    public function it_redirects_to_return_to_when_relative_path_on_update()
+    {
+        $user = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create(['user_id' => $user->id]);
+        $site = Site::factory()->create();
+        $concern = ItConcern::factory()->create([
+            'user_id' => $user->id,
+            'site_id' => $site->id,
+            'description' => 'Old description',
+        ]);
+
+        $newData = [
+            'site_id' => $site->id,
+            'station_number' => (string) $concern->station_number,
+            'category' => $concern->category,
+            'priority' => $concern->priority,
+            'description' => 'New description',
+            '_return_to' => '/form-requests/it-concerns?status=pending&page=2',
+        ];
+
+        $response = $this->actingAs($user)->put(route('it-concerns.update', $concern), $newData);
+
+        $response->assertRedirect('/form-requests/it-concerns?status=pending&page=2');
+        $this->assertDatabaseHas('it_concerns', [
+            'id' => $concern->id,
+            'description' => 'New description',
+        ]);
+    }
+
+    #[Test]
+    public function it_ignores_external_return_to_url_on_update()
+    {
+        $user = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create(['user_id' => $user->id]);
+        $site = Site::factory()->create();
+        $concern = ItConcern::factory()->create([
+            'user_id' => $user->id,
+            'site_id' => $site->id,
+        ]);
+
+        $newData = [
+            'site_id' => $site->id,
+            'station_number' => (string) $concern->station_number,
+            'category' => $concern->category,
+            'priority' => $concern->priority,
+            'description' => 'New description',
+            '_return_to' => 'https://evil.example',
+        ];
+
+        $response = $this->actingAs($user)->put(route('it-concerns.update', $concern), $newData);
+
+        $response->assertRedirect(route('it-concerns.index'));
+    }
+
+    #[Test]
     public function it_allows_it_to_update_status()
     {
         $itUser = User::factory()->create(['role' => 'IT', 'is_approved' => true]);
@@ -177,11 +233,11 @@ class ItConcernControllerTest extends TestCase
         $concern = ItConcern::factory()->create([
             'user_id' => $user->id,
             'site_id' => $site->id,
-            'status' => 'pending'
+            'status' => 'pending',
         ]);
 
         $response = $this->actingAs($itUser)->post(route('it-concerns.updateStatus', $concern), [
-            'status' => 'in_progress'
+            'status' => 'in_progress',
         ]);
 
         $response->assertRedirect();
@@ -200,12 +256,12 @@ class ItConcernControllerTest extends TestCase
         $concern = ItConcern::factory()->create([
             'user_id' => $user->id,
             'site_id' => $site->id,
-            'status' => 'in_progress'
+            'status' => 'in_progress',
         ]);
 
         $response = $this->actingAs($itUser)->post(route('it-concerns.resolve', $concern), [
             'resolution_notes' => 'Fixed the issue',
-            'status' => 'resolved'
+            'status' => 'resolved',
         ]);
 
         $response->assertRedirect();
@@ -252,7 +308,7 @@ class ItConcernControllerTest extends TestCase
         $site = Site::factory()->create();
         $concern = ItConcern::factory()->create([
             'user_id' => $user->id,
-            'site_id' => $site->id
+            'site_id' => $site->id,
         ]);
 
         $response = $this->actingAs($user)->delete(route('it-concerns.destroy', $concern));

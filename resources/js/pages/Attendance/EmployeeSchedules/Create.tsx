@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Head, router, useForm, usePage } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
-import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
+import { useFlashMessage, usePageLoading, usePageMeta, useReturnTo } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { Button } from "@/components/ui/button";
@@ -105,6 +105,7 @@ export default function EmployeeScheduleCreate() {
 
     useFlashMessage();
     const isPageLoading = usePageLoading();
+    const { returnTo, backUrl } = useReturnTo(employeeSchedulesIndex().url);
 
     // Employee search popover state
     const [isEmployeePopoverOpen, setIsEmployeePopoverOpen] = useState(false);
@@ -123,6 +124,7 @@ export default function EmployeeScheduleCreate() {
         grace_period_minutes: 0,
         effective_date: new Date().toISOString().split("T")[0],
         end_date: "",
+        _return_to: returnTo,
     });
 
     // Auto-select current user for restricted roles or from URL parameter
@@ -663,7 +665,7 @@ export default function EmployeeScheduleCreate() {
                                         <Button
                                             type="button"
                                             variant="outline"
-                                            onClick={() => router.get(employeeSchedulesIndex().url)}
+                                            onClick={() => router.get(backUrl)}
                                         >
                                             Cancel
                                         </Button>

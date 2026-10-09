@@ -1,6 +1,6 @@
 import { Head, router, useForm, usePage } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
-import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
+import { useFlashMessage, usePageLoading, usePageMeta, useReturnTo } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { Button } from "@/components/ui/button";
@@ -95,6 +95,7 @@ export default function EmployeeScheduleEdit() {
 
     useFlashMessage();
     const isPageLoading = usePageLoading();
+    const { returnTo, backUrl } = useReturnTo(employeeSchedulesIndex().url);
 
     const { data, setData, put, processing, errors } = useForm({
         campaign_id: schedule.campaign_id || null,
@@ -109,6 +110,7 @@ export default function EmployeeScheduleEdit() {
         is_active: schedule.is_active,
         effective_date: schedule.effective_date || "",
         end_date: schedule.end_date || "",
+        _return_to: returnTo,
     });
 
     // Derived shift type from current Time In + utility toggle.
@@ -469,7 +471,7 @@ export default function EmployeeScheduleEdit() {
                                     <Button
                                         type="button"
                                         variant="outline"
-                                        onClick={() => router.get(employeeSchedulesIndex().url)}
+                                        onClick={() => router.get(backUrl)}
                                     >
                                         Cancel
                                     </Button>

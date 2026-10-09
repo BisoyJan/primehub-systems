@@ -113,6 +113,47 @@ class PcMaintenanceControllerTest extends TestCase
         ]);
     }
 
+    public function test_update_redirects_to_return_to_url_when_provided()
+    {
+        $maintenance = PcMaintenance::factory()->create();
+
+        $data = [
+            'pc_spec_id' => $maintenance->pc_spec_id,
+            'last_maintenance_date' => Carbon::now()->format('Y-m-d'),
+            'next_due_date' => Carbon::now()->addMonth()->format('Y-m-d'),
+            'maintenance_type' => 'Repair',
+            'status' => 'pending',
+            '_return_to' => '/pc-maintenance?status=pending&page=2',
+        ];
+
+        $this->put(route('pc-maintenance.update', $maintenance), $data)
+            ->assertRedirect('/pc-maintenance?status=pending&page=2')
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('pc_maintenances', [
+            'id' => $maintenance->id,
+            'maintenance_type' => 'Repair',
+        ]);
+    }
+
+    public function test_update_falls_back_to_index_when_return_to_is_external()
+    {
+        $maintenance = PcMaintenance::factory()->create();
+
+        $data = [
+            'pc_spec_id' => $maintenance->pc_spec_id,
+            'last_maintenance_date' => Carbon::now()->format('Y-m-d'),
+            'next_due_date' => Carbon::now()->addMonth()->format('Y-m-d'),
+            'maintenance_type' => 'Repair',
+            'status' => 'pending',
+            '_return_to' => 'https://evil.example',
+        ];
+
+        $this->put(route('pc-maintenance.update', $maintenance), $data)
+            ->assertRedirect(route('pc-maintenance.index'))
+            ->assertSessionHas('success');
+    }
+
     public function test_destroy_deletes_maintenance_record()
     {
         $maintenance = PcMaintenance::factory()->create();

@@ -30,7 +30,7 @@ import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
 import { RefreshCw, Filter, Plus, Play, Pause, ChevronsUpDown, Check, X } from "lucide-react";
 
 // New reusable components and hooks
-import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
+import { usePageMeta, useFlashMessage, usePageLoading, withReturnTo } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
@@ -251,7 +251,7 @@ export default function Index() {
                                 </Button>
                             </div>
                             {can("hardware.create") && (
-                                <Link href={create.url()}>
+                                <Link href={withReturnTo(create.url())}>
                                     <Button className="flex-1 sm:flex-none">
                                         <Plus className="mr-2 h-4 w-4" />
                                         Add Processor
@@ -322,7 +322,7 @@ export default function Index() {
                                             <TableCell className="hidden xl:table-cell">{cpu.boost_clock_ghz} GHz</TableCell>
                                             <TableCell className="flex justify-center gap-2">
                                                 <Can permission="hardware.edit">
-                                                    <Link href={edit.url(cpu.id)}>
+                                                    <Link href={withReturnTo(edit.url(cpu.id))}>
                                                         <Button
                                                             variant="outline"
                                                             size="sm"
@@ -383,7 +383,7 @@ export default function Index() {
                             {/* Actions */}
                             <div className="flex gap-2">
                                 <Can permission="hardware.edit">
-                                    <Link href={edit.url(cpu.id)} className="flex-1">
+                                    <Link href={withReturnTo(edit.url(cpu.id))} className="flex-1">
                                         <Button
                                             variant="outline"
                                             size="sm"

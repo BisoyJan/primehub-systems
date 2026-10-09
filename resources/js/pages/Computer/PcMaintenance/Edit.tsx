@@ -17,7 +17,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowLeft, Save, Calendar } from 'lucide-react';
 import { PageHeader } from '@/components/PageHeader';
-import { usePageMeta } from '@/hooks';
+import { usePageMeta, useReturnTo } from '@/hooks';
 import {
     index as pcMaintenanceIndexRoute,
     edit as pcMaintenanceEditRoute,
@@ -89,6 +89,8 @@ export default function Edit({ maintenance, pcSpecs }: EditProps) {
         status: maintenance.status,
     });
 
+    const { returnTo, backUrl } = useReturnTo(pcMaintenanceIndexRoute().url);
+
     const { title, breadcrumbs } = usePageMeta({
         title: 'Edit PC Maintenance',
         breadcrumbs: [
@@ -124,6 +126,7 @@ export default function Edit({ maintenance, pcSpecs }: EditProps) {
             notes: formData.notes,
             performed_by: formData.performed_by,
             status: formData.status,
+            _return_to: returnTo,
         }, {
             preserveScroll: true,
             onSuccess: () => {
@@ -138,7 +141,7 @@ export default function Edit({ maintenance, pcSpecs }: EditProps) {
     };
 
     const handleCancel = () => {
-        router.visit(pcMaintenanceIndexRoute().url);
+        router.visit(backUrl);
     };
 
     return (

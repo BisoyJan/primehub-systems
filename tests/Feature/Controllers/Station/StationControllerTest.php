@@ -143,6 +143,62 @@ class StationControllerTest extends TestCase
         ]);
     }
 
+    public function test_update_redirects_to_return_to_url_when_provided()
+    {
+        $station = Station::factory()->create();
+
+        $response = $this->actingAs($this->user)
+            ->put(route('stations.update', $station), [
+                'site_id' => $station->site_id,
+                'station_number' => $station->station_number,
+                'campaign_id' => $station->campaign_id,
+                'status' => 'Inactive',
+                'monitor_type' => 'single',
+                'pc_spec_id' => $station->pc_spec_id,
+                '_return_to' => '/stations?site_id=1&search=PC&page=3',
+            ]);
+
+        $response->assertRedirect('/stations?site_id=1&search=PC&page=3');
+        $this->assertDatabaseHas('stations', ['id' => $station->id, 'status' => 'Inactive']);
+    }
+
+    public function test_update_falls_back_to_index_when_return_to_is_external()
+    {
+        $station = Station::factory()->create();
+
+        $response = $this->actingAs($this->user)
+            ->put(route('stations.update', $station), [
+                'site_id' => $station->site_id,
+                'station_number' => $station->station_number,
+                'campaign_id' => $station->campaign_id,
+                'status' => 'Inactive',
+                'monitor_type' => 'single',
+                'pc_spec_id' => $station->pc_spec_id,
+                '_return_to' => 'https://evil.example/phish',
+            ]);
+
+        $response->assertRedirect(route('stations.index'));
+    }
+
+    public function test_store_redirects_to_return_to_url_when_provided()
+    {
+        $site = Site::factory()->create();
+        $pcSpec = PcSpec::factory()->create();
+
+        $response = $this->actingAs($this->user)
+            ->post(route('stations.store'), [
+                'site_id' => $site->id,
+                'station_number' => 'ST-RET-001',
+                'status' => 'Active',
+                'monitor_type' => 'single',
+                'pc_spec_id' => $pcSpec->id,
+                '_return_to' => '/stations?page=2',
+            ]);
+
+        $response->assertRedirect('/stations?page=2');
+        $this->assertDatabaseHas('stations', ['station_number' => 'ST-RET-001']);
+    }
+
     public function test_destroy_deletes_station()
     {
         $station = Station::factory()->create();

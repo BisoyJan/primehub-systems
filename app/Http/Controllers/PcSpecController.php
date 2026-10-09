@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Traits\RedirectsWithFlashMessages;
 use App\Jobs\GenerateAllPcSpecQRCodesZip;
 use App\Jobs\GenerateSelectedPcSpecQRCodesZip;
 use App\Models\PcSpec;
@@ -23,6 +24,7 @@ use Inertia\Inertia;
 class PcSpecController extends Controller
 {
     use AddsQrCodeBorder;
+    use RedirectsWithFlashMessages;
 
     /**
      * GET /motherboards
@@ -229,7 +231,7 @@ class PcSpecController extends Controller
             ? "{$quantity} PC Specs created successfully (".implode(', ', $pcNumbers).')'
             : 'PC Spec created successfully';
 
-        return redirect()->route('pcspecs.index', $this->indexRedirectParams($request))
+        return $this->redirectToIndexOrReturnUrl('pcspecs.index')
             ->with('message', $message)
             ->with('type', 'success');
     }
@@ -326,7 +328,7 @@ class PcSpecController extends Controller
             $pcspec->processorSpecs()->sync([$procId]);
         });
 
-        return redirect()->route('pcspecs.index', $this->indexRedirectParams($request))
+        return $this->redirectToIndexOrReturnUrl('pcspecs.index')
             ->with('message', 'PC Spec updated')
             ->with('type', 'success');
     }
@@ -401,18 +403,6 @@ class PcSpecController extends Controller
     }
 
     /**
-     * Build redirect parameters preserving pagination page from request.
-     *
-     * @return array<string, mixed>
-     */
-    private function indexRedirectParams(Request $request): array
-    {
-        $page = $request->input('_page');
-
-        return $page ? ['page' => (int) $page] : [];
-    }
-
-    /**
      * Normalize a user-entered QR Number (digits only) into the storage form:
      * pad to minimum 4 digits, no prefix. e.g. "27" → "0027", "12345" → "12345".
      */
@@ -480,7 +470,7 @@ class PcSpecController extends Controller
             $pcspec->delete();
         });
 
-        return redirect()->route('pcspecs.index', $this->indexRedirectParams(request()))
+        return $this->redirectToIndexOrReturnUrl('pcspecs.index')
             ->with('message', 'PC Spec deleted')
             ->with('type', 'success');
     }

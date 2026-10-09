@@ -26,7 +26,7 @@ import { cn } from '@/lib/utils';
 
 import { PageHeader } from '@/components/PageHeader';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
-import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
+import { useFlashMessage, usePageLoading, usePageMeta, useReturnTo } from '@/hooks';
 
 import {
     index as pcSpecIndex,
@@ -65,7 +65,7 @@ export default function Create() {
 
     const isPageLoading = usePageLoading();
 
-    const returnPage = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('page') ?? '' : '';
+    const { returnTo, backUrl } = useReturnTo(pcSpecIndex().url);
 
     const form = useForm({
         pc_number: '',
@@ -85,7 +85,7 @@ export default function Create() {
         processor_base_clock_ghz: '' as number | '',
         processor_boost_clock_ghz: '' as number | '',
         quantity: 1,
-        _page: returnPage,
+        _return_to: returnTo,
     });
 
     // Generate sequential preview of digit-only PC numbers
@@ -180,7 +180,7 @@ export default function Create() {
                     title="Create PC Specification"
                     description="Add a new PC specification with hardware details."
                     actions={
-                        <Link href={pcSpecIndex().url}>
+                        <Link href={backUrl}>
                             <Button variant="outline">
                                 <ArrowLeft className="mr-2 h-4 w-4" />
                                 Back to list

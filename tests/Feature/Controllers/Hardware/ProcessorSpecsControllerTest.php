@@ -110,6 +110,49 @@ class ProcessorSpecsControllerTest extends TestCase
         $this->assertDatabaseHas('processor_specs', array_merge(['id' => $processorSpec->id], $data));
     }
 
+    public function test_update_redirects_to_safe_return_to_path(): void
+    {
+        $processorSpec = ProcessorSpec::factory()->create();
+
+        $data = [
+            'manufacturer' => 'AMD',
+            'model' => 'Ryzen 5 5600X',
+            'core_count' => 6,
+            'thread_count' => 12,
+            'base_clock_ghz' => 3.70,
+            'boost_clock_ghz' => 4.60,
+            '_return_to' => '/processorspecs?search=ryzen&page=2',
+        ];
+
+        $this->put(route('processorspecs.update', $processorSpec), $data)
+            ->assertRedirect('/processorspecs?search=ryzen&page=2')
+            ->assertSessionHas('type', 'success');
+
+        $this->assertDatabaseHas('processor_specs', [
+            'id' => $processorSpec->id,
+            'model' => 'Ryzen 5 5600X',
+        ]);
+    }
+
+    public function test_update_ignores_external_return_to_url(): void
+    {
+        $processorSpec = ProcessorSpec::factory()->create();
+
+        $data = [
+            'manufacturer' => 'AMD',
+            'model' => 'Ryzen 5 5600X',
+            'core_count' => 6,
+            'thread_count' => 12,
+            'base_clock_ghz' => 3.70,
+            'boost_clock_ghz' => 4.60,
+            '_return_to' => 'https://evil.example',
+        ];
+
+        $this->put(route('processorspecs.update', $processorSpec), $data)
+            ->assertRedirect(route('processorspecs.index'))
+            ->assertSessionHas('type', 'success');
+    }
+
     public function test_destroy_deletes_processor_spec()
     {
         $processorSpec = ProcessorSpec::factory()->create();

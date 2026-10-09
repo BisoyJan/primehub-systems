@@ -45,7 +45,7 @@ import { index as sitesIndexRoute } from "@/routes/sites";
 import { index as campaignsIndexRoute } from "@/routes/campaigns";
 
 // New reusable components and hooks
-import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
+import { usePageMeta, useFlashMessage, usePageLoading, withReturnTo } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
@@ -127,9 +127,6 @@ interface PageProps extends Record<string, unknown> {
 export default function StationIndex() {
     const { stations, filters, allStations = [], allMatchingIds } = usePage<PageProps>().props;
 
-    // Current pagination page (preserved across CRUD operations)
-    const currentPage = stations.meta?.current_page ?? 1;
-    const editLinkSuffix = currentPage > 1 ? `?page=${currentPage}` : '';
     // QR Code ZIP state
     // Persist selectedStationIds in localStorage
     const LOCAL_STORAGE_KEY = 'station_selected_ids';
@@ -676,7 +673,7 @@ export default function StationIndex() {
                         </div>
 
                         <Can permission="stations.create">
-                            <Button onClick={() => router.get(stationsCreateRoute().url + editLinkSuffix)} size="sm">
+                            <Button onClick={() => router.get(withReturnTo(stationsCreateRoute().url))} size="sm">
                                 <Plus className="mr-2 h-4 w-4" />
                                 Add Station
                             </Button>
@@ -1323,7 +1320,7 @@ export default function StationIndex() {
                                                 <TableCell>
                                                     <div className="flex items-center gap-2">
                                                         <Can permission="stations.edit">
-                                                            <Button variant="outline" size="sm" onClick={() => router.get(stationsEditRoute(station.id).url + editLinkSuffix)} disabled={loading}>
+                                                            <Button variant="outline" size="sm" onClick={() => router.get(withReturnTo(stationsEditRoute(station.id).url))} disabled={loading}>
                                                                 Edit
                                                             </Button>
                                                         </Can>
@@ -1521,7 +1518,7 @@ export default function StationIndex() {
                                         <Button
                                             variant="outline"
                                             size="sm"
-                                            onClick={() => router.get(stationsEditRoute(station.id).url + editLinkSuffix)}
+                                            onClick={() => router.get(withReturnTo(stationsEditRoute(station.id).url))}
                                             disabled={loading}
                                             className="flex-1"
                                         >

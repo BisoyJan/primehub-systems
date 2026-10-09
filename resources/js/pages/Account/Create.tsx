@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/PageHeader";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
-import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
+import { useFlashMessage, usePageLoading, usePageMeta, useReturnTo } from "@/hooks";
 import { index as accountsIndex, create as accountsCreate, store as accountsStore } from "@/routes/accounts";
 import { Eye, EyeOff } from "lucide-react";
 
@@ -29,6 +29,7 @@ export default function AccountCreate() {
 
     useFlashMessage();
     const isPageLoading = usePageLoading();
+    const { returnTo, backUrl } = useReturnTo(accountsIndex().url);
 
     const { data, setData, post, processing, errors } = useForm({
         first_name: "",
@@ -39,6 +40,7 @@ export default function AccountCreate() {
         password_confirmation: "",
         role: "Agent",
         hired_date: "",
+        _return_to: returnTo,
     });
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -46,7 +48,7 @@ export default function AccountCreate() {
         post(accountsStore().url, {
             onSuccess: () => {
                 toast.success("User account created successfully");
-                router.get(accountsIndex().url);
+                router.get(backUrl);
             },
             onError: (errors) => {
                 const firstError = Object.values(errors)[0] as string;
@@ -229,7 +231,7 @@ export default function AccountCreate() {
                                 <Button
                                     variant="outline"
                                     type="button"
-                                    onClick={() => router.get(accountsIndex().url)}
+                                    onClick={() => router.get(backUrl)}
                                 >
                                     Cancel
                                 </Button>

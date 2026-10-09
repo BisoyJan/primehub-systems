@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\PcMaintenanceRequest;
+use App\Http\Traits\RedirectsWithFlashMessages;
 use App\Models\PcMaintenance;
 use App\Models\PcSpec;
 use App\Models\Site;
@@ -13,6 +14,8 @@ use Inertia\Response;
 
 class PcMaintenanceController extends Controller
 {
+    use RedirectsWithFlashMessages;
+
     /**
      * Display a listing of the resource.
      */
@@ -155,7 +158,7 @@ class PcMaintenanceController extends Controller
 
         PcMaintenance::insert($records);
 
-        return redirect()->route('pc-maintenance.index')
+        return $this->redirectToIndexOrReturnUrl('pc-maintenance.index')
             ->with('success', count($records).' PC Maintenance record(s) created successfully.');
     }
 
@@ -242,7 +245,7 @@ class PcMaintenanceController extends Controller
     {
         $pcMaintenance->update($request->validated());
 
-        return redirect()->route('pc-maintenance.index')
+        return $this->redirectToIndexOrReturnUrl('pc-maintenance.index')
             ->with('success', 'PC Maintenance record updated successfully.');
     }
 

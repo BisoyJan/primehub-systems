@@ -548,6 +548,58 @@ class AccountControllerTest extends TestCase
         $this->assertEquals($oldPassword, $user->password);
     }
 
+    public function test_update_redirects_to_return_to_when_relative_path(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'Agent',
+            'email' => 'returnto.user@primehubmail.com',
+        ]);
+
+        $updateData = [
+            'first_name' => 'Updated',
+            'last_name' => $user->last_name,
+            'email' => $user->email,
+            'role' => 'Team Lead',
+            'hired_date' => '2024-02-20',
+            '_return_to' => '/accounts?role=agent&page=2',
+        ];
+
+        $response = $this->actingAs($this->adminUser)
+            ->put(route('accounts.update', $user), $updateData);
+
+        $response->assertRedirect('/accounts?role=agent&page=2')
+            ->assertSessionHas('flash.type', 'success');
+
+        $this->assertDatabaseHas('users', [
+            'id' => $user->id,
+            'first_name' => 'Updated',
+            'role' => 'Team Lead',
+        ]);
+    }
+
+    public function test_update_ignores_external_return_to_url(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'Agent',
+            'email' => 'external.returnto@primehubmail.com',
+        ]);
+
+        $updateData = [
+            'first_name' => 'Updated',
+            'last_name' => $user->last_name,
+            'email' => $user->email,
+            'role' => 'Team Lead',
+            'hired_date' => '2024-02-20',
+            '_return_to' => 'https://evil.example',
+        ];
+
+        $response = $this->actingAs($this->adminUser)
+            ->put(route('accounts.update', $user), $updateData);
+
+        $response->assertRedirect(route('accounts.index'))
+            ->assertSessionHas('flash.type', 'success');
+    }
+
     public function test_destroy_deletes_user_account(): void
     {
         $user = User::factory()->create();

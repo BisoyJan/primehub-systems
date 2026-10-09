@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/select';
 import { PageHeader } from '@/components/PageHeader';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
-import { useFlashMessage, usePageMeta, usePageLoading } from '@/hooks';
+import { useFlashMessage, usePageMeta, usePageLoading, useReturnTo } from '@/hooks';
 import {
     update as processorSpecsUpdateRoute,
     index as processorSpecsIndexRoute,
@@ -47,6 +47,8 @@ export default function Edit({ processorspec }: Props) {
         ],
     });
 
+    const { returnTo, backUrl } = useReturnTo(processorSpecsIndexRoute().url);
+
     const { data, setData, put, errors, processing } = useForm({
         manufacturer: processorspec.manufacturer,
         model: processorspec.model,
@@ -54,6 +56,7 @@ export default function Edit({ processorspec }: Props) {
         thread_count: processorspec.thread_count,
         base_clock_ghz: processorspec.base_clock_ghz,
         boost_clock_ghz: processorspec.boost_clock_ghz,
+        _return_to: returnTo,
     });
 
     const handleUpdate = (e: React.FormEvent) => {
@@ -77,7 +80,7 @@ export default function Edit({ processorspec }: Props) {
                     title="Edit Processor Specification"
                     description={`${processorspec.manufacturer} ${processorspec.model}`}
                     actions={(
-                        <Link href={processorSpecsIndexRoute().url}>
+                        <Link href={backUrl}>
                             <Button variant="outline">
                                 <ArrowLeft className="mr-2 h-4 w-4" />
                                 Back to list

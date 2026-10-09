@@ -26,7 +26,7 @@ import { cn } from '@/lib/utils';
 
 import { PageHeader } from '@/components/PageHeader';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
-import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
+import { useFlashMessage, usePageLoading, usePageMeta, useReturnTo } from '@/hooks';
 
 import {
     index as pcSpecIndex,
@@ -91,7 +91,7 @@ export default function Edit() {
 
     const isPageLoading = usePageLoading();
 
-    const returnPage = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('page') ?? '' : '';
+    const { returnTo, backUrl } = useReturnTo(pcSpecIndex().url);
 
     const form = useForm({
         pc_number: (pcspec.pc_number || '').replace(/^PC/i, ''),
@@ -110,7 +110,7 @@ export default function Edit() {
         processor_thread_count: '' as number | '',
         processor_base_clock_ghz: '' as number | '',
         processor_boost_clock_ghz: '' as number | '',
-        _page: returnPage,
+        _return_to: returnTo,
     });
 
     const [processorOpen, setProcessorOpen] = useState(false);
@@ -222,7 +222,7 @@ export default function Edit() {
                     title={title}
                     description="Update PC specification details."
                     actions={
-                        <Link href={pcSpecIndex().url}>
+                        <Link href={backUrl}>
                             <Button variant="outline">
                                 <ArrowLeft className="mr-2 h-4 w-4" />
                                 Back to list

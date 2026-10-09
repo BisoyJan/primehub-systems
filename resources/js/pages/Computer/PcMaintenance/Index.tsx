@@ -39,7 +39,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { TableSkeleton } from '@/components/TableSkeleton';
-import { usePageMeta, useFlashMessage, usePageLoading } from '@/hooks';
+import { usePageMeta, useFlashMessage, usePageLoading, withReturnTo } from '@/hooks';
 import { Can } from '@/components/authorization';
 import { usePermission } from '@/hooks/useAuthorization';
 import {
@@ -561,7 +561,7 @@ export default function Index({ maintenances, sites, filters = {}, allMatchingId
                             </Button>
 
                             {can('pc_maintenance.create') && (
-                                <Link href={pcMaintenanceCreateRoute().url}>
+                                <Link href={withReturnTo(pcMaintenanceCreateRoute().url)}>
                                     <Button size="sm">
                                         <Plus className="mr-1.5 h-3.5 w-3.5" />
                                         Add Record
@@ -700,7 +700,7 @@ export default function Index({ maintenances, sites, filters = {}, allMatchingId
                                                     <TableCell className="text-right">
                                                         <div className="flex justify-end gap-2">
                                                             <Can permission="pc_maintenance.edit">
-                                                                <Link href={pcMaintenanceEditRoute(maintenance.id).url}>
+                                                                <Link href={withReturnTo(pcMaintenanceEditRoute(maintenance.id).url)}>
                                                                     <Button variant="ghost" size="sm" disabled={isMutating}>
                                                                         <Edit className="h-4 w-4" />
                                                                     </Button>
@@ -816,7 +816,7 @@ export default function Index({ maintenances, sites, filters = {}, allMatchingId
 
                                 <div className="flex justify-end gap-2 pt-2 border-t">
                                     <Can permission="pc_maintenance.edit">
-                                        <Link href={pcMaintenanceEditRoute(maintenance.id).url}>
+                                        <Link href={withReturnTo(pcMaintenanceEditRoute(maintenance.id).url)}>
                                             <Button variant="outline" size="sm" disabled={isMutating}>
                                                 <Edit className="h-4 w-4 mr-1" />
                                                 Edit

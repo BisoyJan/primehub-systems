@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Events\ItConcernCreated;
 use App\Http\Requests\ItConcernRequest;
+use App\Http\Traits\RedirectsWithFlashMessages;
 use App\Models\Campaign;
 use App\Models\ItConcern;
 use App\Models\Site;
@@ -15,6 +16,8 @@ use Inertia\Inertia;
 
 class ItConcernController extends Controller
 {
+    use RedirectsWithFlashMessages;
+
     protected NotificationService $notificationService;
 
     public function __construct(NotificationService $notificationService)
@@ -177,7 +180,7 @@ class ItConcernController extends Controller
             Log::warning('ItConcernCreated broadcast failed: '.$e->getMessage());
         }
 
-        return redirect()->route('it-concerns.index')
+        return $this->redirectToIndexOrReturnUrl('it-concerns.index')
             ->with('flash', ['message' => 'IT concern submitted successfully', 'type' => 'success']);
     }
 
@@ -254,7 +257,7 @@ class ItConcernController extends Controller
             );
         }
 
-        return redirect()->route('it-concerns.index')
+        return $this->redirectToIndexOrReturnUrl('it-concerns.index')
             ->with('flash', ['message' => 'IT concern updated successfully', 'type' => 'success']);
     }
 

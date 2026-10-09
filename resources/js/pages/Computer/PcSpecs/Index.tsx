@@ -56,7 +56,7 @@ import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
 import { RefreshCw, Filter, Plus, Play, Pause, ChevronsUpDown, X } from 'lucide-react';
 
 // New reusable components and hooks
-import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
+import { usePageMeta, useFlashMessage, usePageLoading, withReturnTo } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { TableSkeleton } from '@/components/TableSkeleton';
@@ -139,14 +139,6 @@ export default function Index() {
     } = usePage<Props>().props;
     const form = useForm({}); // Keep useForm for delete but empty for search
 
-    // Current pagination page (preserved across CRUD operations)
-    const currentPage = pcspecs.current_page
-        ?? pcspecs.meta?.current_page
-        ?? (() => {
-            const fromUrl = Number(new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '').get('page'));
-            return Number.isFinite(fromUrl) && fromUrl > 0 ? fromUrl : 1;
-        })();
-    const editLinkSuffix = currentPage && currentPage > 1 ? `?page=${currentPage}` : '';
     const [issueDialogOpen, setIssueDialogOpen] = useState(false);
     const [selectedPcSpec, setSelectedPcSpec] = useState<PcSpec | null>(null);
     const [issueText, setIssueText] = useState('');
@@ -755,7 +747,7 @@ export default function Index() {
                                     {autoRefreshEnabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                                 </Button>
                             </div>
-                            <Link href={pcSpecCreate.url() + editLinkSuffix}>
+                            <Link href={withReturnTo(pcSpecCreate.url())}>
                                 <Button className="flex-1 sm:flex-none">
                                     <Plus className="mr-2 h-4 w-4" />
                                     Add PC Spec
@@ -953,7 +945,7 @@ export default function Index() {
                                                 </TableCell>
                                                 <TableCell className="flex justify-center gap-2">
                                                     {/* Edit */}
-                                                    <Link href={pcSpecEdit.url(pc.id) + editLinkSuffix}>
+                                                    <Link href={withReturnTo(pcSpecEdit.url(pc.id))}>
                                                         <Button
                                                             variant="outline"
                                                             size="sm"
@@ -1207,7 +1199,7 @@ export default function Index() {
 
                                 <div className="flex flex-col gap-2 pt-2 border-t">
                                     <div className="flex gap-2">
-                                        <Link href={pcSpecEdit.url(pc.id) + editLinkSuffix} className="flex-1">
+                                        <Link href={withReturnTo(pcSpecEdit.url(pc.id))} className="flex-1">
                                             <Button
                                                 variant="outline"
                                                 size="sm"

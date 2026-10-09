@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Traits\RedirectsWithFlashMessages;
 use App\Mail\EmployeeAccessRevoked;
 use App\Models\Campaign;
 use App\Models\EmployeeSchedule;
@@ -20,6 +21,8 @@ use Inertia\Inertia;
 
 class AccountController extends Controller
 {
+    use RedirectsWithFlashMessages;
+
     protected NotificationService $notificationService;
 
     public function __construct(NotificationService $notificationService)
@@ -281,7 +284,7 @@ class AccountController extends Controller
 
         User::create($validated);
 
-        return redirect()->route('accounts.index')
+        return $this->redirectToIndexOrReturnUrl('accounts.index')
             ->with('flash', [
                 'message' => 'User account created successfully',
                 'type' => 'success',
@@ -347,7 +350,7 @@ class AccountController extends Controller
 
         $account->update($validated);
 
-        return redirect()->route('accounts.index')
+        return $this->redirectToIndexOrReturnUrl('accounts.index')
             ->with('flash', [
                 'message' => 'User account updated successfully',
                 'type' => 'success',

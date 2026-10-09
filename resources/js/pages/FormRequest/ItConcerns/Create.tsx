@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { Head, router, useForm, usePage } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
-import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
+import { useFlashMessage, usePageLoading, usePageMeta, useReturnTo } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { Button } from "@/components/ui/button";
@@ -55,6 +55,7 @@ export default function ItConcernCreate() {
 
     useFlashMessage();
     const isPageLoading = usePageLoading();
+    const { returnTo, backUrl } = useReturnTo("/form-requests/it-concerns");
 
     const { data, setData, post, processing, errors } = useForm({
         user_id: "",
@@ -63,6 +64,7 @@ export default function ItConcernCreate() {
         category: "Hardware",
         priority: "medium",
         description: "",
+        _return_to: returnTo,
     });
 
     // Filter users based on search query
@@ -330,7 +332,7 @@ export default function ItConcernCreate() {
                                     <Button
                                         type="button"
                                         variant="outline"
-                                        onClick={() => router.get("/form-requests/it-concerns")}
+                                        onClick={() => router.get(backUrl)}
                                         disabled={processing}
                                     >
                                         Cancel

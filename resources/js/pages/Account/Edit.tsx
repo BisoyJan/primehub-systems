@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/PageHeader";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
-import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
+import { useFlashMessage, usePageLoading, usePageMeta, useReturnTo } from "@/hooks";
 import { index as accountsIndex, edit as accountsEdit, update as accountsUpdate, toggleActive } from "@/routes/accounts";
 import { Switch } from "@/components/ui/switch";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -49,6 +49,7 @@ export default function AccountEdit() {
 
     useFlashMessage();
     const isPageLoading = usePageLoading();
+    const { returnTo, backUrl } = useReturnTo(accountsIndex().url);
 
     const { data, setData, patch, processing, errors } = useForm({
         first_name: user.first_name,
@@ -60,6 +61,7 @@ export default function AccountEdit() {
         role: user.role,
         hired_date: user.hired_date,
         is_solo_parent: user.is_solo_parent,
+        _return_to: returnTo,
     });
 
     const handleToggleActive = () => {
@@ -92,7 +94,7 @@ export default function AccountEdit() {
         patch(accountsUpdate(user.id).url, {
             onSuccess: () => {
                 toast.success("User account updated successfully");
-                router.get(accountsIndex().url);
+                router.get(backUrl);
             },
             onError: (errors) => {
                 const firstError = Object.values(errors)[0] as string;
@@ -331,7 +333,7 @@ export default function AccountEdit() {
                                 <Button
                                     variant="outline"
                                     type="button"
-                                    onClick={() => router.get(accountsIndex().url)}
+                                    onClick={() => router.get(backUrl)}
                                 >
                                     Cancel
                                 </Button>

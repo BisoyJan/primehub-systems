@@ -1,7 +1,7 @@
 import React from "react";
 import { Head, router, useForm, usePage } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
-import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
+import { useFlashMessage, usePageLoading, usePageMeta, useReturnTo } from "@/hooks";
 import type { SharedData } from "@/types";
 import { PageHeader } from "@/components/PageHeader";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
@@ -62,6 +62,7 @@ export default function ItConcernEdit() {
 
     useFlashMessage();
     const isPageLoading = usePageLoading();
+    const { returnTo, backUrl } = useReturnTo("/form-requests/it-concerns");
 
     const { data, setData, put, processing, errors } = useForm({
         site_id: String(concern.site_id) || "",
@@ -71,6 +72,7 @@ export default function ItConcernEdit() {
         status: concern.status || "pending",
         priority: concern.priority || "medium",
         resolution_notes: concern.resolution_notes || "",
+        _return_to: returnTo,
     });
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -287,7 +289,7 @@ export default function ItConcernEdit() {
                                 <Button
                                     type="button"
                                     variant="outline"
-                                    onClick={() => router.get("/form-requests/it-concerns")}
+                                    onClick={() => router.get(backUrl)}
                                     disabled={processing}
                                 >
                                     Cancel

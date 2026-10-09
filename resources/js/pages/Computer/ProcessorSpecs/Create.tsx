@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/select';
 import { PageHeader } from '@/components/PageHeader';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
-import { useFlashMessage, usePageMeta, usePageLoading } from '@/hooks';
+import { useFlashMessage, usePageMeta, usePageLoading, useReturnTo } from '@/hooks';
 import {
     store as processorSpecsStoreRoute,
     create as processorSpecsCreateRoute,
@@ -33,6 +33,8 @@ export default function Create() {
         ],
     });
 
+    const { returnTo, backUrl } = useReturnTo(processorSpecsIndexRoute().url);
+
     const { data, setData, post, errors, processing } = useForm({
         manufacturer: '' as string,
         model: '',
@@ -40,6 +42,7 @@ export default function Create() {
         thread_count: '' as number | '',
         base_clock_ghz: '' as number | '',
         boost_clock_ghz: '' as number | '',
+        _return_to: returnTo,
     });
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -63,7 +66,7 @@ export default function Create() {
                     title="Create Processor Specification"
                     description="Capture CPU details and initial inventory"
                     actions={(
-                        <Link href={processorSpecsIndexRoute().url}>
+                        <Link href={backUrl}>
                             <Button variant="outline">
                                 <ArrowLeft className="mr-2 h-4 w-4" />
                                 Back to list

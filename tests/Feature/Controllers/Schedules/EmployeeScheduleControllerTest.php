@@ -337,6 +337,40 @@ class EmployeeScheduleControllerTest extends TestCase
         ]);
     }
 
+    public function test_update_redirects_to_safe_return_to_path(): void
+    {
+        $schedule = EmployeeSchedule::factory()->create();
+
+        $response = $this->actingAs($this->user)
+            ->put(route('employee-schedules.update', $schedule), [
+                'scheduled_time_in' => '22:00',
+                'scheduled_time_out' => '06:00',
+                'work_days' => ['sunday', 'monday', 'tuesday', 'wednesday'],
+                'grace_period_minutes' => 20,
+                '_return_to' => '/employee-schedules?search=john&page=2',
+            ]);
+
+        $response->assertRedirect('/employee-schedules?search=john&page=2')
+            ->assertSessionHas('type', 'success');
+    }
+
+    public function test_update_ignores_external_return_to_url(): void
+    {
+        $schedule = EmployeeSchedule::factory()->create();
+
+        $response = $this->actingAs($this->user)
+            ->put(route('employee-schedules.update', $schedule), [
+                'scheduled_time_in' => '22:00',
+                'scheduled_time_out' => '06:00',
+                'work_days' => ['sunday', 'monday', 'tuesday', 'wednesday'],
+                'grace_period_minutes' => 20,
+                '_return_to' => 'https://evil.example',
+            ]);
+
+        $response->assertRedirect(route('employee-schedules.index'))
+            ->assertSessionHas('type', 'success');
+    }
+
     public function test_update_propagates_effective_date_to_hired_date_and_sibling_schedules(): void
     {
         $this->employee->update(['hired_date' => '2025-01-20']);

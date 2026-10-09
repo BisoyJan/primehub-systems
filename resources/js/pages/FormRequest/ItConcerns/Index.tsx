@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Head, router, usePage } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
-import { useDebounce, useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
+import { useDebounce, useFlashMessage, usePageLoading, usePageMeta, withReturnTo } from "@/hooks";
 import { usePermission } from "@/hooks/useAuthorization";
 import type { SharedData } from "@/types";
 import { PageHeader } from "@/components/PageHeader";
@@ -595,7 +595,7 @@ export default function ItConcernsIndex() {
                                 </Button>
                             )}
                             <Can permission="it_concerns.create">
-                                <Button onClick={() => router.get("/form-requests/it-concerns/create")} className="flex-1 sm:flex-none">
+                                <Button onClick={() => router.get(withReturnTo("/form-requests/it-concerns/create"))} className="flex-1 sm:flex-none">
                                     <Plus className="mr-2 h-4 w-4" />
                                     Submit
                                 </Button>
@@ -672,7 +672,7 @@ export default function ItConcernsIndex() {
                                                             <Button
                                                                 variant="outline"
                                                                 size="icon"
-                                                                onClick={() => router.get(`/form-requests/it-concerns/${concern.id}/edit`)}
+                                                                onClick={() => router.get(withReturnTo(`/form-requests/it-concerns/${concern.id}/edit`))}
                                                                 title="Edit Concern"
                                                             >
                                                                 <Edit className="h-4 w-4" />
@@ -777,7 +777,7 @@ export default function ItConcernsIndex() {
                                             variant="outline"
                                             size="sm"
                                             className="flex-1"
-                                            onClick={() => router.get(`/form-requests/it-concerns/${concern.id}/edit`)}
+                                            onClick={() => router.get(withReturnTo(`/form-requests/it-concerns/${concern.id}/edit`))}
                                         >
                                             <Edit className="mr-2 h-4 w-4" />
                                             Edit

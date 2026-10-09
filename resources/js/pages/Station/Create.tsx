@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PageHeader } from "@/components/PageHeader";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
-import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
+import { usePageMeta, useFlashMessage, usePageLoading, useReturnTo } from "@/hooks";
 import {
     index as stationsIndexRoute,
     create as stationsCreateRoute,
@@ -50,6 +50,7 @@ export default function StationCreate({
     const [bulkMode, setBulkMode] = useState(false);
     const [showNoSpecWarning, setShowNoSpecWarning] = useState(false);
     const [showSpecSelectedInfo, setShowSpecSelectedInfo] = useState(false);
+    const { returnTo, backUrl } = useReturnTo(stationsIndexRoute().url);
 
     const { data, setData, post, processing, errors } = useForm({
         site_id: "",
@@ -62,7 +63,7 @@ export default function StationCreate({
         quantity: "1",
         starting_number: "",
         increment_type: "number", // "number", "letter", or "both"
-        _page: typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('page') ?? '' : '',
+        _return_to: returnTo ?? '',
     });
 
     const { title, breadcrumbs } = usePageMeta({
@@ -413,7 +414,7 @@ export default function StationCreate({
                         <Button
                             variant="outline"
                             type="button"
-                            onClick={() => router.visit(stationsIndexRoute().url)}
+                            onClick={() => router.visit(backUrl)}
                             className="w-full sm:w-auto"
                         >
                             Cancel

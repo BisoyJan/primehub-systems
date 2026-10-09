@@ -34,7 +34,7 @@ import { toast } from "sonner";
 import { Plus, RefreshCw, Search, RotateCcw, CheckCircle, XCircle, CheckSquare, XSquare, X, UserX, Play, Pause, Check, ChevronsUpDown, UserCheck, Mail, AlertTriangle, Pencil, Trash2, UserCheck2, UserMinus, Clock } from "lucide-react";
 
 // New reusable hooks and components
-import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
+import { usePageMeta, useFlashMessage, usePageLoading, withReturnTo } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
@@ -936,7 +936,7 @@ export default function AccountIndex() {
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                             <Can permission="accounts.create">
-                                <Button onClick={() => router.get(accountsCreate().url)} className="w-full sm:w-auto">
+                                <Button onClick={() => router.get(withReturnTo(accountsCreate().url))} className="w-full sm:w-auto">
                                     <Plus className="mr-2 h-4 w-4" />
                                     Create Account
                                 </Button>
@@ -1238,7 +1238,7 @@ export default function AccountIndex() {
                                                         ) : (
                                                             <>
                                                                 <Can permission="accounts.edit">
-                                                                    <Link href={accountsEdit(user.id).url}>
+                                                                    <Link href={withReturnTo(accountsEdit(user.id).url)}>
                                                                         <Button variant="outline" size="icon" disabled={loading} title="Edit Account">
                                                                             <Pencil className="h-4 w-4" />
                                                                         </Button>
@@ -1460,7 +1460,7 @@ export default function AccountIndex() {
                                         <>
                                             <div className="flex gap-2">
                                                 <Can permission="accounts.edit">
-                                                    <Link href={accountsEdit(user.id).url} className="flex-1">
+                                                    <Link href={withReturnTo(accountsEdit(user.id).url)} className="flex-1">
                                                         <Button variant="outline" size="sm" className="w-full" disabled={loading}>
                                                             <Pencil className="mr-2 h-4 w-4" />
                                                             Edit
@@ -1664,7 +1664,7 @@ export default function AccountIndex() {
                                                     </div>
                                                     <div className="shrink-0 flex items-center gap-2">
                                                         <Link
-                                                            href={employeeSchedulesEdit(schedule.id).url}
+                                                            href={withReturnTo(employeeSchedulesEdit(schedule.id).url)}
                                                             className="inline-flex items-center gap-1 h-7 px-2 rounded-md border border-border text-xs hover:bg-muted transition-colors"
                                                         >
                                                             <Pencil className="h-3 w-3" /> Edit
@@ -1696,7 +1696,7 @@ export default function AccountIndex() {
                                     )}
                                     <div className="pt-1">
                                         <Link
-                                            href={scheduleDialogUser ? employeeSchedulesCreate({ query: { user_id: scheduleDialogUser.id, effective_date: scheduleDialogHiredDate } }).url : '#'}
+                                            href={scheduleDialogUser ? withReturnTo(employeeSchedulesCreate({ query: { user_id: scheduleDialogUser.id, effective_date: scheduleDialogHiredDate } }).url) : '#'}
                                             className="inline-flex items-center gap-1.5 text-sm text-primary underline-offset-4 hover:underline"
                                         >
                                             <Plus className="h-4 w-4" />

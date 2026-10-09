@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Station;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StationBulkRequest;
 use App\Http\Requests\StationRequest;
+use App\Http\Traits\RedirectsWithFlashMessages;
 use App\Jobs\GenerateAllStationQRCodesZip;
 use App\Jobs\GenerateSelectedStationQRCodesZip;
 use App\Models\Campaign;
@@ -31,6 +32,7 @@ use ZipArchive;
 class StationController extends Controller
 {
     use AddsQrCodeBorder;
+    use RedirectsWithFlashMessages;
 
     // Bulk all stations QR ZIP
     public function bulkAllQRCodes(Request $request)
@@ -379,8 +381,7 @@ class StationController extends Controller
 
         Station::create($data);
 
-        return redirect()
-            ->route('stations.index', $this->indexRedirectParams($request))
+        return $this->redirectToIndexOrReturnUrl('stations.index')
             ->with('flash', ['message' => 'Station saved', 'type' => 'success']);
     }
 
@@ -461,8 +462,7 @@ class StationController extends Controller
             Station::create($stationData);
         }
 
-        return redirect()
-            ->route('stations.index', $this->indexRedirectParams($request))
+        return $this->redirectToIndexOrReturnUrl('stations.index')
             ->with('flash', [
                 'message' => "Successfully created {$quantity} station(s)",
                 'type' => 'success',
@@ -551,8 +551,7 @@ class StationController extends Controller
 
         $station->update($data);
 
-        return redirect()
-            ->route('stations.index', $this->indexRedirectParams($request))
+        return $this->redirectToIndexOrReturnUrl('stations.index')
             ->with('flash', ['message' => 'Station updated', 'type' => 'success']);
     }
 
@@ -723,18 +722,6 @@ class StationController extends Controller
             'message' => $message,
             'type' => $skipped->isNotEmpty() ? 'warning' : 'success',
         ]);
-    }
-
-    /**
-     * Build redirect parameters preserving pagination page from request.
-     *
-     * @return array<string, mixed>
-     */
-    private function indexRedirectParams(Request $request): array
-    {
-        $page = $request->input('_page');
-
-        return $page ? ['page' => (int) $page] : [];
     }
 
     // ScanResult page for a station

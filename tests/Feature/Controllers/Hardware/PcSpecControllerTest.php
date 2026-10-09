@@ -182,6 +182,57 @@ class PcSpecControllerTest extends TestCase
         ]);
     }
 
+    public function test_update_redirects_to_return_to_url_when_provided()
+    {
+        $pcSpec = PcSpec::factory()->create();
+        $processorSpec = ProcessorSpec::factory()->create();
+        $pcSpec->processorSpecs()->attach($processorSpec);
+
+        $data = [
+            'pc_number' => '1002',
+            'manufacturer' => 'Updated Manufacturer',
+            'memory_type' => 'DDR5',
+            'ram_gb' => 32,
+            'disk_gb' => 1024,
+            'processor_mode' => 'existing',
+            'processor_spec_id' => $processorSpec->id,
+            '_return_to' => '/pcspecs?page=2',
+        ];
+
+        $response = $this->actingAs($this->user)
+            ->put(route('pcspecs.update', $pcSpec), $data);
+
+        $response->assertRedirect('/pcspecs?page=2');
+
+        $this->assertDatabaseHas('pc_specs', [
+            'id' => $pcSpec->id,
+            'manufacturer' => 'Updated Manufacturer',
+        ]);
+    }
+
+    public function test_update_falls_back_to_index_when_return_to_is_external()
+    {
+        $pcSpec = PcSpec::factory()->create();
+        $processorSpec = ProcessorSpec::factory()->create();
+        $pcSpec->processorSpecs()->attach($processorSpec);
+
+        $data = [
+            'pc_number' => '1002',
+            'manufacturer' => 'Updated Manufacturer',
+            'memory_type' => 'DDR5',
+            'ram_gb' => 32,
+            'disk_gb' => 1024,
+            'processor_mode' => 'existing',
+            'processor_spec_id' => $processorSpec->id,
+            '_return_to' => 'https://evil.example',
+        ];
+
+        $response = $this->actingAs($this->user)
+            ->put(route('pcspecs.update', $pcSpec), $data);
+
+        $response->assertRedirect(route('pcspecs.index'));
+    }
+
     public function test_destroy_deletes_pc_spec()
     {
         $pcSpec = PcSpec::factory()->create();

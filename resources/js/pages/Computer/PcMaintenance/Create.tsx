@@ -27,7 +27,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ArrowLeft, Save, Calendar } from 'lucide-react';
 import { PageHeader } from '@/components/PageHeader';
 import { SearchBar } from '@/components/SearchBar';
-import { usePageMeta } from '@/hooks';
+import { usePageMeta, useReturnTo } from '@/hooks';
 import {
     index as pcMaintenanceIndexRoute,
     create as pcMaintenanceCreateRoute,
@@ -111,6 +111,8 @@ export default function Create({ pcSpecs, sites }: CreateProps) {
             next_due_date: addMonths(value, 4),
         }));
     };
+
+    const { returnTo, backUrl } = useReturnTo(pcMaintenanceIndexRoute().url);
 
     const { title, breadcrumbs } = usePageMeta({
         title: 'Create PC Maintenance',
@@ -209,6 +211,7 @@ export default function Create({ pcSpecs, sites }: CreateProps) {
         router.post(pcMaintenanceStoreRoute().url, {
             pc_spec_ids: selectedPcSpecIds,
             ...formData,
+            _return_to: returnTo,
         }, {
             preserveScroll: true,
             onSuccess: () => {
@@ -223,7 +226,7 @@ export default function Create({ pcSpecs, sites }: CreateProps) {
     };
 
     const handleCancel = () => {
-        router.visit(pcMaintenanceIndexRoute().url);
+        router.visit(backUrl);
     };
 
     return (

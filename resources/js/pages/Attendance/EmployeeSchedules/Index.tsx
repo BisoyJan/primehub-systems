@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo, useRef } from "react";
 import { Head, router, usePage } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
-import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
+import { useFlashMessage, usePageLoading, usePageMeta, withReturnTo } from "@/hooks";
 import type { SharedData } from "@/types";
 import { PageHeader } from "@/components/PageHeader";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
@@ -508,7 +508,7 @@ export default function EmployeeSchedulesIndex() {
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex flex-col gap-2 sm:flex-row sm:gap-3">
                             <Can permission="schedules.create">
-                                <Button onClick={() => router.get(employeeSchedulesCreate().url)} className="w-full sm:w-auto">
+                                <Button onClick={() => router.get(withReturnTo(employeeSchedulesCreate().url))} className="w-full sm:w-auto">
                                     <Plus className="mr-2 h-4 w-4" />
                                     Add Employee Schedule
                                 </Button>
@@ -668,7 +668,7 @@ export default function EmployeeSchedulesIndex() {
                                                                 <Button
                                                                     variant="outline"
                                                                     size="icon"
-                                                                    onClick={() => router.get(employeeSchedulesEdit({ employee_schedule: primary.id }).url)}
+                                                                    onClick={() => router.get(withReturnTo(employeeSchedulesEdit({ employee_schedule: primary.id }).url))}
                                                                     title="Edit Schedule"
                                                                 >
                                                                     <Edit className="h-4 w-4" />
@@ -735,7 +735,7 @@ export default function EmployeeSchedulesIndex() {
                                                                                 variant="outline"
                                                                                 size="icon"
                                                                                 className="h-8 w-8"
-                                                                                onClick={() => router.get(employeeSchedulesEdit({ employee_schedule: schedule.id }).url)}
+                                                                                onClick={() => router.get(withReturnTo(employeeSchedulesEdit({ employee_schedule: schedule.id }).url))}
                                                                                 title="Edit Schedule"
                                                                             >
                                                                                 <Edit className="h-4 w-4" />
@@ -843,7 +843,7 @@ export default function EmployeeSchedulesIndex() {
                                                 variant="outline"
                                                 size="sm"
                                                 className="flex-1"
-                                                onClick={() => router.get(employeeSchedulesEdit({ employee_schedule: primary.id }).url)}
+                                                onClick={() => router.get(withReturnTo(employeeSchedulesEdit({ employee_schedule: primary.id }).url))}
                                             >
                                                 <Edit className="mr-2 h-4 w-4" />
                                                 Edit
@@ -916,7 +916,7 @@ export default function EmployeeSchedulesIndex() {
                                                                     variant="outline"
                                                                     size="sm"
                                                                     className="flex-1"
-                                                                    onClick={() => router.get(employeeSchedulesEdit({ employee_schedule: schedule.id }).url)}
+                                                                    onClick={() => router.get(withReturnTo(employeeSchedulesEdit({ employee_schedule: schedule.id }).url))}
                                                                 >
                                                                     <Edit className="mr-2 h-4 w-4" />
                                                                     Edit
@@ -1103,7 +1103,7 @@ export default function EmployeeSchedulesIndex() {
                                                             className="w-full sm:w-auto"
                                                             onClick={() => {
                                                                 setNoScheduleDialogOpen(false);
-                                                                router.get(employeeSchedulesCreate().url + `?user_id=${user.id}`);
+                                                                router.get(withReturnTo(employeeSchedulesCreate().url + `?user_id=${user.id}`));
                                                             }}
                                                         >
                                                             <Plus className="h-4 w-4 mr-1" />
@@ -1181,7 +1181,7 @@ export default function EmployeeSchedulesIndex() {
                                                                 className="flex-1 sm:flex-none"
                                                                 onClick={() => {
                                                                     setNoScheduleDialogOpen(false);
-                                                                    router.get(employeeSchedulesCreate().url + `?user_id=${user.id}`);
+                                                                    router.get(withReturnTo(employeeSchedulesCreate().url + `?user_id=${user.id}`));
                                                                 }}
                                                             >
                                                                 <Plus className="h-4 w-4 mr-1" />
@@ -1263,7 +1263,7 @@ export default function EmployeeSchedulesIndex() {
                                                                 className="flex-1 sm:flex-none"
                                                                 onClick={() => {
                                                                     setNoScheduleDialogOpen(false);
-                                                                    router.get(employeeSchedulesCreate().url + `?user_id=${user.id}`);
+                                                                    router.get(withReturnTo(employeeSchedulesCreate().url + `?user_id=${user.id}`));
                                                                 }}
                                                             >
                                                                 <Plus className="h-4 w-4 mr-1" />
@@ -1357,7 +1357,7 @@ export default function EmployeeSchedulesIndex() {
                                                         variant="outline"
                                                         onClick={() => {
                                                             setScheduleDetailsDialogOpen(false);
-                                                            router.get(employeeSchedulesEdit({ employee_schedule: schedule.id }).url);
+                                                            router.get(withReturnTo(employeeSchedulesEdit({ employee_schedule: schedule.id }).url));
                                                         }}
                                                         title="Edit Schedule"
                                                     >
