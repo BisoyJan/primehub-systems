@@ -73,7 +73,7 @@ export function NavGroup({ label, items = [], groupId, isOpen, onToggle }: NavGr
                                 isActive={isItemActive(item)}
                                 tooltip={{ children: item.title }}
                             >
-                                <Link href={item.href} prefetch="mount">
+                                <Link href={item.href} prefetch="hover">
                                     {item.icon && <item.icon />}
                                     <span>{item.title}</span>
                                     {item.badge != null && item.badge > 0 && (
@@ -119,7 +119,7 @@ export function NavGroup({ label, items = [], groupId, isOpen, onToggle }: NavGr
                                     isActive={isItemActive(item)}
                                     tooltip={{ children: item.title }}
                                 >
-                                    <Link href={item.href} prefetch="mount">
+                                    <Link href={item.href} prefetch="hover">
                                         {item.icon && <item.icon />}
                                         <span>{item.title}</span>
                                         {item.badge != null && item.badge > 0 && (
