@@ -77,7 +77,8 @@ function formatDate(dateString: string): string {
     });
 }
 
-function formatTime(timeString: string): string {
+function formatTime(timeString: string | null | undefined): string {
+    if (!timeString) return 'Flexible';
     const [hours, minutes] = timeString.split(':');
     const date = new Date();
     date.setHours(Number(hours));
@@ -168,7 +169,9 @@ export const PersonalDashboardTab: React.FC<PersonalDashboardTabProps> = ({
                                     <div className="grid grid-cols-2 gap-3">
                                         <div className="rounded-lg border p-3">
                                             <p className="text-xs text-muted-foreground">Shift Type</p>
-                                            <p className="text-sm font-semibold capitalize">{personalSchedule.shift_type.replace(/_/g, ' ')}</p>
+                                            <p className="text-sm font-semibold capitalize">
+                                                {personalSchedule.is_flexible ? 'Flexible' : (personalSchedule.shift_type ?? 'Regular').replace(/_/g, ' ')}
+                                            </p>
                                         </div>
                                         <div className="rounded-lg border p-3">
                                             <p className="text-xs text-muted-foreground">Grace Period</p>
@@ -187,7 +190,7 @@ export const PersonalDashboardTab: React.FC<PersonalDashboardTabProps> = ({
                                     <div>
                                         <p className="text-xs text-muted-foreground mb-2">Work Days</p>
                                         <div className="flex flex-wrap gap-1.5">
-                                            {personalSchedule.work_days.map((day) => (
+                                            {(personalSchedule.work_days ?? []).map((day) => (
                                                 <Badge key={day} variant="secondary" className="text-xs">
                                                     {DAY_ABBREVIATIONS[day] ?? day}
                                                 </Badge>
@@ -200,7 +203,7 @@ export const PersonalDashboardTab: React.FC<PersonalDashboardTabProps> = ({
                                     <div>
                                         <p className="text-xs text-muted-foreground mb-2">Next 7 Work Days</p>
                                         <div className="space-y-1">
-                                            {personalSchedule.next_shifts.slice(0, 7).map((shift, i) => (
+                                            {(personalSchedule.next_shifts ?? []).slice(0, 7).map((shift, i) => (
                                                 <div
                                                     key={i}
                                                     className="flex items-center gap-2 text-sm rounded px-2 py-1 hover:bg-muted/50"

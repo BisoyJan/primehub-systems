@@ -597,6 +597,30 @@ class DashboardServiceTest extends TestCase
     }
 
     #[Test]
+    public function it_gets_personal_schedule_for_flexible_schedule_with_null_times(): void
+    {
+        $user = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+
+        EmployeeSchedule::factory()->create([
+            'user_id' => $user->id,
+            'is_active' => true,
+            'is_flexible' => true,
+            'scheduled_time_in' => null,
+            'scheduled_time_out' => null,
+            'work_days' => ['Monday', 'Tuesday'],
+        ]);
+
+        $result = $this->service->getPersonalSchedule($user->id);
+
+        $this->assertNotNull($result);
+        $this->assertTrue($result['is_flexible']);
+        $this->assertNull($result['time_in']);
+        $this->assertNull($result['time_out']);
+        $this->assertSame(['Monday', 'Tuesday'], $result['work_days']);
+        $this->assertNotEmpty($result['next_shifts']);
+    }
+
+    #[Test]
     public function it_returns_null_for_user_without_schedule(): void
     {
         $user = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);

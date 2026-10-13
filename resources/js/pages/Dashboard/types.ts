@@ -60,8 +60,9 @@ export interface PersonalSchedule {
     campaign: string;
     site: string;
     shift_type: string;
-    time_in: string;
-    time_out: string;
+    is_flexible?: boolean;
+    time_in: string | null;
+    time_out: string | null;
     work_days: string[];
     grace_period_minutes: number;
     next_shifts: string[];

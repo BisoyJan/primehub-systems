@@ -827,9 +827,10 @@ class DashboardService
             'campaign' => $schedule->campaign?->name ?? 'Unassigned',
             'site' => $schedule->site?->name ?? 'Unassigned',
             'shift_type' => $schedule->shift_type ?? 'Regular',
+            'is_flexible' => (bool) $schedule->is_flexible,
             'time_in' => $schedule->scheduled_time_in,
             'time_out' => $schedule->scheduled_time_out,
-            'work_days' => $workDays,
+            'work_days' => array_values($workDays),
             'grace_period_minutes' => $schedule->grace_period_minutes ?? 0,
             'next_shifts' => $nextShifts,
         ];
