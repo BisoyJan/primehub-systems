@@ -2,7 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Models\Attendance;
+use App\Models\AttendancePoint;
 use App\Models\LeaveRequest;
+use App\Models\LeaveRequestDay;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -121,6 +124,65 @@ class LeaveRequestDocumentUploadTest extends TestCase
         $this->assertSame(2, $leaveRequest->documents()->count());
         $this->assertDatabaseMissing('leave_request_documents', ['id' => $documentToRemove->id]);
         Storage::disk('local')->assertMissing($removedPath);
+    }
+
+    #[Test]
+    public function it_attaches_document_to_approved_sl_and_excuses_upto_day_points(): void
+    {
+        Mail::fake();
+        Storage::fake('local');
+
+        $superAdmin = User::factory()->create(['role' => 'Super Admin', 'is_approved' => true]);
+        $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        $date = now()->subDays(5)->toDateString();
+
+        $leaveRequest = LeaveRequest::factory()->create([
+            'user_id' => $agent->id,
+            'leave_type' => 'SL',
+            'status' => 'approved',
+            'start_date' => $date,
+            'end_date' => $date,
+            'days_requested' => 1,
+            'credits_deducted' => 0,
+            'medical_cert_submitted' => false,
+            'campaign_department' => 'Sales',
+        ]);
+        LeaveRequestDay::create([
+            'leave_request_id' => $leaveRequest->id,
+            'date' => $date,
+            'day_status' => LeaveRequestDay::STATUS_ADVISED_ABSENCE,
+        ]);
+        $attendance = Attendance::factory()->create([
+            'user_id' => $agent->id,
+            'shift_date' => $date,
+            'status' => 'advised_absence',
+            'leave_request_id' => $leaveRequest->id,
+        ]);
+        $point = AttendancePoint::factory()->create([
+            'user_id' => $agent->id,
+            'attendance_id' => $attendance->id,
+            'shift_date' => $date,
+            'point_type' => 'whole_day_absence',
+            'points' => 1.00,
+        ]);
+
+        $this->actingAs($superAdmin)
+            ->put(route('leave-requests.update', $leaveRequest), [
+                'leave_type' => 'SL',
+                'start_date' => $date,
+                'end_date' => $date,
+                'reason' => $leaveRequest->reason,
+                'campaign_department' => 'Sales',
+                'medical_cert_files' => [UploadedFile::fake()->image('medcert.jpg')],
+            ])
+            ->assertSessionHasNoErrors();
+
+        $leaveRequest->refresh();
+
+        $this->assertSame(1, $leaveRequest->documents()->count());
+        $this->assertTrue((bool) $leaveRequest->medical_cert_submitted);
+        $this->assertTrue((bool) $point->fresh()->is_excused);
+        $this->assertSame('advised_absence', $attendance->fresh()->status);
     }
 
     #[Test]

@@ -689,6 +689,84 @@ sudo systemctl reload nginx
 tail -f /var/log/nginx/primehub_error.log
 ```
 
+#### Static Asset Compression & HTTP/2 (Required)
+
+Without this, every new PC downloads ~2.2 MB of uncompressed JS/CSS on first
+load. Add to the `server {}` block in `/etc/nginx/sites-available/primehub`:
+
+```nginx
+# Enable HTTP/2 on the TLS listener
+listen 443 ssl http2;
+listen [::]:443 ssl http2;
+
+# Gzip for text assets (static files are NOT compressed by default)
+gzip on;
+gzip_vary on;
+gzip_comp_level 6;
+gzip_min_length 1024;
+gzip_proxied any;
+gzip_types
+    text/plain text/css text/javascript
+    application/javascript application/x-javascript application/json
+    application/manifest+json image/svg+xml font/woff2;
+
+# Serve pre-compressed .gz files from `npm run build` when present
+gzip_static on;
+
+# Long-lived, immutable cache for hashed Vite assets
+location ~* ^/build/assets/.+\.(js|css|woff2?|svg|png|jpg|webp)$ {
+    expires 1y;
+    add_header Cache-Control "public, immutable";
+    access_log off;
+    try_files $uri =404;
+}
+```
+
+Then `sudo nginx -t && sudo systemctl reload nginx`. Verify with:
+
+```bash
+# Use GET, not HEAD — nginx omits Content-Encoding on HEAD responses
+JS=$(ls /var/www/primehub-systems/public/build/assets/app-*.js | head -1 | xargs basename)
+curl -s -o /dev/null -D - --http2 -H 'Accept-Encoding: gzip' "https://prmhubsystems.com/build/assets/$JS" \
+  | grep -iE 'HTTP/|content-encoding|cache-control'
+# expect: HTTP/2 200 / content-encoding: gzip / cache-control: public, immutable
+```
+
+Applied to production 2026-10-14. Note: `gzip_types` lives in the `http {}`
+context of `/etc/nginx/nginx.conf` (Ubuntu ships it commented out), not in the
+site file.
+
+#### Diagnosing "slow for some users"
+
+The access log uses the `timed` format (`rt=` total request time,
+`urt=` PHP-FPM time). Compare them to locate the bottleneck:
+
+| `rt` | `urt` | Cause |
+|------|-------|-------|
+| high | high | PHP/DB slow → profile the controller |
+| high | low/`-` | Network between server and client, or client gave up (`499`) |
+| low | low | Not server-side — check the user's PC/LAN |
+
+```bash
+# Requests slower than 2s
+awk '{for(i=1;i<=NF;i++) if($i~/^rt=/){split($i,a,"="); if(a[2]>2) print}}' /var/log/nginx/primehub_access.log | tail -30
+
+# Client disconnects (499) per hour
+awk '$9==499{print substr($4,2,14)}' /var/log/nginx/primehub_access.log | sort | uniq -c
+
+# PHP-FPM pool exhaustion (should be 0)
+grep -c 'max_children' /var/log/php8.4-fpm.log
+
+# Server egress sanity (should be tens of MB/s)
+head -c 5000000 /dev/urandom > /tmp/5mb.bin
+curl -s -o /dev/null -w '%{speed_upload} B/s\n' -T /tmp/5mb.bin https://speed.cloudflare.com/__up
+```
+
+If `rt` is high while `urt` is low and egress is healthy, the problem is the
+transit path to the office ISP. Options: open a Hostinger network ticket with
+the timestamps, or put Cloudflare (free tier) in front so static assets are
+served from a local edge.
+
 ### PHP-FPM Management
 
 ```bash

@@ -1415,33 +1415,8 @@ class LeaveRequestController extends Controller
         try {
             $documentsEnabled = in_array($request->leave_type, LeaveRequest::DOCUMENT_UPLOAD_LEAVE_TYPES);
 
-            // Remove documents the user chose to delete
-            if ($documentsEnabled && $request->filled('removed_documents')) {
-                $documentsToRemove = $leaveRequest->documents()
-                    ->whereIn('id', (array) $request->input('removed_documents'))
-                    ->get();
-
-                foreach ($documentsToRemove as $document) {
-                    if (Storage::disk('local')->exists($document->file_path)) {
-                        Storage::disk('local')->delete($document->file_path);
-                    }
-                    $document->delete();
-                }
-            }
-
-            // Add newly uploaded supporting documents
-            if ($documentsEnabled && $request->hasFile('medical_cert_files')) {
-                foreach ($request->file('medical_cert_files') as $file) {
-                    $filename = 'leavedoc_'.$targetUser->id.'_'.Str::uuid().'.'.$file->getClientOriginalExtension();
-                    $path = $file->storeAs('leave_request_documents', $filename, 'local');
-
-                    $leaveRequest->documents()->create([
-                        'file_path' => $path,
-                        'original_filename' => $file->getClientOriginalName(),
-                        'mime_type' => $file->getMimeType(),
-                        'file_size' => $file->getSize(),
-                    ]);
-                }
+            if ($documentsEnabled) {
+                $this->syncLeaveRequestDocuments($request, $leaveRequest, $targetUser);
             }
 
             $updateData = [
@@ -1484,6 +1459,39 @@ class LeaveRequestController extends Controller
             ]);
 
             return back()->withErrors(['error' => 'Failed to update leave request. Please try again.'])->withInput();
+        }
+    }
+
+    /**
+     * Remove documents flagged for deletion and store newly uploaded supporting documents.
+     */
+    protected function syncLeaveRequestDocuments(Request $request, LeaveRequest $leaveRequest, User $targetUser): void
+    {
+        if ($request->filled('removed_documents')) {
+            $documentsToRemove = $leaveRequest->documents()
+                ->whereIn('id', (array) $request->input('removed_documents'))
+                ->get();
+
+            foreach ($documentsToRemove as $document) {
+                if (Storage::disk('local')->exists($document->file_path)) {
+                    Storage::disk('local')->delete($document->file_path);
+                }
+                $document->delete();
+            }
+        }
+
+        if ($request->hasFile('medical_cert_files')) {
+            foreach ($request->file('medical_cert_files') as $file) {
+                $filename = 'leavedoc_'.$targetUser->id.'_'.Str::uuid().'.'.$file->getClientOriginalExtension();
+                $path = $file->storeAs('leave_request_documents', $filename, 'local');
+
+                $leaveRequest->documents()->create([
+                    'file_path' => $path,
+                    'original_filename' => $file->getClientOriginalName(),
+                    'mime_type' => $file->getMimeType(),
+                    'file_size' => $file->getSize(),
+                ]);
+            }
         }
     }
 
@@ -1547,10 +1555,20 @@ class LeaveRequestController extends Controller
         }
         $modificationReason = $modificationReason ?: 'Updated by administrator';
 
+        $effectiveLeaveType = $isSuperAdmin ? $newLeaveType : $oldLeaveType;
+        $documentsEnabled = in_array($effectiveLeaveType, LeaveRequest::DOCUMENT_UPLOAD_LEAVE_TYPES);
+        $changesAttendance = $datesChanging || ($isSuperAdmin && $leaveTypeChanging);
+
         DB::beginTransaction();
         try {
+            if ($documentsEnabled) {
+                $this->syncLeaveRequestDocuments($request, $leaveRequest, $targetUser);
+            }
+
             // 1. Delete old attendance records associated with this leave
-            Attendance::where('leave_request_id', $leaveRequest->id)->delete();
+            if ($changesAttendance) {
+                Attendance::where('leave_request_id', $leaveRequest->id)->delete();
+            }
 
             // 2. Handle credit adjustments
             if ($leaveTypeChanging) {
@@ -1624,6 +1642,20 @@ class LeaveRequestController extends Controller
                 'date_modification_reason' => $modificationReason,
             ];
 
+            if (! $datesChanging && ! $leaveTypeChanging && ! $reasonChanging) {
+                unset(
+                    $updateData['original_start_date'],
+                    $updateData['original_end_date'],
+                    $updateData['date_modified_by'],
+                    $updateData['date_modified_at'],
+                    $updateData['date_modification_reason'],
+                );
+            }
+
+            if ($documentsEnabled) {
+                $updateData['medical_cert_submitted'] = $leaveRequest->documents()->exists();
+            }
+
             // Only Super Admin's leave_type/reason changes are ever applied
             if ($isSuperAdmin) {
                 $updateData['leave_type'] = $newLeaveType;
@@ -1632,23 +1664,33 @@ class LeaveRequestController extends Controller
 
             $leaveRequest->update($updateData);
 
-            // 4. Create new attendance records for the new date range
-            $this->updateAttendanceForApprovedLeave($leaveRequest);
+            // 4. Rebuild attendance only when dates/type changed; otherwise keep per-day SL statuses
+            if ($changesAttendance) {
+                $this->updateAttendanceForApprovedLeave($leaveRequest);
+            }
+
+            // 5. Excuse attendance points now covered by a supporting document
+            if ($leaveRequest->leave_type === 'SL') {
+                $this->autoExcuseAttendancePointsForSlDays($leaveRequest);
+            } elseif (! $changesAttendance) {
+                $this->autoExcuseAttendancePoints($leaveRequest);
+            }
 
             DB::commit();
 
-            // Notify the employee about the change
-            $this->notificationService->notifyLeaveRequestDateChanged(
-                $targetUser->id,
-                str_replace('_', ' ', ucfirst($leaveRequest->leave_type)),
-                Carbon::parse($originalStartDate)->format('M d, Y'),
-                Carbon::parse($originalEndDate)->format('M d, Y'),
-                Carbon::parse($newStartDate)->format('M d, Y'),
-                Carbon::parse($newEndDate)->format('M d, Y'),
-                $user->name,
-                $modificationReason,
-                $leaveRequest->id
-            );
+            if ($datesChanging || $leaveTypeChanging || $reasonChanging) {
+                $this->notificationService->notifyLeaveRequestDateChanged(
+                    $targetUser->id,
+                    str_replace('_', ' ', ucfirst($leaveRequest->leave_type)),
+                    Carbon::parse($originalStartDate)->format('M d, Y'),
+                    Carbon::parse($originalEndDate)->format('M d, Y'),
+                    Carbon::parse($newStartDate)->format('M d, Y'),
+                    Carbon::parse($newEndDate)->format('M d, Y'),
+                    $user->name,
+                    $modificationReason,
+                    $leaveRequest->id
+                );
+            }
 
             \Log::info('Approved leave request updated', [
                 'leave_request_id' => $leaveRequest->id,
