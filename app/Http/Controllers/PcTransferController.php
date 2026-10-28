@@ -2,21 +2,34 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\PcBulkTransferRequest;
+use App\Http\Requests\PcRemoveRequest;
+use App\Http\Requests\PcTransferRequest;
+use App\Http\Traits\RedirectsWithFlashMessages;
 use App\Models\Campaign;
 use App\Models\PcSpec;
 use App\Models\PcTransfer;
 use App\Models\Site;
 use App\Models\Station;
+use App\Services\PcTransferService;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
+use Inertia\Response;
 
 class PcTransferController extends Controller
 {
+    use RedirectsWithFlashMessages;
+
+    public function __construct(protected PcTransferService $transferService) {}
+
     /**
      * Display the PC transfer interface
      */
-    public function index(Request $request)
+    public function index(Request $request): Response
     {
         $search = $request->query('search');
         $siteFilter = $request->query('site');
@@ -67,17 +80,6 @@ class PcTransferController extends Controller
 
         $paginatorArray = $paginated->toArray();
 
-        // Get all available PC specs for transfer
-        $pcSpecs = PcSpec::with(['processorSpecs'])
-            ->get()
-            ->map(function ($pc) {
-                return [
-                    'id' => $pc->id,
-                    'label' => $pc->model,
-                    'details' => $pc->getFormattedDetails(),
-                ];
-            });
-
         return Inertia::render('Station/PcTransfer/Index', [
             'stations' => [
                 'data' => $stations,
@@ -89,253 +91,126 @@ class PcTransferController extends Controller
                     'total' => $paginated->total(),
                 ],
             ],
-            'pcSpecs' => $pcSpecs,
+            'pcSpecs' => $this->pcSpecOptions(),
+            'stationOptions' => $this->stationOptions(),
             'filters' => [
-                'sites' => Site::all(['id', 'name']),
-                'campaigns' => Campaign::all(['id', 'name']),
+                'sites' => Site::query()->orderBy('name')->get(['id', 'name']),
+                'campaigns' => Campaign::query()->orderBy('name')->get(['id', 'name']),
             ],
-            'flash' => session('flash') ?? null,
         ]);
     }
 
     /**
-     * Transfer a PC to a station (can also handle swapping)
+     * Transfer a single PC to a station (assign, replace or swap).
      */
-    public function transfer(Request $request)
+    public function transfer(PcTransferRequest $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'to_station_id' => 'required|exists:stations,id',
-            'pc_spec_id' => 'required|exists:pc_specs,id',
-            'from_station_id' => 'nullable|exists:stations,id',
-            'transfer_type' => 'required|in:assign,swap,remove',
-            'notes' => 'nullable|string|max:500',
-        ]);
+        $validated = $request->validated();
 
-        DB::beginTransaction();
         try {
-            $toStation = Station::findOrFail($validated['to_station_id']);
-            $pcSpec = PcSpec::findOrFail($validated['pc_spec_id']);
-
-            // Find all stations currently assigned to this PC and remove it
-            $currentStations = Station::where('pc_spec_id', $validated['pc_spec_id'])->get();
-            $fromStation = $currentStations->first(); // Use first as primary source station
-
-            // Handle swap if the target station already has a PC
-            if ($toStation->pc_spec_id && $validated['transfer_type'] === 'swap' && $fromStation) {
-                $tempPcId = $toStation->pc_spec_id;
-
-                // Remove current PC from all its assigned stations
-                foreach ($currentStations as $station) {
-                    $station->pc_spec_id = null;
-                    $station->save();
-                }
-
-                // Assign new PC to target station
-                $toStation->pc_spec_id = $validated['pc_spec_id'];
-                $toStation->save();
-
-                // Assign replaced PC to source station
-                $fromStation->pc_spec_id = $tempPcId;
-                $fromStation->save();
-
-                // Log both transfers
-                PcTransfer::create([
-                    'from_station_id' => $fromStation->id,
-                    'to_station_id' => $toStation->id,
+            $result = $this->transferService->bulkTransfer(
+                [[
+                    'to_station_id' => $validated['to_station_id'],
                     'pc_spec_id' => $validated['pc_spec_id'],
-                    'user_id' => auth()->id(),
-                    'transfer_type' => 'swap',
-                    'notes' => $validated['notes'] ?? null,
-                ]);
-
-                PcTransfer::create([
-                    'from_station_id' => $toStation->id,
-                    'to_station_id' => $fromStation->id,
-                    'pc_spec_id' => $tempPcId,
-                    'user_id' => auth()->id(),
-                    'transfer_type' => 'swap',
-                    'notes' => $validated['notes'] ?? null,
-                ]);
-            } else {
-                // Simple assign/transfer
-                // Remove PC from all its currently assigned stations
-                foreach ($currentStations as $station) {
-                    $station->pc_spec_id = null;
-                    $station->save();
-                }
-
-                // Assign PC to target station
-                $toStation->pc_spec_id = $validated['pc_spec_id'];
-                $toStation->save();
-
-                // Log transfer
-                PcTransfer::create([
-                    'from_station_id' => $fromStation?->id,
-                    'to_station_id' => $toStation->id,
-                    'pc_spec_id' => $validated['pc_spec_id'],
-                    'user_id' => auth()->id(),
                     'transfer_type' => $validated['transfer_type'],
-                    'notes' => $validated['notes'] ?? null,
-                ]);
-            }
+                ]],
+                $validated['notes'] ?? null,
+                (int) $request->user()->id,
+            );
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            Log::error('PcTransferController transfer error: '.$e->getMessage());
 
-            DB::commit();
-
-            return redirect()->back()->with('flash', [
-                'message' => 'PC transferred successfully',
-                'type' => 'success',
-            ]);
-        } catch (\Exception $e) {
-            DB::rollBack();
-
-            return redirect()->back()->with('flash', [
-                'message' => 'Transfer failed: '.$e->getMessage(),
-                'type' => 'error',
-            ]);
+            return $this->backWithFlash('Transfer failed. Please try again.', 'error');
         }
+
+        return $this->backWithFlash($this->transferService->describeResult($result));
     }
 
     /**
      * Bulk transfer multiple PCs
      */
-    public function bulkTransfer(Request $request)
+    public function bulkTransfer(PcBulkTransferRequest $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'transfers' => 'required|array',
-            'transfers.*.to_station_id' => 'required|exists:stations,id',
-            'transfers.*.pc_spec_id' => 'required|exists:pc_specs,id',
-            'transfers.*.from_station_id' => 'nullable|exists:stations,id',
-            'notes' => 'nullable|string|max:500',
-        ]);
+        $validated = $request->validated();
 
-        DB::beginTransaction();
         try {
-            $floatingPcs = []; // Track PCs that become floating
+            $result = $this->transferService->bulkTransfer(
+                $validated['transfers'],
+                $validated['notes'] ?? null,
+                (int) $request->user()->id,
+            );
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            Log::error('PcTransferController bulkTransfer error: '.$e->getMessage());
 
-            foreach ($validated['transfers'] as $transfer) {
-                $toStation = Station::findOrFail($transfer['to_station_id']);
-                $pcSpec = PcSpec::findOrFail($transfer['pc_spec_id']);
-
-                // Find all stations currently assigned to this PC and remove it
-                $currentStations = Station::where('pc_spec_id', $transfer['pc_spec_id'])->get();
-                foreach ($currentStations as $currentStation) {
-                    $currentStation->pc_spec_id = null;
-                    $currentStation->save();
-                }
-
-                // If target station has a PC, it will become floating (unassigned)
-                $replacedPcId = $toStation->pc_spec_id;
-                if ($replacedPcId) {
-                    $floatingPc = PcSpec::find($replacedPcId);
-
-                    $floatingPcs[] = [
-                        'pc_number' => $floatingPc->pc_number,
-                        'model' => $floatingPc->model,
-                        'from_station' => $toStation->station_number,
-                    ];
-                }
-
-                // Assign PC to target station (this replaces any existing PC)
-                $toStation->pc_spec_id = $transfer['pc_spec_id'];
-                $toStation->save();
-
-                // Log transfer
-                PcTransfer::create([
-                    'from_station_id' => $currentStations->first()?->id, // Log the first/primary station it came from
-                    'to_station_id' => $toStation->id,
-                    'pc_spec_id' => $transfer['pc_spec_id'],
-                    'user_id' => auth()->id(),
-                    'transfer_type' => 'assign',
-                    'notes' => $validated['notes'] ?? null,
-                ]);
-            }
-
-            DB::commit();
-
-            $message = count($validated['transfers']).' PC(s) transferred successfully';
-            if (count($floatingPcs) > 0) {
-                $floatingList = collect($floatingPcs)->map(function ($pc) {
-                    return $pc['pc_number'].' (from '.$pc['from_station'].')';
-                })->join(', ');
-                $message .= '. Floating PCs: '.$floatingList;
-            }
-
-            return redirect()->back()->with('flash', [
-                'message' => $message,
-                'type' => 'success',
-                'floating_pcs' => $floatingPcs,
-            ]);
-        } catch (\Exception $e) {
-            DB::rollBack();
-
-            return redirect()->back()->with('flash', [
-                'message' => 'Bulk transfer failed: '.$e->getMessage(),
-                'type' => 'error',
-            ]);
+            return $this->backWithFlash('Bulk transfer failed. Please try again.', 'error');
         }
+
+        return $this->redirectWithFlash('pc-transfers.index', $this->transferService->describeResult($result));
     }
 
     /**
      * Remove PC from a station
      */
-    public function remove(Request $request)
+    public function remove(PcRemoveRequest $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'station_id' => 'required|exists:stations,id',
-            'notes' => 'nullable|string|max:500',
-        ]);
+        $validated = $request->validated();
+        $station = Station::query()->findOrFail($validated['station_id']);
 
-        DB::beginTransaction();
         try {
-            $station = Station::findOrFail($validated['station_id']);
+            $this->transferService->remove($station, $validated['notes'] ?? null, (int) $request->user()->id);
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            Log::error('PcTransferController remove error: '.$e->getMessage());
 
-            if (! $station->pc_spec_id) {
-                return redirect()->back()->with('flash', [
-                    'message' => 'Station has no PC assigned',
-                    'type' => 'error',
-                ]);
-            }
-
-            $pcSpecId = $station->pc_spec_id;
-            $station->pc_spec_id = null;
-            $station->save();
-
-            // Log removal
-            PcTransfer::create([
-                'from_station_id' => $station->id,
-                'to_station_id' => $station->id,
-                'pc_spec_id' => $pcSpecId,
-                'user_id' => auth()->id(),
-                'transfer_type' => 'remove',
-                'notes' => $validated['notes'] ?? null,
-            ]);
-
-            DB::commit();
-
-            return redirect()->back()->with('flash', [
-                'message' => 'PC removed from station successfully',
-                'type' => 'success',
-            ]);
-        } catch (\Exception $e) {
-            DB::rollBack();
-
-            return redirect()->back()->with('flash', [
-                'message' => 'Removal failed: '.$e->getMessage(),
-                'type' => 'error',
-            ]);
+            return $this->backWithFlash('Removal failed. Please try again.', 'error');
         }
+
+        return $this->backWithFlash('PC removed from station successfully');
     }
 
     /**
      * Get transfer history
      */
-    public function history(Request $request)
+    public function history(Request $request): Response
     {
         $perPage = 20;
+        $search = trim((string) $request->query('search', ''));
+        $type = $request->query('type');
+        $dateFrom = $request->query('date_from');
+        $dateTo = $request->query('date_to');
 
-        $transfers = PcTransfer::with(['fromStation', 'toStation', 'pcSpec', 'user'])
-            ->orderBy('created_at', 'desc')
-            ->paginate($perPage);
+        $query = PcTransfer::query()
+            ->with(['fromStation', 'toStation', 'pcSpec', 'user'])
+            ->orderBy('created_at', 'desc');
+
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->whereHas('pcSpec', fn ($pq) => $pq->where('pc_number', 'like', "%{$search}%"))
+                    ->orWhereHas('fromStation', fn ($sq) => $sq->where('station_number', 'like', "%{$search}%"))
+                    ->orWhereHas('toStation', fn ($sq) => $sq->where('station_number', 'like', "%{$search}%"))
+                    ->orWhereHas('user', fn ($uq) => $uq->where('first_name', 'like', "%{$search}%")
+                        ->orWhere('last_name', 'like', "%{$search}%"));
+            });
+        }
+
+        if ($type && $type !== 'all') {
+            $query->where('transfer_type', $type);
+        }
+
+        if ($dateFrom) {
+            $query->whereDate('created_at', '>=', $dateFrom);
+        }
+
+        if ($dateTo) {
+            $query->whereDate('created_at', '<=', $dateTo);
+        }
+
+        $transfers = $query->paginate($perPage)->withQueryString();
 
         $formattedTransfers = $transfers->getCollection()->map(function ($transfer) {
             return [
@@ -346,7 +221,7 @@ class PcTransferController extends Controller
                 'user' => $transfer->user?->name,
                 'transfer_type' => $transfer->transfer_type,
                 'notes' => $transfer->notes,
-                'created_at' => $transfer->created_at->format('Y-m-d H:i:s'),
+                'created_at' => $transfer->created_at->toIso8601String(),
             ];
         });
 
@@ -363,47 +238,32 @@ class PcTransferController extends Controller
                     'total' => $transfers->total(),
                 ],
             ],
+            'filters' => [
+                'search' => $search,
+                'type' => $type ?: 'all',
+                'date_from' => $dateFrom ?: '',
+                'date_to' => $dateTo ?: '',
+            ],
         ]);
     }
 
     /**
      * Show dedicated transfer page for bulk transfers
      */
-    public function transferPage(Request $request, ?Station $station = null)
+    public function transferPage(Request $request, ?Station $station = null): Response
     {
-        // Get all PC specs with their station assignments
-        $pcSpecs = PcSpec::with(['processorSpecs', 'stations.site', 'stations.campaign'])
-            ->get()
-            ->map(function ($pc) {
-                $assignedStation = $pc->stations->first();
-
-                return [
-                    'id' => $pc->id,
-                    'pc_number' => $pc->pc_number,
-                    'label' => $pc->model,
-                    'details' => $pc->getFormattedDetails(),
-                    'station' => $assignedStation ? [
-                        'id' => $assignedStation->id,
-                        'station_number' => $assignedStation->station_number,
-                        'site' => $assignedStation->site?->name,
-                        'site_id' => $assignedStation->site_id,
-                        'campaign' => $assignedStation->campaign?->name,
-                        'campaign_id' => $assignedStation->campaign_id,
-                    ] : null,
-                ];
-            });
-
-        // Get all stations or filter by IDs if provided (bulk mode)
         $stationsQuery = Station::select('stations.*')
-            ->with(['site', 'campaign', 'pcSpec'])
+            ->with(['site', 'campaign', 'pcSpec.processorSpecs'])
             ->join('sites', 'stations.site_id', '=', 'sites.id')
             ->orderBy('sites.name')
             ->orderByRaw('CAST(stations.station_number AS UNSIGNED), stations.station_number');
 
-        // If station IDs provided in query string (for bulk mode)
-        if ($request->has('stations')) {
-            $stationIds = explode(',', $request->input('stations'));
-            $stationsQuery->whereIn('id', $stationIds);
+        if ($request->filled('stations')) {
+            $stationIds = collect(explode(',', (string) $request->input('stations')))
+                ->map(fn ($id) => (int) trim($id))
+                ->filter()
+                ->all();
+            $stationsQuery->whereIn('stations.id', $stationIds);
         }
 
         $stations = $stationsQuery->get()->map(function ($st) {
@@ -419,26 +279,77 @@ class PcTransferController extends Controller
             ];
         });
 
-        // Get unique sites and campaigns for filters (distinct values only)
-        $sites = Site::select('id', 'name')
-            ->distinct()
-            ->orderBy('name')
-            ->get();
-
-        $campaigns = Campaign::select('id', 'name')
-            ->distinct()
-            ->orderBy('name')
-            ->get();
+        $siteFilter = $request->query('site');
+        $campaignFilter = $request->query('campaign');
 
         return Inertia::render('Station/PcTransfer/Transfer', [
             'stations' => $stations,
-            'pcSpecs' => $pcSpecs,
+            'pcSpecs' => $this->pcSpecOptions(),
             'filters' => [
-                'sites' => $sites,
-                'campaigns' => $campaigns,
+                'sites' => Site::query()->orderBy('name')->get(['id', 'name']),
+                'campaigns' => Campaign::query()->orderBy('name')->get(['id', 'name']),
+            ],
+            'initialFilters' => [
+                'site' => $siteFilter && $siteFilter !== 'all' ? (string) $siteFilter : ($station?->site_id ? (string) $station->site_id : 'all'),
+                'campaign' => $campaignFilter && $campaignFilter !== 'all' ? (string) $campaignFilter : 'all',
+                'search' => (string) $request->query('search', ''),
             ],
             'preselectedStationId' => $station?->id,
-            'flash' => session('flash') ?? null,
         ]);
+    }
+
+    /**
+     * All PC specs with their current station, formatted for pickers.
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
+    protected function pcSpecOptions()
+    {
+        return PcSpec::query()
+            ->with(['processorSpecs', 'stations.site', 'stations.campaign'])
+            ->orderBy('pc_number')
+            ->get()
+            ->map(function (PcSpec $pc) {
+                $assignedStation = $pc->stations->first();
+
+                return [
+                    'id' => $pc->id,
+                    'pc_number' => $pc->pc_number,
+                    'label' => $pc->pc_number ?? $pc->manufacturer,
+                    'details' => $pc->getFormattedDetails(),
+                    'station' => $assignedStation ? [
+                        'id' => $assignedStation->id,
+                        'station_number' => $assignedStation->station_number,
+                        'site' => $assignedStation->site?->name,
+                        'site_id' => $assignedStation->site_id,
+                        'campaign' => $assignedStation->campaign?->name,
+                        'campaign_id' => $assignedStation->campaign_id,
+                    ] : null,
+                ];
+            });
+    }
+
+    /**
+     * Lightweight list of every station for destination pickers.
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
+    protected function stationOptions()
+    {
+        return Station::select('stations.*')
+            ->with(['site', 'pcSpec:id,pc_number'])
+            ->join('sites', 'stations.site_id', '=', 'sites.id')
+            ->orderBy('sites.name')
+            ->orderByRaw('CAST(stations.station_number AS UNSIGNED), stations.station_number')
+            ->get()
+            ->map(fn (Station $st) => [
+                'id' => $st->id,
+                'station_number' => $st->station_number,
+                'site' => $st->site?->name,
+                'site_id' => $st->site_id,
+                'campaign_id' => $st->campaign_id,
+                'pc_spec_id' => $st->pc_spec_id,
+                'pc_number' => $st->pcSpec?->pc_number,
+            ]);
     }
 }

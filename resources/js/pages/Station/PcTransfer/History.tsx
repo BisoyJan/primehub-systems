@@ -1,9 +1,14 @@
 import { Head, Link, router } from '@inertiajs/react';
-import { useState, useMemo, useEffect, useRef } from 'react';
-import { ArrowLeft, ArrowRight, Clock, RefreshCw, Play, Pause } from 'lucide-react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { ArrowLeft, ArrowRight, Clock, RefreshCw, Play, Pause, Search } from 'lucide-react';
+import { format, formatDistanceToNow, isValid, parseISO } from 'date-fns';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+import { DatePicker } from '@/components/ui/date-picker';
 import {
     Card,
     CardContent,
@@ -23,7 +28,7 @@ import { Badge } from '@/components/ui/badge';
 import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
 import { PageHeader } from '@/components/PageHeader';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
-import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
+import { useFlashMessage, usePageLoading, usePageMeta, useDebounce } from '@/hooks';
 import {
     history as pcTransfersHistoryRoute,
     index as pcTransfersIndexRoute,
@@ -52,11 +57,45 @@ type TransfersPayload = {
     };
 };
 
-type PageProps = {
-    transfers: TransfersPayload;
+type HistoryFilters = {
+    search: string;
+    type: string;
+    date_from: string;
+    date_to: string;
 };
 
-export default function History({ transfers }: PageProps) {
+type PageProps = {
+    transfers: TransfersPayload;
+    filters: HistoryFilters;
+};
+
+const TRANSFER_TYPES = [
+    { value: 'all', label: 'All types' },
+    { value: 'assign', label: 'Assign / Move' },
+    { value: 'swap', label: 'Swap' },
+    { value: 'remove', label: 'Remove' },
+];
+
+/** "Wednesday, October 29, 2026" over "1:16 AM · 2 hours ago"; falls back to the raw value if unparsable. */
+function TransferTimestamp({ value, compact = false }: { value: string; compact?: boolean }) {
+    const date = parseISO(value);
+    if (!isValid(date)) {
+        return <span>{value}</span>;
+    }
+
+    return (
+        <div className={compact ? 'text-xs' : 'text-sm'} title={format(date, 'yyyy-MM-dd HH:mm:ss')}>
+            <div className="font-medium leading-tight">{format(date, 'EEEE, MMMM d, yyyy')}</div>
+            <div className="text-xs text-muted-foreground">
+                {format(date, 'h:mm a')}
+                <span className="mx-1">·</span>
+                {formatDistanceToNow(date, { addSuffix: true })}
+            </div>
+        </div>
+    );
+}
+
+export default function History({ transfers, filters }: PageProps) {
     const { title, breadcrumbs } = usePageMeta({
         title: 'PC Transfer History',
         breadcrumbs: [
@@ -71,6 +110,56 @@ export default function History({ transfers }: PageProps) {
 
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
+    const [search, setSearch] = useState(filters.search ?? '');
+    const [type, setType] = useState(filters.type || 'all');
+    const [dateFrom, setDateFrom] = useState(filters.date_from ?? '');
+    const [dateTo, setDateTo] = useState(filters.date_to ?? '');
+    const debouncedSearch = useDebounce(search, 400);
+
+    const hasActiveFilters = Boolean(search.trim()) || type !== 'all' || Boolean(dateFrom) || Boolean(dateTo);
+
+    const buildParams = useCallback((overrides: Partial<HistoryFilters> = {}) => {
+        const values = { search: debouncedSearch, type, date_from: dateFrom, date_to: dateTo, ...overrides };
+        const params: Record<string, string> = {};
+        if (values.search.trim()) params.search = values.search.trim();
+        if (values.type && values.type !== 'all') params.type = values.type;
+        if (values.date_from) params.date_from = values.date_from;
+        if (values.date_to) params.date_to = values.date_to;
+        return params;
+    }, [debouncedSearch, type, dateFrom, dateTo]);
+
+    const fetchHistory = useCallback((params: Record<string, string>) => {
+        router.get(pcTransfersHistoryRoute().url, params, {
+            preserveScroll: true,
+            preserveState: true,
+            replace: true,
+            only: ['transfers', 'filters'],
+            onSuccess: () => setLastRefresh(new Date()),
+        });
+    }, []);
+
+    // Auto-apply filters; skip the initial mount and identical re-runs.
+    const lastAppliedRef = useRef<string | null>(null);
+    useEffect(() => {
+        const params = buildParams();
+        const serialized = new URLSearchParams(params).toString();
+        if (lastAppliedRef.current === null) {
+            lastAppliedRef.current = serialized;
+            return;
+        }
+        if (lastAppliedRef.current === serialized) {
+            return;
+        }
+        lastAppliedRef.current = serialized;
+        fetchHistory(params);
+    }, [buildParams, fetchHistory]);
+
+    const handleClearFilters = () => {
+        setSearch('');
+        setType('all');
+        setDateFrom('');
+        setDateTo('');
+    };
 
     const summary = useMemo(() => {
         const showingStart = transfers.data.length > 0
@@ -85,22 +174,11 @@ export default function History({ transfers }: PageProps) {
     }, [transfers]);
 
     const handlePaginate = (pageNumber: number) => {
-        router.get(pcTransfersHistoryRoute().url, { page: pageNumber }, {
-            preserveScroll: true,
-            preserveState: true,
-            replace: true,
-            only: ['transfers'],
-        });
+        fetchHistory({ ...buildParams(), page: String(pageNumber) });
     };
 
     const handleRefresh = () => {
-        router.get(pcTransfersHistoryRoute().url, {}, {
-            preserveScroll: true,
-            preserveState: true,
-            replace: true,
-            only: ['transfers'],
-            onSuccess: () => setLastRefresh(new Date()),
-        });
+        fetchHistory(buildParams());
     };
 
     // Auto-refresh every 30 seconds
@@ -110,7 +188,7 @@ export default function History({ transfers }: PageProps) {
         const interval = setInterval(() => {
             if (isPollingRef.current) return;
             isPollingRef.current = true;
-            router.get(pcTransfersHistoryRoute().url, {}, {
+            router.get(pcTransfersHistoryRoute().url, buildParams(), {
                 preserveScroll: true,
                 preserveState: true,
                 replace: true,
@@ -121,7 +199,7 @@ export default function History({ transfers }: PageProps) {
         }, 30000);
 
         return () => clearInterval(interval);
-    }, [autoRefreshEnabled]);
+    }, [autoRefreshEnabled, buildParams]);
 
     function getTransferTypeVariant(type: string): 'default' | 'secondary' | 'destructive' | 'outline' {
         switch (type) {
@@ -169,6 +247,54 @@ export default function History({ transfers }: PageProps) {
                     </div>
                 </PageHeader>
 
+                <div className="rounded-lg border bg-card p-3 space-y-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Search</Label>
+                            <div className="relative">
+                                <Search className="absolute left-2.5 top-3 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    type="search"
+                                    placeholder="PC number, station, user..."
+                                    className="pl-8"
+                                    value={search}
+                                    onChange={(event) => setSearch(event.target.value)}
+                                />
+                            </div>
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Type</Label>
+                            <Select value={type} onValueChange={setType}>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {TRANSFER_TYPES.map((option) => (
+                                        <SelectItem key={option.value} value={option.value}>
+                                            {option.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">From date</Label>
+                            <DatePicker value={dateFrom} onChange={setDateFrom} maxDate={dateTo || undefined} placeholder="Any" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">To date</Label>
+                            <DatePicker value={dateTo} onChange={setDateTo} minDate={dateFrom || undefined} defaultMonth={dateFrom || undefined} placeholder="Any" />
+                        </div>
+                    </div>
+                    {hasActiveFilters && (
+                        <div className="flex justify-end">
+                            <Button variant="ghost" size="sm" onClick={handleClearFilters}>
+                                Reset filters
+                            </Button>
+                        </div>
+                    )}
+                </div>
+
                 <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
@@ -204,8 +330,8 @@ export default function History({ transfers }: PageProps) {
                                     ) : (
                                         transfers.data.map((transfer) => (
                                             <TableRow key={transfer.id}>
-                                                <TableCell className="font-medium">
-                                                    {transfer.created_at}
+                                                <TableCell className="whitespace-nowrap">
+                                                    <TransferTimestamp value={transfer.created_at} />
                                                 </TableCell>
                                                 <TableCell>
                                                     <span className="text-blue-600 font-medium">
@@ -266,8 +392,8 @@ export default function History({ transfers }: PageProps) {
                                                 <span className="text-blue-600 font-semibold">
                                                     {transfer.pc_spec || 'Unknown PC'}
                                                 </span>
-                                                <div className="text-xs text-muted-foreground mt-1">
-                                                    {transfer.created_at}
+                                                <div className="mt-1">
+                                                    <TransferTimestamp value={transfer.created_at} compact />
                                                 </div>
                                             </div>
                                             <Badge variant={getTransferTypeVariant(transfer.transfer_type)}>

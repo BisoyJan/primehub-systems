@@ -414,22 +414,24 @@ Each row shows: **ID**, **Name**, and **Actions** (Edit, Delete).
 
 Path: **Stations** → Click **PC Transfer** (or the **Transfer** button on the Station List)
 
-PC Transfer lets you move or assign PC specs between stations.
+PC Transfer lets you move or assign PC specs between stations. There are two ways to work:
+
+- **Quick transfer (one station)** — click **Assign** / **Transfer** on a row in the Transfer List. A dialog opens; no page change.
+- **Transfer Workspace (many stations)** — pair several PCs with stations, then submit them all at once.
 
 ### Transfer List
 
-**Filters:**
-- **Search** box — type station name, site, or campaign to narrow results
+**Filters (apply automatically):**
+- **Search** box — type station name, site, or campaign; results refresh after you stop typing
 - **Site** dropdown — filter by location
 - **Campaign** dropdown — filter by campaign
-- Check **Reset** to clear filters (appears when any filter is active)
-- Click **Apply Filters** to refresh results
+- Click **Reset** to clear filters (appears when any filter is active)
 - Click the **Refresh** icon to manually refresh
 - Click **Play** to auto-refresh every 30 seconds, **Pause** to stop
 
 **Page Header Actions:**
 - **Bulk Transfer** — click to enter bulk mode (see "PC Transfer — Bulk Mode")
-- **Transfer** — click to go to the Transfer page for a single station
+- **Transfer Workspace** — opens the full workspace with your current site/campaign filters already applied
 - **View History** — click to see the PC transfer history log
 
 **Table Columns:**
@@ -439,19 +441,27 @@ PC Transfer lets you move or assign PC specs between stations.
 - **Status** — color-coded badge (green=Occupied, yellow=Vacant, red=No PC, blue=Admin)
 - **Current PC** — manufacturer name and PC number (if assigned), or "No PC assigned"
 - **PC Details** — processor, RAM, disk type, ports
-- **Actions** — **Transfer/Assign** button and **Unassign** button
+- **Actions** — **Assign** / **Transfer**, **Unassign**, and a **History** icon (filters the history page to that PC)
 
-**Transfer/Assign Button:**
-- If the station has a PC, click **Transfer** to move that PC to another station
-- If the station has no PC, click **Assign** to give it a PC
-- Clicking opens the PC Transfer interface (see below)
+### Quick Transfer Dialog
 
-**Unassign Button:**
-- Appears only for stations that have a PC
-- Click **Unassign** to remove the PC from this station
-- *System rejects if the station has no PC*
-- A confirmation dialog appears — click **Confirm** to proceed
-- *The PC becomes "floating" (unassigned) and available for other stations*
+Click **Assign** (empty station) or **Transfer** (station with a PC) on a row.
+
+**Empty station — "Assign":**
+- Pick a PC from the searchable list (search by PC number, model, processor, or current station). Available PCs are listed first, then PCs on the same site.
+- If the chosen PC is at another station, the dialog tells you it will leave that station.
+- Click **Confirm transfer**.
+
+**Station with a PC — "Transfer":**
+- **Move this PC** tab — pick a destination station (same-site empty stations are listed first).
+- **Put another PC here** tab — pick a replacement PC for this station.
+- If the destination already has a PC, choose what happens to it:
+  - **Replace** — it becomes unassigned (floating)
+  - **Swap** — it moves to the other station (only available when both PCs have a station)
+- Optional **Notes** (max 500 characters).
+- A summary line shows exactly what will change before you confirm.
+- *System rejects if the PC is already at the destination, or if the station/PC no longer exists*
+- On success the list refreshes in place and a toast confirms the result
 
 ### PC Transfer — Bulk Mode
 
@@ -459,37 +469,38 @@ Click **Bulk Transfer** to enter bulk mode.
 
 - Checkboxes appear next to each station
 - Check one or more stations (a count badge shows **X selected**)
-- Click **Configure Transfers** to go to the Transfer page with all selected stations
+- Click **Configure Transfers** to open the Transfer Workspace limited to those stations, with your current filters carried over
 
 Click **Cancel Bulk Mode** to exit selection mode.
 
-### PC Transfer Interface
+### Transfer Workspace
 
-This page has two sides:
+Opened from **Transfer Workspace** or **Configure Transfers**. The station filters start on the same site/campaign you were viewing. On small screens the page is split into **1. PCs**, **2. Stations**, **3. Review** tabs; on desktop everything is visible at once.
 
 **Left Side — Available PC Specs:**
 - Shows all PC specs with search, assignment status filter (All/Available/Assigned), Site filter, and Campaign filter
-- Click **Select** on a PC to add it to your transfer list
-- PCs already assigned to a station show "At [Station #]"
-- Available (unassigned) PCs show "Available" badge
-- *System rejects if you try to select a PC that is already in the transfer list*
+- Unassigned PCs always appear regardless of the site/campaign filter (they are not tied to a location)
+- Click **Select** on a PC to add it to your transfer list — it becomes the **active** transfer (dark ring)
+- PCs already assigned to a station show "At [Station #]"; available PCs show "Available"
 
 **Right Side — Destination Stations:**
 - Shows stations with search, PC status filter (All/Empty/Has PC), Site filter, and Campaign filter
-- After selecting a PC, click **Select** on a station to assign that PC to it
-- *System rejects if you select a station that is already assigned in a different transfer in the same batch*
+- Click **Select** on a station to pair it with the **active** transfer
+- Selecting a station for a transfer that already has one simply re-targets it
+- Click **Deselect** to unpair a station
 
 **Selected Transfers Card:**
-- Lists all pending transfers in a collapsible card
-- Each transfer shows: PC name → Station name
-- Each transfer pair has a unique random color for easy matching
-- Click the **X** icon to remove a transfer from the list
-- If a PC is replacing another PC at a station, the replaced PC shows as "Floating" with an orange background
-- Click **Assign** on a floating PC to add it to the transfer list (so it gets assigned somewhere instead of becoming unassigned)
+- Lists all pending transfers; each shows **PC (from Station #) → Destination**
+- Click a row to make it active, then pick (or re-pick) its station on the right
+- Each transfer pair has a unique color for easy matching
+- Click **X** to remove a transfer from the list
+- If the destination already has a PC, an orange panel shows it with two choices:
+  - **Replace** — the replaced PC becomes unassigned (floating)
+  - **Swap** — the replaced PC goes to the incoming PC's source station (disabled if the incoming PC has no source station)
+  - **Assign elsewhere** — adds the replaced PC as its own transfer so you can give it a new station in the same batch
 
 **Transfer Notes (Optional):**
-- Type notes about the transfer in the text area (max 500 characters)
-- Character count shown below (e.g., "0/500 characters")
+- Type notes about the batch in the text area (max 500 characters)
 
 **Submit:**
 - Click **Transfer X PC(s)** to execute all pending transfers
@@ -497,18 +508,16 @@ This page has two sides:
 - *System rejects if a PC is being transferred to the station it is already at*
 - *System rejects if the same station receives multiple PCs in one batch*
 - *System rejects if the same PC is included more than once*
-- On success, a message shows "X PC(s) transferred successfully!" and auto-redirects after 3 seconds
+- *System rejects a swap when the replaced PC is also being transferred, or when the source station is also a destination in the batch*
+- The same checks run again on the server before anything is saved; the whole batch succeeds or nothing changes
+- On success you return straight to the Transfer List (with your filters) and a message summarizes the batch, including any PCs that are now unassigned
 
 **Help Button:**
-- Click the animated help icon to open a help dialog explaining how to:
-  - Assign a PC to an empty station
-  - Transfer a PC from one station to another
-  - Use bulk mode for multiple stations
-  - Understand the color code system (blue highlight, random colors, orange alert)
+- Click the animated help icon to open a help dialog explaining single assign, single transfer, bulk mode and the color codes
 - Click **Got it!** to close the help dialog
 
 **Cancel:**
-- Click **Back to Transfers** to return to the Transfer List page
+- Click **Back to Transfers** to return to the Transfer List page with your filters intact
 
 [Insert Screenshot: 'PC Transfer Interface Showing Two-Panel Layout' Screen Layout]
 
@@ -516,9 +525,15 @@ This page has two sides:
 
 ## PC Transfer History
 
-Path: **Stations** → **PC Transfer** → Click **View History**
+Path: **Stations** → **PC Transfer** → Click **View History** (or the **History** icon on a station row to open it pre-filtered to that PC)
 
 This page shows a complete log of all PC transfers (assignments, swaps, and removals).
+
+**Filters (apply automatically):**
+- **Search** — PC number, station number (from or to), or user name
+- **Type** — All types / Assign / Swap / Remove
+- **From date** / **To date** — limit to a date range
+- Click **Reset filters** to clear
 
 **Auto-Refresh:**
 - Click the **Refresh** (circular arrow) icon to manually refresh the history
@@ -539,7 +554,7 @@ This page shows a complete log of all PC transfers (assignments, swaps, and remo
 - Type shown as a colored badge
 
 **Pagination:**
-- Pages shown at the bottom
+- Pages shown at the bottom; filters are kept when changing pages
 - Click a page number to go to that page
 
 [Insert Screenshot: 'PC Transfer History Page' Screen Layout]

@@ -27,6 +27,8 @@ import {
     DialogDescription,
 } from '@/components/ui/dialog';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { cn } from '@/lib/utils';
 
 import {
     index as pcTransfersIndexRoute,
@@ -35,7 +37,7 @@ import {
 } from '@/routes/pc-transfers';
 
 // New reusable components and hooks
-import { usePageMeta, useFlashMessage, usePageLoading } from '@/hooks';
+import { usePageMeta, useFlashMessage, usePageLoading, useReturnTo } from '@/hooks';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { PageHeader } from '@/components/PageHeader';
 import { index as stationsIndexRoute } from '@/routes/stations';
@@ -99,8 +101,12 @@ interface Props {
         sites: Site[];
         campaigns: Campaign[];
     };
+    initialFilters: {
+        site: string;
+        campaign: string;
+        search: string;
+    };
     preselectedStationId?: number | null;
-    flash?: { message?: string; type?: string } | null;
 }
 
 // Generate random hex color for unlimited color support
@@ -129,20 +135,40 @@ interface ColorizedProps extends React.HTMLAttributes<HTMLElement> {
 
 const Colorized = ({ children, style, className, as: Component = 'div', ...props }: ColorizedProps) => {
     const ref = useRef<HTMLElement>(null);
+    const appliedKeys = useRef<string[]>([]);
+
     useEffect(() => {
-        if (ref.current && style) {
-            Object.assign(ref.current.style, style);
-        }
+        const el = ref.current;
+        if (!el) return;
+        const inlineStyle = el.style as unknown as Record<string, string>;
+
+        // Reset what we set last time so removed/undefined values fall back to the stylesheet;
+        // assigning `undefined` to a CSS property is ignored by the browser and would keep the old color.
+        appliedKeys.current.forEach((key) => {
+            inlineStyle[key] = '';
+        });
+        appliedKeys.current = [];
+
+        if (!style) return;
+        Object.entries(style).forEach(([key, value]) => {
+            if (value === undefined || value === null) return;
+            inlineStyle[key] = String(value);
+            appliedKeys.current.push(key);
+        });
     }, [style]);
 
     return <Component ref={ref} className={className} {...props}>{children}</Component>;
 };
+
+type TransferType = 'assign' | 'swap';
+type MobileTab = 'pcs' | 'stations' | 'review';
 
 interface Transfer {
     pcId: number;
     stationId: number;
     color: string; // HSL color string
     replacedPcId?: number; // ID of PC being replaced/made floating
+    transferType: TransferType; // 'swap' sends the replaced PC back to this PC's source station
 }
 
 // Helper to read query params synchronously for initial state
@@ -157,7 +183,7 @@ function getInitialQueryParams() {
     };
 }
 
-export default function Transfer({ stations, pcSpecs, filters, preselectedStationId }: Props) {
+export default function Transfer({ stations, pcSpecs, filters, initialFilters, preselectedStationId }: Props) {
 
     // Read 'pc' and 'filter' query params from URL (synchronous for initial state)
     const initialParams = getInitialQueryParams();
@@ -165,13 +191,22 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
         initialParams.pcId && !isNaN(initialParams.pcId) ? initialParams.pcId : null
     );
 
+    const indexWithFilters = pcTransfersIndexRoute({
+        query: {
+            site: initialFilters.site !== 'all' ? initialFilters.site : null,
+            campaign: initialFilters.campaign !== 'all' ? initialFilters.campaign : null,
+            search: initialFilters.search || null,
+        },
+    }).url;
+    const { returnTo, backUrl } = useReturnTo(indexWithFilters);
+
     // Use new hooks for cleaner code
     const { title, breadcrumbs } = usePageMeta({
-        title: 'Bulk PC Transfer',
+        title: 'Transfer Workspace',
         breadcrumbs: [
             { title: 'Stations', href: stationsIndexRoute().url },
             { title: 'PC Transfer', href: pcTransfersIndexRoute().url },
-            { title: 'Transfer', href: pcTransfersTransferPageRoute().url },
+            { title: 'Workspace', href: pcTransfersTransferPageRoute().url },
         ]
     });
 
@@ -187,14 +222,16 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
     );
 
     const [pcSearch, setPcSearch] = useState('');
-    const [stationSearch, setStationSearch] = useState('');
-    const [pcSiteFilter, setPcSiteFilter] = useState('all');
+    const [stationSearch, setStationSearch] = useState(initialFilters.search ?? '');
+    const [pcSiteFilter, setPcSiteFilter] = useState(initialFilters.site || 'all');
     const [pcCampaignFilter, setPcCampaignFilter] = useState('all');
     const [pcAssignmentFilter, setPcAssignmentFilter] = useState<'all' | 'available' | 'assigned'>(initialParams.filter);
-    const [stationSiteFilter, setStationSiteFilter] = useState('all');
-    const [stationCampaignFilter, setStationCampaignFilter] = useState('all');
+    const [stationSiteFilter, setStationSiteFilter] = useState(initialFilters.site || 'all');
+    const [stationCampaignFilter, setStationCampaignFilter] = useState(initialFilters.campaign || 'all');
     const [stationAssignmentFilter, setStationAssignmentFilter] = useState<'all' | 'empty' | 'has-pc'>('all');
     const [transfers, setTransfers] = useState<Transfer[]>([]);
+    const [activePcId, setActivePcId] = useState<number | null>(null);
+    const [mobileTab, setMobileTab] = useState<MobileTab>('pcs');
     const [errors, setErrors] = useState<string[]>([]);
     const [processing, setProcessing] = useState(false);
     const [notes, setNotes] = useState('');
@@ -203,6 +240,10 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
     const readyTransfers = transfers.filter(t => t.stationId !== 0).length;
     const transferActionDisabled = processing || transfers.some(t => t.stationId === 0);
     const overlayMessage = processing ? 'Processing transfers...' : undefined;
+    const activeTransfer = transfers.find(t => t.pcId === activePcId);
+    const incompleteTransfer = transfers.find(t => t.stationId === 0);
+    // The transfer that will receive the next station click: explicit active, else first incomplete.
+    const targetTransfer = activeTransfer ?? incompleteTransfer;
 
     // Auto-select PC from preselected station OR highlight empty station
     useEffect(() => {
@@ -215,8 +256,11 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
                 setTransfers([{
                     pcId,
                     stationId: 0,
-                    color
+                    color,
+                    transferType: 'assign',
                 }]);
+                setActivePcId(pcId);
+                setMobileTab('stations');
                 setTimeout(() => {
                     const pcRow = document.querySelector(`[data-pc-id="${pcId}"]`);
                     if (pcRow) {
@@ -239,8 +283,10 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
             setTransfers(prev => {
                 if (prev.some(t => t.pcId === autoSelectedPcId)) return prev;
                 const color = generateRandomColor();
-                return [{ pcId: autoSelectedPcId, stationId: 0, color }];
+                return [{ pcId: autoSelectedPcId, stationId: 0, color, transferType: 'assign' }];
             });
+            setActivePcId(autoSelectedPcId);
+            setMobileTab('stations');
             setTimeout(() => {
                 const pcRow = document.querySelector(`[data-pc-id="${autoSelectedPcId}"]`);
                 if (pcRow) {
@@ -258,8 +304,9 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
             (pc.details.processor && pc.details.processor.toLowerCase().includes(search))
         );
 
-        const matchesSite = pcSiteFilter === 'all' || (pc.station && String(pc.station.site_id) === pcSiteFilter);
-        const matchesCampaign = pcCampaignFilter === 'all' || (pc.station && String(pc.station.campaign_id) === pcCampaignFilter);
+        // Unassigned PCs belong to no site/campaign, so they always pass location filters.
+        const matchesSite = pcSiteFilter === 'all' || !pc.station || String(pc.station.site_id) === pcSiteFilter;
+        const matchesCampaign = pcCampaignFilter === 'all' || !pc.station || String(pc.station.campaign_id) === pcCampaignFilter;
 
         // Filter by assignment status (Available = no station, Assigned = has station)
         const matchesAssignment = pcAssignmentFilter === 'all' ||
@@ -312,6 +359,9 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
 
             // Remove this transfer
             setTransfers(prev => prev.filter(t => t.pcId !== pcId));
+            if (activePcId === pcId) {
+                setActivePcId(null);
+            }
         } else {
             // Only allow one PC selection at a time when assigning to a preselected station
             const preselectedStation = preselectedStationId
@@ -333,42 +383,50 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
                     setTransfers([{
                         pcId,
                         stationId: preselectedStationId,
-                        color
+                        color,
+                        transferType: 'assign',
                     }]);
                     // Remove station highlight once PC is selected
                     setHighlightedStationId(null);
+                    setMobileTab('review');
                 } else {
                     // Station has PC - select this PC for transfer (station selection comes later)
                     setTransfers([{
                         pcId,
                         stationId: 0,
-                        color
+                        color,
+                        transferType: 'assign',
                     }]);
+                    setMobileTab('stations');
                 }
+                setActivePcId(pcId);
             } else {
-                // For bulk/multi-select mode, add new transfer
+                // For bulk/multi-select mode, add new transfer and make it the active one
                 const color = generateRandomColor();
-                setTransfers(prev => [...prev, { pcId, stationId: 0, color }]);
+                setTransfers(prev => [...prev, { pcId, stationId: 0, color, transferType: 'assign' }]);
+                setActivePcId(pcId);
+                setMobileTab('stations');
             }
         }
         setErrors([]);
     }
 
     function selectStationForPc(stationId: number) {
-        // Find the first incomplete transfer (where stationId is 0)
-        const incompleteTransfer = transfers.find(t => t.stationId === 0);
-        if (incompleteTransfer) {
-            const targetStation = stations.find(s => s.id === stationId);
-
-            // Check if station has a PC that will be replaced (made floating)
-            const replacedPcId = targetStation?.pc_spec_id || undefined;
-
-            setTransfers(prev => prev.map(t =>
-                t.pcId === incompleteTransfer.pcId
-                    ? { ...t, stationId, replacedPcId }
-                    : t
-            ));
+        if (!targetTransfer) {
+            return;
         }
+
+        const targetStation = stations.find(s => s.id === stationId);
+        const replacedPcId = targetStation?.pc_spec_id || undefined;
+
+        // Re-targeting the active transfer frees its previous station automatically.
+        setTransfers(prev => prev.map(t =>
+            t.pcId === targetTransfer.pcId
+                ? { ...t, stationId, replacedPcId, transferType: 'assign' as TransferType }
+                : t
+        ));
+        setActivePcId(targetTransfer.pcId);
+        setMobileTab('review');
         setErrors([]);
     }
 
@@ -382,9 +440,13 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
         // Find transfer with this station and reset its stationId to 0
         setTransfers(prev => prev.map(t =>
             t.stationId === stationId
-                ? { ...t, stationId: 0, replacedPcId: undefined }
+                ? { ...t, stationId: 0, replacedPcId: undefined, transferType: 'assign' as TransferType }
                 : t
         ));
+        const affected = transfers.find(t => t.stationId === stationId);
+        if (affected) {
+            setActivePcId(affected.pcId);
+        }
         setErrors([]);
     }
 
@@ -399,6 +461,14 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
         }
 
         setTransfers(prev => prev.filter(t => t.pcId !== pcId));
+        if (activePcId === pcId) {
+            setActivePcId(null);
+        }
+        setErrors([]);
+    }
+
+    function setTransferType(pcId: number, transferType: TransferType) {
+        setTransfers(prev => prev.map(t => (t.pcId === pcId ? { ...t, transferType } : t)));
         setErrors([]);
     }
 
@@ -411,7 +481,9 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
         const newColor = generateRandomColor();
 
         // Add transfer with stationId = 0 (will require user to select station)
-        setTransfers(prev => [...prev, { pcId, stationId: 0, color: newColor }]);
+        setTransfers(prev => [...prev, { pcId, stationId: 0, color: newColor, transferType: 'assign' }]);
+        setActivePcId(pcId);
+        setMobileTab('stations');
         setErrors([]);
 
         // Auto-scroll to the newly added transfer in Selected Transfers card
@@ -427,20 +499,23 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
         const validationErrors: string[] = [];
         const usedStations = new Set<number>();
         const usedPcs = new Set<number>();
+        const allPcIds = new Set(transfers.map(t => t.pcId));
+        const allStationIds = new Set(transfers.map(t => t.stationId).filter(id => id !== 0));
 
         transfers.forEach((transfer, index) => {
             const pc = pcSpecs.find(p => p.id === transfer.pcId);
             const station = stations.find(s => s.id === transfer.stationId);
+            const label = pc?.pc_number || pc?.label;
 
             if (!transfer.stationId) {
                 validationErrors.push(
-                    `⚠️ Transfer #${index + 1}: PC "${pc?.pc_number || pc?.label}" has no station selected. Please select a destination station.`
+                    `⚠️ Transfer #${index + 1}: PC "${label}" has no station selected. Please select a destination station.`
                 );
             }
 
             if (pc?.station && pc.station.id === transfer.stationId) {
                 validationErrors.push(
-                    `⚠️ Transfer #${index + 1}: PC "${pc.pc_number || pc.label}" is already at station "${station?.station_number}". No transfer needed.`
+                    `⚠️ Transfer #${index + 1}: PC "${label}" is already at station "${station?.station_number}". No transfer needed.`
                 );
             }
 
@@ -452,8 +527,27 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
 
             if (usedPcs.has(transfer.pcId)) {
                 validationErrors.push(
-                    `⚠️ Transfer #${index + 1}: PC "${pc?.pc_number || pc?.label}" is selected multiple times. Each PC can only be transferred once.`
+                    `⚠️ Transfer #${index + 1}: PC "${label}" is selected multiple times. Each PC can only be transferred once.`
                 );
+            }
+
+            if (transfer.transferType === 'swap' && transfer.replacedPcId) {
+                const replaced = pcSpecs.find(p => p.id === transfer.replacedPcId);
+                if (!pc?.station) {
+                    validationErrors.push(
+                        `⚠️ Transfer #${index + 1}: PC "${label}" has no source station, so "${replaced?.pc_number || replaced?.label}" cannot be swapped back. Use Replace instead.`
+                    );
+                }
+                if (allPcIds.has(transfer.replacedPcId)) {
+                    validationErrors.push(
+                        `⚠️ Transfer #${index + 1}: cannot swap, "${replaced?.pc_number || replaced?.label}" is also being transferred in this batch.`
+                    );
+                }
+                if (pc?.station && allStationIds.has(pc.station.id)) {
+                    validationErrors.push(
+                        `⚠️ Transfer #${index + 1}: cannot swap, station "${pc.station.station_number}" is also a destination in this batch.`
+                    );
+                }
             }
 
             usedStations.add(transfer.stationId);
@@ -463,9 +557,9 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
         return validationErrors;
     }
 
-    // Check if a PC will become floating (be replaced by another PC)
+    // Check if a PC will become floating (be replaced by another PC without a swap)
     function isPcBecomingFloating(pcId: number): boolean {
-        return transfers.some(t => t.replacedPcId === pcId);
+        return transfers.some(t => t.replacedPcId === pcId && t.transferType !== 'swap');
     }
 
     function handleSubmit() {
@@ -480,59 +574,24 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
         setErrors([]);
 
         const payload = {
-            transfers: transfers.map(t => {
-                // Determine transfer type based on context
-                const pc = pcSpecs.find(p => p.id === t.pcId);
-                const fromStation = pc?.station;
-
-                // If PC is moving from one station to another, it's an assign
-                // (In bulk mode, we don't support swap - replaced PCs just become floating)
-                const transferType = 'assign';
-
-                return {
-                    to_station_id: t.stationId,
-                    pc_spec_id: t.pcId,
-                    from_station_id: fromStation?.id || null,
-                    transfer_type: transferType,
-                };
-            }),
-            notes: notes.trim() || undefined, // Include notes if provided
+            transfers: transfers.map(t => ({
+                to_station_id: t.stationId,
+                pc_spec_id: t.pcId,
+                transfer_type: t.replacedPcId ? t.transferType : 'assign',
+            })),
+            notes: notes.trim() || undefined,
+            _return_to: returnTo ?? indexWithFilters,
         };
 
+        // On success the server redirects straight back to the filtered list with a flash message.
         router.post(pcTransfersBulkRoute().url, payload, {
             preserveScroll: true,
-            onSuccess: () => {
-                const transferCount = transfers.length;
-                const successToast = toast.success(`${transferCount} PC(s) transferred successfully!`, {
-                    duration: 1500, // Show for 1.5 seconds before countdown
-                });
-                setTransfers([]);
-
-                // Wait for success toast to finish, then show countdown
-                setTimeout(() => {
-                    toast.dismiss(successToast);
-
-                    let countdown = 3;
-                    const countdownToast = toast.loading(`Redirecting in ${countdown} seconds...`);
-
-                    const countdownInterval = setInterval(() => {
-                        countdown--;
-                        if (countdown > 0) {
-                            toast.loading(`Redirecting in ${countdown} seconds...`, { id: countdownToast });
-                        } else {
-                            clearInterval(countdownInterval);
-                            toast.dismiss(countdownToast);
-                            setProcessing(false);
-                            router.visit(pcTransfersIndexRoute().url);
-                        }
-                    }, 1000);
-                }, 1500);
-            },
-            onError: (errors) => {
-                const errorMessages = Object.values(errors).flat().map(err => `❌ ${err}`);
+            onError: (serverErrors) => {
+                const errorMessages = Object.values(serverErrors).flat().map(err => `❌ ${err}`);
                 setErrors(errorMessages);
                 toast.error('Transfer failed. Please check the errors below.');
                 setProcessing(false);
+                setMobileTab('review');
             },
         });
     }
@@ -547,12 +606,12 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
                 <LoadingOverlay isLoading={isPageLoading || processing} message={overlayMessage} />
 
                 <PageHeader
-                    title="Bulk PC Transfer"
-                    description="Queue assignments, swaps, or removals across stations"
+                    title="Transfer Workspace"
+                    description="Pair PCs with stations, choose replace or swap, then transfer everything at once"
                 >
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                         <div className="flex items-center gap-2">
-                            <Link href={pcTransfersIndexRoute().url}>
+                            <Link href={backUrl}>
                                 <Button variant="outline">
                                     <ArrowLeft className="mr-2 h-4 w-4" />
                                     Back to Transfers
@@ -601,15 +660,28 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
                     </Alert>
                 )}
 
+                {/* Mobile step switcher; desktop shows all panels side by side */}
+                <Tabs value={mobileTab} onValueChange={(value) => setMobileTab(value as MobileTab)} className="lg:hidden">
+                    <TabsList className="w-full">
+                        <TabsTrigger value="pcs">1. PCs</TabsTrigger>
+                        <TabsTrigger value="stations">2. Stations</TabsTrigger>
+                        <TabsTrigger value="review">
+                            3. Review{transfers.length > 0 ? ` (${transfers.length})` : ''}
+                        </TabsTrigger>
+                    </TabsList>
+                </Tabs>
+
                 {/* Selected Transfers Summary */}
                 {transfers.length > 0 && (
-                    <Collapsible defaultOpen>
+                    <Collapsible defaultOpen className={cn(mobileTab === 'review' ? 'block' : 'hidden', 'lg:block')}>
                         <Card>
                             <CardHeader className="pb-3">
                                 <div className="flex items-center justify-between">
                                     <div>
                                         <CardTitle className="text-base">Selected Transfers</CardTitle>
-                                        <CardDescription className="text-xs">Review and manage your selections</CardDescription>
+                                        <CardDescription className="text-xs">
+                                            Click a row to make it active, then pick its station. Occupied destinations can be replaced or swapped.
+                                        </CardDescription>
                                     </div>
                                     <CollapsibleTrigger asChild>
                                         <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
@@ -629,33 +701,49 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
                                                 ? pcSpecs.find(p => p.id === transfer.replacedPcId)
                                                 : null;
                                             const darkColor = generateDarkColor(transfer.color);
+                                            const isActive = activePcId === transfer.pcId;
+                                            const canSwap = Boolean(replacedPc && pc?.station);
 
                                             return (
                                                 <div key={transfer.pcId} data-transfer-id={transfer.pcId}>
                                                     <Colorized
-                                                        className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-2 rounded border-2 space-y-2 sm:space-y-0"
+                                                        role="button"
+                                                        tabIndex={0}
+                                                        onClick={() => setActivePcId(transfer.pcId)}
+                                                        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setActivePcId(transfer.pcId)}
+                                                        className={cn(
+                                                            'flex flex-col sm:flex-row items-start sm:items-center justify-between p-2 rounded border-2 space-y-2 sm:space-y-0 cursor-pointer',
+                                                            isActive && 'ring-2 ring-offset-2 ring-foreground/60'
+                                                        )}
                                                         style={{
                                                             backgroundColor: transfer.color,
                                                             borderColor: darkColor,
                                                         }}
                                                     >
-                                                        <div className="flex items-center gap-2">
+                                                        <div className="flex flex-wrap items-center gap-2">
                                                             <Colorized className="text-sm font-semibold" style={{ color: darkColor }}>
                                                                 {pc?.pc_number || pc?.label}
+                                                            </Colorized>
+                                                            <Colorized as="span" className="text-xs opacity-80" style={{ color: darkColor }}>
+                                                                {pc?.station ? `from ${pc.station.station_number}` : 'unassigned'}
                                                             </Colorized>
                                                             <Colorized as="span" style={{ color: darkColor }} className="flex items-center">
                                                                 <ArrowRight className="h-3 w-3" />
                                                             </Colorized>
                                                             <Colorized className="text-sm font-semibold" style={{ color: darkColor }}>
-                                                                {station ? station.station_number : 'No station selected'}
+                                                                {station ? station.station_number : 'Pick a station →'}
                                                             </Colorized>
+                                                            {isActive && !station && (
+                                                                <Badge variant="outline" className="text-[10px] uppercase tracking-wide">Active</Badge>
+                                                            )}
                                                         </div>
                                                         <div className="w-full sm:w-auto flex justify-end">
                                                             <Button
                                                                 size="sm"
                                                                 variant="ghost"
-                                                                onClick={() => clearTransfer(transfer.pcId)}
+                                                                onClick={(e) => { e.stopPropagation(); clearTransfer(transfer.pcId); }}
                                                                 className="h-6 w-6 p-0"
+                                                                aria-label="Remove transfer"
                                                             >
                                                                 <X className="h-3 w-3" />
                                                             </Button>
@@ -663,24 +751,48 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
                                                     </Colorized>
 
                                                     {replacedPc && (
-                                                        <div className="mt-1 p-2 bg-orange-50 border-l-2 border-orange-400 rounded text-xs">
+                                                        <div className="mt-1 p-2 bg-orange-50 dark:bg-orange-950/30 border-l-2 border-orange-400 rounded text-xs">
                                                             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                                                                <div className="flex items-center gap-1.5 text-orange-700">
+                                                                <div className="flex items-center gap-1.5 text-orange-700 dark:text-orange-300">
                                                                     <AlertCircle className="h-3 w-3 flex-shrink-0" />
                                                                     <div>
-                                                                        <span className="font-medium">Floating PC: </span>
                                                                         <span className="font-semibold">{replacedPc.pc_number || replacedPc.label}</span>
-                                                                        <span className="text-orange-600"> - will be unassigned</span>
+                                                                        <span>
+                                                                            {transfer.transferType === 'swap' && pc?.station
+                                                                                ? ` → ${pc.station.station_number} (swap)`
+                                                                                : ' will be unassigned (floating)'}
+                                                                        </span>
                                                                     </div>
                                                                 </div>
-                                                                <div className="w-full sm:w-auto">
+                                                                <div className="flex w-full sm:w-auto items-center gap-1">
                                                                     <Button
                                                                         size="sm"
-                                                                        onClick={() => assignFloatingPc(replacedPc.id)}
-                                                                        className="h-6 text-xs px-2 w-full sm:w-auto"
+                                                                        variant={transfer.transferType === 'assign' ? 'default' : 'outline'}
+                                                                        onClick={() => setTransferType(transfer.pcId, 'assign')}
+                                                                        className="h-6 text-xs px-2 flex-1 sm:flex-none"
                                                                     >
-                                                                        Assign
+                                                                        Replace
                                                                     </Button>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant={transfer.transferType === 'swap' ? 'default' : 'outline'}
+                                                                        onClick={() => setTransferType(transfer.pcId, 'swap')}
+                                                                        disabled={!canSwap}
+                                                                        title={canSwap ? `Send ${replacedPc.pc_number || replacedPc.label} to ${pc?.station?.station_number}` : 'Swap needs a source station'}
+                                                                        className="h-6 text-xs px-2 flex-1 sm:flex-none"
+                                                                    >
+                                                                        Swap
+                                                                    </Button>
+                                                                    {transfer.transferType !== 'swap' && !getTransferByPc(replacedPc.id) && (
+                                                                        <Button
+                                                                            size="sm"
+                                                                            variant="secondary"
+                                                                            onClick={() => assignFloatingPc(replacedPc.id)}
+                                                                            className="h-6 text-xs px-2 flex-1 sm:flex-none"
+                                                                        >
+                                                                            Assign elsewhere
+                                                                        </Button>
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -695,7 +807,7 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
                     </Collapsible>
                 )}
 
-                <Card>
+                <Card className={cn(mobileTab === 'review' ? 'block' : 'hidden', 'lg:block')}>
                     <CardHeader className="pb-3">
                         <CardTitle className="text-sm font-medium">Transfer Notes (Optional)</CardTitle>
                     </CardHeader>
@@ -717,7 +829,7 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
                 {/* Split View: PC Specs (Left) and Stations (Right) */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* PC Specs Table - Left Side */}
-                    <Card>
+                    <Card className={cn(mobileTab === 'pcs' ? 'block' : 'hidden', 'lg:block')}>
                         <CardHeader>
                             <CardTitle>Available PC Specs</CardTitle>
                             <CardDescription>
@@ -818,11 +930,18 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
                                                 const hasSelection = transfers.length > 0;
                                                 const isDisabled = isSingleStationMode && hasSelection && !transfer && !willBeFloating;
 
+                                                const isActivePc = activePcId === pc.id && Boolean(transfer);
+
                                                 return (
                                                     <TableRow
                                                         key={pc.id}
                                                         data-pc-id={pc.id}
-                                                        className="hover:bg-muted/50"
+                                                        onClick={() => transfer && setActivePcId(pc.id)}
+                                                        className={cn(
+                                                            'hover:bg-muted/50',
+                                                            transfer && 'cursor-pointer',
+                                                            isActivePc && 'ring-2 ring-inset ring-foreground/60'
+                                                        )}
                                                         style={transfer ? {
                                                             backgroundColor: transfer.color,
                                                             borderLeftWidth: '4px',
@@ -876,7 +995,7 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
                                                                 <Button
                                                                     size="sm"
                                                                     variant="outline"
-                                                                    onClick={() => togglePcSelection(pc.id)}
+                                                                    onClick={(e) => { e.stopPropagation(); togglePcSelection(pc.id); }}
                                                                     style={{
                                                                         borderColor: darkColor || undefined,
                                                                         color: darkColor || undefined
@@ -915,14 +1034,14 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
                     </Card>
 
                     {/* Stations Table - Right Side */}
-                    <Card>
+                    <Card className={cn(mobileTab === 'stations' ? 'block' : 'hidden', 'lg:block')}>
                         <CardHeader>
                             <CardTitle>Destination Stations</CardTitle>
                             <CardDescription>
                                 {preselectedStationId && !stations.find(s => s.id === preselectedStationId)?.pc_spec_id
                                     ? 'Select a PC from the left to assign to the highlighted station'
-                                    : transfers.find(t => t.stationId === 0)
-                                        ? 'Select a station for the highlighted PC'
+                                    : targetTransfer
+                                        ? `Pick a station for ${pcSpecs.find(p => p.id === targetTransfer.pcId)?.pc_number ?? 'the active PC'}`
                                         : 'Select PCs first, then choose destination stations'}
                             </CardDescription>
                         </CardHeader>
@@ -1011,7 +1130,7 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
                                             filteredStations.map((station) => {
                                                 const transfer = getTransferByStation(station.id);
                                                 const darkColor = transfer ? generateDarkColor(transfer.color) : null;
-                                                const hasIncomplete = transfers.some(t => t.stationId === 0);
+                                                const canSelect = Boolean(targetTransfer) && targetTransfer?.stationId !== station.id;
                                                 const isHighlighted = highlightedStationId === station.id;
 
                                                 return (
@@ -1069,7 +1188,8 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
                                                                 <Button
                                                                     size="sm"
                                                                     onClick={() => selectStationForPc(station.id)}
-                                                                    disabled={!hasIncomplete}
+                                                                    disabled={!canSelect}
+                                                                    title={canSelect ? undefined : 'Select a PC first'}
                                                                 >
                                                                     Select
                                                                 </Button>
@@ -1170,13 +1290,13 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
                                     <div className="flex items-start gap-2">
                                         <span className="font-bold text-indigo-600">4.</span>
                                         <div>
-                                            <span className="font-medium">Choose Destination:</span> Click <Badge variant="outline" className="mx-1">Select</Badge> on a destination station from the right table
+                                            <span className="font-medium">Choose Destination:</span> Click <Badge variant="outline" className="mx-1">Select</Badge> on a destination station from the right table. If it already has a PC, choose <Badge variant="outline" className="mx-1">Replace</Badge> (it floats) or <Badge variant="outline" className="mx-1">Swap</Badge> (it goes to the source station)
                                         </div>
                                     </div>
                                     <div className="flex items-start gap-2">
                                         <span className="font-bold text-indigo-600">5.</span>
                                         <div>
-                                            <span className="font-medium">Submit:</span> Click <Badge className="mx-1 bg-blue-600">Transfer 1 PC</Badge> to move the PC to the new station
+                                            <span className="font-medium">Submit:</span> Click <Badge className="mx-1 bg-blue-600">Transfer 1 PC</Badge> — you return to the filtered list immediately
                                         </div>
                                     </div>
                                 </div>
@@ -1200,19 +1320,19 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
                                     <div className="flex items-start gap-2">
                                         <span className="font-bold text-green-600">2.</span>
                                         <div>
-                                            <span className="font-medium">Bulk Action:</span> Click <Badge variant="outline" className="mx-1">Assign PCs to Selected</Badge>
+                                            <span className="font-medium">Bulk Action:</span> Click <Badge variant="outline" className="mx-1">Configure Transfers</Badge>
                                         </div>
                                     </div>
                                     <div className="flex items-start gap-2">
                                         <span className="font-bold text-green-600">3.</span>
                                         <div>
-                                            <span className="font-medium">Select PCs:</span> Click <Badge variant="outline" className="mx-1">Select</Badge> on each PC you want to assign
+                                            <span className="font-medium">Select PCs:</span> Click <Badge variant="outline" className="mx-1">Select</Badge> on each PC you want to assign. The most recent one is <span className="font-semibold">active</span>
                                         </div>
                                     </div>
                                     <div className="flex items-start gap-2">
                                         <span className="font-bold text-green-600">4.</span>
                                         <div>
-                                            <span className="font-medium">Choose Stations:</span> For each PC, click <Badge variant="outline" className="mx-1">Select</Badge> on a destination station (right side)
+                                            <span className="font-medium">Choose Stations:</span> Click <Badge variant="outline" className="mx-1">Select</Badge> on a station to pair it with the active PC. Click any row in <span className="bg-purple-50 border border-purple-300 px-2 py-0.5 rounded">Selected Transfers</span> to make it active and re-pick its station
                                         </div>
                                     </div>
                                     <div className="flex items-start gap-2">
@@ -1254,7 +1374,13 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
                                     <div className="flex items-start gap-3">
                                         <div className="w-6 h-6 rounded border-2 border-orange-400 bg-orange-50 flex-shrink-0 mt-0.5" />
                                         <div>
-                                            <span className="font-medium">Orange Alert:</span> A PC will become "floating" (unassigned) when replaced
+                                            <span className="font-medium">Orange Alert:</span> A PC will become "floating" (unassigned) when replaced — switch to <Badge variant="outline" className="mx-1">Swap</Badge> to send it to the source station instead
+                                        </div>
+                                    </div>
+                                    <div className="flex items-start gap-3">
+                                        <div className="w-6 h-6 rounded border-2 border-foreground/60 ring-2 ring-foreground/60 ring-offset-1 flex-shrink-0 mt-0.5" />
+                                        <div>
+                                            <span className="font-medium">Dark Ring:</span> The active transfer — the next station you select is paired with it
                                         </div>
                                     </div>
                                 </div>
@@ -1275,7 +1401,11 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
                                     </div>
                                     <div className="flex items-start gap-2">
                                         <ArrowRight className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                                        <div><span className="font-medium">Floating PCs:</span> Click <Badge className="mx-1 bg-orange-600">Assign</Badge> to reassign a floating PC</div>
+                                        <div><span className="font-medium">Floating PCs:</span> Click <Badge variant="secondary" className="mx-1">Assign elsewhere</Badge> to give a replaced PC its own destination in the same batch</div>
+                                    </div>
+                                    <div className="flex items-start gap-2">
+                                        <ArrowRight className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                                        <div><span className="font-medium">Quick single moves:</span> For one station, use <Badge variant="outline" className="mx-1">Assign</Badge> / <Badge variant="outline" className="mx-1">Transfer</Badge> on the list page — it opens a dialog, no page change</div>
                                     </div>
                                     <div className="flex items-start gap-2">
                                         <ArrowRight className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />

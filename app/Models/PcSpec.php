@@ -73,7 +73,7 @@ class PcSpec extends Model
     // Format PC Spec details for frontend display
     public function getFormattedDetails(): array
     {
-        $this->load(['processorSpecs']);
+        $this->loadMissing(['processorSpecs']);
 
         return [
             'id' => $this->id,

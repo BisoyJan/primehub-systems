@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Head, router, Link } from '@inertiajs/react';
 import { toast } from 'sonner';
-import { ArrowRight, Search, History, CheckSquare, List, RefreshCw, Play, Pause } from 'lucide-react';
+import { ArrowRight, Search, History, CheckSquare, List, RefreshCw, Play, Pause, LayoutGrid, Trash2, Rows3, ArrowLeftRight } from 'lucide-react';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -25,6 +25,7 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
 import {
     index as pcTransfersIndexRoute,
@@ -33,23 +34,36 @@ import {
     remove as pcTransfersRemoveRoute,
 } from '@/routes/pc-transfers';
 import { index as stationsIndexRoute } from '@/routes/stations';
-import { usePageMeta, useFlashMessage, usePageLoading } from '@/hooks';
+import { usePageMeta, useFlashMessage, usePageLoading, useDebounce, withReturnTo } from '@/hooks';
 import { PageHeader } from '@/components/PageHeader';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { Can } from '@/components/authorization';
+import { cn } from '@/lib/utils';
+import { QuickTransferDialog, type PcSpecOption, type StationOption } from './components/QuickTransferDialog';
+
+const MUTATION_RELOAD_PROPS = ['stations', 'pcSpecs', 'stationOptions'];
+const VIEW_MODE_STORAGE_KEY = 'pc-transfers.view-mode';
+
+type ViewMode = 'table' | 'cards';
+
+const readStoredViewMode = (): ViewMode => {
+    if (typeof window === 'undefined') {
+        return 'cards';
+    }
+    return window.localStorage.getItem(VIEW_MODE_STORAGE_KEY) === 'table' ? 'table' : 'cards';
+};
 
 type PcSpecDetails = {
-    manufacturer: string;
+    id: number;
     pc_number?: string | null;
-    processor: string;
-    ram_ddr: string;
-    ram_gb: number;
-    ram_capacities: string;
-    disk_gb: number;
-    disk_capacities: string;
-    disk_type: string;
+    manufacturer: string | null;
+    memory_type: string | null;
+    ram_gb: number | null;
+    disk_gb: number | null;
     available_ports?: string | null;
     issue?: string | null;
+    notes?: string | null;
+    processor: string;
 };
 
 type Station = {
@@ -93,8 +107,9 @@ type FilterOptions = {
 
 type PageProps = {
     stations: StationsPayload;
+    pcSpecs: PcSpecOption[];
+    stationOptions: StationOption[];
     filters: FilterOptions;
-    flash?: { message?: string; type?: string };
 };
 
 const getInitialParam = (key: string, fallback = '') => {
@@ -105,7 +120,91 @@ const getInitialParam = (key: string, fallback = '') => {
     return params.get(key) ?? fallback;
 };
 
-export default function Index({ stations: stationsPayload, filters }: PageProps) {
+const toStationOption = (station: Station): StationOption => ({
+    id: station.id,
+    station_number: station.station_number,
+    site: station.site,
+    site_id: station.site_id,
+    campaign_id: station.campaign_id,
+    pc_spec_id: station.pc_spec_id,
+    pc_number: station.pc_spec_details?.pc_number ?? null,
+});
+
+const statusBadgeClass = (status: string) => {
+    switch (status.toLowerCase()) {
+        case 'occupied':
+            return 'bg-green-500 text-white';
+        case 'vacant':
+            return 'bg-yellow-500 text-white';
+        case 'no pc':
+            return 'bg-red-500 text-white';
+        case 'admin':
+            return 'bg-blue-500 text-white';
+        default:
+            return 'bg-gray-500 text-white';
+    }
+};
+
+/** Where: station number, status, and its site · campaign on one compact block. */
+function StationCell({ station, align = 'left' }: { station: Station; align?: 'left' | 'right' }) {
+    const location = [station.site, station.campaign].filter(Boolean).join(' · ');
+    const right = align === 'right';
+
+    return (
+        <div className={cn('min-w-0', right && 'text-right')}>
+            <div className={cn('flex items-center gap-2', right && 'flex-row-reverse justify-start')}>
+                <span className="text-base font-semibold leading-tight">{station.station_number}</span>
+                {station.status && (
+                    <Badge className={cn('h-5 px-1.5 text-[10px] uppercase tracking-wide hover:bg-inherit', statusBadgeClass(station.status))}>
+                        {station.status}
+                    </Badge>
+                )}
+            </div>
+            <div className="truncate text-xs text-muted-foreground">{location || '—'}</div>
+        </div>
+    );
+}
+
+/** What: PC number + make on line one, full spec summary on line two. */
+function PcCell({ details }: { details: PcSpecDetails | null }) {
+    if (!details) {
+        return (
+            <span className="inline-flex items-center rounded border border-dashed px-2 py-0.5 text-xs text-muted-foreground">
+                No PC assigned
+            </span>
+        );
+    }
+
+    const specs = [
+        details.processor,
+        details.ram_gb ? `${details.ram_gb}GB${details.memory_type ? ` ${details.memory_type}` : ''}` : null,
+        details.disk_gb ? `${details.disk_gb}GB` : null,
+        details.available_ports,
+    ]
+        .filter(Boolean)
+        .join(' · ');
+
+    return (
+        <div className="min-w-0">
+            <div className="flex items-center gap-2">
+                <span className="font-semibold leading-tight text-blue-600 dark:text-blue-400">
+                    {details.pc_number ?? 'Unnumbered'}
+                </span>
+                {details.manufacturer && <span className="text-sm text-muted-foreground">{details.manufacturer}</span>}
+                {details.issue && (
+                    <Badge variant="outline" className="h-5 border-amber-500 px-1.5 text-[10px] text-amber-600" title={details.issue}>
+                        Issue
+                    </Badge>
+                )}
+            </div>
+            <div className="truncate text-xs text-muted-foreground" title={specs}>
+                {specs || '—'}
+            </div>
+        </div>
+    );
+}
+
+export default function Index({ stations: stationsPayload, pcSpecs, stationOptions, filters }: PageProps) {
     const { title, breadcrumbs } = usePageMeta({
         title: 'PC Transfer',
         breadcrumbs: [
@@ -126,7 +225,14 @@ export default function Index({ stations: stationsPayload, filters }: PageProps)
     const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
     const [bulkMode, setBulkMode] = useState(false);
     const [selectedStations, setSelectedStations] = useState<Set<number>>(new Set());
+    const [quickTransferStation, setQuickTransferStation] = useState<StationOption | null>(null);
+    const [viewMode, setViewMode] = useState<ViewMode>(readStoredViewMode);
 
+    useEffect(() => {
+        window.localStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode);
+    }, [viewMode]);
+
+    const debouncedSearch = useDebounce(search, 400);
     const showClearFilters = Boolean(search.trim()) || siteFilter !== 'all' || campaignFilter !== 'all';
 
     const buildFilterParams = useCallback(() => {
@@ -143,7 +249,7 @@ export default function Index({ stations: stationsPayload, filters }: PageProps)
         return params;
     }, [search, siteFilter, campaignFilter]);
 
-    const requestWithFilters = (params: Record<string, string>) => {
+    const requestWithFilters = useCallback((params: Record<string, string>) => {
         setIsFilterLoading(true);
         router.get(pcTransfersIndexRoute().url, params, {
             preserveScroll: true,
@@ -153,21 +259,45 @@ export default function Index({ stations: stationsPayload, filters }: PageProps)
             onSuccess: () => setLastRefresh(new Date()),
             onFinish: () => setIsFilterLoading(false),
         });
-    };
+    }, []);
 
-    const handleApplyFilters = () => {
-        requestWithFilters(buildFilterParams());
-    };
+    // Auto-apply filters; the ref holds the last applied query so mount and
+    // StrictMode re-runs never fire a redundant request.
+    const lastAppliedRef = useRef<string | null>(null);
+    useEffect(() => {
+        const params: Record<string, string> = {};
+        if (debouncedSearch.trim()) params.search = debouncedSearch.trim();
+        if (siteFilter !== 'all') params.site = siteFilter;
+        if (campaignFilter !== 'all') params.campaign = campaignFilter;
+        const serialized = new URLSearchParams(params).toString();
+
+        if (lastAppliedRef.current === null) {
+            lastAppliedRef.current = serialized;
+            return;
+        }
+        if (lastAppliedRef.current === serialized) {
+            return;
+        }
+        lastAppliedRef.current = serialized;
+        requestWithFilters(params);
+    }, [debouncedSearch, siteFilter, campaignFilter, requestWithFilters]);
 
     const handleClearFilters = () => {
         setSearch('');
         setSiteFilter('all');
         setCampaignFilter('all');
-        requestWithFilters({});
     };
 
     const handleManualRefresh = () => {
         requestWithFilters(buildFilterParams());
+    };
+
+    const transferPageUrl = (stationIds?: number[]) => {
+        const query: Record<string, string> = { ...buildFilterParams() };
+        if (stationIds && stationIds.length > 0) {
+            query.stations = stationIds.join(',');
+        }
+        return withReturnTo(pcTransfersTransferPageRoute(undefined, { query }).url);
     };
 
     // Auto-refresh every 30 seconds
@@ -202,9 +332,9 @@ export default function Index({ stations: stationsPayload, filters }: PageProps)
             preserveScroll: true,
             preserveState: true,
             replace: true,
-            only: ['stations'],
+            only: MUTATION_RELOAD_PROPS,
             onSuccess: () => {
-                toast.success('PC removed successfully');
+                toast.success(`${station.pc_spec_details?.pc_number ?? 'PC'} unassigned from ${station.station_number}`);
                 setLastRefresh(new Date());
             },
             onError: () => toast.error('Removal failed'),
@@ -276,10 +406,7 @@ export default function Index({ stations: stationsPayload, filters }: PageProps)
                         </Button>
                         {bulkMode && selectedStations.size > 0 && (
                             <Button
-                                onClick={() => {
-                                    const stationIds = Array.from(selectedStations).join(',');
-                                    router.visit(`${pcTransfersTransferPageRoute().url}?stations=${stationIds}`);
-                                }}
+                                onClick={() => router.visit(transferPageUrl(Array.from(selectedStations)))}
                                 size="sm"
                             >
                                 <List size={16} className="mr-2" />
@@ -287,19 +414,24 @@ export default function Index({ stations: stationsPayload, filters }: PageProps)
                                 <span className="sm:hidden">Configure</span>
                             </Button>
                         )}
-                        <Link href={pcTransfersTransferPageRoute().url}>
-                            <Button variant="outline" size="sm">
-                                <ArrowRight size={16} className="mr-2" />
-                                Transfer
-                            </Button>
-                        </Link>
-                        <Link href={pcTransfersHistoryRoute().url}>
-                            <Button variant="outline" size="sm">
-                                <History size={16} className="mr-2" />
-                                <span className="hidden sm:inline">View History</span>
-                                <span className="sm:hidden">History</span>
-                            </Button>
-                        </Link>
+                        <Can permission="pc_transfers.create">
+                            <Link href={transferPageUrl()}>
+                                <Button variant="outline" size="sm">
+                                    <ArrowLeftRight size={16} className="mr-2" />
+                                    <span className="hidden sm:inline">Transfer Workspace</span>
+                                    <span className="sm:hidden">Workspace</span>
+                                </Button>
+                            </Link>
+                        </Can>
+                        <Can permission="pc_transfers.history">
+                            <Link href={pcTransfersHistoryRoute().url}>
+                                <Button variant="outline" size="sm">
+                                    <History size={16} className="mr-2" />
+                                    <span className="hidden sm:inline">View History</span>
+                                    <span className="sm:hidden">History</span>
+                                </Button>
+                            </Link>
+                        </Can>
                     </div>
                 </PageHeader>
 
@@ -315,7 +447,6 @@ export default function Index({ stations: stationsPayload, filters }: PageProps)
                                     className="pl-8"
                                     value={search}
                                     onChange={(event) => setSearch(event.target.value)}
-                                    onKeyDown={(event) => event.key === 'Enter' && handleApplyFilters()}
                                 />
                             </div>
                         </div>
@@ -386,10 +517,7 @@ export default function Index({ stations: stationsPayload, filters }: PageProps)
                                     Reset
                                 </Button>
                             )}
-                            <Button onClick={handleApplyFilters} disabled={isFilterLoading} size="sm">
-                                <Search className="h-4 w-4 mr-2" />
-                                Apply Filters
-                            </Button>
+                            <span className="text-xs text-muted-foreground">Filters apply automatically</span>
                         </div>
                     </div>
                 </div>
@@ -403,34 +531,52 @@ export default function Index({ stations: stationsPayload, filters }: PageProps)
                 </div>
 
                 <Card>
-                    <CardHeader>
-                        <CardTitle>Stations</CardTitle>
-                        <CardDescription>
-                            {bulkMode
-                                ? 'Select multiple stations for bulk transfer'
-                                : 'Click "Transfer PC" to assign or swap PC specs between stations'}
-                        </CardDescription>
+                    <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+                        <div>
+                            <CardTitle>Stations</CardTitle>
+                            <CardDescription>
+                                {bulkMode
+                                    ? 'Select multiple stations, then configure them together in the workspace'
+                                    : 'Assign, move, swap or unassign a PC directly from its row'}
+                            </CardDescription>
+                        </div>
+                        <ToggleGroup
+                            type="single"
+                            variant="outline"
+                            size="sm"
+                            value={viewMode}
+                            onValueChange={(value) => value && setViewMode(value as ViewMode)}
+                            aria-label="View mode"
+                            className="hidden md:flex"
+                        >
+                            <ToggleGroupItem value="cards" aria-label="Card view" title="Card view">
+                                <LayoutGrid className="h-4 w-4" />
+                            </ToggleGroupItem>
+                            <ToggleGroupItem value="table" aria-label="Table view" title="Table view">
+                                <Rows3 className="h-4 w-4" />
+                            </ToggleGroupItem>
+                        </ToggleGroup>
                     </CardHeader>
                     <CardContent>
-                        {/* Desktop Table View */}
-                        <div className="hidden md:block overflow-x-auto">
+                        {/* Table view (desktop only) */}
+                        <div className={cn('hidden overflow-x-auto', viewMode === 'table' && 'md:block')}>
                             <Table>
                                 <TableHeader>
                                     <TableRow className="bg-muted/50">
-                                        {bulkMode && <TableHead className="w-12">Select</TableHead>}
-                                        <TableHead>Station</TableHead>
-                                        <TableHead>Site</TableHead>
-                                        <TableHead>Campaign</TableHead>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead>Current PC</TableHead>
-                                        <TableHead>PC Details</TableHead>
-                                        <TableHead className="text-right">Actions</TableHead>
+                                        {bulkMode && (
+                                            <TableHead className="w-12">
+                                                <span className="sr-only">Select</span>
+                                            </TableHead>
+                                        )}
+                                        <TableHead className="w-2/5 pr-4 text-right">Station</TableHead>
+                                        <TableHead className="pl-4">Current PC</TableHead>
+                                        <TableHead className="w-px whitespace-nowrap text-right">Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {stationRows.length === 0 ? (
                                         <TableRow>
-                                            <TableCell colSpan={8} className="text-center py-8 text-gray-500">
+                                            <TableCell colSpan={bulkMode ? 4 : 3} className="text-center py-8 text-muted-foreground">
                                                 No stations found
                                             </TableCell>
                                         </TableRow>
@@ -438,7 +584,11 @@ export default function Index({ stations: stationsPayload, filters }: PageProps)
                                         stationRows.map((station) => (
                                             <TableRow
                                                 key={station.id}
-                                                className={bulkMode && selectedStations.has(station.id) ? 'bg-blue-800' : ''}
+                                                onClick={() => bulkMode && toggleStationSelection(station.id)}
+                                                className={cn(
+                                                    bulkMode && 'cursor-pointer',
+                                                    bulkMode && selectedStations.has(station.id) && 'bg-blue-50 dark:bg-blue-950/40'
+                                                )}
                                             >
                                                 {bulkMode && (
                                                     <TableCell>
@@ -446,75 +596,26 @@ export default function Index({ stations: stationsPayload, filters }: PageProps)
                                                             type="checkbox"
                                                             checked={selectedStations.has(station.id)}
                                                             onChange={() => toggleStationSelection(station.id)}
+                                                            onClick={(event) => event.stopPropagation()}
                                                             className="w-4 h-4 cursor-pointer"
                                                             aria-label={`Select station ${station.station_number}`}
                                                         />
                                                     </TableCell>
                                                 )}
-                                                <TableCell className="font-medium">
-                                                    {station.station_number}
+                                                <TableCell className="w-2/5 py-2.5 pr-4">
+                                                    <StationCell station={station} align="right" />
                                                 </TableCell>
-                                                <TableCell>{station.site}</TableCell>
-                                                <TableCell>{station.campaign}</TableCell>
-                                                <TableCell>
-                                                    <Badge
-                                                        className={
-                                                            (station.status ?? '').toLowerCase() === 'occupied'
-                                                                ? 'bg-green-500 hover:bg-green-600 text-white'
-                                                                : (station.status ?? '').toLowerCase() === 'vacant'
-                                                                    ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
-                                                                    : (station.status ?? '').toLowerCase() === 'no pc'
-                                                                        ? 'bg-red-500 hover:bg-red-600 text-white'
-                                                                        : (station.status ?? '').toLowerCase() === 'admin'
-                                                                            ? 'bg-blue-500 hover:bg-blue-600 text-white'
-                                                                            : 'bg-gray-500 hover:bg-gray-600 text-white'
-                                                        }
-                                                    >
-                                                        {station.status ?? 'N/A'}
-                                                    </Badge>
+                                                <TableCell className="py-2.5 pl-4">
+                                                    <PcCell details={station.pc_spec_details} />
                                                 </TableCell>
-                                                <TableCell>
-                                                    {station.pc_spec_details ? (
-                                                        <div>
-                                                            <span className="font-medium text-green-600">
-                                                                {station.pc_spec_details.manufacturer}
-                                                            </span>
-                                                            {station.pc_spec_details.pc_number && (
-                                                                <div className="text-xs text-blue-600 mt-1">
-                                                                    PC: {station.pc_spec_details.pc_number}
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    ) : (
-                                                        <span className="text-gray-400">No PC assigned</span>
-                                                    )}
-                                                </TableCell>
-                                                <TableCell>
-                                                    {station.pc_spec_details && (
-                                                        <div className="text-xs text-muted-foreground">
-                                                            <div>{station.pc_spec_details.processor}</div>
-                                                            <div>
-                                                                {station.pc_spec_details.ram_ddr} {station.pc_spec_details.ram_gb}GB RAM
-                                                            </div>
-                                                            <div>
-                                                                {station.pc_spec_details.disk_type} {station.pc_spec_details.disk_gb}GB
-                                                            </div>
-                                                            <div>
-                                                                Ports: {station.pc_spec_details.available_ports || 'N/A'}
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </TableCell>
-                                                <TableCell className="text-right">
+                                                <TableCell className="py-2.5 text-right">
                                                     {!bulkMode && (
-                                                        <div className="flex justify-end gap-2">
+                                                        <div className="flex justify-end gap-1.5">
                                                             <Can permission="pc_transfers.create">
-                                                                <Link href={pcTransfersTransferPageRoute(station.id).url}>
-                                                                    <Button size="sm">
-                                                                        <ArrowRight size={14} className="mr-1" />
-                                                                        {station.pc_spec_id ? 'Transfer' : 'Assign'}
-                                                                    </Button>
-                                                                </Link>
+                                                                <Button size="sm" onClick={() => setQuickTransferStation(toStationOption(station))}>
+                                                                    <ArrowRight size={14} className="mr-1" />
+                                                                    {station.pc_spec_id ? 'Transfer' : 'Assign'}
+                                                                </Button>
                                                             </Can>
                                                             {station.pc_spec_id && (
                                                                 <Can permission="pc_transfers.remove">
@@ -522,9 +623,32 @@ export default function Index({ stations: stationsPayload, filters }: PageProps)
                                                                         onConfirm={() => handleRemovePC(station)}
                                                                         title="Unassign PC from Station"
                                                                         description={`Are you sure you want to unassign the PC from station "${station.station_number}"? The PC will become available for assignment to other stations.`}
-                                                                        triggerLabel="Unassign"
-                                                                        disabled={isMutating}
+                                                                        trigger={
+                                                                            <Button
+                                                                                size="sm"
+                                                                                variant="outline"
+                                                                                className="px-2 text-destructive hover:text-destructive"
+                                                                                disabled={isMutating}
+                                                                                title="Unassign PC"
+                                                                            >
+                                                                                <Trash2 size={14} />
+                                                                                <span className="sr-only">Unassign</span>
+                                                                            </Button>
+                                                                        }
                                                                     />
+                                                                </Can>
+                                                            )}
+                                                            {station.pc_spec_details?.pc_number && (
+                                                                <Can permission="pc_transfers.history">
+                                                                    <Link
+                                                                        href={pcTransfersHistoryRoute({ query: { search: station.pc_spec_details.pc_number } }).url}
+                                                                        title={`History for ${station.pc_spec_details.pc_number}`}
+                                                                    >
+                                                                        <Button size="sm" variant="ghost" className="px-2">
+                                                                            <History size={14} />
+                                                                            <span className="sr-only">PC history</span>
+                                                                        </Button>
+                                                                    </Link>
                                                                 </Can>
                                                             )}
                                                         </div>
@@ -537,89 +661,55 @@ export default function Index({ stations: stationsPayload, filters }: PageProps)
                             </Table>
                         </div>
 
-                        {/* Mobile Card View */}
-                        <div className="md:hidden space-y-4">
+                        {/* Card view: always on mobile, opt-in grid on desktop */}
+                        <div
+                            className={cn(
+                                'space-y-3',
+                                viewMode === 'cards'
+                                    ? 'md:grid md:grid-cols-2 md:gap-3 md:space-y-0 xl:grid-cols-3'
+                                    : 'md:hidden'
+                            )}
+                        >
                             {stationRows.length === 0 ? (
-                                <div className="text-center py-8 text-gray-500">
+                                <div className="text-center py-8 text-muted-foreground md:col-span-full">
                                     No stations found
                                 </div>
                             ) : (
                                 stationRows.map((station) => (
                                     <div
                                         key={station.id}
-                                        className={`bg-card border rounded-lg p-4 shadow-sm space-y-3 ${bulkMode && selectedStations.has(station.id) ? 'bg-blue-100 dark:bg-blue-900/30 ring-2 ring-blue-500' : ''
-                                            }`}
+                                        onClick={() => bulkMode && toggleStationSelection(station.id)}
+                                        className={cn(
+                                            'flex flex-col gap-3 bg-card border rounded-lg p-3 shadow-sm',
+                                            bulkMode && 'cursor-pointer',
+                                            bulkMode && selectedStations.has(station.id) && 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-950/40'
+                                        )}
                                     >
-                                        <div className="flex justify-between items-start">
-                                            <div className="flex items-center gap-3">
-                                                {bulkMode && (
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={selectedStations.has(station.id)}
-                                                        onChange={() => toggleStationSelection(station.id)}
-                                                        className="w-5 h-5 cursor-pointer"
-                                                        aria-label={`Select station ${station.station_number}`}
-                                                    />
-                                                )}
-                                                <div>
-                                                    <div className="font-semibold text-lg">{station.station_number}</div>
-                                                    <div className="text-sm text-muted-foreground">
-                                                        {station.site} • {station.campaign}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <Badge
-                                                className={
-                                                    (station.status ?? '').toLowerCase() === 'occupied'
-                                                        ? 'bg-green-500 hover:bg-green-600 text-white'
-                                                        : (station.status ?? '').toLowerCase() === 'vacant'
-                                                            ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
-                                                            : (station.status ?? '').toLowerCase() === 'no pc'
-                                                                ? 'bg-red-500 hover:bg-red-600 text-white'
-                                                                : (station.status ?? '').toLowerCase() === 'admin'
-                                                                    ? 'bg-blue-500 hover:bg-blue-600 text-white'
-                                                                    : 'bg-gray-500 hover:bg-gray-600 text-white'
-                                                }
-                                            >
-                                                {station.status ?? 'N/A'}
-                                            </Badge>
+                                        <div className="flex items-start gap-3">
+                                            {bulkMode && (
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedStations.has(station.id)}
+                                                    onChange={() => toggleStationSelection(station.id)}
+                                                    onClick={(event) => event.stopPropagation()}
+                                                    className="mt-1 w-5 h-5 cursor-pointer"
+                                                    aria-label={`Select station ${station.station_number}`}
+                                                />
+                                            )}
+                                            <StationCell station={station} />
                                         </div>
 
-                                        <div className="space-y-2 text-sm">
-                                            <div className="flex justify-between">
-                                                <span className="text-muted-foreground">Current PC:</span>
-                                                <span className="font-medium">
-                                                    {station.pc_spec_details ? (
-                                                        <span className="text-green-600">
-                                                            {station.pc_spec_details.manufacturer}
-                                                            {station.pc_spec_details.pc_number && (
-                                                                <span className="text-blue-600 ml-1">({station.pc_spec_details.pc_number})</span>
-                                                            )}
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-gray-400">No PC assigned</span>
-                                                    )}
-                                                </span>
-                                            </div>
-                                            {station.pc_spec_details && (
-                                                <div className="text-xs text-muted-foreground bg-muted/50 rounded p-2">
-                                                    <div>{station.pc_spec_details.processor}</div>
-                                                    <div>{station.pc_spec_details.ram_ddr} {station.pc_spec_details.ram_gb}GB RAM</div>
-                                                    <div>{station.pc_spec_details.disk_type} {station.pc_spec_details.disk_gb}GB</div>
-                                                    <div>Ports: {station.pc_spec_details.available_ports || 'N/A'}</div>
-                                                </div>
-                                            )}
+                                        <div className="flex-1 rounded-md bg-muted/40 p-2">
+                                            <PcCell details={station.pc_spec_details} />
                                         </div>
 
                                         {!bulkMode && (
-                                            <div className="flex gap-2 pt-2 border-t">
+                                            <div className="flex gap-2 pt-1">
                                                 <Can permission="pc_transfers.create">
-                                                    <Link href={pcTransfersTransferPageRoute(station.id).url} className="flex-1">
-                                                        <Button size="sm" className="w-full">
-                                                            <ArrowRight size={14} className="mr-1" />
-                                                            {station.pc_spec_id ? 'Transfer' : 'Assign'}
-                                                        </Button>
-                                                    </Link>
+                                                    <Button size="sm" className="flex-1" onClick={() => setQuickTransferStation(toStationOption(station))}>
+                                                        <ArrowRight size={14} className="mr-1" />
+                                                        {station.pc_spec_id ? 'Transfer' : 'Assign'}
+                                                    </Button>
                                                 </Can>
                                                 {station.pc_spec_id && (
                                                     <Can permission="pc_transfers.remove">
@@ -627,16 +717,36 @@ export default function Index({ stations: stationsPayload, filters }: PageProps)
                                                             onConfirm={() => handleRemovePC(station)}
                                                             title="Unassign PC from Station"
                                                             description={`Are you sure you want to unassign the PC from station "${station.station_number}"? The PC will become available for assignment to other stations.`}
-                                                            triggerLabel="Unassign"
-                                                            disabled={isMutating}
+                                                            trigger={
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    className="px-2 text-destructive hover:text-destructive"
+                                                                    disabled={isMutating}
+                                                                    title="Unassign PC"
+                                                                >
+                                                                    <Trash2 size={14} />
+                                                                    <span className="sr-only">Unassign</span>
+                                                                </Button>
+                                                            }
                                                         />
+                                                    </Can>
+                                                )}
+                                                {station.pc_spec_details?.pc_number && (
+                                                    <Can permission="pc_transfers.history">
+                                                        <Link href={pcTransfersHistoryRoute({ query: { search: station.pc_spec_details.pc_number } }).url}>
+                                                            <Button size="sm" variant="ghost" className="px-2">
+                                                                <History size={14} />
+                                                                <span className="sr-only">PC history</span>
+                                                            </Button>
+                                                        </Link>
                                                     </Can>
                                                 )}
                                             </div>
                                         )}
-                                            </div>
-                                        ))
-                                    )}
+                                    </div>
+                                ))
+                            )}
                         </div>
                     </CardContent>
                 </Card>
@@ -646,6 +756,17 @@ export default function Index({ stations: stationsPayload, filters }: PageProps)
                         <PaginationNav links={paginationLinks} only={['stations']} />
                     )}
                 </div>
+
+                <QuickTransferDialog
+                    open={quickTransferStation !== null}
+                    onOpenChange={(open) => !open && setQuickTransferStation(null)}
+                    station={quickTransferStation}
+                    pcSpecs={pcSpecs}
+                    stationOptions={stationOptions}
+                    sites={filters.sites}
+                    reloadProps={MUTATION_RELOAD_PROPS}
+                    onSuccess={() => setLastRefresh(new Date())}
+                />
             </div>
         </AppLayout>
     );

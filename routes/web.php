@@ -202,11 +202,21 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
         ->middleware('permission:pc_transfers.view,pc_transfers.create,pc_transfers.remove')
         ->group(function () {
             Route::get('/', [PcTransferController::class, 'index'])->name('index');
-            Route::get('transfer/{station?}', [PcTransferController::class, 'transferPage'])->name('transferPage');
-            Route::post('/', [PcTransferController::class, 'transfer'])->name('transfer');
-            Route::post('bulk', [PcTransferController::class, 'bulkTransfer'])->name('bulk');
-            Route::delete('remove', [PcTransferController::class, 'remove'])->name('remove');
-            Route::get('history', [PcTransferController::class, 'history'])->name('history');
+            Route::get('transfer/{station?}', [PcTransferController::class, 'transferPage'])
+                ->middleware('permission:pc_transfers.create')
+                ->name('transferPage');
+            Route::post('/', [PcTransferController::class, 'transfer'])
+                ->middleware('permission:pc_transfers.create')
+                ->name('transfer');
+            Route::post('bulk', [PcTransferController::class, 'bulkTransfer'])
+                ->middleware('permission:pc_transfers.create')
+                ->name('bulk');
+            Route::delete('remove', [PcTransferController::class, 'remove'])
+                ->middleware('permission:pc_transfers.remove')
+                ->name('remove');
+            Route::get('history', [PcTransferController::class, 'history'])
+                ->middleware('permission:pc_transfers.history')
+                ->name('history');
         });
 
     // PC Maintenance
