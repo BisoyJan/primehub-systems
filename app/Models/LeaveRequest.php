@@ -72,6 +72,12 @@ class LeaveRequest extends Model
         'cancelled_by',
         'cancelled_at',
         'cancellation_reason',
+        // Denial revert tracking (Super Admin reverting a denied request to pending)
+        'reverted_by',
+        'reverted_at',
+        'revert_reason',
+        'reverted_denial_by',
+        'reverted_denial_notes',
         // Partial denial fields (when reviewer approves some dates but denies others)
         'has_partial_denial',
         'approved_days',
@@ -107,6 +113,8 @@ class LeaveRequest extends Model
             'auto_cancelled_at' => 'datetime',
             // Cancellation tracking
             'cancelled_at' => 'datetime',
+            // Denial revert tracking
+            'reverted_at' => 'datetime',
             'tl_approved_at' => 'datetime',
             'tl_rejected' => 'boolean',
             // Partial denial
@@ -210,6 +218,22 @@ class LeaveRequest extends Model
     public function canceller(): BelongsTo
     {
         return $this->cancelledBy();
+    }
+
+    /**
+     * Get the Super Admin who reverted the denial of this request.
+     */
+    public function reverter(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reverted_by');
+    }
+
+    /**
+     * Get the reviewer whose denial was reverted (snapshot of the undone denial).
+     */
+    public function previousDenier(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reverted_denial_by');
     }
 
     /**
@@ -396,6 +420,22 @@ class LeaveRequest extends Model
     public function isApproved(): bool
     {
         return $this->status === 'approved';
+    }
+
+    /**
+     * Check if request is denied.
+     */
+    public function isDenied(): bool
+    {
+        return $this->status === 'denied';
+    }
+
+    /**
+     * Check if a previous denial of this request was reverted by Super Admin.
+     */
+    public function wasDenialReverted(): bool
+    {
+        return $this->reverted_at !== null;
     }
 
     /**

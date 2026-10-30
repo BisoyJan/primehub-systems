@@ -577,4 +577,61 @@ class LeaveRequestPolicyTest extends TestCase
 
         $this->assertFalse($this->policy->delete($tl, $leaveRequest));
     }
+
+    // ─── revertDenial ────────────────────────────────────────────────────
+
+    #[Test]
+    public function super_admin_can_revert_future_denied_leave_request(): void
+    {
+        $superAdmin = User::factory()->create(['role' => 'Super Admin']);
+        $leaveRequest = LeaveRequest::factory()->denied()->create([
+            'start_date' => now()->addDays(5),
+            'end_date' => now()->addDays(6),
+        ]);
+
+        $this->assertTrue($this->policy->revertDenial($superAdmin, $leaveRequest));
+    }
+
+    #[Test]
+    public function super_admin_cannot_revert_denied_leave_request_with_past_end_date(): void
+    {
+        $superAdmin = User::factory()->create(['role' => 'Super Admin']);
+        $leaveRequest = LeaveRequest::factory()->denied()->create([
+            'start_date' => now()->subDays(6),
+            'end_date' => now()->subDays(5),
+        ]);
+
+        $this->assertFalse($this->policy->revertDenial($superAdmin, $leaveRequest));
+    }
+
+    #[Test]
+    public function super_admin_cannot_revert_non_denied_leave_request(): void
+    {
+        $superAdmin = User::factory()->create(['role' => 'Super Admin']);
+
+        foreach (['pending', 'approved', 'cancelled'] as $status) {
+            $leaveRequest = LeaveRequest::factory()->create([
+                'status' => $status,
+                'start_date' => now()->addDays(5),
+                'end_date' => now()->addDays(6),
+            ]);
+
+            $this->assertFalse($this->policy->revertDenial($superAdmin, $leaveRequest), "Expected false for status {$status}");
+        }
+    }
+
+    #[Test]
+    public function non_super_admin_roles_cannot_revert_denied_leave_request(): void
+    {
+        $leaveRequest = LeaveRequest::factory()->denied()->create([
+            'start_date' => now()->addDays(5),
+            'end_date' => now()->addDays(6),
+        ]);
+
+        foreach (['Admin', 'HR', 'Team Lead', 'Agent', 'IT', 'Utility'] as $role) {
+            $user = User::factory()->create(['role' => $role]);
+
+            $this->assertFalse($this->policy->revertDenial($user, $leaveRequest), "Expected false for role {$role}");
+        }
+    }
 }

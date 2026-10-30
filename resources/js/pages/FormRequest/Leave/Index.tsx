@@ -31,7 +31,7 @@ import {
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
-import { Plus, Eye, Ban, RefreshCw, Filter, Trash2, Pencil, CheckCircle, Play, Pause, Download, Calendar, FileImage, AlertTriangle, List, Clock, XCircle } from 'lucide-react';
+import { Plus, Eye, Ban, RefreshCw, Filter, Trash2, Pencil, CheckCircle, Play, Pause, Download, Calendar, FileImage, AlertTriangle, List, Clock, XCircle, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
 import { usePermission } from '@/hooks/use-permission';
@@ -51,7 +51,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { index as leaveIndexRoute, create as leaveCreateRoute, show as leaveShowRoute, cancel as leaveCancelRoute, destroy as leaveDestroyRoute, edit as leaveEditRoute } from '@/routes/leave-requests';
+import { index as leaveIndexRoute, create as leaveCreateRoute, show as leaveShowRoute, cancel as leaveCancelRoute, destroy as leaveDestroyRoute, edit as leaveEditRoute, revertDenial as leaveRevertDenialRoute } from '@/routes/leave-requests';
 import { MultiSelectFilter, parseMultiSelectParam, multiSelectToParam } from '@/components/multi-select-filter';
 import { Calendar as CalendarPicker } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -186,8 +186,10 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
     const [filterDate, setFilterDate] = useState<Date | undefined>(filters.date ? parseISO(filters.date) : undefined);
     const [showCancelDialog, setShowCancelDialog] = useState(false);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+    const [showRevertDialog, setShowRevertDialog] = useState(false);
     const [selectedLeaveId, setSelectedLeaveId] = useState<number | null>(null);
     const cancelForm = useForm({ cancellation_reason: '' });
+    const revertForm = useForm({ revert_reason: '' });
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
 
@@ -345,6 +347,39 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
     const handleDeleteRequest = (id: number) => {
         setSelectedLeaveId(id);
         setShowDeleteDialog(true);
+    };
+
+    const handleRevertRequest = (id: number) => {
+        setSelectedLeaveId(id);
+        revertForm.reset();
+        setShowRevertDialog(true);
+    };
+
+    // Super Admin can revert a denial only while the leave end date has not passed
+    const canRevertRequest = (request: LeaveRequest): boolean =>
+        can('leave.revert_denial')
+        && request.status === 'denied'
+        && new Date(request.end_date + 'T23:59:59') >= new Date();
+
+    const confirmRevert = () => {
+        if (!selectedLeaveId) return;
+
+        revertForm.post(
+            leaveRevertDenialRoute(selectedLeaveId).url,
+            {
+                onSuccess: () => {
+                    toast.success('Denial reverted. Leave request is pending review again.');
+                    setShowRevertDialog(false);
+                    setSelectedLeaveId(null);
+                    revertForm.reset();
+                },
+                onError: (errors) => {
+                    if (errors.error) {
+                        toast.error(errors.error);
+                    }
+                }
+            }
+        );
     };
 
     const confirmCancel = () => {
@@ -931,6 +966,17 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
                                                                             <Ban className="h-4 w-4" />
                                                                         </Button>
                                                                     )}
+                                                                    {canRevertRequest(request) && (
+                                                                        <Button
+                                                                            size="icon"
+                                                                            variant="outline"
+                                                                            onClick={() => handleRevertRequest(request.id)}
+                                                                            title="Revert Denial"
+                                                                            className="text-amber-600 hover:text-amber-700 border-amber-300"
+                                                                        >
+                                                                            <RotateCcw className="h-4 w-4" />
+                                                                        </Button>
+                                                                    )}
                                                                     {(can('leave.delete') || (auth.user.id === request.user.id && (request.status === 'cancelled' || request.status === 'denied'))) && (
                                                                         <Button
                                                                             size="icon"
@@ -1084,6 +1130,17 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
                                                     Cancel
                                                 </Button>
                                             )}
+                                            {canRevertRequest(request) && (
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => handleRevertRequest(request.id)}
+                                                    className="flex-1 text-amber-600 hover:text-amber-700 border-amber-300"
+                                                >
+                                                    <RotateCcw className="mr-2 h-4 w-4" />
+                                                    Revert
+                                                </Button>
+                                            )}
                                             {(can('leave.delete') || (auth.user.id === request.user.id && (request.status === 'cancelled' || request.status === 'denied'))) && (
                                                 <Button
                                                     size="sm"
@@ -1142,6 +1199,47 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
                             disabled={cancelForm.processing || !cancelForm.data.cancellation_reason.trim()}
                         >
                             {cancelForm.processing ? 'Cancelling...' : 'Yes, Cancel Request'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Revert Denial Dialog (Super Admin) */}
+            <Dialog open={showRevertDialog} onOpenChange={(open) => { setShowRevertDialog(open); if (!open) { setSelectedLeaveId(null); revertForm.reset(); } }}>
+                <DialogContent className="max-w-[90vw] sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <RotateCcw className="h-5 w-5 text-amber-600" />
+                            Revert Denial
+                        </DialogTitle>
+                        <DialogDescription>
+                            This will undo the denial and return the leave request to pending so it can be reviewed again. The employee and the original reviewer will be notified.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-2">
+                        <Label htmlFor="index-revert-reason">Reason for revert <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                        <Textarea
+                            id="index-revert-reason"
+                            placeholder="Why is this denial being reverted?"
+                            value={revertForm.data.revert_reason}
+                            onChange={(e) => revertForm.setData('revert_reason', e.target.value)}
+                            rows={3}
+                            maxLength={1000}
+                        />
+                        {revertForm.errors.revert_reason && (
+                            <p className="text-sm text-red-500">{revertForm.errors.revert_reason}</p>
+                        )}
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => { setShowRevertDialog(false); setSelectedLeaveId(null); revertForm.reset(); }}>
+                            Keep Denied
+                        </Button>
+                        <Button
+                            className="bg-amber-600 hover:bg-amber-700 text-white"
+                            onClick={confirmRevert}
+                            disabled={revertForm.processing}
+                        >
+                            {revertForm.processing ? 'Reverting...' : 'Revert to Pending'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

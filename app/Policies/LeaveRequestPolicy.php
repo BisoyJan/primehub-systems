@@ -284,4 +284,31 @@ class LeaveRequestPolicy
         // Only Super Admin, Admin, and HR can delete
         return in_array($user->role, ['Super Admin', 'Admin', 'HR']);
     }
+
+    /**
+     * Determine whether the user can revert a denied leave request back to pending.
+     *
+     * Super Admin only. Blocked once the leave's end date has passed because the
+     * request can no longer be meaningfully re-reviewed.
+     */
+    public function revertDenial(User $user, LeaveRequest $leaveRequest): bool
+    {
+        if ($leaveRequest->status !== 'denied') {
+            return false;
+        }
+
+        if ($user->role !== 'Super Admin') {
+            return false;
+        }
+
+        if (! $this->permissionService->userHasPermission($user, 'leave.revert_denial')) {
+            return false;
+        }
+
+        if ($leaveRequest->end_date && $leaveRequest->end_date->copy()->endOfDay()->isPast()) {
+            return false;
+        }
+
+        return true;
+    }
 }

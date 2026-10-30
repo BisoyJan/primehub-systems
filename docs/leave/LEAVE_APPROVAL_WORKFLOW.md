@@ -32,6 +32,7 @@ Leave requests move through a **three-party** approval chain.
         ├→ [Admin OR HR Denies] → denied
         └→ [Employee Cancels] → cancelled
 
+denied   → [Super Admin Reverts] → pending (pre-denial state, see Step 2c)
 approved → [Employee Cancels] → cancelled (if future date)
 ```
 
@@ -67,6 +68,20 @@ $table->timestamp('admin_approved_at')->nullable();
 $table->foreignId('hr_approved_by')->nullable()->constrained('users')->nullOnDelete();
 $table->timestamp('hr_approved_at')->nullable();
 ```
+
+### New DB Columns (Denial Revert — Super Admin)
+
+```php
+// Migration: 2026_10_31_*_add_revert_denial_fields_to_leave_requests_table
+$table->foreignId('reverted_by')->nullable()->constrained('users')->nullOnDelete();
+$table->timestamp('reverted_at')->nullable();
+$table->text('revert_reason')->nullable();            // optional
+$table->foreignId('reverted_denial_by')->nullable()->constrained('users')->nullOnDelete();
+$table->text('reverted_denial_notes')->nullable();    // snapshot of the undone denial
+```
+
+Model relations: `reverter()` → `reverted_by`, `previousDenier()` → `reverted_denial_by`
+(named to avoid a serialization collision with the FK column).
 
 ---
 
@@ -295,6 +310,44 @@ leave_requests:
 
 leave_credits: Unchanged (no deduction occurred)
 ```
+
+---
+
+### Step 2c: Revert Denial (Super Admin only)
+**File:** `LeaveRequestController@revertDenial`
+**Route:** `POST /form-requests/leave-requests/{leaveRequest}/revert-denial`
+**Policy:** `LeaveRequestPolicy@revertDenial`
+**Permission:** `leave.revert_denial` (granted to Super Admin via `*`)
+
+Undoes a denial made by Team Lead, HR, or Admin and returns the request to its
+**pre-denial pending state**. Because denial never deducts credits or creates
+attendance records, the revert only resets status/review columns.
+
+**Guards**
+- `status === 'denied'`
+- Role is `Super Admin` with `leave.revert_denial`
+- `end_date` has not already passed (request can no longer be meaningfully re-reviewed)
+- `revert_reason` optional, `max:1000`
+
+**State reset**
+
+| Denied by | Reset | Resulting state |
+|---|---|---|
+| Team Lead (`tl_rejected = true`) | `status→pending`, `tl_rejected→false`, `tl_approved_by/at/notes→null`, `reviewed_by/at/notes→null` | Pending Team Lead Approval |
+| HR / Admin | `status→pending`, `reviewed_by/at/notes→null` — any existing `tl_*` / `admin_approved_*` / `hr_approved_*` are **kept** | Pending HR / Admin / Both Approvals |
+
+Always records `reverted_by`, `reverted_at`, `revert_reason`, plus a snapshot of
+the undone denial in `reverted_denial_by` / `reverted_denial_notes`. Repeat
+deny→revert cycles overwrite the snapshot; full history lives in the Spatie
+activity log.
+
+**Notifications**
+- Employee: in-app (`Leave Request Denial Reverted`) + email (`LeaveRequestDenialReverted`)
+- Original denier: in-app (`Leave Denial Reverted by Super Admin`) — skipped when the denier is the reverting Super Admin
+
+**Frontend**
+- `Leave/Show.tsx`: "Revert Denial" button (prop `canRevertDenial`), confirmation dialog with optional reason, and an amber "Denial reverted by …" info card while the request is not denied
+- `Leave/Index.tsx`: `RotateCcw` icon/button on denied rows (desktop + mobile) gated by `can('leave.revert_denial')` and a future `end_date`
 
 ---
 

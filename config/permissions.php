@@ -128,6 +128,7 @@ return [
         'leave.cancel' => 'Cancel Leave Requests',
         'leave.delete' => 'Delete Leave Requests',
         'leave.view_all' => 'View All Leave Requests',
+        'leave.revert_denial' => 'Revert Denied Leave Requests',
 
         // Leave Credits
         'leave_credits.view_all' => 'View All Leave Credits',

@@ -34,7 +34,7 @@ import {
 import { ArrowLeft, Check, X, Ban, Info, Trash2, CheckCircle, Clock, UserCheck, XCircle, Shield, Edit, AlertTriangle, Calendar, FileImage, FileText, Eye, ExternalLink, ZoomIn, ZoomOut, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePermission } from '@/hooks/use-permission';
-import { index as leaveIndexRoute, approve as leaveApproveRoute, deny as leaveDenyRoute, partialDeny as leavePartialDenyRoute, cancel as leaveCancelRoute, destroy as leaveDestroyRoute, edit as leaveEditRoute, medicalCert as leaveMedicalCertRoute, documents as leaveDocumentRoute, updateDayStatuses as leaveUpdateDayStatusesRoute } from '@/routes/leave-requests';
+import { index as leaveIndexRoute, approve as leaveApproveRoute, deny as leaveDenyRoute, partialDeny as leavePartialDenyRoute, cancel as leaveCancelRoute, destroy as leaveDestroyRoute, edit as leaveEditRoute, medicalCert as leaveMedicalCertRoute, documents as leaveDocumentRoute, updateDayStatuses as leaveUpdateDayStatusesRoute, revertDenial as leaveRevertDenialRoute } from '@/routes/leave-requests';
 import type { LeaveRequestDocument } from '@/types';
 import DayStatusAssignment, { type DayStatus, VL_STATUS_OPTIONS, SL_STATUS_OPTIONS } from './Components/DayStatusAssignment';
 
@@ -141,6 +141,14 @@ interface LeaveRequest {
     short_notice_override_by?: number;
     short_notice_overrider?: User;
     medical_cert_path?: string;
+    // Denial revert tracking
+    reverted_by?: number | null;
+    reverted_at?: string | null;
+    revert_reason?: string | null;
+    reverter?: User | null;
+    reverted_denial_by?: number | null;
+    reverted_denial_notes?: string | null;
+    previous_denier?: User | null;
     // Partial denial fields
     has_partial_denial?: boolean;
     approved_days?: number;
@@ -211,6 +219,7 @@ interface Props {
     userRole: string;
     canAdminCancel?: boolean;
     canEditApproved?: boolean;
+    canRevertDenial?: boolean;
     canViewMedicalCert?: boolean;
     earlierConflicts?: EarlierConflict[];
     absenceWindowInfo?: AbsenceWindowInfo | null;
@@ -246,6 +255,7 @@ export default function Show({
     isSuperAdmin = false,
     canAdminCancel = false,
     canEditApproved = false,
+    canRevertDenial = false,
     canViewMedicalCert = false,
     earlierConflicts = [],
     absenceWindowInfo = null,
@@ -298,6 +308,7 @@ export default function Show({
     const [showForceApproveDialog, setShowForceApproveDialog] = useState(false);
     const [showTLDenyDialog, setShowTLDenyDialog] = useState(false);
     const [showAdminCancelDialog, setShowAdminCancelDialog] = useState(false);
+    const [showRevertDenialDialog, setShowRevertDenialDialog] = useState(false);
     const [shortNoticeOverride, setShortNoticeOverride] = useState(false);
     const [showAdjustForWorkDialog, setShowAdjustForWorkDialog] = useState(false);
     const [selectedApprovedDates, setSelectedApprovedDates] = useState<string[]>([]);
@@ -397,6 +408,7 @@ export default function Show({
     const [forceApproveSelectedDates, setForceApproveSelectedDates] = useState<string[]>([]);
     const cancelForm = useForm({ cancellation_reason: '' });
     const adminCancelForm = useForm({ cancellation_reason: '' });
+    const revertDenialForm = useForm({ revert_reason: '' });
     const adjustForWorkForm = useForm({
         work_date: '',
         adjustment_type: 'start_late' as 'end_early' | 'start_late' | 'remove_day',
@@ -601,6 +613,19 @@ export default function Show({
             },
             onError: () => {
                 toast.error('Failed to cancel leave request');
+            },
+        });
+    };
+
+    const handleRevertDenial = () => {
+        revertDenialForm.post(leaveRevertDenialRoute(leaveRequest.id).url, {
+            onSuccess: () => {
+                setShowRevertDenialDialog(false);
+                revertDenialForm.reset();
+                toast.success('Denial reverted. Leave request is pending review again.');
+            },
+            onError: (errors) => {
+                toast.error(errors.error || 'Failed to revert denial');
             },
         });
     };
@@ -1031,6 +1056,17 @@ export default function Show({
                             >
                                 <Ban className="mr-1 h-4 w-4" />
                                 <span className="hidden sm:inline">{leaveRequest.status === 'approved' ? 'Cancel Approved' : 'Cancel'}</span>
+                            </Button>
+                        )}
+                        {canRevertDenial && leaveRequest.status === 'denied' && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="border-amber-300 text-amber-700 hover:bg-amber-50"
+                                onClick={() => setShowRevertDenialDialog(true)}
+                            >
+                                <RotateCcw className="mr-1 h-4 w-4" />
+                                <span className="hidden sm:inline">Revert Denial</span>
                             </Button>
                         )}
                         {canCancel && !canAdminCancel && (leaveRequest.status === 'pending' || leaveRequest.status === 'approved') && (
@@ -1551,6 +1587,31 @@ export default function Show({
                                     ) : (
                                         <strong>Cancelled by user</strong>
                                     )}
+                                </AlertDescription>
+                            </Alert>
+                        )}
+
+                        {/* Denial Reverted Info (Super Admin returned a denied request to pending) */}
+                        {leaveRequest.reverted_at && leaveRequest.status !== 'denied' && (
+                            <Alert className="border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+                                <RotateCcw className="h-4 w-4 text-amber-600" />
+                                <AlertDescription className="text-amber-800 dark:text-amber-200">
+                                    <div className="space-y-1">
+                                        <p>
+                                            <strong>Denial reverted by {leaveRequest.reverter?.name || 'Super Admin'}</strong>
+                                            {' '}on {format(parseISO(leaveRequest.reverted_at), 'MMM d, yyyy h:mm a')}
+                                            {leaveRequest.status === 'pending' && ' — request is pending review again.'}
+                                        </p>
+                                        {leaveRequest.revert_reason && (
+                                            <p className="text-sm italic">"{leaveRequest.revert_reason}"</p>
+                                        )}
+                                        {(leaveRequest.previous_denier || leaveRequest.reverted_denial_notes) && (
+                                            <p className="text-xs text-amber-700 dark:text-amber-300">
+                                                Previously denied by {leaveRequest.previous_denier?.name || 'reviewer'}
+                                                {leaveRequest.reverted_denial_notes && `: "${leaveRequest.reverted_denial_notes}"`}
+                                            </p>
+                                        )}
+                                    </div>
                                 </AlertDescription>
                             </Alert>
                         )}
@@ -2409,6 +2470,64 @@ export default function Show({
                             disabled={adminCancelForm.processing || !adminCancelForm.data.cancellation_reason.trim()}
                         >
                             {leaveRequest.status === 'approved' ? 'Cancel Approved Leave' : 'Cancel Leave Request'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Revert Denial Dialog (Super Admin) */}
+            <Dialog open={showRevertDenialDialog} onOpenChange={(open) => { setShowRevertDenialDialog(open); if (!open) revertDenialForm.reset(); }}>
+                <DialogContent className="max-w-[90vw] sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <RotateCcw className="h-5 w-5 text-amber-600" />
+                            Revert Denial
+                        </DialogTitle>
+                        <DialogDescription>
+                            This will undo the denial and return the leave request to pending so it can be reviewed again.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+                        <AlertTriangle className="h-4 w-4 text-amber-600" />
+                        <AlertDescription className="text-amber-800 dark:text-amber-200">
+                            <ul className="list-disc list-inside text-sm space-y-1">
+                                {leaveRequest.tl_rejected ? (
+                                    <li>Request returns to the Team Lead approval stage</li>
+                                ) : (
+                                    <li>Any prior Team Lead / Admin / HR approvals are kept</li>
+                                )}
+                                <li>The employee and the original reviewer will be notified</li>
+                                <li>The original denial reason is preserved for reference</li>
+                            </ul>
+                        </AlertDescription>
+                    </Alert>
+                    <div className="space-y-2">
+                        <Label htmlFor="revert_reason">Reason for Revert <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                        <Textarea
+                            id="revert_reason"
+                            value={revertDenialForm.data.revert_reason}
+                            onChange={(e) => revertDenialForm.setData('revert_reason', e.target.value)}
+                            placeholder="Why is this denial being reverted?"
+                            rows={3}
+                            maxLength={1000}
+                        />
+                        {revertDenialForm.errors.revert_reason && (
+                            <p className="text-sm text-red-500">{revertDenialForm.errors.revert_reason}</p>
+                        )}
+                        <p className="text-xs text-muted-foreground">
+                            This reason will be recorded in the audit log and shown to the employee.
+                        </p>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowRevertDenialDialog(false)}>
+                            Keep Denied
+                        </Button>
+                        <Button
+                            className="bg-amber-600 hover:bg-amber-700 text-white"
+                            onClick={handleRevertDenial}
+                            disabled={revertDenialForm.processing}
+                        >
+                            {revertDenialForm.processing ? 'Reverting...' : 'Revert to Pending'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

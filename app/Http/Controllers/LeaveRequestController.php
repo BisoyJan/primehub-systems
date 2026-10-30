@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\AssignDayStatusesRequest;
 use App\Http\Requests\LeaveRequestRequest;
+use App\Mail\LeaveRequestDenialReverted;
 use App\Mail\LeaveRequestStatusUpdated;
 use App\Mail\LeaveRequestSubmitted;
 use App\Mail\LeaveRequestTLStatusUpdated;
@@ -891,7 +892,7 @@ class LeaveRequestController extends Controller
         $isAdmin = in_array($user->role, ['Super Admin', 'Admin', 'HR']);
         $isTeamLead = $user->role === 'Team Lead';
 
-        $leaveRequest->load(['user', 'reviewer', 'adminApprover', 'hrApprover', 'tlApprover', 'shortNoticeOverrider', 'deniedDates.denier', 'days.assigner', 'documents']);
+        $leaveRequest->load(['user', 'reviewer', 'adminApprover', 'hrApprover', 'tlApprover', 'shortNoticeOverrider', 'reverter', 'previousDenier', 'deniedDates.denier', 'days.assigner', 'documents']);
 
         // Check if current user has already approved
         $hasUserApproved = false;
@@ -940,6 +941,9 @@ class LeaveRequestController extends Controller
         // Check if Admin/Super Admin can edit this approved leave (Admin is
         // blocked once the end date has passed; Super Admin is not).
         $canEditApproved = $user->can('updateApproved', $leaveRequest);
+
+        // Check if Super Admin can revert a denial back to pending
+        $canRevertDenial = $user->can('revertDenial', $leaveRequest);
 
         // Check if user can view medical certificate.
         $canViewMedicalCert = $leaveRequest->user_id === $user->id || $user->can('view', $leaveRequest);
@@ -1112,6 +1116,7 @@ class LeaveRequestController extends Controller
             'canCancel' => ($leaveRequest->canBeCancelled() && $leaveRequest->user_id === $user->id),
             'canAdminCancel' => $canAdminCancel,
             'canEditApproved' => $canEditApproved,
+            'canRevertDenial' => $canRevertDenial,
             'hasUserApproved' => $hasUserApproved,
             'canTlApprove' => $canTlApprove,
             'userRole' => $user->role,
@@ -2540,6 +2545,95 @@ class LeaveRequestController extends Controller
             DB::rollBack();
 
             return back()->withErrors(['error' => 'Failed to deny leave request. Please try again.']);
+        }
+    }
+
+    /**
+     * Revert a denied leave request back to pending (Super Admin only).
+     *
+     * Denial never deducts credits or creates attendance records, so the
+     * revert only resets status/review columns. The request returns to its
+     * pre-denial state: a Team Lead rejection goes back to the TL stage, while
+     * an HR/Admin denial keeps any prior TL/Admin/HR approvals intact.
+     */
+    public function revertDenial(Request $request, LeaveRequest $leaveRequest)
+    {
+        $this->authorize('revertDenial', $leaveRequest);
+
+        $user = auth()->user();
+
+        $request->validate([
+            'revert_reason' => 'nullable|string|max:1000',
+        ]);
+
+        $deniedBy = $leaveRequest->reviewed_by;
+        $denialNotes = $leaveRequest->review_notes;
+        $wasTlRejected = $leaveRequest->isTlRejected();
+
+        DB::beginTransaction();
+        try {
+            $updates = [
+                'status' => 'pending',
+                'reviewed_by' => null,
+                'reviewed_at' => null,
+                'review_notes' => null,
+                'reverted_by' => $user->id,
+                'reverted_at' => now(),
+                'revert_reason' => $request->revert_reason,
+                'reverted_denial_by' => $deniedBy,
+                'reverted_denial_notes' => $denialNotes,
+            ];
+
+            if ($wasTlRejected) {
+                $updates['tl_rejected'] = false;
+                $updates['tl_approved_by'] = null;
+                $updates['tl_approved_at'] = null;
+                $updates['tl_review_notes'] = null;
+            }
+
+            $leaveRequest->update($updates);
+
+            $this->notificationService->notifyLeaveRequestDenialReverted(
+                $leaveRequest->user_id,
+                $leaveRequest->leave_type,
+                $user->name,
+                $leaveRequest->id
+            );
+
+            if ($deniedBy && $deniedBy !== $user->id) {
+                $this->notificationService->notifyReviewerAboutDenialRevert(
+                    $deniedBy,
+                    $leaveRequest->user->name,
+                    $leaveRequest->leave_type,
+                    $user->name,
+                    $leaveRequest->id
+                );
+            }
+
+            DB::commit();
+
+            try {
+                $employee = $leaveRequest->user;
+                if ($employee && $employee->email && filter_var($employee->email, FILTER_VALIDATE_EMAIL)) {
+                    Mail::to($employee->email)->send(new LeaveRequestDenialReverted($leaveRequest->fresh(), $employee, $user));
+                }
+            } catch (\Exception $mailException) {
+                Log::warning('Failed to send leave request denial revert email', [
+                    'error' => $mailException->getMessage(),
+                    'leave_request_id' => $leaveRequest->id,
+                ]);
+            }
+
+            return redirect()->route('leave-requests.show', $leaveRequest)
+                ->with('success', 'Denial reverted. Leave request is pending review again.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Leave request denial revert failed', [
+                'error' => $e->getMessage(),
+                'leave_request_id' => $leaveRequest->id,
+            ]);
+
+            return back()->withErrors(['error' => 'Failed to revert denial. Please try again.']);
         }
     }
 

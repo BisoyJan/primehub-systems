@@ -645,6 +645,47 @@ class NotificationService
     }
 
     /**
+     * Notify employee that Super Admin reverted the denial of their leave request.
+     */
+    public function notifyLeaveRequestDenialReverted(int $userId, string $leaveType, string $revertedByName, int $requestId): ?Notification
+    {
+        return $this->create(
+            $userId,
+            'leave_request',
+            'Leave Request Denial Reverted',
+            "The denial of your {$leaveType} request has been reverted by {$revertedByName}. It is now pending review again.",
+            [
+                'status' => 'denial_reverted',
+                'type' => $leaveType,
+                'reverted_by' => $revertedByName,
+                'request_id' => $requestId,
+                'link' => route('leave-requests.show', $requestId),
+            ]
+        );
+    }
+
+    /**
+     * Notify the original reviewer (TL/HR/Admin) that their denial was reverted by Super Admin.
+     */
+    public function notifyReviewerAboutDenialRevert(int $reviewerId, string $employeeName, string $leaveType, string $revertedByName, int $requestId): ?Notification
+    {
+        return $this->create(
+            $reviewerId,
+            'leave_request',
+            'Leave Denial Reverted by Super Admin',
+            "{$revertedByName} reverted your denial of {$employeeName}'s {$leaveType} request. It is pending review again.",
+            [
+                'status' => 'denial_reverted',
+                'type' => $leaveType,
+                'employee' => $employeeName,
+                'reverted_by' => $revertedByName,
+                'request_id' => $requestId,
+                'link' => route('leave-requests.show', $requestId),
+            ]
+        );
+    }
+
+    /**
      * Notify Admin/HR that Team Lead has approved an agent's leave request.
      */
     public function notifyAdminHrAboutTLApproval(string $agentName, string $leaveType, string $teamLeadName, int $requestId): void
