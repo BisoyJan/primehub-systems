@@ -788,6 +788,8 @@ class LeaveCreditServiceTest extends TestCase
     #[Test]
     public function it_uses_actual_balance_for_future_month_vl_requests(): void
     {
+        $this->travelTo(Carbon::create(now()->year, 6, 15));
+
         $user = User::factory()->create([
             'role' => 'Agent',
             'hired_date' => Carbon::now()->subYear(),
@@ -829,6 +831,8 @@ class LeaveCreditServiceTest extends TestCase
     #[Test]
     public function it_pre_creates_future_credit_records_for_vl_approval(): void
     {
+        $this->travelTo(Carbon::create(now()->year, 6, 15));
+
         $user = User::factory()->create([
             'role' => 'Agent',
             'hired_date' => Carbon::now()->subYear(),

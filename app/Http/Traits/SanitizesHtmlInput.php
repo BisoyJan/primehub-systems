@@ -13,7 +13,7 @@ trait SanitizesHtmlInput
     /**
      * The allowed HTML tags for rich text fields.
      */
-    private const ALLOWED_TAGS = '<p><br><strong><b><em><i><u><s><ul><ol><li><h1><h2><h3><h4><h5><h6><blockquote><a><span><sub><sup>';
+    private const ALLOWED_TAGS = '<p><div><br><strong><b><em><i><u><s><ul><ol><li><h1><h2><h3><h4><h5><h6><blockquote><a><span><sub><sup>';
 
     /**
      * The rich text field names to sanitize.
@@ -70,11 +70,10 @@ trait SanitizesHtmlInput
                 $value = strip_tags($value, self::ALLOWED_TAGS);
 
                 // Strip unwanted style attributes from tags, preserving only safe styles.
-                // Keeps pasted formatting from Word/Google Docs (bold, italic, color,
-                // highlight, alignment, font-size) while dropping font-family, line-height,
-                // margins, and other layout-breaking styles.
+                // Keep formatting and bounded spacing while dropping font-family and
+                // other layout-breaking styles.
                 $value = preg_replace_callback(
-                    '/<(ol|li|span|p|strong|b|em|i|u|s|h[1-6]|blockquote|a|sub|sup)\b([^>]*?)>/i',
+                    '/<(ol|li|span|p|div|strong|b|em|i|u|s|h[1-6]|blockquote|a|sub|sup)\b([^>]*?)>/i',
                     function ($matches) {
                         $tag = strtolower($matches[1]);
                         $attrs = $matches[2];

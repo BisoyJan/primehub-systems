@@ -126,6 +126,16 @@ class SanitizesHtmlInputTest extends TestCase
     }
 
     #[Test]
+    public function it_preserves_div_blocks_and_safe_formatting_styles(): void
+    {
+        $result = $this->sanitize('<div style="line-height: 1.5; color: #123456;" onclick="run()">First</div><div>Second</div>');
+
+        $this->assertStringContainsString('<div style="color: #123456; line-height: 1.5">First</div>', $result);
+        $this->assertStringContainsString('<div>Second</div>', $result);
+        $this->assertStringNotContainsString('onclick', $result);
+    }
+
+    #[Test]
     public function it_strips_excessive_spacing_values(): void
     {
         $result = $this->sanitize('<p style="margin-top: 9999px; line-height: 50;">Runaway</p>');

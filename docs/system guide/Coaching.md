@@ -86,7 +86,7 @@ Columns: **Date**, **Coachee**, **Coach**, **Purpose**, **Severity** (colored ba
 **Row Actions:**
 - **View** (eye icon) — Open session details.
 - **Edit** (pencil icon) — Modify the session. *(Requires edit permission.)*
-- **Copy** (copy icon) — Clone the session as a new one.
+- **Copy** (copy icon) — Clone the session as a new one with only the original Team Lead (coach), agent (or Team Lead coachee), and coaching purpose preselected. All other form fields start blank and the session date defaults to today.
 - **Delete** (trash icon) — Remove the session. A confirmation dialog appears: *"This action cannot be undone."* *(Team Lead: only available when compliance is **Awaiting Agent Ack** and ack status is **Pending**. Admin: always available.)*
 
 ### Create New Session

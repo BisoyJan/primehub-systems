@@ -44,10 +44,11 @@ interface Props extends InertiaPageProps {
     coachedThisWeekIds: number[];
     draftedThisWeekIds: number[];
     existingDraft: Record<string, unknown> | null;
+    clone_data: { coach_id: number; coachee_id: number; purpose: string } | null;
 }
 
 export default function CoachingSessionsCreate() {
-    const { agents, teamLeads, coachableTeamLeads, isAdmin, coachingMode, selectedAgentId, purposes, severityFlags, coachedThisWeekIds, draftedThisWeekIds, existingDraft } = usePage<Props>().props;
+    const { agents, teamLeads, coachableTeamLeads, isAdmin, coachingMode, selectedAgentId, purposes, severityFlags, coachedThisWeekIds, draftedThisWeekIds, existingDraft, clone_data: cloneData } = usePage<Props>().props;
 
     const { title, breadcrumbs } = usePageMeta({
         title: 'Create Coaching Session',
@@ -71,15 +72,15 @@ export default function CoachingSessionsCreate() {
         } catch { /* ignore */ }
         return null;
     };
-    const savedForm = getSavedFormData();
+    const savedForm = cloneData ? null : getSavedFormData();
 
-    // Priority: savedForm (queue session storage) > existingDraft (server draft) > defaults
-    const prefill = savedForm ?? existingDraft;
+    // Cloning starts a new session instead of restoring queued or drafted content.
+    const prefill = cloneData ?? savedForm ?? existingDraft;
 
     const { data, setData, post, transform, errors, processing } = useForm({
         coaching_mode: coachingMode ?? 'assign',
-        coach_id: '' as number | '',
-        coachee_id: selectedAgentId ?? ('' as number | ''),
+        coach_id: cloneData?.coach_id ?? ('' as number | ''),
+        coachee_id: cloneData?.coachee_id ?? selectedAgentId ?? ('' as number | ''),
         session_date: prefill?.session_date ?? new Date().toISOString().split('T')[0],
         // Agent Profile
         profile_new_hire: prefill?.profile_new_hire ?? false,

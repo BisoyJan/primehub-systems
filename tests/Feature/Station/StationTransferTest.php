@@ -2,23 +2,25 @@
 
 namespace Tests\Feature\Station;
 
-use App\Models\User;
-use App\Models\Site;
 use App\Models\Campaign;
 use App\Models\EmployeeSchedule;
-use App\Models\Station;
 use App\Models\PcSpec;
 use App\Models\PcTransfer;
+use App\Models\Site;
+use App\Models\Station;
+use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
-use Tests\TestCase;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\TestCase;
 
 class StationTransferTest extends TestCase
 {
     use DatabaseMigrations;
 
     protected User $admin;
+
     protected Site $site;
+
     protected Campaign $campaign;
 
     protected function setUp(): void
@@ -256,9 +258,7 @@ class StationTransferTest extends TestCase
             ]);
 
         $response->assertRedirect();
-        $response->assertSessionHas('flash', fn ($flash) =>
-            $flash['type'] === 'error' && str_contains($flash['message'], 'no PC')
-        );
+        $response->assertSessionHasErrors(['station_id' => 'Station has no PC assigned.']);
     }
 
     #[Test]

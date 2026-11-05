@@ -331,7 +331,7 @@ class CoachingSessionController extends Controller
 
         // Load existing draft for the selected agent this week
         $existingDraft = null;
-        if ($selectedAgentId) {
+        if ($selectedAgentId && ! $request->has('clone_from')) {
             $draft = CoachingSession::where('coachee_id', $selectedAgentId)
                 ->where('coach_id', $user->id)
                 ->where('is_draft', true)
@@ -355,18 +355,10 @@ class CoachingSessionController extends Controller
         // Handle clone_from
         $cloneData = null;
         if ($request->has('clone_from')) {
-            $sourceSession = CoachingSession::find($request->clone_from);
+            $sourceSession = CoachingSession::with('coachee:id,role')->find($request->clone_from);
             if ($sourceSession && $request->user()->can('view', $sourceSession)) {
-                $cloneData = $sourceSession->only([
-                    'coachee_id', 'purpose', 'severity_flag',
-                    'profile_new_hire', 'profile_tenured', 'profile_returning', 'profile_previously_coached_same_issue',
-                    'focus_attendance_tardiness', 'focus_productivity', 'focus_compliance', 'focus_callouts',
-                    'focus_recognition_milestones', 'focus_growth_development', 'focus_other', 'focus_other_notes',
-                    'root_cause_lack_of_skills', 'root_cause_lack_of_clarity', 'root_cause_personal_issues',
-                    'root_cause_motivation_engagement', 'root_cause_health_fatigue', 'root_cause_workload_process',
-                    'root_cause_peer_conflict', 'root_cause_others', 'root_cause_others_notes',
-                    'performance_description', 'agent_strengths_wins', 'smart_action_plan',
-                ]);
+                $cloneData = $sourceSession->only(['coach_id', 'coachee_id', 'purpose']);
+                $coachingMode = $sourceSession->coachee?->role === 'Team Lead' ? 'direct' : 'assign';
             }
         }
 

@@ -217,14 +217,12 @@ function ToolbarButton({
                 <button
                     type="button"
                     className={cn(
-                        'inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground',
+                        'inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
                         className,
                     )}
                     aria-label={label}
-                    onMouseDown={(e) => {
-                        e.preventDefault();
-                        onClick();
-                    }}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={onClick}
                 >
                     {children}
                 </button>
@@ -271,12 +269,6 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
         onChange(isEmpty ? '' : html);
     }, [onChange]);
 
-    const exec = useCallback((command: string, val?: string) => {
-        editorRef.current?.focus();
-        document.execCommand(command, false, val);
-        emitChange();
-    }, [emitChange]);
-
     // Remember the current selection so toolbar popovers (which steal focus) can restore it
     const saveSelection = useCallback(() => {
         const sel = window.getSelection();
@@ -291,7 +283,7 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
         const editor = editorRef.current;
         const range = savedRangeRef.current;
         if (!editor) return;
-        editor.focus();
+        editor.focus({ preventScroll: true });
         if (!range) return;
         const sel = window.getSelection();
         if (sel) {
@@ -299,6 +291,13 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
             sel.addRange(range);
         }
     }, []);
+
+    const exec = useCallback((command: string, val?: string) => {
+        restoreSelection();
+        document.execCommand(command, false, val);
+        saveSelection();
+        emitChange();
+    }, [emitChange, restoreSelection, saveSelection]);
 
     // Formatting commands
     const handleUndo = () => exec('undo');
@@ -331,14 +330,10 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
     };
     const handleBlockquote = () => exec('formatBlock', 'blockquote');
     const handleTextColor = (color: string) => {
-        if (!color) {
-            exec('removeFormat');
-            return;
-        }
-        editorRef.current?.focus();
+        restoreSelection();
         // Chromium's foreColor produces legacy <font color> tags; rewrite to <span style="color">
         // so the markup matches what the backend sanitizer and paste-cleaning allow.
-        document.execCommand('foreColor', false, color);
+        document.execCommand('foreColor', false, color || 'inherit');
         const editor = editorRef.current;
         if (editor) {
             editor.querySelectorAll('font[color]').forEach((font) => {
@@ -350,15 +345,13 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
                 font.replaceWith(span);
             });
         }
+        saveSelection();
         emitChange();
     };
     const handleHighlight = (color: string) => {
-        editorRef.current?.focus();
-        if (!color) {
-            document.execCommand('removeFormat', false);
-        } else {
-            document.execCommand('hiliteColor', false, color);
-        }
+        restoreSelection();
+        document.execCommand('hiliteColor', false, color || 'transparent');
+        saveSelection();
         emitChange();
     };
     const handleFontSize = (size: string) => {
@@ -438,9 +431,10 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
         emitChange();
     };
     const handleRemoveFormatting = () => {
-        editorRef.current?.focus();
+        restoreSelection();
         document.execCommand('removeFormat', false);
         document.execCommand('formatBlock', false, 'div');
+        saveSelection();
         emitChange();
     };
 
@@ -669,11 +663,9 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
             }
         }
 
-        // TAB: indent list item
-        if (e.key === 'Tab' && !e.shiftKey) {
+        // TAB: indent a list item only when a previous sibling can be nested under.
+        if (e.key === 'Tab' && !e.shiftKey && li.previousElementSibling) {
             e.preventDefault();
-            if (!li.previousElementSibling) return;
-
             document.execCommand('indent', false);
 
             requestAnimationFrame(() => {
@@ -683,8 +675,8 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
             return;
         }
 
-        // SHIFT+TAB: outdent list item
-        if (e.key === 'Tab' && e.shiftKey) {
+        // SHIFT+TAB: outdent nested items; leave top-level lists navigable.
+        if (e.key === 'Tab' && e.shiftKey && parentList.parentElement?.tagName === 'LI') {
             e.preventDefault();
 
             document.execCommand('outdent', false);
@@ -724,7 +716,10 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
                     style={{ minHeight }}
                     data-placeholder={placeholder}
                     onInput={emitChange}
-                    onBlur={emitChange}
+                    onBlur={() => {
+                        saveSelection();
+                        emitChange();
+                    }}
                     onPaste={handlePaste}
                     onKeyDown={handleKeyDown}
                     onMouseUp={saveSelection}
@@ -771,7 +766,7 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
                             </TooltipTrigger>
                             <TooltipContent side="top" className="text-xs">Text color</TooltipContent>
                         </Tooltip>
-                        <PopoverContent className="w-auto p-3" align="start" side="top">
+                        <PopoverContent className="w-auto p-3" align="start" side="top" onCloseAutoFocus={(e) => e.preventDefault()}>
                             <div className="flex gap-4">
                                 {/* Background color column */}
                                 <div>
@@ -781,17 +776,21 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
                                             <button
                                                 key={`bg-${color}`}
                                                 type="button"
+                                                aria-label={`Set background color ${color}`}
                                                 title={color}
                                                 className="h-4.5 w-4.5 border border-gray-200 transition-transform hover:scale-125 hover:z-10 hover:border-gray-400"
                                                 style={{ backgroundColor: color }}
-                                                onMouseDown={(e) => { e.preventDefault(); handleHighlight(color); }}
+                                                onMouseDown={(e) => e.preventDefault()}
+                                                onClick={() => handleHighlight(color)}
                                             />
                                         ))}
                                     </div>
                                     <button
                                         type="button"
+                                        aria-label="Reset background color"
                                         className="mt-1.5 text-xs text-muted-foreground hover:text-foreground"
-                                        onMouseDown={(e) => { e.preventDefault(); handleHighlight(''); }}
+                                        onMouseDown={(e) => e.preventDefault()}
+                                        onClick={() => handleHighlight('')}
                                     >
                                         Reset
                                     </button>
@@ -805,17 +804,21 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
                                             <button
                                                 key={`text-${color}`}
                                                 type="button"
+                                                aria-label={`Set text color ${color}`}
                                                 title={color}
                                                 className="h-4.5 w-4.5 border border-gray-200 transition-transform hover:scale-125 hover:z-10 hover:border-gray-400"
                                                 style={{ backgroundColor: color }}
-                                                onMouseDown={(e) => { e.preventDefault(); handleTextColor(color); }}
+                                                onMouseDown={(e) => e.preventDefault()}
+                                                onClick={() => handleTextColor(color)}
                                             />
                                         ))}
                                     </div>
                                     <button
                                         type="button"
+                                        aria-label="Reset text color"
                                         className="mt-1.5 text-xs text-muted-foreground hover:text-foreground"
-                                        onMouseDown={(e) => { e.preventDefault(); handleTextColor(''); }}
+                                        onMouseDown={(e) => e.preventDefault()}
+                                        onClick={() => handleTextColor('')}
                                     >
                                         Reset
                                     </button>
@@ -841,7 +844,7 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
                             </TooltipTrigger>
                             <TooltipContent side="top" className="text-xs">Font size</TooltipContent>
                         </Tooltip>
-                        <PopoverContent className="w-32 p-1" align="start" side="top">
+                        <PopoverContent className="w-32 p-1" align="start" side="top" onCloseAutoFocus={(e) => e.preventDefault()}>
                             <div className="flex flex-col">
                                 {/* Custom size input (like MS Office) */}
                                 <div className="flex items-center gap-1 px-1 pb-1">
@@ -868,7 +871,8 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
                                             key={size}
                                             type="button"
                                             className="flex w-full items-center rounded px-2 py-1 text-left text-sm text-foreground transition-colors hover:bg-accent"
-                                            onMouseDown={(e) => { e.preventDefault(); handleFontSize(`${size}pt`); }}
+                                            onMouseDown={(e) => e.preventDefault()}
+                                            onClick={() => handleFontSize(`${size}pt`)}
                                         >
                                             {size}
                                         </button>
@@ -895,14 +899,15 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
                             </TooltipTrigger>
                             <TooltipContent side="top" className="text-xs">Line spacing</TooltipContent>
                         </Tooltip>
-                        <PopoverContent className="w-28 p-1" align="start" side="top">
+                        <PopoverContent className="w-28 p-1" align="start" side="top" onCloseAutoFocus={(e) => e.preventDefault()}>
                             <div className="max-h-48 overflow-y-auto">
                                 {LINE_SPACINGS.map((spacing) => (
                                     <button
                                         key={spacing.value}
                                         type="button"
                                         className="flex w-full items-center rounded px-2 py-1 text-left text-sm text-foreground transition-colors hover:bg-accent"
-                                        onMouseDown={(e) => { e.preventDefault(); handleLineSpacing(spacing.value); }}
+                                        onMouseDown={(e) => e.preventDefault()}
+                                        onClick={() => handleLineSpacing(spacing.value)}
                                     >
                                         {spacing.label}
                                     </button>

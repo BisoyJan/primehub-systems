@@ -281,6 +281,104 @@ class CoachingSessionControllerTest extends TestCase
     }
 
     #[Test]
+    public function admin_can_clone_session_with_original_coach_and_agent(): void
+    {
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+        $team = $this->createTeamWithCampaign();
+        $session = CoachingSession::factory()->verified()->create([
+            'coach_id' => $team['teamLead']->id,
+            'coachee_id' => $team['agent']->id,
+        ]);
+        CoachingSession::factory()->draft()->create([
+            'coach_id' => $admin->id,
+            'coachee_id' => $team['agent']->id,
+            'session_date' => now()->format('Y-m-d'),
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('coaching.sessions.create', [
+                'clone_from' => $session->id,
+                'coachee_id' => $team['agent']->id,
+            ]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Coaching/Sessions/Create')
+                ->where('coachingMode', 'assign')
+                ->where('clone_data.coach_id', $team['teamLead']->id)
+                ->where('clone_data.coachee_id', $team['agent']->id)
+                ->where('clone_data.purpose', $session->purpose)
+                ->where('existingDraft', null)
+                ->missing('clone_data.severity_flag')
+                ->missing('clone_data.performance_description')
+                ->missing('clone_data.smart_action_plan')
+                ->missing('clone_data.profile_tenured')
+                ->missing('clone_data.focus_productivity')
+                ->missing('clone_data.root_cause_lack_of_skills')
+                ->missing('clone_data.id')
+                ->missing('clone_data.session_date')
+                ->missing('clone_data.follow_up_date')
+                ->missing('clone_data.attachments')
+                ->missing('clone_data.ack_status')
+                ->missing('clone_data.compliance_status')
+            );
+    }
+
+    #[Test]
+    public function team_lead_can_clone_own_session(): void
+    {
+        $team = $this->createTeamWithCampaign();
+        $session = CoachingSession::factory()->create([
+            'coach_id' => $team['teamLead']->id,
+            'coachee_id' => $team['agent']->id,
+        ]);
+
+        $this->actingAs($team['teamLead'])
+            ->get(route('coaching.sessions.create', ['clone_from' => $session->id]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('clone_data.coach_id', $team['teamLead']->id)
+                ->where('clone_data.coachee_id', $team['agent']->id)
+                ->where('coachingMode', 'assign')
+            );
+    }
+
+    #[Test]
+    public function cloning_direct_coaching_preselects_direct_mode(): void
+    {
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+        $coach = User::factory()->create(['role' => 'Super Admin', 'is_approved' => true]);
+        $team = $this->createTeamWithCampaign();
+        $session = CoachingSession::factory()->create([
+            'coach_id' => $coach->id,
+            'coachee_id' => $team['teamLead']->id,
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('coaching.sessions.create', ['clone_from' => $session->id]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('coachingMode', 'direct')
+                ->where('clone_data.coach_id', $coach->id)
+                ->where('clone_data.coachee_id', $team['teamLead']->id)
+            );
+    }
+
+    #[Test]
+    public function cloning_inaccessible_session_does_not_expose_prefill(): void
+    {
+        $team = $this->createTeamWithCampaign();
+        $session = CoachingSession::factory()->create();
+
+        $this->actingAs($team['teamLead'])
+            ->get(route('coaching.sessions.create', ['clone_from' => $session->id]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('clone_data', null)
+                ->where('coachingMode', 'assign')
+            );
+    }
+
+    #[Test]
     public function agent_cannot_view_create_form(): void
     {
         $team = $this->createTeamWithCampaign();
