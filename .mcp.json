@@ -1,0 +1,24 @@
+{
+  "mcpServers": {
+    "laravel-boost": {
+      "type": "stdio",
+      "command": "php",
+      "args": [
+        "artisan",
+        "boost:mcp"
+      ],
+      "tools": [
+        "*"
+      ]
+    },
+    "lean-ctx": {
+      "type": "stdio",
+      "command": "C:/Users/bisoy/AppData/Roaming/npm/lean-ctx.cmd",
+      "args": [],
+      "env": {},
+      "tools": [
+        "*"
+      ]
+    }
+  }
+}
