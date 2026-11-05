@@ -33,7 +33,6 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import activityLogs, { exportMethod } from '@/routes/activity-logs';
 import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
-import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { TableSkeleton } from '@/components/TableSkeleton';
 import { usePageLoading } from '@/hooks';
 

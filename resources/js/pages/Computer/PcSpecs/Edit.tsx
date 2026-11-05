@@ -165,36 +165,6 @@ export default function Edit() {
         }, 350);
 
         return () => {
-            {
-                !form.errors.pc_number && availability.state === 'checking' && (
-                    <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                        Checking availability...
-                    </p>
-                )
-            }
-            {
-                !form.errors.pc_number && availability.state === 'available' && (
-                    <p className="mt-1 flex items-center gap-1 text-xs text-green-600">
-                        <Check className="h-3 w-3" />
-                        {availability.message}
-                    </p>
-                )
-            }
-            {
-                !form.errors.pc_number && availability.state === 'taken' && (
-                    <p className="mt-1 flex items-center gap-1 text-xs text-red-600">
-                        <X className="h-3 w-3" />
-                        {availability.message}
-                    </p>
-                )
-            }
-            {
-                !form.errors.pc_number && availability.state === 'error' && (
-                    <p className="mt-1 text-xs text-amber-600">{availability.message}</p>
-                )
-            }
-
             controller.abort();
             clearTimeout(timer);
         };
@@ -253,6 +223,27 @@ export default function Edit() {
                                     required
                                 />
                                 {form.errors.pc_number && <p className="text-sm text-red-600">{form.errors.pc_number}</p>}
+                                {!form.errors.pc_number && availability.state === 'checking' && (
+                                    <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                        Checking availability...
+                                    </p>
+                                )}
+                                {!form.errors.pc_number && availability.state === 'available' && (
+                                    <p className="mt-1 flex items-center gap-1 text-xs text-green-600">
+                                        <Check className="h-3 w-3" />
+                                        {availability.message}
+                                    </p>
+                                )}
+                                {!form.errors.pc_number && availability.state === 'taken' && (
+                                    <p className="mt-1 flex items-center gap-1 text-xs text-red-600">
+                                        <X className="h-3 w-3" />
+                                        {availability.message}
+                                    </p>
+                                )}
+                                {!form.errors.pc_number && availability.state === 'error' && (
+                                    <p className="mt-1 text-xs text-amber-600">{availability.message}</p>
+                                )}
                             </div>
 
                             <div>

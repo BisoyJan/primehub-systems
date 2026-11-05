@@ -40,7 +40,6 @@ import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { Can } from "@/components/authorization";
-import { usePermission } from "@/hooks/useAuthorization";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { TableSkeleton } from "@/components/TableSkeleton";
 
@@ -122,7 +121,6 @@ export default function DatabaseBackupsIndex() {
 
     useFlashMessage();
     const isLoading = usePageLoading();
-    const { can } = usePermission();
 
     const [searchQuery, setSearchQuery] = useState(initialSearch || "");
     const [activeJobId, setActiveJobId] = useState<string | null>(null);
@@ -133,9 +131,8 @@ export default function DatabaseBackupsIndex() {
 
     // Check for backup_job_id in flash
     useEffect(() => {
-        const flash = (props as any).flash;
-        if (flash?.backup_job_id) {
-            setActiveJobId(flash.backup_job_id);
+        if (props.flash?.backup_job_id) {
+            setActiveJobId(props.flash.backup_job_id);
         }
     }, [props]);
 

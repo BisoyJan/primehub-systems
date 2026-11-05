@@ -14,7 +14,6 @@ import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { PageHeader } from '@/components/PageHeader';
 import { DatePicker } from '@/components/ui/date-picker';
 import { reports as reportsRoute } from '@/routes/break-timer';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useState, useMemo } from 'react';
 import { format, parseISO } from 'date-fns';
 import { AlertTriangle, BarChart3, Check, ChevronsUpDown, Download, FileText, History, RotateCcw, ShieldX, Undo2 } from 'lucide-react';
