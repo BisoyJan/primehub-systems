@@ -1,5 +1,3 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Head, Link, useForm, usePage, router } from '@inertiajs/react';
 import {
     Dialog,
     DialogContent,
@@ -9,27 +7,46 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
-import { ArrowLeft, CheckCircle2, Circle, Users, UserPlus, X, Save, SaveAll, CloudUpload, Check, AlertTriangle } from 'lucide-react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
+import {
+    AlertTriangle,
+    ArrowLeft,
+    Check,
+    CheckCircle2,
+    Circle,
+    CloudUpload,
+    Save,
+    SaveAll,
+    UserPlus,
+    Users,
+    X,
+} from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
-import AppLayout from '@/layouts/app-layout';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { PageHeader } from '@/components/PageHeader';
-import { LoadingOverlay } from '@/components/LoadingOverlay';
-import { usePageMeta, useFlashMessage, usePageLoading } from '@/hooks';
 import { CoachingFormFields } from '@/components/coaching/CoachingFormFields';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { PageHeader } from '@/components/PageHeader';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
+import AppLayout from '@/layouts/app-layout';
 
 import {
-    index as sessionsIndex,
-    create as sessionsCreate,
-    store as sessionsStore,
-    draft as sessionsDraft,
-    submit as sessionsSubmit,
     autoSaveDraft as sessionsAutoSaveDraft,
+    create as sessionsCreate,
+    draft as sessionsDraft,
+    index as sessionsIndex,
+    store as sessionsStore,
+    submit as sessionsSubmit,
 } from '@/routes/coaching/sessions';
 
-import type { CoachingMode, CoachingPurposeLabels, User, Campaign } from '@/types';
+import type {
+    Campaign,
+    CoachingMode,
+    CoachingPurposeLabels,
+    User,
+} from '@/types';
 
 interface Props extends InertiaPageProps {
     agents: User[];
@@ -44,11 +61,28 @@ interface Props extends InertiaPageProps {
     coachedThisWeekIds: number[];
     draftedThisWeekIds: number[];
     existingDraft: Record<string, unknown> | null;
-    clone_data: { coach_id: number; coachee_id: number; purpose: string } | null;
+    clone_data: {
+        coach_id: number;
+        coachee_id: number;
+        purpose: string;
+    } | null;
 }
 
 export default function CoachingSessionsCreate() {
-    const { agents, teamLeads, coachableTeamLeads, isAdmin, coachingMode, selectedAgentId, purposes, severityFlags, coachedThisWeekIds, draftedThisWeekIds, existingDraft, clone_data: cloneData } = usePage<Props>().props;
+    const {
+        agents,
+        teamLeads,
+        coachableTeamLeads,
+        isAdmin,
+        coachingMode,
+        selectedAgentId,
+        purposes,
+        severityFlags,
+        coachedThisWeekIds,
+        draftedThisWeekIds,
+        existingDraft,
+        clone_data: cloneData,
+    } = usePage<Props>().props;
 
     const { title, breadcrumbs } = usePageMeta({
         title: 'Create Coaching Session',
@@ -67,9 +101,13 @@ export default function CoachingSessionsCreate() {
             const queueRaw = sessionStorage.getItem('coaching_queue');
             const queue = queueRaw ? JSON.parse(queueRaw) : [];
             if (queue.length === 0) return null;
-            const raw = sessionStorage.getItem(`coaching_form_${selectedAgentId}`);
+            const raw = sessionStorage.getItem(
+                `coaching_form_${selectedAgentId}`,
+            );
             if (raw) return JSON.parse(raw);
-        } catch { /* ignore */ }
+        } catch {
+            /* ignore */
+        }
         return null;
     };
     const savedForm = cloneData ? null : getSavedFormData();
@@ -80,21 +118,26 @@ export default function CoachingSessionsCreate() {
     const { data, setData, post, transform, errors, processing } = useForm({
         coaching_mode: coachingMode ?? 'assign',
         coach_id: cloneData?.coach_id ?? ('' as number | ''),
-        coachee_id: cloneData?.coachee_id ?? selectedAgentId ?? ('' as number | ''),
-        session_date: prefill?.session_date ?? new Date().toISOString().split('T')[0],
+        coachee_id:
+            cloneData?.coachee_id ?? selectedAgentId ?? ('' as number | ''),
+        session_date:
+            prefill?.session_date ?? new Date().toISOString().split('T')[0],
         // Agent Profile
         profile_new_hire: prefill?.profile_new_hire ?? false,
         profile_tenured: prefill?.profile_tenured ?? false,
         profile_returning: prefill?.profile_returning ?? false,
-        profile_previously_coached_same_issue: prefill?.profile_previously_coached_same_issue ?? false,
+        profile_previously_coached_same_issue:
+            prefill?.profile_previously_coached_same_issue ?? false,
         // Purpose
         purpose: prefill?.purpose ?? ('' as string),
         // Focus Areas
-        focus_attendance_tardiness: prefill?.focus_attendance_tardiness ?? false,
+        focus_attendance_tardiness:
+            prefill?.focus_attendance_tardiness ?? false,
         focus_productivity: prefill?.focus_productivity ?? false,
         focus_compliance: prefill?.focus_compliance ?? false,
         focus_callouts: prefill?.focus_callouts ?? false,
-        focus_recognition_milestones: prefill?.focus_recognition_milestones ?? false,
+        focus_recognition_milestones:
+            prefill?.focus_recognition_milestones ?? false,
         focus_growth_development: prefill?.focus_growth_development ?? false,
         focus_other: prefill?.focus_other ?? false,
         focus_other_notes: prefill?.focus_other_notes ?? '',
@@ -102,11 +145,15 @@ export default function CoachingSessionsCreate() {
         performance_description: prefill?.performance_description ?? '',
         // Root Causes
         root_cause_lack_of_skills: prefill?.root_cause_lack_of_skills ?? false,
-        root_cause_lack_of_clarity: prefill?.root_cause_lack_of_clarity ?? false,
-        root_cause_personal_issues: prefill?.root_cause_personal_issues ?? false,
-        root_cause_motivation_engagement: prefill?.root_cause_motivation_engagement ?? false,
+        root_cause_lack_of_clarity:
+            prefill?.root_cause_lack_of_clarity ?? false,
+        root_cause_personal_issues:
+            prefill?.root_cause_personal_issues ?? false,
+        root_cause_motivation_engagement:
+            prefill?.root_cause_motivation_engagement ?? false,
         root_cause_health_fatigue: prefill?.root_cause_health_fatigue ?? false,
-        root_cause_workload_process: prefill?.root_cause_workload_process ?? false,
+        root_cause_workload_process:
+            prefill?.root_cause_workload_process ?? false,
         root_cause_peer_conflict: prefill?.root_cause_peer_conflict ?? false,
         root_cause_others: prefill?.root_cause_others ?? false,
         root_cause_others_notes: prefill?.root_cause_others_notes ?? '',
@@ -130,22 +177,29 @@ export default function CoachingSessionsCreate() {
         try {
             const raw = sessionStorage.getItem('coaching_queue');
             if (raw) return JSON.parse(raw);
-        } catch { /* ignore */ }
+        } catch {
+            /* ignore */
+        }
         return [];
     }, []);
 
     // Clean up all per-agent form data when queue is empty
     useEffect(() => {
         if (getQueue().length === 0) {
-            Object.keys(sessionStorage).forEach(key => {
-                if (key.startsWith('coaching_form_')) sessionStorage.removeItem(key);
+            Object.keys(sessionStorage).forEach((key) => {
+                if (key.startsWith('coaching_form_'))
+                    sessionStorage.removeItem(key);
             });
         }
     }, [getQueue]);
 
     // ─── Auto-save draft logic ──────────────────────────────────────
-    const [draftId, setDraftId] = useState<number | null>(existingDraft?.id as number | null ?? null);
-    const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>(existingDraft ? 'saved' : 'idle');
+    const [draftId, setDraftId] = useState<number | null>(
+        (existingDraft?.id as number | null) ?? null,
+    );
+    const [autoSaveStatus, setAutoSaveStatus] = useState<
+        'idle' | 'saving' | 'saved' | 'error'
+    >(existingDraft ? 'saved' : 'idle');
     const [autoSaveError, setAutoSaveError] = useState<string | null>(null);
     const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
     const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -164,18 +218,26 @@ export default function CoachingSessionsCreate() {
     }, [data]);
 
     const isFormDirty = useCallback(() => {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { attachments: _a, ...currentWithout } = formDataRef.current;
+        const { attachments, ...currentWithout } = formDataRef.current;
         const initialParsed = JSON.parse(initialDataRef.current);
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { attachments: _b, ...initialWithout } = initialParsed;
-        return JSON.stringify(currentWithout) !== JSON.stringify(initialWithout);
+        const { attachments: initialAttachments, ...initialWithout } =
+            initialParsed;
+        return (
+            JSON.stringify(currentWithout) !== JSON.stringify(initialWithout)
+        );
     }, []);
 
     const performAutoSave = useCallback(async () => {
-        if (isSubmittingRef.current || !formDataRef.current.coachee_id || processing) return;
+        if (
+            isSubmittingRef.current ||
+            !formDataRef.current.coachee_id ||
+            processing
+        )
+            return;
 
-        const csrfToken = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content;
+        const csrfToken = document.querySelector<HTMLMetaElement>(
+            'meta[name="csrf-token"]',
+        )?.content;
         if (!csrfToken) return;
 
         // Abort any previous in-flight auto-save
@@ -187,7 +249,6 @@ export default function CoachingSessionsCreate() {
         isSavingRef.current = true;
 
         try {
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const { attachments, ...formFields } = formDataRef.current;
 
             const response = await fetch(sessionsAutoSaveDraft().url, {
@@ -195,7 +256,7 @@ export default function CoachingSessionsCreate() {
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRF-TOKEN': csrfToken,
-                    'Accept': 'application/json',
+                    Accept: 'application/json',
                 },
                 body: JSON.stringify({
                     ...formFields,
@@ -210,16 +271,23 @@ export default function CoachingSessionsCreate() {
                 setAutoSaveStatus('saved');
                 setAutoSaveError(null);
                 isSavingRef.current = false;
-                setLastSavedAt(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+                setLastSavedAt(
+                    new Date().toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                    }),
+                );
             } else {
                 const errorBody = await response.json().catch(() => null);
-                const message = errorBody?.message || `Server error (${response.status})`;
+                const message =
+                    errorBody?.message || `Server error (${response.status})`;
                 setAutoSaveError(message);
                 setAutoSaveStatus('error');
                 isSavingRef.current = false;
             }
         } catch (err) {
-            if (err instanceof DOMException && err.name === 'AbortError') return;
+            if (err instanceof DOMException && err.name === 'AbortError')
+                return;
             setAutoSaveError('Network error');
             setAutoSaveStatus('error');
             isSavingRef.current = false;
@@ -258,7 +326,8 @@ export default function CoachingSessionsCreate() {
         };
 
         window.addEventListener('beforeunload', handleBeforeUnload);
-        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+        return () =>
+            window.removeEventListener('beforeunload', handleBeforeUnload);
     }, [isFormDirty]);
 
     // Warn on Inertia in-app navigation
@@ -267,7 +336,12 @@ export default function CoachingSessionsCreate() {
             if (isSubmittingRef.current || isNavigatingRef.current) return true;
             if (isFormDirty()) {
                 const url = (event as CustomEvent).detail?.visit?.url;
-                pendingNavUrlRef.current = url instanceof URL ? url.href : (typeof url === 'string' ? url : null);
+                pendingNavUrlRef.current =
+                    url instanceof URL
+                        ? url.href
+                        : typeof url === 'string'
+                          ? url
+                          : null;
                 event.preventDefault();
                 setLeaveDialogOpen(true);
                 return false;
@@ -290,23 +364,24 @@ export default function CoachingSessionsCreate() {
     const handleModeSwitch = (mode: CoachingMode) => {
         if (mode === coachingMode) return;
         isNavigatingRef.current = true;
-        router.get(sessionsCreate.url({ query: { coaching_mode: mode } }), {}, { preserveState: false });
+        router.get(
+            sessionsCreate.url({ query: { coaching_mode: mode } }),
+            {},
+            { preserveState: false },
+        );
     };
 
     const [queueAgents, setQueueAgents] = useState(() => getQueue());
 
     const getFormFieldsToSave = () => {
-        return Object.fromEntries(
-            Object.entries(data).filter(
-                ([key]) =>
-                    ![
-                        'coachee_id',
-                        'attachments',
-                        'coaching_mode',
-                        'coach_id',
-                    ].includes(key),
-            ),
-        );
+        const {
+            coachee_id,
+            attachments,
+            coaching_mode,
+            coach_id,
+            ...formFields
+        } = data;
+        return formFields;
     };
 
     const [savingDraft, setSavingDraft] = useState(false);
@@ -321,26 +396,43 @@ export default function CoachingSessionsCreate() {
             transform((d) => ({ ...d, _method: 'patch' }));
             post(sessionsSubmit(draftId).url, {
                 forceFormData: true,
-                onError: () => { isSubmittingRef.current = false; transform((d) => d); },
+                onError: () => {
+                    isSubmittingRef.current = false;
+                    transform((d) => d);
+                },
                 onFinish: () => transform((d) => d),
                 onSuccess: () => {
                     const queue = getQueue();
                     if (queue.length > 0) {
-                        const updated = queue.map(a => a.id === selectedAgentId ? { ...a, done: true, status: 'done' as const } : a);
-                        const nextAgent = updated.find(a => !a.done);
+                        const updated = queue.map((a) =>
+                            a.id === selectedAgentId
+                                ? { ...a, done: true, status: 'done' as const }
+                                : a,
+                        );
+                        const nextAgent = updated.find((a) => !a.done);
                         if (nextAgent) {
-                            sessionStorage.setItem('coaching_queue', JSON.stringify(updated));
+                            sessionStorage.setItem(
+                                'coaching_queue',
+                                JSON.stringify(updated),
+                            );
                             setQueueAgents(updated);
                             if (selectedAgentId) {
-                                sessionStorage.setItem(`coaching_form_${selectedAgentId}`, JSON.stringify(getFormFieldsToSave()));
+                                sessionStorage.setItem(
+                                    `coaching_form_${selectedAgentId}`,
+                                    JSON.stringify(getFormFieldsToSave()),
+                                );
                             }
-                            router.visit(sessionsCreate().url + `?coachee_id=${nextAgent.id}`);
+                            router.visit(
+                                sessionsCreate().url +
+                                    `?coachee_id=${nextAgent.id}`,
+                            );
                             return;
                         } else {
                             sessionStorage.removeItem('coaching_queue');
                             setQueueAgents([]);
-                            Object.keys(sessionStorage).forEach(key => {
-                                if (key.startsWith('coaching_form_')) sessionStorage.removeItem(key);
+                            Object.keys(sessionStorage).forEach((key) => {
+                                if (key.startsWith('coaching_form_'))
+                                    sessionStorage.removeItem(key);
                             });
                         }
                     }
@@ -351,27 +443,43 @@ export default function CoachingSessionsCreate() {
 
         post(sessionsStore().url, {
             forceFormData: true,
-            onError: () => { isSubmittingRef.current = false; },
+            onError: () => {
+                isSubmittingRef.current = false;
+            },
             onSuccess: () => {
                 // Mark current agent as done (submitted) in the queue
                 const queue = getQueue();
                 if (queue.length > 0) {
-                    const updated = queue.map(a => a.id === selectedAgentId ? { ...a, done: true, status: 'done' as const } : a);
-                    const nextAgent = updated.find(a => !a.done);
+                    const updated = queue.map((a) =>
+                        a.id === selectedAgentId
+                            ? { ...a, done: true, status: 'done' as const }
+                            : a,
+                    );
+                    const nextAgent = updated.find((a) => !a.done);
                     if (nextAgent) {
-                        sessionStorage.setItem('coaching_queue', JSON.stringify(updated));
+                        sessionStorage.setItem(
+                            'coaching_queue',
+                            JSON.stringify(updated),
+                        );
                         setQueueAgents(updated);
                         // Keep completed agent's form data so they can review it later
                         if (selectedAgentId) {
-                            sessionStorage.setItem(`coaching_form_${selectedAgentId}`, JSON.stringify(getFormFieldsToSave()));
+                            sessionStorage.setItem(
+                                `coaching_form_${selectedAgentId}`,
+                                JSON.stringify(getFormFieldsToSave()),
+                            );
                         }
-                        router.visit(sessionsCreate().url + `?coachee_id=${nextAgent.id}`);
+                        router.visit(
+                            sessionsCreate().url +
+                                `?coachee_id=${nextAgent.id}`,
+                        );
                         return;
                     } else {
                         sessionStorage.removeItem('coaching_queue');
                         setQueueAgents([]);
-                        Object.keys(sessionStorage).forEach(key => {
-                            if (key.startsWith('coaching_form_')) sessionStorage.removeItem(key);
+                        Object.keys(sessionStorage).forEach((key) => {
+                            if (key.startsWith('coaching_form_'))
+                                sessionStorage.removeItem(key);
                         });
                     }
                 }
@@ -384,28 +492,44 @@ export default function CoachingSessionsCreate() {
         setSavingDraft(true);
         post(sessionsDraft().url, {
             forceFormData: true,
-            onError: () => { isSubmittingRef.current = false; },
+            onError: () => {
+                isSubmittingRef.current = false;
+            },
             onFinish: () => setSavingDraft(false),
             onSuccess: () => {
                 // Mark current agent as draft in the queue and move to next
                 const queue = getQueue();
                 if (queue.length > 0) {
-                    const updated = queue.map(a => a.id === selectedAgentId ? { ...a, done: true, status: 'draft' as const } : a);
-                    const nextAgent = updated.find(a => !a.done);
+                    const updated = queue.map((a) =>
+                        a.id === selectedAgentId
+                            ? { ...a, done: true, status: 'draft' as const }
+                            : a,
+                    );
+                    const nextAgent = updated.find((a) => !a.done);
                     if (nextAgent) {
-                        sessionStorage.setItem('coaching_queue', JSON.stringify(updated));
+                        sessionStorage.setItem(
+                            'coaching_queue',
+                            JSON.stringify(updated),
+                        );
                         setQueueAgents(updated);
                         if (selectedAgentId) {
-                            sessionStorage.setItem(`coaching_form_${selectedAgentId}`, JSON.stringify(getFormFieldsToSave()));
+                            sessionStorage.setItem(
+                                `coaching_form_${selectedAgentId}`,
+                                JSON.stringify(getFormFieldsToSave()),
+                            );
                         }
                         isNavigatingRef.current = true;
-                        router.visit(sessionsCreate().url + `?coachee_id=${nextAgent.id}`);
+                        router.visit(
+                            sessionsCreate().url +
+                                `?coachee_id=${nextAgent.id}`,
+                        );
                         return;
                     } else {
                         sessionStorage.removeItem('coaching_queue');
                         setQueueAgents([]);
-                        Object.keys(sessionStorage).forEach(key => {
-                            if (key.startsWith('coaching_form_')) sessionStorage.removeItem(key);
+                        Object.keys(sessionStorage).forEach((key) => {
+                            if (key.startsWith('coaching_form_'))
+                                sessionStorage.removeItem(key);
                         });
                     }
                 }
@@ -418,37 +542,53 @@ export default function CoachingSessionsCreate() {
         setSavingDraft(true);
         post(sessionsDraft().url, {
             forceFormData: true,
-            onError: () => { isSubmittingRef.current = false; },
+            onError: () => {
+                isSubmittingRef.current = false;
+            },
             onFinish: () => setSavingDraft(false),
             onSuccess: async () => {
                 const queue = getQueue();
-                const remainingAgents = queue.filter(a => a.id !== selectedAgentId && !a.done);
+                const remainingAgents = queue.filter(
+                    (a) => a.id !== selectedAgentId && !a.done,
+                );
                 const failedAgents: string[] = [];
 
                 if (remainingAgents.length > 0) {
-                    const csrfToken = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content;
+                    const csrfToken = document.querySelector<HTMLMetaElement>(
+                        'meta[name="csrf-token"]',
+                    )?.content;
                     if (csrfToken) {
                         for (const agent of remainingAgents) {
                             try {
                                 // Use saved form data if available, otherwise minimal data
-                                const savedRaw = sessionStorage.getItem(`coaching_form_${agent.id}`);
-                                const savedData = savedRaw ? JSON.parse(savedRaw) : {};
+                                const savedRaw = sessionStorage.getItem(
+                                    `coaching_form_${agent.id}`,
+                                );
+                                const savedData = savedRaw
+                                    ? JSON.parse(savedRaw)
+                                    : {};
 
-                                const response = await fetch(sessionsAutoSaveDraft().url, {
-                                    method: 'POST',
-                                    headers: {
-                                        'Content-Type': 'application/json',
-                                        'X-CSRF-TOKEN': csrfToken,
-                                        'Accept': 'application/json',
+                                const response = await fetch(
+                                    sessionsAutoSaveDraft().url,
+                                    {
+                                        method: 'POST',
+                                        headers: {
+                                            'Content-Type': 'application/json',
+                                            'X-CSRF-TOKEN': csrfToken,
+                                            Accept: 'application/json',
+                                        },
+                                        body: JSON.stringify({
+                                            coachee_id: agent.id,
+                                            coaching_mode: data.coaching_mode,
+                                            coach_id:
+                                                data.coach_id || undefined,
+                                            session_date:
+                                                savedData.session_date ||
+                                                data.session_date,
+                                            ...savedData,
+                                        }),
                                     },
-                                    body: JSON.stringify({
-                                        coachee_id: agent.id,
-                                        coaching_mode: data.coaching_mode,
-                                        coach_id: data.coach_id || undefined,
-                                        session_date: savedData.session_date || data.session_date,
-                                        ...savedData,
-                                    }),
-                                });
+                                );
 
                                 if (!response.ok) {
                                     failedAgents.push(agent.name);
@@ -461,13 +601,16 @@ export default function CoachingSessionsCreate() {
                 }
 
                 if (failedAgents.length > 0) {
-                    toast.error(`Failed to save drafts for: ${failedAgents.join(', ')}. Please save them individually.`);
+                    toast.error(
+                        `Failed to save drafts for: ${failedAgents.join(', ')}. Please save them individually.`,
+                    );
                 }
 
                 // Clear queue entirely
                 sessionStorage.removeItem('coaching_queue');
-                Object.keys(sessionStorage).forEach(key => {
-                    if (key.startsWith('coaching_form_')) sessionStorage.removeItem(key);
+                Object.keys(sessionStorage).forEach((key) => {
+                    if (key.startsWith('coaching_form_'))
+                        sessionStorage.removeItem(key);
                 });
 
                 isNavigatingRef.current = true;
@@ -483,41 +626,73 @@ export default function CoachingSessionsCreate() {
 
         // Save current agent's form data before switching
         if (selectedAgentId) {
-            sessionStorage.setItem(`coaching_form_${selectedAgentId}`, JSON.stringify(getFormFieldsToSave()));
+            sessionStorage.setItem(
+                `coaching_form_${selectedAgentId}`,
+                JSON.stringify(getFormFieldsToSave()),
+            );
         }
         isNavigatingRef.current = true;
         router.visit(sessionsCreate().url + `?coachee_id=${agentId}`);
     };
 
-    const handleAddAgentToQueue = (agent: { id: number; first_name?: string; last_name?: string; name?: string; active_schedule?: { campaign?: { name?: string } } | null }) => {
+    const handleAddAgentToQueue = (agent: {
+        id: number;
+        first_name?: string;
+        last_name?: string;
+        name?: string;
+        active_schedule?: { campaign?: { name?: string } } | null;
+    }) => {
         const queue = getQueue();
         // Don't add duplicates
-        if (queue.some(a => a.id === agent.id)) return;
+        if (queue.some((a) => a.id === agent.id)) return;
 
-        const agentName = agent.name ?? `${agent.first_name ?? ''} ${agent.last_name ?? ''}`.trim();
+        const agentName =
+            agent.name ??
+            `${agent.first_name ?? ''} ${agent.last_name ?? ''}`.trim();
 
         // If no queue exists yet, create one with the current agent + the new agent
         if (queue.length === 0 && selectedAgentId) {
-            const currentAgent = agents.find(a => a.id === selectedAgentId);
+            const currentAgent = agents.find((a) => a.id === selectedAgentId);
             const currentName = currentAgent
                 ? `${currentAgent.first_name ?? ''} ${currentAgent.last_name ?? ''}`.trim()
                 : 'Unknown';
             const newQueue: QueueAgent[] = [
-                { id: selectedAgentId, name: currentName, coaching_status: '', done: false },
-                { id: agent.id, name: agentName, coaching_status: '', done: false },
+                {
+                    id: selectedAgentId,
+                    name: currentName,
+                    coaching_status: '',
+                    done: false,
+                },
+                {
+                    id: agent.id,
+                    name: agentName,
+                    coaching_status: '',
+                    done: false,
+                },
             ];
             sessionStorage.setItem('coaching_queue', JSON.stringify(newQueue));
             setQueueAgents(newQueue);
         } else {
             // Add to existing queue
-            const updated = [...queue, { id: agent.id, name: agentName, coaching_status: '', done: false }];
+            const updated = [
+                ...queue,
+                {
+                    id: agent.id,
+                    name: agentName,
+                    coaching_status: '',
+                    done: false,
+                },
+            ];
             sessionStorage.setItem('coaching_queue', JSON.stringify(updated));
             setQueueAgents(updated);
         }
 
         // Save current form data before switching
         if (selectedAgentId) {
-            sessionStorage.setItem(`coaching_form_${selectedAgentId}`, JSON.stringify(getFormFieldsToSave()));
+            sessionStorage.setItem(
+                `coaching_form_${selectedAgentId}`,
+                JSON.stringify(getFormFieldsToSave()),
+            );
         }
 
         isNavigatingRef.current = true;
@@ -530,14 +705,15 @@ export default function CoachingSessionsCreate() {
         autoSaveAbortRef.current?.abort();
 
         const queue = getQueue();
-        const updated = queue.filter(a => a.id !== agentId);
+        const updated = queue.filter((a) => a.id !== agentId);
         sessionStorage.removeItem(`coaching_form_${agentId}`);
 
         if (updated.length === 0) {
             // No agents left — dissolve the queue entirely
             sessionStorage.removeItem('coaching_queue');
-            Object.keys(sessionStorage).forEach(key => {
-                if (key.startsWith('coaching_form_')) sessionStorage.removeItem(key);
+            Object.keys(sessionStorage).forEach((key) => {
+                if (key.startsWith('coaching_form_'))
+                    sessionStorage.removeItem(key);
             });
             setQueueAgents([]);
         } else if (updated.length === 1) {
@@ -545,21 +721,26 @@ export default function CoachingSessionsCreate() {
             const remainingAgent = updated[0];
             sessionStorage.removeItem('coaching_queue');
             // Only clear OTHER agents' form data, keep the remaining agent's data
-            Object.keys(sessionStorage).forEach(key => {
-                if (key.startsWith('coaching_form_') && key !== `coaching_form_${remainingAgent.id}`) {
+            Object.keys(sessionStorage).forEach((key) => {
+                if (
+                    key.startsWith('coaching_form_') &&
+                    key !== `coaching_form_${remainingAgent.id}`
+                ) {
                     sessionStorage.removeItem(key);
                 }
             });
             setQueueAgents([]);
             if (remainingAgent.id !== selectedAgentId) {
                 isNavigatingRef.current = true;
-                router.visit(sessionsCreate().url + `?coachee_id=${remainingAgent.id}`);
+                router.visit(
+                    sessionsCreate().url + `?coachee_id=${remainingAgent.id}`,
+                );
             }
         } else if (agentId === selectedAgentId) {
             // Removing the currently active agent — save form data, then switch to next
             sessionStorage.setItem('coaching_queue', JSON.stringify(updated));
             setQueueAgents(updated);
-            const next = updated.find(a => !a.done) ?? updated[0];
+            const next = updated.find((a) => !a.done) ?? updated[0];
             isNavigatingRef.current = true;
             router.visit(sessionsCreate().url + `?coachee_id=${next.id}`);
         } else {
@@ -574,19 +755,32 @@ export default function CoachingSessionsCreate() {
             <Head title={title} />
 
             {/* Unsaved changes confirmation dialog */}
-            <Dialog open={leaveDialogOpen} onOpenChange={(open) => { if (!open) setLeaveDialogOpen(false); }}>
+            <Dialog
+                open={leaveDialogOpen}
+                onOpenChange={(open) => {
+                    if (!open) setLeaveDialogOpen(false);
+                }}
+            >
                 <DialogContent className="max-w-[90vw] sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle>Unsaved Changes</DialogTitle>
                         <DialogDescription>
-                            You have unsaved changes. Your draft has been auto-saved, but any recent changes may be lost. Leave anyway?
+                            You have unsaved changes. Your draft has been
+                            auto-saved, but any recent changes may be lost.
+                            Leave anyway?
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter className="flex gap-2 sm:justify-end">
-                        <Button variant="outline" onClick={() => setLeaveDialogOpen(false)}>
+                        <Button
+                            variant="outline"
+                            onClick={() => setLeaveDialogOpen(false)}
+                        >
                             Stay
                         </Button>
-                        <Button variant="destructive" onClick={handleConfirmLeave}>
+                        <Button
+                            variant="destructive"
+                            onClick={handleConfirmLeave}
+                        >
                             Leave anyway
                         </Button>
                     </DialogFooter>
@@ -594,7 +788,10 @@ export default function CoachingSessionsCreate() {
             </Dialog>
 
             <div className="relative mx-auto flex w-full max-w-4xl flex-col gap-4 rounded-xl p-3 md:p-6">
-                <LoadingOverlay isLoading={isPageLoading || processing} message={processing ? 'Saving session...' : undefined} />
+                <LoadingOverlay
+                    isLoading={isPageLoading || processing}
+                    message={processing ? 'Saving session...' : undefined}
+                />
 
                 <PageHeader
                     title="Create Coaching Session"
@@ -610,20 +807,27 @@ export default function CoachingSessionsCreate() {
                 />
 
                 {queueAgents.length > 0 && (
-                    <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
+                    <div className="space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-3">
                         <div className="flex items-center justify-between">
                             <span className="flex items-center gap-2 text-sm font-medium">
                                 <Users className="h-4 w-4 text-primary" />
-                                Bulk Coaching Queue ({queueAgents.filter(a => a.done).length}/{queueAgents.length} completed)
+                                Bulk Coaching Queue (
+                                {queueAgents.filter((a) => a.done).length}/
+                                {queueAgents.length} completed)
                             </span>
                             <button
                                 type="button"
-                                className="text-xs text-muted-foreground hover:text-foreground underline"
+                                className="text-xs text-muted-foreground underline hover:text-foreground"
                                 onClick={() => {
                                     sessionStorage.removeItem('coaching_queue');
-                                    Object.keys(sessionStorage).forEach(key => {
-                                        if (key.startsWith('coaching_form_')) sessionStorage.removeItem(key);
-                                    });
+                                    Object.keys(sessionStorage).forEach(
+                                        (key) => {
+                                            if (
+                                                key.startsWith('coaching_form_')
+                                            )
+                                                sessionStorage.removeItem(key);
+                                        },
+                                    );
                                     setQueueAgents([]);
                                 }}
                             >
@@ -632,21 +836,30 @@ export default function CoachingSessionsCreate() {
                         </div>
                         <div className="flex flex-wrap gap-2">
                             {queueAgents.map((agent) => (
-                                <div key={agent.id} className="flex items-center gap-0">
+                                <div
+                                    key={agent.id}
+                                    className="flex items-center gap-0"
+                                >
                                     <button
                                         type="button"
                                         disabled={agent.id === selectedAgentId}
-                                        onClick={() => agent.id !== selectedAgentId && handleSwitchToAgent(agent.id)}
-                                        className={`flex items-center gap-1.5 rounded-l-md border px-2.5 py-1.5 text-xs transition-colors ${agent.id === selectedAgentId
-                                            ? 'border-primary bg-primary/10 font-medium text-primary'
-                                            : agent.done && agent.status === 'draft'
-                                                ? 'border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-400 cursor-pointer hover:border-blue-400 hover:bg-blue-100 dark:hover:bg-blue-950/50'
-                                                : agent.done
-                                                    ? 'border-green-300 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950/30 dark:text-green-400 cursor-pointer hover:border-green-400 hover:bg-green-100 dark:hover:bg-green-950/50'
-                                                    : 'border-muted-foreground/20 hover:border-primary/50 hover:bg-primary/5 cursor-pointer'
-                                            }`}
+                                        onClick={() =>
+                                            agent.id !== selectedAgentId &&
+                                            handleSwitchToAgent(agent.id)
+                                        }
+                                        className={`flex items-center gap-1.5 rounded-l-md border px-2.5 py-1.5 text-xs transition-colors ${
+                                            agent.id === selectedAgentId
+                                                ? 'border-primary bg-primary/10 font-medium text-primary'
+                                                : agent.done &&
+                                                    agent.status === 'draft'
+                                                  ? 'cursor-pointer border-blue-300 bg-blue-50 text-blue-700 hover:border-blue-400 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-400 dark:hover:bg-blue-950/50'
+                                                  : agent.done
+                                                    ? 'cursor-pointer border-green-300 bg-green-50 text-green-700 hover:border-green-400 hover:bg-green-100 dark:border-green-800 dark:bg-green-950/30 dark:text-green-400 dark:hover:bg-green-950/50'
+                                                    : 'cursor-pointer border-muted-foreground/20 hover:border-primary/50 hover:bg-primary/5'
+                                        }`}
                                     >
-                                        {agent.done && agent.status === 'draft' ? (
+                                        {agent.done &&
+                                        agent.status === 'draft' ? (
                                             <Save className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
                                         ) : agent.done ? (
                                             <CheckCircle2 className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
@@ -656,17 +869,35 @@ export default function CoachingSessionsCreate() {
                                             <Circle className="h-3.5 w-3.5" />
                                         )}
                                         <span>{agent.name}</span>
-                                        {agent.coaching_status && !agent.done && (
-                                            <Badge variant={agent.coaching_status === 'Please Coach ASAP' ? 'destructive' : 'secondary'} className="px-1 py-0 text-[9px]">
-                                                {agent.coaching_status}
-                                            </Badge>
-                                        )}
-                                        {agent.done && agent.status === 'draft' && (
-                                            <Badge variant="secondary" className="px-1 py-0 text-[9px] bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400">Draft</Badge>
-                                        )}
-                                        {agent.done && agent.status !== 'draft' && (
-                                            <span className="text-[9px] text-green-600 dark:text-green-400">Done</span>
-                                        )}
+                                        {agent.coaching_status &&
+                                            !agent.done && (
+                                                <Badge
+                                                    variant={
+                                                        agent.coaching_status ===
+                                                        'Please Coach ASAP'
+                                                            ? 'destructive'
+                                                            : 'secondary'
+                                                    }
+                                                    className="px-1 py-0 text-[9px]"
+                                                >
+                                                    {agent.coaching_status}
+                                                </Badge>
+                                            )}
+                                        {agent.done &&
+                                            agent.status === 'draft' && (
+                                                <Badge
+                                                    variant="secondary"
+                                                    className="bg-blue-100 px-1 py-0 text-[9px] text-blue-700 dark:bg-blue-950 dark:text-blue-400"
+                                                >
+                                                    Draft
+                                                </Badge>
+                                            )}
+                                        {agent.done &&
+                                            agent.status !== 'draft' && (
+                                                <span className="text-[9px] text-green-600 dark:text-green-400">
+                                                    Done
+                                                </span>
+                                            )}
                                     </button>
                                     <button
                                         type="button"
@@ -674,14 +905,16 @@ export default function CoachingSessionsCreate() {
                                             e.stopPropagation();
                                             handleRemoveFromQueue(agent.id);
                                         }}
-                                        className={`flex items-center rounded-r-md border border-l-0 px-1 py-1.5 text-xs transition-colors hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-950/30 dark:hover:text-red-400 ${agent.id === selectedAgentId
-                                            ? 'border-primary text-primary/50'
-                                            : agent.done && agent.status === 'draft'
-                                                ? 'border-blue-300 text-blue-600/50 dark:border-blue-800 dark:text-blue-400/50'
-                                                : agent.done
+                                        className={`flex items-center rounded-r-md border border-l-0 px-1 py-1.5 text-xs transition-colors hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-950/30 dark:hover:text-red-400 ${
+                                            agent.id === selectedAgentId
+                                                ? 'border-primary text-primary/50'
+                                                : agent.done &&
+                                                    agent.status === 'draft'
+                                                  ? 'border-blue-300 text-blue-600/50 dark:border-blue-800 dark:text-blue-400/50'
+                                                  : agent.done
                                                     ? 'border-green-300 text-green-600/50 dark:border-green-800 dark:text-green-400/50'
                                                     : 'border-muted-foreground/20 text-muted-foreground/50'
-                                            }`}
+                                        }`}
                                         title={`Remove ${agent.name} from queue`}
                                     >
                                         <X className="h-3 w-3" />
@@ -693,14 +926,15 @@ export default function CoachingSessionsCreate() {
                 )}
 
                 {isAdmin && (
-                    <div className="flex rounded-lg border bg-muted/30 p-1 w-fit">
+                    <div className="flex w-fit rounded-lg border bg-muted/30 p-1">
                         <button
                             type="button"
                             onClick={() => handleModeSwitch('assign')}
-                            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${coachingMode === 'assign'
-                                ? 'bg-background text-foreground shadow-sm'
-                                : 'text-muted-foreground hover:text-foreground'
-                                }`}
+                            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                                coachingMode === 'assign'
+                                    ? 'bg-background text-foreground shadow-sm'
+                                    : 'text-muted-foreground hover:text-foreground'
+                            }`}
                         >
                             <Users className="h-4 w-4" />
                             Assign TL → Agent
@@ -708,10 +942,11 @@ export default function CoachingSessionsCreate() {
                         <button
                             type="button"
                             onClick={() => handleModeSwitch('direct')}
-                            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${coachingMode === 'direct'
-                                ? 'bg-background text-foreground shadow-sm'
-                                : 'text-muted-foreground hover:text-foreground'
-                                }`}
+                            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                                coachingMode === 'direct'
+                                    ? 'bg-background text-foreground shadow-sm'
+                                    : 'text-muted-foreground hover:text-foreground'
+                            }`}
                         >
                             <UserPlus className="h-4 w-4" />
                             Coach a Team Lead
@@ -734,12 +969,12 @@ export default function CoachingSessionsCreate() {
                         showAgentSelect={true}
                         selectedAgentId={selectedAgentId}
                         onAgentAddToQueue={handleAddAgentToQueue}
-                        queueAgentIds={queueAgents.map(a => a.id)}
+                        queueAgentIds={queueAgents.map((a) => a.id)}
                         coachedThisWeekIds={coachedThisWeekIds ?? []}
                         draftedThisWeekIds={draftedThisWeekIds ?? []}
                     />
 
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-6">
+                    <div className="flex flex-col items-start justify-between gap-3 pt-6 sm:flex-row sm:items-center">
                         {/* Auto-save status indicator */}
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                             {autoSaveStatus === 'saving' && (
@@ -751,13 +986,20 @@ export default function CoachingSessionsCreate() {
                             {autoSaveStatus === 'saved' && lastSavedAt && (
                                 <>
                                     <Check className="h-3.5 w-3.5 text-green-500" />
-                                    <span>Draft auto-saved at {lastSavedAt}</span>
+                                    <span>
+                                        Draft auto-saved at {lastSavedAt}
+                                    </span>
                                 </>
                             )}
                             {autoSaveStatus === 'error' && (
                                 <>
                                     <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
-                                    <span>Auto-save failed{autoSaveError ? `: ${autoSaveError}` : ''}</span>
+                                    <span>
+                                        Auto-save failed
+                                        {autoSaveError
+                                            ? `: ${autoSaveError}`
+                                            : ''}
+                                    </span>
                                 </>
                             )}
                         </div>
@@ -773,36 +1015,60 @@ export default function CoachingSessionsCreate() {
                                     <Button
                                         type="button"
                                         variant="secondary"
-                                        disabled={processing || savingDraft || !data.coachee_id}
+                                        disabled={
+                                            processing ||
+                                            savingDraft ||
+                                            !data.coachee_id
+                                        }
                                         onClick={handleSaveDraft}
                                     >
                                         <Save className="mr-2 h-4 w-4" />
-                                        {savingDraft ? 'Saving...' : 'Save Draft & Next'}
+                                        {savingDraft
+                                            ? 'Saving...'
+                                            : 'Save Draft & Next'}
                                     </Button>
                                     <Button
                                         type="button"
                                         variant="secondary"
-                                        disabled={processing || savingDraft || !data.coachee_id}
+                                        disabled={
+                                            processing ||
+                                            savingDraft ||
+                                            !data.coachee_id
+                                        }
                                         onClick={handleSaveAllAsDraft}
                                         className="border-dashed"
                                     >
                                         <SaveAll className="mr-2 h-4 w-4" />
-                                        {savingDraft ? 'Saving...' : 'Save All as Draft'}
+                                        {savingDraft
+                                            ? 'Saving...'
+                                            : 'Save All as Draft'}
                                     </Button>
                                 </>
                             ) : (
                                 <Button
                                     type="button"
                                     variant="secondary"
-                                    disabled={processing || savingDraft || !data.coachee_id}
+                                    disabled={
+                                        processing ||
+                                        savingDraft ||
+                                        !data.coachee_id
+                                    }
                                     onClick={handleSaveDraft}
                                 >
                                     <Save className="mr-2 h-4 w-4" />
-                                    {savingDraft ? 'Saving Draft...' : 'Save as Draft'}
+                                    {savingDraft
+                                        ? 'Saving Draft...'
+                                        : 'Save as Draft'}
                                 </Button>
                             )}
-                            <Button type="submit" disabled={processing || savingDraft} className="bg-blue-600 hover:bg-blue-700 text-white">
-                                {processing ? 'Saving...' : 'Create Coaching Session'}
+                            <Button
+                                type="submit"
+                                disabled={processing || savingDraft}
+                                className="bg-blue-600 text-white hover:bg-blue-700"
+                            >
+                                {processing
+                                    ? 'Saving...'
+                                    : 'Create Coaching Session'}
                             </Button>
                         </div>
                     </div>
