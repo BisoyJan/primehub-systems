@@ -296,9 +296,17 @@ export default function CoachingSessionsCreate() {
     const [queueAgents, setQueueAgents] = useState(() => getQueue());
 
     const getFormFieldsToSave = () => {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { coachee_id, attachments, coaching_mode, coach_id, ...formFields } = data;
-        return formFields;
+        return Object.fromEntries(
+            Object.entries(data).filter(
+                ([key]) =>
+                    ![
+                        'coachee_id',
+                        'attachments',
+                        'coaching_mode',
+                        'coach_id',
+                    ].includes(key),
+            ),
+        );
     };
 
     const [savingDraft, setSavingDraft] = useState(false);
