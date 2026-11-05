@@ -1,18 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { Head, Link, router, useForm } from '@inertiajs/react';
-import { format, parseISO, eachDayOfInterval, isWeekend } from 'date-fns';
-import AppLayout from '@/layouts/app-layout';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Can } from '@/components/authorization';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Switch } from '@/components/ui/switch';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
     Attachment,
     AttachmentAction,
@@ -22,7 +9,11 @@ import {
     AttachmentMedia,
     AttachmentTitle,
 } from '@/components/ui/attachment';
-import { useInitials } from '@/hooks/use-initials';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
     Dialog,
     DialogContent,
@@ -31,12 +22,67 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { ArrowLeft, Check, X, Ban, Info, Trash2, CheckCircle, Clock, UserCheck, XCircle, Shield, Edit, AlertTriangle, Calendar, FileImage, FileText, Eye, ExternalLink, ZoomIn, ZoomOut, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
-import { toast } from 'sonner';
+import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
+import { useInitials } from '@/hooks/use-initials';
 import { usePermission } from '@/hooks/use-permission';
-import { index as leaveIndexRoute, approve as leaveApproveRoute, deny as leaveDenyRoute, partialDeny as leavePartialDenyRoute, cancel as leaveCancelRoute, destroy as leaveDestroyRoute, edit as leaveEditRoute, medicalCert as leaveMedicalCertRoute, documents as leaveDocumentRoute, updateDayStatuses as leaveUpdateDayStatusesRoute, revertDenial as leaveRevertDenialRoute } from '@/routes/leave-requests';
+import AppLayout from '@/layouts/app-layout';
+import {
+    approve as leaveApproveRoute,
+    cancel as leaveCancelRoute,
+    deny as leaveDenyRoute,
+    destroy as leaveDestroyRoute,
+    documents as leaveDocumentRoute,
+    edit as leaveEditRoute,
+    index as leaveIndexRoute,
+    medicalCert as leaveMedicalCertRoute,
+    partialDeny as leavePartialDenyRoute,
+    revertDenial as leaveRevertDenialRoute,
+    updateDayStatuses as leaveUpdateDayStatusesRoute,
+} from '@/routes/leave-requests';
 import type { LeaveRequestDocument } from '@/types';
-import DayStatusAssignment, { type DayStatus, VL_STATUS_OPTIONS, SL_STATUS_OPTIONS } from './Components/DayStatusAssignment';
+import { Head, Link, router, useForm } from '@inertiajs/react';
+import { eachDayOfInterval, format, isWeekend, parseISO } from 'date-fns';
+import {
+    AlertTriangle,
+    ArrowLeft,
+    Ban,
+    Calendar,
+    Check,
+    CheckCircle,
+    ChevronLeft,
+    ChevronRight,
+    Clock,
+    Edit,
+    ExternalLink,
+    Eye,
+    FileImage,
+    FileText,
+    Info,
+    RotateCcw,
+    Shield,
+    Trash2,
+    UserCheck,
+    X,
+    XCircle,
+    ZoomIn,
+    ZoomOut,
+} from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { toast } from 'sonner';
+import DayStatusAssignment, {
+    type DayStatus,
+    SL_STATUS_OPTIONS,
+    VL_STATUS_OPTIONS,
+} from './Components/DayStatusAssignment';
 
 const isImageDocument = (document: LeaveRequestDocument): boolean => {
     if (document.mime_type) {
@@ -59,15 +105,22 @@ const formatFileSize = (bytes: number | null): string | null => {
 };
 
 const formatDocumentDescription = (document: LeaveRequestDocument): string => {
-    const extension = document.original_filename.split('.').pop()?.toUpperCase();
+    const extension = document.original_filename
+        .split('.')
+        .pop()
+        ?.toUpperCase();
     const size = formatFileSize(document.file_size);
     return [extension, size].filter(Boolean).join(' · ') || 'Document';
 };
 
-const getFirstValidationError = (errors: Record<string, unknown>): string | null => {
+const getFirstValidationError = (
+    errors: Record<string, unknown>,
+): string | null => {
     for (const value of Object.values(errors)) {
         if (Array.isArray(value)) {
-            const message = value.find((item) => typeof item === 'string' && item.trim().length > 0);
+            const message = value.find(
+                (item) => typeof item === 'string' && item.trim().length > 0,
+            );
             if (typeof message === 'string' && message.trim()) {
                 return message;
             }
@@ -203,7 +256,17 @@ interface LeaveRequestDayRecord {
 
 interface SuggestedDayStatus {
     date: string;
-    status: 'pending' | 'sl_credited' | 'ncns' | 'advised_absence' | 'vl_credited' | 'upto' | 'spl_credited' | 'absent' | 'loa_credited' | 'loa_unpaid';
+    status:
+        | 'pending'
+        | 'sl_credited'
+        | 'ncns'
+        | 'advised_absence'
+        | 'vl_credited'
+        | 'upto'
+        | 'spl_credited'
+        | 'absent'
+        | 'loa_credited'
+        | 'loa_unpaid';
     notes: string | null;
     is_half_day?: boolean;
 }
@@ -223,11 +286,24 @@ interface Props {
     canViewMedicalCert?: boolean;
     earlierConflicts?: EarlierConflict[];
     absenceWindowInfo?: AbsenceWindowInfo | null;
-    blEligibility?: { is_eligible: boolean; eligibility_date: string | null } | null;
+    blEligibility?: {
+        is_eligible: boolean;
+        eligibility_date: string | null;
+    } | null;
     activeAttendancePoints?: ActiveAttendancePoint[];
     creditPreview?: CreditPreview | null;
-    splCreditPreview?: { should_deduct: boolean; credits_to_deduct: number; available: number; insufficient: boolean } | null;
-    splCreditsSummary?: { total: number; used: number; balance: number; year: number } | null;
+    splCreditPreview?: {
+        should_deduct: boolean;
+        credits_to_deduct: number;
+        available: number;
+        insufficient: boolean;
+    } | null;
+    splCreditsSummary?: {
+        total: number;
+        used: number;
+        balance: number;
+        year: number;
+    } | null;
     leaveRequestDays?: LeaveRequestDayRecord[] | null;
     suggestedDayStatuses?: SuggestedDayStatus[] | null;
     isShortNotice?: boolean;
@@ -274,10 +350,12 @@ export default function Show({
     const [showPartialDenyDialog, setShowPartialDenyDialog] = useState(false);
     const [showMedicalCertDialog, setShowMedicalCertDialog] = useState(false);
     const [medicalCertZoom, setMedicalCertZoom] = useState(100);
-    const [selectedDocument, setSelectedDocument] = useState<LeaveRequestDocument | null>(null);
+    const [selectedDocument, setSelectedDocument] =
+        useState<LeaveRequestDocument | null>(null);
 
     // Zoom controls
-    const handleZoomChange = (value: number) => setMedicalCertZoom(Math.min(300, Math.max(25, value)));
+    const handleZoomChange = (value: number) =>
+        setMedicalCertZoom(Math.min(300, Math.max(25, value)));
     const handleZoomReset = () => setMedicalCertZoom(100);
 
     // Reset zoom when dialog opens
@@ -298,7 +376,9 @@ export default function Show({
         if (selectedDocumentIndex === -1 || documentList.length === 0) {
             return;
         }
-        const nextIndex = (selectedDocumentIndex + offset + documentList.length) % documentList.length;
+        const nextIndex =
+            (selectedDocumentIndex + offset + documentList.length) %
+            documentList.length;
         setSelectedDocument(documentList[nextIndex]);
         setMedicalCertZoom(100);
     };
@@ -310,11 +390,18 @@ export default function Show({
     const [showAdminCancelDialog, setShowAdminCancelDialog] = useState(false);
     const [showRevertDenialDialog, setShowRevertDenialDialog] = useState(false);
     const [shortNoticeOverride, setShortNoticeOverride] = useState(false);
-    const [showAdjustForWorkDialog, setShowAdjustForWorkDialog] = useState(false);
-    const [selectedApprovedDates, setSelectedApprovedDates] = useState<string[]>([]);
-    const [showAttendancePointsDialog, setShowAttendancePointsDialog] = useState(false);
-    const [showEditDayStatusesDialog, setShowEditDayStatusesDialog] = useState(false);
-    const [editDayStatusesError, setEditDayStatusesError] = useState<string | null>(null);
+    const [showAdjustForWorkDialog, setShowAdjustForWorkDialog] =
+        useState(false);
+    const [selectedApprovedDates, setSelectedApprovedDates] = useState<
+        string[]
+    >([]);
+    const [showAttendancePointsDialog, setShowAttendancePointsDialog] =
+        useState(false);
+    const [showEditDayStatusesDialog, setShowEditDayStatusesDialog] =
+        useState(false);
+    const [editDayStatusesError, setEditDayStatusesError] = useState<
+        string | null
+    >(null);
     const [isEditingPartialDenial, setIsEditingPartialDenial] = useState(false);
     const { can } = usePermission();
     const getInitials = useInitials();
@@ -330,19 +417,31 @@ export default function Show({
     // SL with Undertime (partial-day absence) restricts options to "Partial-day Absence" only —
     // employee worked partial hours; existing attendance is preserved, no credits consumed,
     // and the resulting attendance point is auto-excused via medical certificate.
-    const slStatusOptions = isSl && leaveRequest.sl_with_undertime
-        ? [...SL_STATUS_OPTIONS].filter((o) => o.value === 'partial_day_absence')
-        : undefined;
+    const slStatusOptions =
+        isSl && leaveRequest.sl_with_undertime
+            ? [...SL_STATUS_OPTIONS].filter(
+                  (o) => o.value === 'partial_day_absence',
+              )
+            : undefined;
 
     // Check if there are pre-stored day statuses from a previous approver (TL/Admin)
-    const hasPreStoredDayStatuses = hasDayStatuses && leaveRequest.status === 'pending' && leaveRequestDays && leaveRequestDays.length > 0;
-    const preStoredAttribution = hasPreStoredDayStatuses && leaveRequestDays![0]?.assigned_by
-        ? `Pre-assigned by ${leaveRequestDays![0].assigned_by}${leaveRequestDays![0].assigned_by_role ? ` (${leaveRequestDays![0].assigned_by_role})` : ''}`
-        : null;
+    const hasPreStoredDayStatuses =
+        hasDayStatuses &&
+        leaveRequest.status === 'pending' &&
+        leaveRequestDays &&
+        leaveRequestDays.length > 0;
+    const preStoredAttribution =
+        hasPreStoredDayStatuses && leaveRequestDays![0]?.assigned_by
+            ? `Pre-assigned by ${leaveRequestDays![0].assigned_by}${leaveRequestDays![0].assigned_by_role ? ` (${leaveRequestDays![0].assigned_by_role})` : ''}`
+            : null;
 
     const [slDayStatuses, setSlDayStatuses] = useState<DayStatus[]>(() => {
         // Priority 1: Pre-stored day statuses from previous approver (TL/Admin)
-        if (hasPreStoredDayStatuses && leaveRequestDays && leaveRequestDays.length > 0) {
+        if (
+            hasPreStoredDayStatuses &&
+            leaveRequestDays &&
+            leaveRequestDays.length > 0
+        ) {
             return leaveRequestDays.map((d) => ({
                 date: d.date,
                 status: d.day_status as DayStatus['status'],
@@ -376,43 +475,64 @@ export default function Show({
         return [];
     });
     const [editDayStatuses, setEditDayStatuses] = useState<DayStatus[]>([]);
-    const [editDayStatusesProcessing, setEditDayStatusesProcessing] = useState(false);
+    const [editDayStatusesProcessing, setEditDayStatusesProcessing] =
+        useState(false);
 
     // Credit validation states - true = invalid (cannot submit)
     const [dayStatusInvalid, setDayStatusInvalid] = useState(false);
-    const [forceApproveDayStatusInvalid, setForceApproveDayStatusInvalid] = useState(false);
-    const [partialDenyDayStatusInvalid, setPartialDenyDayStatusInvalid] = useState(false);
+    const [forceApproveDayStatusInvalid, setForceApproveDayStatusInvalid] =
+        useState(false);
+    const [partialDenyDayStatusInvalid, setPartialDenyDayStatusInvalid] =
+        useState(false);
 
     // SL/VL Per-Day Status for Partial Deny dialog
-    const [partialDenySlDayStatuses, setPartialDenySlDayStatuses] = useState<DayStatus[]>([]);
+    const [partialDenySlDayStatuses, setPartialDenySlDayStatuses] = useState<
+        DayStatus[]
+    >([]);
     // SL/VL Per-Day Status for Force Approve dialog
-    const [forceApproveSlDayStatuses, setForceApproveSlDayStatuses] = useState<DayStatus[]>([]);
+    const [forceApproveSlDayStatuses, setForceApproveSlDayStatuses] = useState<
+        DayStatus[]
+    >([]);
 
     // SPL half-day overrides — admin can toggle each date between full/half day during approval
-    const [splHalfDayOverrides, setSplHalfDayOverrides] = useState<Record<string, boolean>>({});
+    const [splHalfDayOverrides, setSplHalfDayOverrides] = useState<
+        Record<string, boolean>
+    >({});
 
     const approveForm = useForm({
         review_notes: '',
-        day_statuses: [] as Array<{ date: string; status: string; notes?: string }>,
+        day_statuses: [] as Array<{
+            date: string;
+            status: string;
+            notes?: string;
+        }>,
     });
     const denyForm = useForm({ review_notes: '' });
-    const partialDenyForm = useForm({ denied_dates: [] as string[], denial_reason: '', review_notes: '' });
+    const partialDenyForm = useForm({
+        denied_dates: [] as string[],
+        denial_reason: '',
+        review_notes: '',
+    });
     const tlApproveForm = useForm({ review_notes: '' });
     const tlDenyForm = useForm({ review_notes: '' });
     const forceApproveForm = useForm({
         review_notes: '',
         denied_dates: [] as string[],
-        denial_reason: ''
+        denial_reason: '',
     });
-    const [forceApprovePartialMode, setForceApprovePartialMode] = useState(false);
-    const [forceApproveSelectedDates, setForceApproveSelectedDates] = useState<string[]>([]);
+    const [forceApprovePartialMode, setForceApprovePartialMode] =
+        useState(false);
+    const [forceApproveSelectedDates, setForceApproveSelectedDates] = useState<
+        string[]
+    >([]);
     const cancelForm = useForm({ cancellation_reason: '' });
     const adminCancelForm = useForm({ cancellation_reason: '' });
     const revertDenialForm = useForm({ revert_reason: '' });
     const adjustForWorkForm = useForm({
         work_date: '',
-        adjustment_type: 'start_late' as 'end_early' | 'start_late' | 'remove_day',
-        notes: ''
+        adjustment_type: 'start_late' as
+            'end_early' | 'start_late' | 'remove_day',
+        notes: '',
     });
 
     // Check if Admin/HR has approved
@@ -422,14 +542,22 @@ export default function Show({
     const isFullyApproved = isAdminApproved && isHrApproved;
 
     // Determine if user can approve (not already approved by their role)
-    const canUserApprove = isAdmin && leaveRequest.status === 'pending' && !hasUserApproved &&
+    const canUserApprove =
+        isAdmin &&
+        leaveRequest.status === 'pending' &&
+        !hasUserApproved &&
         (!leaveRequest.requires_tl_approval || isTlApproved);
 
     const handleApprove = () => {
         // For SL/VL/SPL, include per-day statuses in the approval data
         const submitData: {
             review_notes: string;
-            day_statuses?: Array<{ date: string; status: string; notes?: string; is_half_day?: boolean }>;
+            day_statuses?: Array<{
+                date: string;
+                status: string;
+                notes?: string;
+                is_half_day?: boolean;
+            }>;
             spl_half_day_overrides?: Record<string, boolean>;
             short_notice_override?: boolean;
         } = {
@@ -486,7 +614,13 @@ export default function Show({
         setEditDayStatusesError(null);
         router.put(
             leaveUpdateDayStatusesRoute(leaveRequest.id).url,
-            { day_statuses: editDayStatuses.map((d) => ({ date: d.date, status: d.status, notes: d.notes || undefined })) },
+            {
+                day_statuses: editDayStatuses.map((d) => ({
+                    date: d.date,
+                    status: d.status,
+                    notes: d.notes || undefined,
+                })),
+            },
             {
                 onSuccess: () => {
                     setShowEditDayStatusesDialog(false);
@@ -496,7 +630,10 @@ export default function Show({
                 },
                 onError: (errors) => {
                     setEditDayStatusesProcessing(false);
-                    const message = getFirstValidationError(errors) || errors.error || 'Failed to update day statuses';
+                    const message =
+                        getFirstValidationError(errors) ||
+                        errors.error ||
+                        'Failed to update day statuses';
                     setEditDayStatusesError(message);
                     toast.error(message);
                 },
@@ -514,21 +651,29 @@ export default function Show({
     };
 
     const handleTLApprove = () => {
-        tlApproveForm.post(`/form-requests/leave-requests/${leaveRequest.id}/approve-tl`, {
-            onSuccess: () => {
-                setShowTLApproveDialog(false);
-                toast.success('Leave request approved. Now pending Admin/HR approval.');
+        tlApproveForm.post(
+            `/form-requests/leave-requests/${leaveRequest.id}/approve-tl`,
+            {
+                onSuccess: () => {
+                    setShowTLApproveDialog(false);
+                    toast.success(
+                        'Leave request approved. Now pending Admin/HR approval.',
+                    );
+                },
             },
-        });
+        );
     };
 
     const handleTLDeny = () => {
-        tlDenyForm.post(`/form-requests/leave-requests/${leaveRequest.id}/deny-tl`, {
-            onSuccess: () => {
-                setShowTLDenyDialog(false);
-                toast.success('Leave request has been rejected.');
+        tlDenyForm.post(
+            `/form-requests/leave-requests/${leaveRequest.id}/deny-tl`,
+            {
+                onSuccess: () => {
+                    setShowTLDenyDialog(false);
+                    toast.success('Leave request has been rejected.');
+                },
             },
-        });
+        );
     };
 
     const handleForceApprove = () => {
@@ -537,13 +682,17 @@ export default function Show({
             review_notes: string;
             denied_dates: string[];
             denial_reason: string;
-            day_statuses?: Array<{ date: string; status: string; notes?: string }>;
+            day_statuses?: Array<{
+                date: string;
+                status: string;
+                notes?: string;
+            }>;
             spl_half_day_overrides?: Record<string, boolean>;
             short_notice_override?: boolean;
         } = {
             review_notes: forceApproveForm.data.review_notes,
             denied_dates: [],
-            denial_reason: forceApproveForm.data.denial_reason
+            denial_reason: forceApproveForm.data.denial_reason,
         };
 
         // Include short notice override if toggled
@@ -552,19 +701,26 @@ export default function Show({
         }
 
         // If partial mode is enabled and dates are selected, calculate denied dates
-        if (forceApprovePartialMode && forceApproveSelectedDates.length > 0 && forceApproveSelectedDates.length < workDays.length) {
+        if (
+            forceApprovePartialMode &&
+            forceApproveSelectedDates.length > 0 &&
+            forceApproveSelectedDates.length < workDays.length
+        ) {
             submitData.denied_dates = workDays
-                .map(date => format(date, 'yyyy-MM-dd'))
-                .filter(dateStr => !forceApproveSelectedDates.includes(dateStr));
+                .map((date) => format(date, 'yyyy-MM-dd'))
+                .filter(
+                    (dateStr) => !forceApproveSelectedDates.includes(dateStr),
+                );
         }
 
         // Include SL/VL per-day statuses
         if (hasDayStatuses) {
-            const dayStatuses = forceApproveSlDayStatuses.length > 0
-                ? forceApproveSlDayStatuses
-                : forceApproveAllSlDayStatuses;
+            const dayStatuses =
+                forceApproveSlDayStatuses.length > 0
+                    ? forceApproveSlDayStatuses
+                    : forceApproveAllSlDayStatuses;
             if (dayStatuses.length > 0) {
-                submitData.day_statuses = dayStatuses.map(d => ({
+                submitData.day_statuses = dayStatuses.map((d) => ({
                     date: d.date,
                     status: d.status,
                     notes: d.notes || undefined,
@@ -577,22 +733,29 @@ export default function Show({
             submitData.spl_half_day_overrides = splHalfDayOverrides;
         }
 
-        router.post(`/form-requests/leave-requests/${leaveRequest.id}/force-approve`, submitData, {
-            onSuccess: () => {
-                setShowForceApproveDialog(false);
-                setForceApprovePartialMode(false);
-                setForceApproveSelectedDates([]);
-                setForceApproveSlDayStatuses([]);
-                setSplHalfDayOverrides({});
-                forceApproveForm.reset();
-                toast.success(forceApprovePartialMode && forceApproveSelectedDates.length > 0
-                    ? 'Leave request force approved with partial denial'
-                    : 'Leave request force approved by Super Admin');
+        router.post(
+            `/form-requests/leave-requests/${leaveRequest.id}/force-approve`,
+            submitData,
+            {
+                onSuccess: () => {
+                    setShowForceApproveDialog(false);
+                    setForceApprovePartialMode(false);
+                    setForceApproveSelectedDates([]);
+                    setForceApproveSlDayStatuses([]);
+                    setSplHalfDayOverrides({});
+                    forceApproveForm.reset();
+                    toast.success(
+                        forceApprovePartialMode &&
+                            forceApproveSelectedDates.length > 0
+                            ? 'Leave request force approved with partial denial'
+                            : 'Leave request force approved by Super Admin',
+                    );
+                },
+                onError: (errors) => {
+                    toast.error(errors.error || 'Failed to force approve');
+                },
             },
-            onError: (errors) => {
-                toast.error(errors.error || 'Failed to force approve');
-            },
-        });
+        );
     };
 
     const handleCancel = () => {
@@ -609,7 +772,9 @@ export default function Show({
         adminCancelForm.post(leaveCancelRoute(leaveRequest.id).url, {
             onSuccess: () => {
                 setShowAdminCancelDialog(false);
-                toast.success('Approved leave request cancelled. Credits have been restored.');
+                toast.success(
+                    'Approved leave request cancelled. Credits have been restored.',
+                );
             },
             onError: () => {
                 toast.error('Failed to cancel leave request');
@@ -622,7 +787,9 @@ export default function Show({
             onSuccess: () => {
                 setShowRevertDenialDialog(false);
                 revertDenialForm.reset();
-                toast.success('Denial reverted. Leave request is pending review again.');
+                toast.success(
+                    'Denial reverted. Leave request is pending review again.',
+                );
             },
             onError: (errors) => {
                 toast.error(errors.error || 'Failed to revert denial');
@@ -631,26 +798,31 @@ export default function Show({
     };
 
     const handleAdjustForWork = () => {
-        adjustForWorkForm.post(`/form-requests/leave-requests/${leaveRequest.id}/adjust-for-work`, {
-            onSuccess: () => {
-                setShowAdjustForWorkDialog(false);
-                adjustForWorkForm.reset();
-                toast.success('Leave adjusted successfully. Credits have been restored for the work day.');
+        adjustForWorkForm.post(
+            `/form-requests/leave-requests/${leaveRequest.id}/adjust-for-work`,
+            {
+                onSuccess: () => {
+                    setShowAdjustForWorkDialog(false);
+                    adjustForWorkForm.reset();
+                    toast.success(
+                        'Leave adjusted successfully. Credits have been restored for the work day.',
+                    );
+                },
+                onError: (errors) => {
+                    toast.error(errors.error || 'Failed to adjust leave');
+                },
             },
-            onError: (errors) => {
-                toast.error(errors.error || 'Failed to adjust leave');
-            },
-        });
+        );
     };
 
     // Helper function to format attendance point type
     const formatPointType = (type: string) => {
         const typeMap: Record<string, string> = {
-            'whole_day_absence': 'Whole Day Absence',
-            'half_day_absence': 'Half Day Absence',
-            'undertime': 'Undertime',
-            'undertime_more_than_hour': 'Undertime (>1 Hour)',
-            'tardy': 'Tardy',
+            whole_day_absence: 'Whole Day Absence',
+            half_day_absence: 'Half Day Absence',
+            undertime: 'Undertime',
+            undertime_more_than_hour: 'Undertime (>1 Hour)',
+            tardy: 'Tardy',
         };
         return typeMap[type] || type;
     };
@@ -660,7 +832,9 @@ export default function Show({
         try {
             const start = parseISO(leaveRequest.start_date);
             const end = parseISO(leaveRequest.end_date);
-            return eachDayOfInterval({ start, end }).filter(date => allowsWeekendLeave || !isWeekend(date));
+            return eachDayOfInterval({ start, end }).filter(
+                (date) => allowsWeekendLeave || !isWeekend(date),
+            );
         } catch {
             return [];
         }
@@ -669,44 +843,85 @@ export default function Show({
     // Full original date range working days — used in Partial Deny dialog when a prior partial denial exists
     // so the next approver can see and re-select previously denied dates
     const originalWorkDays = useMemo(() => {
-        if (leaveRequest.has_partial_denial && leaveRequest.original_start_date && leaveRequest.original_end_date) {
+        if (
+            leaveRequest.has_partial_denial &&
+            leaveRequest.original_start_date &&
+            leaveRequest.original_end_date
+        ) {
             try {
                 const start = parseISO(leaveRequest.original_start_date);
                 const end = parseISO(leaveRequest.original_end_date);
-                return eachDayOfInterval({ start, end }).filter(date => allowsWeekendLeave || !isWeekend(date));
+                return eachDayOfInterval({ start, end }).filter(
+                    (date) => allowsWeekendLeave || !isWeekend(date),
+                );
             } catch {
                 return workDays;
             }
         }
         return workDays;
-    }, [leaveRequest.has_partial_denial, leaveRequest.original_start_date, leaveRequest.original_end_date, workDays, allowsWeekendLeave]);
+    }, [
+        leaveRequest.has_partial_denial,
+        leaveRequest.original_start_date,
+        leaveRequest.original_end_date,
+        workDays,
+        allowsWeekendLeave,
+    ]);
 
     // Set of previously denied date strings for quick lookup
     const previouslyDeniedDateSet = useMemo(() => {
-        if (!leaveRequest.has_partial_denial || !leaveRequest.denied_dates) return new Set<string>();
-        return new Set(leaveRequest.denied_dates.map(dd => {
-            try { return format(parseISO(dd.denied_date), 'yyyy-MM-dd'); } catch { return ''; }
-        }).filter(Boolean));
+        if (!leaveRequest.has_partial_denial || !leaveRequest.denied_dates)
+            return new Set<string>();
+        return new Set(
+            leaveRequest.denied_dates
+                .map((dd) => {
+                    try {
+                        return format(parseISO(dd.denied_date), 'yyyy-MM-dd');
+                    } catch {
+                        return '';
+                    }
+                })
+                .filter(Boolean),
+        );
     }, [leaveRequest.has_partial_denial, leaveRequest.denied_dates]);
 
     // Helper: build SL day statuses for a set of approved dates, preserving existing selections + pre-stored records
-    const buildSlDayStatusesForDates = (approvedDateStrs: string[], existingStatuses: DayStatus[]): DayStatus[] => {
-        const existingMap = new Map(existingStatuses.map(d => [d.date, d]));
+    const buildSlDayStatusesForDates = (
+        approvedDateStrs: string[],
+        existingStatuses: DayStatus[],
+    ): DayStatus[] => {
+        const existingMap = new Map(existingStatuses.map((d) => [d.date, d]));
         // Also check pre-stored records from previous approver as fallback
         const preStoredMap = new Map(
-            (leaveRequestDays ?? []).map(d => [d.date, { date: d.date, status: d.day_status as DayStatus['status'], notes: d.notes || '' }])
+            (leaveRequestDays ?? []).map((d) => [
+                d.date,
+                {
+                    date: d.date,
+                    status: d.day_status as DayStatus['status'],
+                    notes: d.notes || '',
+                },
+            ]),
         );
-        return approvedDateStrs
-            .sort()
-            .map(dateStr => existingMap.get(dateStr) ?? preStoredMap.get(dateStr) ?? { date: dateStr, status: 'pending' as const, notes: '' });
+        return approvedDateStrs.sort().map(
+            (dateStr) =>
+                existingMap.get(dateStr) ??
+                preStoredMap.get(dateStr) ?? {
+                    date: dateStr,
+                    status: 'pending' as const,
+                    notes: '',
+                },
+        );
     };
 
     // Update partial deny SL day statuses when approved dates change
     const handleToggleApprovedDateWithSlUpdate = (dateStr: string) => {
-        setSelectedApprovedDates(prev => {
-            const next = prev.includes(dateStr) ? prev.filter(d => d !== dateStr) : [...prev, dateStr];
+        setSelectedApprovedDates((prev) => {
+            const next = prev.includes(dateStr)
+                ? prev.filter((d) => d !== dateStr)
+                : [...prev, dateStr];
             if (hasDayStatuses) {
-                setPartialDenySlDayStatuses(current => buildSlDayStatusesForDates(next, current));
+                setPartialDenySlDayStatuses((current) =>
+                    buildSlDayStatusesForDates(next, current),
+                );
             }
             return next;
         });
@@ -714,10 +929,14 @@ export default function Show({
 
     // Update force approve SL/VL day statuses when selected dates change
     const handleToggleForceApproveDateWithSlUpdate = (dateStr: string) => {
-        setForceApproveSelectedDates(prev => {
-            const next = prev.includes(dateStr) ? prev.filter(d => d !== dateStr) : [...prev, dateStr];
+        setForceApproveSelectedDates((prev) => {
+            const next = prev.includes(dateStr)
+                ? prev.filter((d) => d !== dateStr)
+                : [...prev, dateStr];
             if (hasDayStatuses && forceApprovePartialMode) {
-                setForceApproveSlDayStatuses(current => buildSlDayStatusesForDates(next, current));
+                setForceApproveSlDayStatuses((current) =>
+                    buildSlDayStatusesForDates(next, current),
+                );
             }
             return next;
         });
@@ -728,14 +947,35 @@ export default function Show({
     const forceApproveAllSlDayStatuses = useMemo(() => {
         if (!hasDayStatuses) return [];
         const preStoredMap = new Map(
-            (leaveRequestDays ?? []).map(d => [d.date, { date: d.date, status: d.day_status as DayStatus['status'], notes: d.notes || '' }])
+            (leaveRequestDays ?? []).map((d) => [
+                d.date,
+                {
+                    date: d.date,
+                    status: d.day_status as DayStatus['status'],
+                    notes: d.notes || '',
+                },
+            ]),
         );
         const suggestedMap = new Map(
-            (suggestedDayStatuses ?? []).map(s => [s.date, { date: s.date, status: s.status as DayStatus['status'], notes: s.notes || '' }])
+            (suggestedDayStatuses ?? []).map((s) => [
+                s.date,
+                {
+                    date: s.date,
+                    status: s.status as DayStatus['status'],
+                    notes: s.notes || '',
+                },
+            ]),
         );
-        return workDays.map(d => {
+        return workDays.map((d) => {
             const dateStr = format(d, 'yyyy-MM-dd');
-            return preStoredMap.get(dateStr) ?? suggestedMap.get(dateStr) ?? { date: dateStr, status: 'pending' as const, notes: '' };
+            return (
+                preStoredMap.get(dateStr) ??
+                suggestedMap.get(dateStr) ?? {
+                    date: dateStr,
+                    status: 'pending' as const,
+                    notes: '',
+                }
+            );
         });
     }, [hasDayStatuses, workDays, leaveRequestDays, suggestedDayStatuses]);
 
@@ -768,7 +1008,11 @@ export default function Show({
             let creditNeeded = isHalfDay ? 0.5 : 1.0;
 
             // Auto-downgrade to half-day if only 0.5 credits remain and day is full
-            if (!isHalfDay && creditsRemaining >= 0.5 && creditsRemaining < 1.0) {
+            if (
+                !isHalfDay &&
+                creditsRemaining >= 0.5 &&
+                creditsRemaining < 1.0
+            ) {
                 isHalfDay = true;
                 creditNeeded = 0.5;
                 halfDayMap.set(dateStr, true);
@@ -796,14 +1040,22 @@ export default function Show({
             halfDayMap,
             autoHalfDays,
         };
-    }, [isSpl, splCreditsSummary, workDays, leaveRequestDays, splHalfDayOverrides]);
+    }, [
+        isSpl,
+        splCreditsSummary,
+        workDays,
+        leaveRequestDays,
+        splHalfDayOverrides,
+    ]);
 
     // Get list of dates in leave period for the adjust dialog
     const getLeaveDates = () => {
         try {
             const start = parseISO(leaveRequest.start_date);
             const end = parseISO(leaveRequest.end_date);
-            return eachDayOfInterval({ start, end }).filter(date => allowsWeekendLeave || !isWeekend(date));
+            return eachDayOfInterval({ start, end }).filter(
+                (date) => allowsWeekendLeave || !isWeekend(date),
+            );
         } catch {
             return [];
         }
@@ -822,21 +1074,31 @@ export default function Show({
             return;
         }
 
-        if (!isEditingPartialDenial && selectedApprovedDates.length === originalWorkDays.length) {
-            toast.error('You cannot approve all dates. Use full approve instead.');
+        if (
+            !isEditingPartialDenial &&
+            selectedApprovedDates.length === originalWorkDays.length
+        ) {
+            toast.error(
+                'You cannot approve all dates. Use full approve instead.',
+            );
             return;
         }
 
         // Calculate denied dates (dates NOT selected for approval) from full original range
         const deniedDates = originalWorkDays
-            .map(date => format(date, 'yyyy-MM-dd'))
-            .filter(dateStr => !selectedApprovedDates.includes(dateStr));
+            .map((date) => format(date, 'yyyy-MM-dd'))
+            .filter((dateStr) => !selectedApprovedDates.includes(dateStr));
 
         const submitData: {
             denied_dates: string[];
             denial_reason: string;
             review_notes: string;
-            day_statuses?: Array<{ date: string; status: string; notes?: string; is_half_day?: boolean }>;
+            day_statuses?: Array<{
+                date: string;
+                status: string;
+                notes?: string;
+                is_half_day?: boolean;
+            }>;
             short_notice_override?: boolean;
         } = {
             denied_dates: deniedDates,
@@ -851,7 +1113,7 @@ export default function Show({
 
         // Include SL/VL per-day statuses for approved dates only
         if (hasDayStatuses && partialDenySlDayStatuses.length > 0) {
-            submitData.day_statuses = partialDenySlDayStatuses.map(d => ({
+            submitData.day_statuses = partialDenySlDayStatuses.map((d) => ({
                 date: d.date,
                 status: d.status,
                 notes: d.notes || undefined,
@@ -859,21 +1121,30 @@ export default function Show({
         }
 
         if (isEditingPartialDenial) {
-            router.put(`/form-requests/leave-requests/${leaveRequest.id}/partial-denial`, {
-                denied_dates: deniedDates,
-            }, {
-                onSuccess: () => {
-                    setShowPartialDenyDialog(false);
-                    setSelectedApprovedDates([]);
-                    partialDenyForm.reset();
-                    setPartialDenySlDayStatuses([]);
-                    setIsEditingPartialDenial(false);
-                    toast.success('Partial approval dates updated successfully');
+            router.put(
+                `/form-requests/leave-requests/${leaveRequest.id}/partial-denial`,
+                {
+                    denied_dates: deniedDates,
                 },
-                onError: (errors) => {
-                    toast.error(errors.error || 'Failed to update partial approval dates');
+                {
+                    onSuccess: () => {
+                        setShowPartialDenyDialog(false);
+                        setSelectedApprovedDates([]);
+                        partialDenyForm.reset();
+                        setPartialDenySlDayStatuses([]);
+                        setIsEditingPartialDenial(false);
+                        toast.success(
+                            'Partial approval dates updated successfully',
+                        );
+                    },
+                    onError: (errors) => {
+                        toast.error(
+                            errors.error ||
+                                'Failed to update partial approval dates',
+                        );
+                    },
                 },
-            });
+            );
 
             return;
         }
@@ -888,21 +1159,20 @@ export default function Show({
                 toast.success('Leave request partially approved');
             },
             onError: (errors) => {
-                toast.error(errors.error || 'Failed to process partial approval');
+                toast.error(
+                    errors.error || 'Failed to process partial approval',
+                );
             },
         });
     };
 
     const handleDelete = () => {
-        router.delete(
-            leaveDestroyRoute(leaveRequest.id).url,
-            {
-                onSuccess: () => {
-                    setShowDeleteDialog(false);
-                    toast.success('Leave request deleted');
-                },
-            }
-        );
+        router.delete(leaveDestroyRoute(leaveRequest.id).url, {
+            onSuccess: () => {
+                setShowDeleteDialog(false);
+                toast.success('Leave request deleted');
+            },
+        });
     };
 
     const getStatusBadge = (status: string) => {
@@ -913,7 +1183,10 @@ export default function Show({
             cancelled: 'bg-gray-100 text-gray-800 border-gray-300',
         };
         return (
-            <Badge variant="outline" className={variants[status as keyof typeof variants]}>
+            <Badge
+                variant="outline"
+                className={variants[status as keyof typeof variants]}
+            >
                 {status.toUpperCase()}
             </Badge>
         );
@@ -923,8 +1196,8 @@ export default function Show({
         <AppLayout>
             <Head title={`Leave Request #${leaveRequest.id}`} />
 
-            <div className="container mx-auto px-4 py-8 max-w-4xl">
-                <div className="mb-6 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+            <div className="container mx-auto max-w-4xl px-4 py-8">
+                <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <Link href={leaveIndexRoute().url}>
                         <Button variant="ghost" size="sm">
                             <ArrowLeft className="mr-2 h-4 w-4" />
@@ -936,13 +1209,25 @@ export default function Show({
                         {/* Team Lead Approval Buttons */}
                         {canTlApprove && leaveRequest.status === 'pending' && (
                             <>
-                                <Button variant="default" size="sm" onClick={() => setShowTLApproveDialog(true)}>
+                                <Button
+                                    variant="default"
+                                    size="sm"
+                                    onClick={() => setShowTLApproveDialog(true)}
+                                >
                                     <UserCheck className="mr-1 h-4 w-4" />
-                                    <span className="hidden sm:inline">Approve (TL)</span>
+                                    <span className="hidden sm:inline">
+                                        Approve (TL)
+                                    </span>
                                 </Button>
-                                <Button variant="destructive" size="sm" onClick={() => setShowTLDenyDialog(true)}>
+                                <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    onClick={() => setShowTLDenyDialog(true)}
+                                >
                                     <X className="mr-1 h-4 w-4" />
-                                    <span className="hidden sm:inline">Reject (TL)</span>
+                                    <span className="hidden sm:inline">
+                                        Reject (TL)
+                                    </span>
                                 </Button>
                                 {/* Partial Deny for Team Lead - Only show for multi-day requests */}
                                 {workDays.length > 1 && (
@@ -956,7 +1241,9 @@ export default function Show({
                                         }}
                                     >
                                         <Calendar className="mr-1 h-4 w-4" />
-                                        <span className="hidden sm:inline">Partial Approved (TL)</span>
+                                        <span className="hidden sm:inline">
+                                            Partial Approved (TL)
+                                        </span>
                                     </Button>
                                 )}
                             </>
@@ -965,15 +1252,29 @@ export default function Show({
                         {canUserApprove && (
                             <>
                                 <Can permission="leave.approve">
-                                    <Button variant="default" size="sm" onClick={() => setShowApproveDialog(true)}>
+                                    <Button
+                                        variant="default"
+                                        size="sm"
+                                        onClick={() =>
+                                            setShowApproveDialog(true)
+                                        }
+                                    >
                                         <Check className="mr-1 h-4 w-4" />
-                                        <span className="hidden sm:inline">Approve</span>
+                                        <span className="hidden sm:inline">
+                                            Approve
+                                        </span>
                                     </Button>
                                 </Can>
                                 <Can permission="leave.approve">
-                                    <Button variant="destructive" size="sm" onClick={() => setShowDenyDialog(true)}>
+                                    <Button
+                                        variant="destructive"
+                                        size="sm"
+                                        onClick={() => setShowDenyDialog(true)}
+                                    >
                                         <X className="mr-1 h-4 w-4" />
-                                        <span className="hidden sm:inline">Deny</span>
+                                        <span className="hidden sm:inline">
+                                            Deny
+                                        </span>
                                     </Button>
                                 </Can>
                                 {/* Partial Deny - Only show for multi-day requests */}
@@ -984,69 +1285,103 @@ export default function Show({
                                             size="sm"
                                             className="border-green-300 text-green-700 hover:bg-green-50"
                                             onClick={() => {
-                                                setIsEditingPartialDenial(false);
+                                                setIsEditingPartialDenial(
+                                                    false,
+                                                );
                                                 setShowPartialDenyDialog(true);
                                             }}
                                         >
                                             <Calendar className="mr-1 h-4 w-4" />
-                                            <span className="hidden sm:inline">Partial Approved</span>
+                                            <span className="hidden sm:inline">
+                                                Partial Approved
+                                            </span>
                                         </Button>
                                     </Can>
                                 )}
                             </>
                         )}
                         {/* Super Admin Force Approve Button - Shows when pending and not fully approved */}
-                        {isSuperAdmin && leaveRequest.status === 'pending' && !isFullyApproved && (
-                            <Button
-                                variant="default"
-                                size="sm"
-                                className="bg-purple-600 hover:bg-purple-700"
-                                onClick={() => setShowForceApproveDialog(true)}
-                            >
-                                <Shield className="mr-1 h-4 w-4" />
-                                <span className="hidden sm:inline">Force Approve</span>
-                            </Button>
-                        )}
-                        {isSuperAdmin && leaveRequest.has_partial_denial && (leaveRequest.status === 'pending' || leaveRequest.status === 'approved') && (
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="border-amber-300 text-amber-700 hover:bg-amber-50"
-                                onClick={() => {
-                                    setIsEditingPartialDenial(true);
-                                    setShowPartialDenyDialog(true);
-                                }}
-                            >
-                                <Edit className="mr-1 h-4 w-4" />
-                                <span className="hidden sm:inline">Edit Partial Dates</span>
-                            </Button>
-                        )}
-                        {hasUserApproved && leaveRequest.status === 'pending' && (
-                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">
-                                <CheckCircle className="mr-1 h-3 w-3" />
-                                You've Approved
-                            </Badge>
-                        )}
-                        {/* Admin Actions for Approved Leaves */}
-                        {canEditApproved && leaveRequest.status === 'approved' && (
-                            <>
-                                <Link href={leaveEditRoute({ leaveRequest: leaveRequest.id }).url}>
-                                    <Button variant="outline" size="sm">
-                                        <Edit className="mr-1 h-4 w-4" />
-                                        <span className="hidden sm:inline">{isSuperAdmin ? 'Edit Request' : 'Edit Dates'}</span>
-                                    </Button>
-                                </Link>
+                        {isSuperAdmin &&
+                            leaveRequest.status === 'pending' &&
+                            !isFullyApproved && (
+                                <Button
+                                    variant="default"
+                                    size="sm"
+                                    className="bg-purple-600 hover:bg-purple-700"
+                                    onClick={() =>
+                                        setShowForceApproveDialog(true)
+                                    }
+                                >
+                                    <Shield className="mr-1 h-4 w-4" />
+                                    <span className="hidden sm:inline">
+                                        Force Approve
+                                    </span>
+                                </Button>
+                            )}
+                        {isSuperAdmin &&
+                            leaveRequest.has_partial_denial &&
+                            (leaveRequest.status === 'pending' ||
+                                leaveRequest.status === 'approved') && (
                                 <Button
                                     variant="outline"
                                     size="sm"
-                                    className="border-blue-300 text-blue-700 hover:bg-blue-50"
-                                    onClick={() => setShowAdjustForWorkDialog(true)}
+                                    className="border-amber-300 text-amber-700 hover:bg-amber-50"
+                                    onClick={() => {
+                                        setIsEditingPartialDenial(true);
+                                        setShowPartialDenyDialog(true);
+                                    }}
                                 >
-                                    <Calendar className="mr-1 h-4 w-4" />
-                                    <span className="hidden sm:inline">Adjust for Work</span>
+                                    <Edit className="mr-1 h-4 w-4" />
+                                    <span className="hidden sm:inline">
+                                        Edit Partial Dates
+                                    </span>
                                 </Button>
-                            </>
-                        )}
+                            )}
+                        {hasUserApproved &&
+                            leaveRequest.status === 'pending' && (
+                                <Badge
+                                    variant="outline"
+                                    className="border-green-300 bg-green-50 text-green-700"
+                                >
+                                    <CheckCircle className="mr-1 h-3 w-3" />
+                                    You've Approved
+                                </Badge>
+                            )}
+                        {/* Admin Actions for Approved Leaves */}
+                        {canEditApproved &&
+                            leaveRequest.status === 'approved' && (
+                                <>
+                                    <Link
+                                        href={
+                                            leaveEditRoute({
+                                                leaveRequest: leaveRequest.id,
+                                            }).url
+                                        }
+                                    >
+                                        <Button variant="outline" size="sm">
+                                            <Edit className="mr-1 h-4 w-4" />
+                                            <span className="hidden sm:inline">
+                                                {isSuperAdmin
+                                                    ? 'Edit Request'
+                                                    : 'Edit Dates'}
+                                            </span>
+                                        </Button>
+                                    </Link>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="border-blue-300 text-blue-700 hover:bg-blue-50"
+                                        onClick={() =>
+                                            setShowAdjustForWorkDialog(true)
+                                        }
+                                    >
+                                        <Calendar className="mr-1 h-4 w-4" />
+                                        <span className="hidden sm:inline">
+                                            Adjust for Work
+                                        </span>
+                                    </Button>
+                                </>
+                            )}
                         {canAdminCancel && (
                             <Button
                                 variant="outline"
@@ -1055,30 +1390,54 @@ export default function Show({
                                 onClick={() => setShowAdminCancelDialog(true)}
                             >
                                 <Ban className="mr-1 h-4 w-4" />
-                                <span className="hidden sm:inline">{leaveRequest.status === 'approved' ? 'Cancel Approved' : 'Cancel'}</span>
+                                <span className="hidden sm:inline">
+                                    {leaveRequest.status === 'approved'
+                                        ? 'Cancel Approved'
+                                        : 'Cancel'}
+                                </span>
                             </Button>
                         )}
-                        {canRevertDenial && leaveRequest.status === 'denied' && (
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="border-amber-300 text-amber-700 hover:bg-amber-50"
-                                onClick={() => setShowRevertDenialDialog(true)}
-                            >
-                                <RotateCcw className="mr-1 h-4 w-4" />
-                                <span className="hidden sm:inline">Revert Denial</span>
-                            </Button>
-                        )}
-                        {canCancel && !canAdminCancel && (leaveRequest.status === 'pending' || leaveRequest.status === 'approved') && (
-                            <Can permission="leave.cancel">
-                                <Button variant="outline" size="sm" onClick={() => setShowCancelDialog(true)}>
-                                    <Ban className="mr-1 h-4 w-4" />
-                                    <span className="hidden sm:inline">Cancel</span>
+                        {canRevertDenial &&
+                            leaveRequest.status === 'denied' && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="border-amber-300 text-amber-700 hover:bg-amber-50"
+                                    onClick={() =>
+                                        setShowRevertDenialDialog(true)
+                                    }
+                                >
+                                    <RotateCcw className="mr-1 h-4 w-4" />
+                                    <span className="hidden sm:inline">
+                                        Revert Denial
+                                    </span>
                                 </Button>
-                            </Can>
-                        )}
+                            )}
+                        {canCancel &&
+                            !canAdminCancel &&
+                            (leaveRequest.status === 'pending' ||
+                                leaveRequest.status === 'approved') && (
+                                <Can permission="leave.cancel">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() =>
+                                            setShowCancelDialog(true)
+                                        }
+                                    >
+                                        <Ban className="mr-1 h-4 w-4" />
+                                        <span className="hidden sm:inline">
+                                            Cancel
+                                        </span>
+                                    </Button>
+                                </Can>
+                            )}
                         {can('leave.delete') && (
-                            <Button variant="destructive" size="sm" onClick={() => setShowDeleteDialog(true)}>
+                            <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => setShowDeleteDialog(true)}
+                            >
                                 <Trash2 className="mr-1 h-4 w-4" />
                                 <span className="hidden sm:inline">Delete</span>
                             </Button>
@@ -1088,11 +1447,17 @@ export default function Show({
 
                 <Card>
                     <CardHeader>
-                        <div className="flex justify-between items-start">
+                        <div className="flex items-start justify-between">
                             <div>
-                                <CardTitle>Leave Request #{leaveRequest.id}</CardTitle>
-                                <p className="text-sm text-muted-foreground mt-1">
-                                    Submitted on {format(parseISO(leaveRequest.created_at), 'MMMM d, yyyy')}
+                                <CardTitle>
+                                    Leave Request #{leaveRequest.id}
+                                </CardTitle>
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                    Submitted on{' '}
+                                    {format(
+                                        parseISO(leaveRequest.created_at),
+                                        'MMMM d, yyyy',
+                                    )}
                                 </p>
                             </div>
                             {getStatusBadge(leaveRequest.status)}
@@ -1100,47 +1465,72 @@ export default function Show({
                     </CardHeader>
                     <CardContent className="space-y-6">
                         {/* Employee Info */}
-                        <div className="flex items-start gap-4 pb-4 border-b">
+                        <div className="flex items-start gap-4 border-b pb-4">
                             <Avatar className="h-16 w-16 overflow-hidden rounded-full">
-                                <AvatarImage src={leaveRequest.user.avatar_url} alt={leaveRequest.user.name} />
-                                <AvatarFallback className="rounded-full bg-neutral-200 text-black dark:bg-neutral-700 dark:text-white text-lg">
+                                <AvatarImage
+                                    src={leaveRequest.user.avatar_url}
+                                    alt={leaveRequest.user.name}
+                                />
+                                <AvatarFallback className="rounded-full bg-neutral-200 text-lg text-black dark:bg-neutral-700 dark:text-white">
                                     {getInitials(leaveRequest.user.name)}
                                 </AvatarFallback>
                             </Avatar>
-                            <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="grid flex-1 grid-cols-1 gap-4 sm:grid-cols-2">
                                 <div>
-                                    <p className="text-sm font-medium text-muted-foreground">Employee</p>
-                                    <p className="text-base font-semibold">{leaveRequest.user.name}</p>
+                                    <p className="text-sm font-medium text-muted-foreground">
+                                        Employee
+                                    </p>
+                                    <p className="text-base font-semibold">
+                                        {leaveRequest.user.name}
+                                    </p>
                                 </div>
                                 <div>
-                                    <p className="text-sm font-medium text-muted-foreground">Email</p>
-                                    <p className="text-base break-all">{leaveRequest.user.email}</p>
+                                    <p className="text-sm font-medium text-muted-foreground">
+                                        Email
+                                    </p>
+                                    <p className="text-base break-all">
+                                        {leaveRequest.user.email}
+                                    </p>
                                 </div>
                             </div>
                         </div>
 
                         {/* Leave Details */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                             <div>
-                                <p className="text-sm font-medium text-muted-foreground">Leave Type</p>
+                                <p className="text-sm font-medium text-muted-foreground">
+                                    Leave Type
+                                </p>
                                 <div className="mt-1 flex flex-wrap items-center gap-2">
                                     <Badge variant="secondary">
                                         {leaveRequest.leave_type}
                                     </Badge>
-                                    {leaveRequest.leave_type === 'SL' && leaveRequest.sl_with_undertime && (
-                                        <Badge className="bg-blue-600 hover:bg-blue-700">
-                                            Partial-day Absence
-                                        </Badge>
-                                    )}
+                                    {leaveRequest.leave_type === 'SL' &&
+                                        leaveRequest.sl_with_undertime && (
+                                            <Badge className="bg-blue-600 hover:bg-blue-700">
+                                                Partial-day Absence
+                                            </Badge>
+                                        )}
                                 </div>
                             </div>
                             <div>
-                                <p className="text-sm font-medium text-muted-foreground">Duration</p>
+                                <p className="text-sm font-medium text-muted-foreground">
+                                    Duration
+                                </p>
                                 <p className="text-base">
                                     {leaveRequest.has_partial_denial ? (
                                         <>
-                                            <span className="text-green-600 font-medium">{leaveRequest.approved_days} days approved</span>
-                                            <span className="text-muted-foreground"> / {leaveRequest.days_requested} days requested</span>
+                                            <span className="font-medium text-green-600">
+                                                {leaveRequest.approved_days}{' '}
+                                                days approved
+                                            </span>
+                                            <span className="text-muted-foreground">
+                                                {' '}
+                                                / {
+                                                    leaveRequest.days_requested
+                                                }{' '}
+                                                days requested
+                                            </span>
                                         </>
                                     ) : (
                                         <>{leaveRequest.days_requested} days</>
@@ -1150,66 +1540,122 @@ export default function Show({
                         </div>
 
                         {/* Partial Denial Info */}
-                        {Boolean(leaveRequest.has_partial_denial && leaveRequest.denied_dates && leaveRequest.denied_dates.length > 0) && (
+                        {Boolean(
+                            leaveRequest.has_partial_denial &&
+                            leaveRequest.denied_dates &&
+                            leaveRequest.denied_dates.length > 0,
+                        ) && (
                             <Alert className="border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950">
                                 <Calendar className="h-4 w-4 text-orange-600" />
                                 <AlertDescription className="text-orange-800 dark:text-orange-200">
-                                    <p className="font-medium mb-2">Partial Approval - Some dates were denied:</p>
+                                    <p className="mb-2 font-medium">
+                                        Partial Approval - Some dates were
+                                        denied:
+                                    </p>
                                     <div className="space-y-1">
-                                        {leaveRequest.denied_dates?.map((dd) => (
-                                            <div key={dd.id} className="flex items-center gap-2 text-sm">
-                                                <Badge variant="destructive" className="text-xs">Denied</Badge>
-                                                <span>{format(parseISO(dd.denied_date), 'EEEE, MMM d, yyyy')}</span>
-                                                {dd.denial_reason && <span className="text-muted-foreground">- {dd.denial_reason}</span>}
-                                            </div>
-                                        ))}
+                                        {leaveRequest.denied_dates?.map(
+                                            (dd) => (
+                                                <div
+                                                    key={dd.id}
+                                                    className="flex items-center gap-2 text-sm"
+                                                >
+                                                    <Badge
+                                                        variant="destructive"
+                                                        className="text-xs"
+                                                    >
+                                                        Denied
+                                                    </Badge>
+                                                    <span>
+                                                        {format(
+                                                            parseISO(
+                                                                dd.denied_date,
+                                                            ),
+                                                            'EEEE, MMM d, yyyy',
+                                                        )}
+                                                    </span>
+                                                    {dd.denial_reason && (
+                                                        <span className="text-muted-foreground">
+                                                            - {dd.denial_reason}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            ),
+                                        )}
                                     </div>
                                     {leaveRequest.denied_dates?.[0]?.denier && (
                                         <p className="mt-2 text-xs text-muted-foreground">
-                                            Denied by: {leaveRequest.denied_dates[0].denier.name}
+                                            Denied by:{' '}
+                                            {
+                                                leaveRequest.denied_dates[0]
+                                                    .denier.name
+                                            }
                                         </p>
                                     )}
                                 </AlertDescription>
                             </Alert>
                         )}
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                             <div>
-                                <p className="text-sm font-medium text-muted-foreground">Start Date</p>
+                                <p className="text-sm font-medium text-muted-foreground">
+                                    Start Date
+                                </p>
                                 <p className="text-base">
-                                    {format(parseISO(leaveRequest.start_date), 'MMMM d, yyyy')}
+                                    {format(
+                                        parseISO(leaveRequest.start_date),
+                                        'MMMM d, yyyy',
+                                    )}
                                 </p>
                             </div>
                             <div>
-                                <p className="text-sm font-medium text-muted-foreground">End Date</p>
+                                <p className="text-sm font-medium text-muted-foreground">
+                                    End Date
+                                </p>
                                 <p className="text-base">
-                                    {format(parseISO(leaveRequest.end_date), 'MMMM d, yyyy')}
+                                    {format(
+                                        parseISO(leaveRequest.end_date),
+                                        'MMMM d, yyyy',
+                                    )}
                                 </p>
                             </div>
                         </div>
 
                         {/* Work Info */}
                         <div>
-                            <p className="text-sm font-medium text-muted-foreground">Campaign/Department</p>
-                            <p className="text-base">{leaveRequest.campaign_department}</p>
+                            <p className="text-sm font-medium text-muted-foreground">
+                                Campaign/Department
+                            </p>
+                            <p className="text-base">
+                                {leaveRequest.campaign_department}
+                            </p>
                         </div>
 
                         {/* Earlier Conflicts Warning (First-Come-First-Serve for VL/UPTO) - Hidden for cancelled leaves */}
-                        {Boolean(earlierConflicts && earlierConflicts.length > 0 && ['VL', 'UPTO'].includes(leaveRequest.leave_type) && leaveRequest.status !== 'cancelled') && (
+                        {Boolean(
+                            earlierConflicts &&
+                            earlierConflicts.length > 0 &&
+                            ['VL', 'UPTO'].includes(leaveRequest.leave_type) &&
+                            leaveRequest.status !== 'cancelled',
+                        ) && (
                             <Alert className="border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950">
                                 <AlertTriangle className="h-4 w-4 text-orange-600" />
                                 <AlertDescription className="text-orange-800 dark:text-orange-200">
                                     <div className="space-y-2">
                                         <div className="flex items-center justify-between gap-2">
                                             <p className="font-semibold">
-                                                Date Conflict Detected (First-Come-First-Serve Policy)
+                                                Date Conflict Detected
+                                                (First-Come-First-Serve Policy)
                                             </p>
                                             <a
                                                 href={`/form-requests/leave-requests/calendar?month=${leaveRequest.start_date.substring(0, 7)}${leaveRequest.campaign_id ? `&campaign_id=${leaveRequest.campaign_id}` : ''}&leave_type=${leaveRequest.leave_type}`}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
                                             >
-                                                <Button variant="outline" size="sm" className="h-7 text-xs bg-white dark:bg-gray-800">
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="h-7 bg-white text-xs dark:bg-gray-800"
+                                                >
                                                     <Calendar className="mr-1 h-3 w-3" />
                                                     View Calendar
                                                     <ExternalLink className="ml-1 h-3 w-3" />
@@ -1217,50 +1663,109 @@ export default function Show({
                                             </a>
                                         </div>
                                         <p className="text-sm">
-                                            The following leave requests from the same campaign were submitted earlier and have overlapping dates:
+                                            The following leave requests from
+                                            the same campaign were submitted
+                                            earlier and have overlapping dates:
                                         </p>
-                                        <div className="mt-2 max-h-60 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
-                                            {earlierConflicts.map((conflict) => (
-                                                <div
-                                                    key={conflict.id}
-                                                    className="bg-white/50 dark:bg-black/20 rounded-md p-2 border border-orange-200 dark:border-orange-700 text-sm"
-                                                >
-                                                    <div className="flex flex-wrap items-center justify-between gap-1">
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="font-medium">{conflict.user_name}</span>
-                                                            <div className="flex gap-1">
-                                                                <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
-                                                                    {conflict.leave_type}
-                                                                </Badge>
-                                                                <Badge
-                                                                    variant={conflict.status === 'approved' ? 'default' : 'secondary'}
-                                                                    className="h-5 px-1.5 text-[10px]"
-                                                                >
-                                                                    {conflict.status}
-                                                                </Badge>
+                                        <div className="custom-scrollbar mt-2 max-h-60 space-y-2 overflow-y-auto pr-1">
+                                            {earlierConflicts.map(
+                                                (conflict) => (
+                                                    <div
+                                                        key={conflict.id}
+                                                        className="rounded-md border border-orange-200 bg-white/50 p-2 text-sm dark:border-orange-700 dark:bg-black/20"
+                                                    >
+                                                        <div className="flex flex-wrap items-center justify-between gap-1">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="font-medium">
+                                                                    {
+                                                                        conflict.user_name
+                                                                    }
+                                                                </span>
+                                                                <div className="flex gap-1">
+                                                                    <Badge
+                                                                        variant="outline"
+                                                                        className="h-5 px-1.5 text-[10px]"
+                                                                    >
+                                                                        {
+                                                                            conflict.leave_type
+                                                                        }
+                                                                    </Badge>
+                                                                    <Badge
+                                                                        variant={
+                                                                            conflict.status ===
+                                                                            'approved'
+                                                                                ? 'default'
+                                                                                : 'secondary'
+                                                                        }
+                                                                        className="h-5 px-1.5 text-[10px]"
+                                                                    >
+                                                                        {
+                                                                            conflict.status
+                                                                        }
+                                                                    </Badge>
+                                                                </div>
                                                             </div>
-                                                        </div>
-                                                        <span className="text-xs text-muted-foreground whitespace-nowrap">
-                                                            {format(parseISO(conflict.start_date), 'MMM d')} - {format(parseISO(conflict.end_date), 'MMM d')}
-                                                        </span>
-                                                    </div>
-
-                                                    <div className="flex flex-wrap justify-between items-end gap-2 mt-1">
-                                                        <span className="text-xs text-muted-foreground">
-                                                            Submitted: {format(parseISO(conflict.created_at), 'MM/dd h:mm a')}
-                                                        </span>
-
-                                                        {Boolean(conflict.overlapping_dates && conflict.overlapping_dates.length > 0) && (
-                                                            <span className="text-xs font-medium text-orange-600 dark:text-orange-400">
-                                                                Overlaps: {conflict.overlapping_dates.map(d => format(parseISO(d), 'MMM d')).join(', ')}
+                                                            <span className="text-xs whitespace-nowrap text-muted-foreground">
+                                                                {format(
+                                                                    parseISO(
+                                                                        conflict.start_date,
+                                                                    ),
+                                                                    'MMM d',
+                                                                )}{' '}
+                                                                -{' '}
+                                                                {format(
+                                                                    parseISO(
+                                                                        conflict.end_date,
+                                                                    ),
+                                                                    'MMM d',
+                                                                )}
                                                             </span>
-                                                        )}
+                                                        </div>
+
+                                                        <div className="mt-1 flex flex-wrap items-end justify-between gap-2">
+                                                            <span className="text-xs text-muted-foreground">
+                                                                Submitted:{' '}
+                                                                {format(
+                                                                    parseISO(
+                                                                        conflict.created_at,
+                                                                    ),
+                                                                    'MM/dd h:mm a',
+                                                                )}
+                                                            </span>
+
+                                                            {Boolean(
+                                                                conflict.overlapping_dates &&
+                                                                conflict
+                                                                    .overlapping_dates
+                                                                    .length > 0,
+                                                            ) && (
+                                                                <span className="text-xs font-medium text-orange-600 dark:text-orange-400">
+                                                                    Overlaps:{' '}
+                                                                    {conflict.overlapping_dates
+                                                                        .map(
+                                                                            (
+                                                                                d,
+                                                                            ) =>
+                                                                                format(
+                                                                                    parseISO(
+                                                                                        d,
+                                                                                    ),
+                                                                                    'MMM d',
+                                                                                ),
+                                                                        )
+                                                                        .join(
+                                                                            ', ',
+                                                                        )}
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            ))}
+                                                ),
+                                            )}
                                         </div>
-                                        <p className="text-xs italic mt-1 opacity-80">
-                                            Note: Earlier submitted requests may take priority.
+                                        <p className="mt-1 text-xs italic opacity-80">
+                                            Note: Earlier submitted requests may
+                                            take priority.
                                         </p>
                                     </div>
                                 </AlertDescription>
@@ -1269,24 +1774,51 @@ export default function Show({
 
                         {/* Document (available for all leave types) */}
                         <div className="space-y-2">
-                                <p className="text-sm font-medium text-muted-foreground">
-                                    {leaveRequest.leave_type === 'SL' ? 'Medical Certificate' : leaveRequest.leave_type === 'BL' ? 'Death Certificate' : 'Supporting Document'}
-                                </p>
-                                {(leaveRequest.documents && leaveRequest.documents.length > 0) && canViewMedicalCert ? (
-                                    <div className="space-y-2">
-                                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">
-                                            <FileImage className="h-3 w-3 mr-1" />
-                                            {leaveRequest.documents.length} file{leaveRequest.documents.length > 1 ? 's' : ''} uploaded
-                                        </Badge>
-                                        <div className="flex flex-wrap gap-3">
-                                            {leaveRequest.documents.map((document) => {
-                                                const url = leaveDocumentRoute({ leaveRequest: leaveRequest.id, document: document.id }).url;
-                                                const isImage = isImageDocument(document);
+                            <p className="text-sm font-medium text-muted-foreground">
+                                {leaveRequest.leave_type === 'SL'
+                                    ? 'Medical Certificate'
+                                    : leaveRequest.leave_type === 'BL'
+                                      ? 'Death Certificate'
+                                      : 'Supporting Document'}
+                            </p>
+                            {leaveRequest.documents &&
+                            leaveRequest.documents.length > 0 &&
+                            canViewMedicalCert ? (
+                                <div className="space-y-2">
+                                    <Badge
+                                        variant="outline"
+                                        className="border-green-300 bg-green-50 text-green-700"
+                                    >
+                                        <FileImage className="mr-1 h-3 w-3" />
+                                        {leaveRequest.documents.length} file
+                                        {leaveRequest.documents.length > 1
+                                            ? 's'
+                                            : ''}{' '}
+                                        uploaded
+                                    </Badge>
+                                    <div className="flex flex-wrap gap-3">
+                                        {leaveRequest.documents.map(
+                                            (document) => {
+                                                const url = leaveDocumentRoute({
+                                                    leaveRequest:
+                                                        leaveRequest.id,
+                                                    document: document.id,
+                                                }).url;
+                                                const isImage =
+                                                    isImageDocument(document);
                                                 return (
-                                                    <Attachment key={document.id} className="w-full sm:w-72">
+                                                    <Attachment
+                                                        key={document.id}
+                                                        className="w-full sm:w-72"
+                                                    >
                                                         {isImage ? (
                                                             <AttachmentMedia variant="image">
-                                                                <img src={url} alt={document.original_filename} />
+                                                                <img
+                                                                    src={url}
+                                                                    alt={
+                                                                        document.original_filename
+                                                                    }
+                                                                />
                                                             </AttachmentMedia>
                                                         ) : (
                                                             <AttachmentMedia>
@@ -1294,14 +1826,26 @@ export default function Show({
                                                             </AttachmentMedia>
                                                         )}
                                                         <AttachmentContent>
-                                                            <AttachmentTitle>{document.original_filename}</AttachmentTitle>
-                                                            <AttachmentDescription>{formatDocumentDescription(document)}</AttachmentDescription>
+                                                            <AttachmentTitle>
+                                                                {
+                                                                    document.original_filename
+                                                                }
+                                                            </AttachmentTitle>
+                                                            <AttachmentDescription>
+                                                                {formatDocumentDescription(
+                                                                    document,
+                                                                )}
+                                                            </AttachmentDescription>
                                                         </AttachmentContent>
                                                         <AttachmentActions>
                                                             <AttachmentAction
                                                                 aria-label={`View ${document.original_filename}`}
                                                                 title="View"
-                                                                onClick={() => handleOpenDocument(document)}
+                                                                onClick={() =>
+                                                                    handleOpenDocument(
+                                                                        document,
+                                                                    )
+                                                                }
                                                             >
                                                                 <Eye />
                                                             </AttachmentAction>
@@ -1321,81 +1865,119 @@ export default function Show({
                                                         </AttachmentActions>
                                                     </Attachment>
                                                 );
-                                            })}
-                                        </div>
+                                            },
+                                        )}
                                     </div>
-                                ) : leaveRequest.medical_cert_path && canViewMedicalCert ? (
-                                    <div className="flex items-center gap-2">
-                                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">
-                                            <FileImage className="h-3 w-3 mr-1" />
-                                            Uploaded
-                                        </Badge>
-                                        <a
-                                            href={leaveMedicalCertRoute(leaveRequest.id).url}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            title="Open in new tab"
-                                        >
-                                            <Button variant="outline" size="sm">
-                                                <FileImage className="h-4 w-4 mr-1" />
-                                                View Document
-                                            </Button>
-                                        </a>
-                                    </div>
-                                ) : leaveRequest.medical_cert_submitted ? (
-                                    <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-300">
-                                        Pending submission
+                                </div>
+                            ) : leaveRequest.medical_cert_path &&
+                              canViewMedicalCert ? (
+                                <div className="flex items-center gap-2">
+                                    <Badge
+                                        variant="outline"
+                                        className="border-green-300 bg-green-50 text-green-700"
+                                    >
+                                        <FileImage className="mr-1 h-3 w-3" />
+                                        Uploaded
                                     </Badge>
-                                ) : (
-                                    <Badge variant="outline" className="bg-gray-50 text-gray-600 border-gray-300">
-                                        Not provided
-                                    </Badge>
-                                )}
-                            </div>
+                                    <a
+                                        href={
+                                            leaveMedicalCertRoute(
+                                                leaveRequest.id,
+                                            ).url
+                                        }
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        title="Open in new tab"
+                                    >
+                                        <Button variant="outline" size="sm">
+                                            <FileImage className="mr-1 h-4 w-4" />
+                                            View Document
+                                        </Button>
+                                    </a>
+                                </div>
+                            ) : leaveRequest.medical_cert_submitted ? (
+                                <Badge
+                                    variant="outline"
+                                    className="border-yellow-300 bg-yellow-50 text-yellow-700"
+                                >
+                                    Pending submission
+                                </Badge>
+                            ) : (
+                                <Badge
+                                    variant="outline"
+                                    className="border-gray-300 bg-gray-50 text-gray-600"
+                                >
+                                    Not provided
+                                </Badge>
+                            )}
+                        </div>
 
                         {/* Credits Info */}
-                        {Boolean(leaveRequest.credits_deducted !== null && leaveRequest.credits_deducted !== undefined && Number(leaveRequest.credits_deducted) > 0) && (
+                        {Boolean(
+                            leaveRequest.credits_deducted !== null &&
+                            leaveRequest.credits_deducted !== undefined &&
+                            Number(leaveRequest.credits_deducted) > 0,
+                        ) && (
                             <div>
-                                <p className="text-sm font-medium text-muted-foreground">Leave Credits Deducted</p>
-                                <p className="text-base">{leaveRequest.credits_deducted} days</p>
+                                <p className="text-sm font-medium text-muted-foreground">
+                                    Leave Credits Deducted
+                                </p>
+                                <p className="text-base">
+                                    {leaveRequest.credits_deducted} days
+                                </p>
                             </div>
                         )}
 
                         {/* SL No Credit Reason - Show when SL has no credits applied */}
-                        {leaveRequest.leave_type === 'SL' && leaveRequest.sl_credits_applied === false && leaveRequest.sl_no_credit_reason && (
-                            <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
-                                <Info className="h-4 w-4 text-blue-600" />
-                                <AlertDescription className="text-blue-800 dark:text-blue-200">
-                                    <strong>SL Credits Not Deducted:</strong> {leaveRequest.sl_no_credit_reason}
-                                </AlertDescription>
-                            </Alert>
-                        )}
+                        {leaveRequest.leave_type === 'SL' &&
+                            leaveRequest.sl_credits_applied === false &&
+                            leaveRequest.sl_no_credit_reason && (
+                                <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
+                                    <Info className="h-4 w-4 text-blue-600" />
+                                    <AlertDescription className="text-blue-800 dark:text-blue-200">
+                                        <strong>
+                                            SL Credits Not Deducted:
+                                        </strong>{' '}
+                                        {leaveRequest.sl_no_credit_reason}
+                                    </AlertDescription>
+                                </Alert>
+                            )}
 
                         {/* SL Converted to UPTO - Show when UPTO was converted from SL due to insufficient credits */}
-                        {leaveRequest.leave_type === 'UPTO' && leaveRequest.sl_no_credit_reason && leaveRequest.sl_no_credit_reason.includes('Converted to UPTO') && (
-                            <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
-                                <AlertTriangle className="h-4 w-4 text-amber-600" />
-                                <AlertDescription className="text-amber-800 dark:text-amber-200">
-                                    <strong>Originally filed as Sick Leave (SL):</strong> {leaveRequest.sl_no_credit_reason}
-                                </AlertDescription>
-                            </Alert>
-                        )}
+                        {leaveRequest.leave_type === 'UPTO' &&
+                            leaveRequest.sl_no_credit_reason &&
+                            leaveRequest.sl_no_credit_reason.includes(
+                                'Converted to UPTO',
+                            ) && (
+                                <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+                                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                                    <AlertDescription className="text-amber-800 dark:text-amber-200">
+                                        <strong>
+                                            Originally filed as Sick Leave (SL):
+                                        </strong>{' '}
+                                        {leaveRequest.sl_no_credit_reason}
+                                    </AlertDescription>
+                                </Alert>
+                            )}
 
                         {/* SL/VL Per-Day Status (Pre-stored from previous approver — for pending requests) */}
                         {hasPreStoredDayStatuses && (
                             <div className="space-y-2">
-                                <p className="text-sm font-medium text-muted-foreground">Per-Day Status (Pre-assigned)</p>
+                                <p className="text-sm font-medium text-muted-foreground">
+                                    Per-Day Status (Pre-assigned)
+                                </p>
                                 {preStoredAttribution && (
                                     <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
                                         <Info className="h-4 w-4 text-blue-600" />
                                         <AlertDescription className="text-blue-800 dark:text-blue-200">
-                                            {preStoredAttribution}. These can be reviewed and edited during approval.
+                                            {preStoredAttribution}. These can be
+                                            reviewed and edited during approval.
                                         </AlertDescription>
                                     </Alert>
                                 )}
                                 <DayStatusAssignment
                                     dayStatuses={[]}
-                                    onChange={() => { }}
+                                    onChange={() => {}}
                                     readOnly
                                     existingRecords={leaveRequestDays}
                                 />
@@ -1403,85 +1985,169 @@ export default function Show({
                         )}
 
                         {/* SL/VL/LOA Per-Day Status Breakdown (for approved requests) */}
-                        {hasDisplayableDayStatuses && leaveRequestDays && leaveRequestDays.length > 0 && leaveRequest.status === 'approved' && (
-                            <div className="space-y-2">
-                                <div className="flex items-center justify-between">
-                                    <p className="text-sm font-medium text-muted-foreground">Per-Day Status Breakdown</p>
-                                    {isAdmin && canEditApproved && hasDayStatuses && (
-                                        <Button variant="outline" size="sm" onClick={handleOpenEditDayStatuses} className="h-7 text-xs">
-                                            <Edit className="h-3 w-3 mr-1" />
-                                            Edit Day Statuses
-                                        </Button>
-                                    )}
+                        {hasDisplayableDayStatuses &&
+                            leaveRequestDays &&
+                            leaveRequestDays.length > 0 &&
+                            leaveRequest.status === 'approved' && (
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <p className="text-sm font-medium text-muted-foreground">
+                                            Per-Day Status Breakdown
+                                        </p>
+                                        {isAdmin &&
+                                            canEditApproved &&
+                                            hasDayStatuses && (
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={
+                                                        handleOpenEditDayStatuses
+                                                    }
+                                                    className="h-7 text-xs"
+                                                >
+                                                    <Edit className="mr-1 h-3 w-3" />
+                                                    Edit Day Statuses
+                                                </Button>
+                                            )}
+                                    </div>
+                                    <DayStatusAssignment
+                                        dayStatuses={[]}
+                                        onChange={() => {}}
+                                        readOnly
+                                        existingRecords={leaveRequestDays}
+                                    />
                                 </div>
-                                <DayStatusAssignment
-                                    dayStatuses={[]}
-                                    onChange={() => { }}
-                                    readOnly
-                                    existingRecords={leaveRequestDays}
-                                />
-                            </div>
-                        )}
+                            )}
 
                         {/* Attendance Points at Request - Highlighted if >= 6, hidden for ML and BL */}
-                        {leaveRequest.leave_type !== 'ML' && leaveRequest.leave_type !== 'BL' && (
-                            <div>
-                                <p className="text-sm font-medium text-muted-foreground">
-                                    Attendance Points at Request
-                                </p>
-                                <div className="flex items-center gap-2 mt-1">
-                                    {Number(leaveRequest.attendance_points_at_request || 0) >= 6 ? (
-                                        <Badge variant="destructive" className="text-sm font-semibold px-3 py-1">
-                                            <AlertTriangle className="h-3.5 w-3.5 mr-1.5" />
-                                            {Number(leaveRequest.attendance_points_at_request || 0).toFixed(1)} Points (High)
-                                        </Badge>
-                                    ) : (
-                                        <p className="text-base">
-                                            {Number(leaveRequest.attendance_points_at_request || 0).toFixed(1)}
-                                        </p>
-                                    )}
-                                    {activeAttendancePoints && activeAttendancePoints.length > 0 && (
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => setShowAttendancePointsDialog(true)}
-                                            className="h-8"
-                                        >
-                                            <Info className="h-4 w-4 mr-1" />
-                                            View Details
-                                        </Button>
-                                    )}
+                        {leaveRequest.leave_type !== 'ML' &&
+                            leaveRequest.leave_type !== 'BL' && (
+                                <div>
+                                    <p className="text-sm font-medium text-muted-foreground">
+                                        Attendance Points at Request
+                                    </p>
+                                    <div className="mt-1 flex items-center gap-2">
+                                        {Number(
+                                            leaveRequest.attendance_points_at_request ||
+                                                0,
+                                        ) >= 6 ? (
+                                            <Badge
+                                                variant="destructive"
+                                                className="px-3 py-1 text-sm font-semibold"
+                                            >
+                                                <AlertTriangle className="mr-1.5 h-3.5 w-3.5" />
+                                                {Number(
+                                                    leaveRequest.attendance_points_at_request ||
+                                                        0,
+                                                ).toFixed(1)}{' '}
+                                                Points (High)
+                                            </Badge>
+                                        ) : (
+                                            <p className="text-base">
+                                                {Number(
+                                                    leaveRequest.attendance_points_at_request ||
+                                                        0,
+                                                ).toFixed(1)}
+                                            </p>
+                                        )}
+                                        {activeAttendancePoints &&
+                                            activeAttendancePoints.length >
+                                                0 && (
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() =>
+                                                        setShowAttendancePointsDialog(
+                                                            true,
+                                                        )
+                                                    }
+                                                    className="h-8"
+                                                >
+                                                    <Info className="mr-1 h-4 w-4" />
+                                                    View Details
+                                                </Button>
+                                            )}
+                                    </div>
                                 </div>
-                            </div>
-                        )}
+                            )}
 
                         {/* High Attendance Points Alert - Hidden for cancelled leaves, ML, and BL */}
-                        {Number(leaveRequest.attendance_points_at_request || 0) >= 6 && leaveRequest.status !== 'cancelled' && leaveRequest.leave_type !== 'ML' && leaveRequest.leave_type !== 'BL' && (
-                            <Alert className="border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950">
-                                <AlertDescription className="text-red-800 dark:text-red-200">
-                                    <strong>⚠️ High Attendance Points:</strong>  <p>This employee has{' '}
-                                        <span className="font-bold">{Number(leaveRequest.attendance_points_at_request || 0).toFixed(1)} attendance points</span>{' '}
-                                        at the time of this request. Please review attendance history before approving.</p>
-                                </AlertDescription>
-                            </Alert>
-                        )}
+                        {Number(
+                            leaveRequest.attendance_points_at_request || 0,
+                        ) >= 6 &&
+                            leaveRequest.status !== 'cancelled' &&
+                            leaveRequest.leave_type !== 'ML' &&
+                            leaveRequest.leave_type !== 'BL' && (
+                                <Alert className="border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950">
+                                    <AlertDescription className="text-red-800 dark:text-red-200">
+                                        <strong>
+                                            ⚠️ High Attendance Points:
+                                        </strong>{' '}
+                                        <p>
+                                            This employee has{' '}
+                                            <span className="font-bold">
+                                                {Number(
+                                                    leaveRequest.attendance_points_at_request ||
+                                                        0,
+                                                ).toFixed(1)}{' '}
+                                                attendance points
+                                            </span>{' '}
+                                            at the time of this request. Please
+                                            review attendance history before
+                                            approving.
+                                        </p>
+                                    </AlertDescription>
+                                </Alert>
+                            )}
 
                         {/* 30-Day Absence Window Warning for VL - Hidden for cancelled leaves */}
-                        {Boolean(absenceWindowInfo?.within_window && leaveRequest.leave_type === 'VL' && leaveRequest.status !== 'cancelled') && (
+                        {Boolean(
+                            absenceWindowInfo?.within_window &&
+                            leaveRequest.leave_type === 'VL' &&
+                            leaveRequest.status !== 'cancelled',
+                        ) && (
                             <Alert className="border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
                                 <AlertTriangle className="h-4 w-4 text-amber-600" />
                                 <AlertDescription className="text-amber-800 dark:text-amber-200">
                                     <div className="space-y-1">
-                                        <p className="font-semibold">⚠️ 30-Day Absence Window Violation</p>
-                                        <p className="text-sm">
-                                            This VL application falls within 30 days of the employee's last recorded absence.
+                                        <p className="font-semibold">
+                                            ⚠️ 30-Day Absence Window Violation
                                         </p>
-                                        <div className="text-sm mt-2">
-                                            <p><strong>Last Absence Date:</strong> {absenceWindowInfo?.last_absence_date ? format(parseISO(absenceWindowInfo.last_absence_date), 'MMMM d, yyyy') : 'N/A'}</p>
-                                            <p><strong>Window Ends:</strong> {absenceWindowInfo?.window_end_date ? format(parseISO(absenceWindowInfo.window_end_date), 'MMMM d, yyyy') : 'N/A'}</p>
+                                        <p className="text-sm">
+                                            This VL application falls within 30
+                                            days of the employee's last recorded
+                                            absence.
+                                        </p>
+                                        <div className="mt-2 text-sm">
+                                            <p>
+                                                <strong>
+                                                    Last Absence Date:
+                                                </strong>{' '}
+                                                {absenceWindowInfo?.last_absence_date
+                                                    ? format(
+                                                          parseISO(
+                                                              absenceWindowInfo.last_absence_date,
+                                                          ),
+                                                          'MMMM d, yyyy',
+                                                      )
+                                                    : 'N/A'}
+                                            </p>
+                                            <p>
+                                                <strong>Window Ends:</strong>{' '}
+                                                {absenceWindowInfo?.window_end_date
+                                                    ? format(
+                                                          parseISO(
+                                                              absenceWindowInfo.window_end_date,
+                                                          ),
+                                                          'MMMM d, yyyy',
+                                                      )
+                                                    : 'N/A'}
+                                            </p>
                                         </div>
-                                        <p className="text-xs italic mt-1 opacity-80">
-                                            Note: VL applications within 30 days of last absence may require additional review.
+                                        <p className="mt-1 text-xs italic opacity-80">
+                                            Note: VL applications within 30 days
+                                            of last absence may require
+                                            additional review.
                                         </p>
                                     </div>
                                 </AlertDescription>
@@ -1489,31 +2155,58 @@ export default function Show({
                         )}
 
                         {/* Bereavement Leave 3-month eligibility notice - non-blocking, visible to owner/TL/admin */}
-                        {leaveRequest.leave_type === 'BL' && blEligibility && !blEligibility.is_eligible && leaveRequest.status !== 'cancelled' && (
-                            <Alert className="border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
-                                <AlertTriangle className="h-4 w-4 text-amber-600" />
-                                <AlertDescription className="text-amber-800 dark:text-amber-200">
-                                    <p className="font-semibold">Bereavement Leave Eligibility Notice</p>
-                                    <p className="text-sm mt-1">
-                                        {blEligibility.eligibility_date ? (
-                                            <>
-                                                This employee was not yet eligible for Bereavement Leave (minimum 3 months employment) when this request was filed.
-                                                {' '}Eligibility started on <strong>{format(parseISO(blEligibility.eligibility_date), 'MMMM d, yyyy')}</strong>.
-                                            </>
-                                        ) : (
-                                            <>Unable to determine the 3-month eligibility date for this employee (missing hire date).</>
-                                        )}
-                                    </p>
-                                </AlertDescription>
-                            </Alert>
-                        )}
+                        {leaveRequest.leave_type === 'BL' &&
+                            blEligibility &&
+                            !blEligibility.is_eligible &&
+                            leaveRequest.status !== 'cancelled' && (
+                                <Alert className="border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+                                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                                    <AlertDescription className="text-amber-800 dark:text-amber-200">
+                                        <p className="font-semibold">
+                                            Bereavement Leave Eligibility Notice
+                                        </p>
+                                        <p className="mt-1 text-sm">
+                                            {blEligibility.eligibility_date ? (
+                                                <>
+                                                    This employee was not yet
+                                                    eligible for Bereavement
+                                                    Leave (minimum 3 months
+                                                    employment) when this
+                                                    request was filed.{' '}
+                                                    Eligibility started on{' '}
+                                                    <strong>
+                                                        {format(
+                                                            parseISO(
+                                                                blEligibility.eligibility_date,
+                                                            ),
+                                                            'MMMM d, yyyy',
+                                                        )}
+                                                    </strong>
+                                                    .
+                                                </>
+                                            ) : (
+                                                <>
+                                                    Unable to determine the
+                                                    3-month eligibility date for
+                                                    this employee (missing hire
+                                                    date).
+                                                </>
+                                            )}
+                                        </p>
+                                    </AlertDescription>
+                                </Alert>
+                            )}
 
                         {/* Reason */}
                         <div>
-                            <p className="text-sm font-medium text-muted-foreground mb-2">Reason</p>
+                            <p className="mb-2 text-sm font-medium text-muted-foreground">
+                                Reason
+                            </p>
                             <Alert className="overflow-hidden">
                                 <Info className="h-4 w-4 shrink-0" />
-                                <AlertDescription className="wrap-break-word whitespace-pre-wrap">{leaveRequest.reason}</AlertDescription>
+                                <AlertDescription className="wrap-break-word whitespace-pre-wrap">
+                                    {leaveRequest.reason}
+                                </AlertDescription>
                             </Alert>
                         </div>
 
@@ -1522,47 +2215,100 @@ export default function Show({
                             <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
                                 <Shield className="h-4 w-4 text-blue-600" />
                                 <AlertDescription className="text-blue-800 dark:text-blue-200">
-                                    <strong>Short Notice Override:</strong> The 2-week advance notice requirement was overridden
+                                    <strong>Short Notice Override:</strong> The
+                                    2-week advance notice requirement was
+                                    overridden
                                     {leaveRequest.short_notice_overrider && (
-                                        <span> by {leaveRequest.short_notice_overrider.name}</span>
-                                    )}.
+                                        <span>
+                                            {' '}
+                                            by{' '}
+                                            {
+                                                leaveRequest
+                                                    .short_notice_overrider.name
+                                            }
+                                        </span>
+                                    )}
+                                    .
                                 </AlertDescription>
                             </Alert>
                         )}
 
                         {/* Short Notice Warning (not yet overridden) */}
-                        {isShortNotice && !leaveRequest.short_notice_override && (
-                            <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
-                                <AlertTriangle className="h-4 w-4 text-amber-600" />
-                                <AlertDescription className="text-amber-800 dark:text-amber-200">
-                                    <strong>Short Notice Request:</strong> This leave was filed less than 2 weeks in advance.
-                                    {canOverrideShortNotice && leaveRequest.status === 'pending' && (
-                                        <span className="text-xs opacity-80"> You can override this in the Approve dialog.</span>
-                                    )}
-                                </AlertDescription>
-                            </Alert>
-                        )}
+                        {isShortNotice &&
+                            !leaveRequest.short_notice_override && (
+                                <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+                                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                                    <AlertDescription className="text-amber-800 dark:text-amber-200">
+                                        <strong>Short Notice Request:</strong>{' '}
+                                        This leave was filed less than 2 weeks
+                                        in advance.
+                                        {canOverrideShortNotice &&
+                                            leaveRequest.status ===
+                                                'pending' && (
+                                                <span className="text-xs opacity-80">
+                                                    {' '}
+                                                    You can override this in the
+                                                    Approve dialog.
+                                                </span>
+                                            )}
+                                    </AlertDescription>
+                                </Alert>
+                            )}
 
                         {/* Date Modification History */}
-                        {(leaveRequest.original_start_date && leaveRequest.original_end_date) || leaveRequest.date_modification_reason ? (
+                        {(leaveRequest.original_start_date &&
+                            leaveRequest.original_end_date) ||
+                        leaveRequest.date_modification_reason ? (
                             <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
                                 <AlertTriangle className="h-4 w-4 text-amber-600" />
                                 <AlertDescription className="text-amber-800 dark:text-amber-200">
-                                    {leaveRequest.original_start_date && leaveRequest.original_end_date && (
-                                        <div className="mb-2">
-                                            <strong>Dates Modified:</strong> Original dates were{' '}
-                                            {format(parseISO(leaveRequest.original_start_date), 'MMM d, yyyy')} to{' '}
-                                            {format(parseISO(leaveRequest.original_end_date), 'MMM d, yyyy')}
-                                            {leaveRequest.date_modifier && (
-                                                <span className="font-semibold">. Modified by {leaveRequest.date_modifier.name}</span>
-                                            )}
-                                        </div>
-                                    )}
+                                    {leaveRequest.original_start_date &&
+                                        leaveRequest.original_end_date && (
+                                            <div className="mb-2">
+                                                <strong>Dates Modified:</strong>{' '}
+                                                Original dates were{' '}
+                                                {format(
+                                                    parseISO(
+                                                        leaveRequest.original_start_date,
+                                                    ),
+                                                    'MMM d, yyyy',
+                                                )}{' '}
+                                                to{' '}
+                                                {format(
+                                                    parseISO(
+                                                        leaveRequest.original_end_date,
+                                                    ),
+                                                    'MMM d, yyyy',
+                                                )}
+                                                {leaveRequest.date_modifier && (
+                                                    <span className="font-semibold">
+                                                        . Modified by{' '}
+                                                        {
+                                                            leaveRequest
+                                                                .date_modifier
+                                                                .name
+                                                        }
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
                                     {leaveRequest.date_modification_reason && (
-                                        <div className={leaveRequest.original_start_date ? "mt-3 pt-3 border-t border-amber-300 dark:border-amber-700" : ""}>
-                                            {!leaveRequest.original_start_date && <strong className="block mb-2">Adjustment Details:</strong>}
+                                        <div
+                                            className={
+                                                leaveRequest.original_start_date
+                                                    ? 'mt-3 border-t border-amber-300 pt-3 dark:border-amber-700'
+                                                    : ''
+                                            }
+                                        >
+                                            {!leaveRequest.original_start_date && (
+                                                <strong className="mb-2 block">
+                                                    Adjustment Details:
+                                                </strong>
+                                            )}
                                             <div className="space-y-1 text-sm whitespace-pre-line">
-                                                {leaveRequest.date_modification_reason}
+                                                {
+                                                    leaveRequest.date_modification_reason
+                                                }
                                             </div>
                                         </div>
                                     )}
@@ -1577,12 +2323,17 @@ export default function Show({
                                 <AlertDescription className="text-gray-800 dark:text-gray-200">
                                     {leaveRequest.auto_cancelled ? (
                                         <>
-                                            <strong>Auto-Cancelled:</strong> {leaveRequest.auto_cancelled_reason}
+                                            <strong>Auto-Cancelled:</strong>{' '}
+                                            {leaveRequest.auto_cancelled_reason}
                                         </>
                                     ) : leaveRequest.canceller ? (
                                         <>
-                                            <strong>Cancelled by {leaveRequest.canceller.name}:</strong>{' '}
-                                            {leaveRequest.cancellation_reason || 'No reason provided'}
+                                            <strong>
+                                                Cancelled by{' '}
+                                                {leaveRequest.canceller.name}:
+                                            </strong>{' '}
+                                            {leaveRequest.cancellation_reason ||
+                                                'No reason provided'}
                                         </>
                                     ) : (
                                         <strong>Cancelled by user</strong>
@@ -1592,185 +2343,321 @@ export default function Show({
                         )}
 
                         {/* Denial Reverted Info (Super Admin returned a denied request to pending) */}
-                        {leaveRequest.reverted_at && leaveRequest.status !== 'denied' && (
-                            <Alert className="border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
-                                <RotateCcw className="h-4 w-4 text-amber-600" />
-                                <AlertDescription className="text-amber-800 dark:text-amber-200">
-                                    <div className="space-y-1">
-                                        <p>
-                                            <strong>Denial reverted by {leaveRequest.reverter?.name || 'Super Admin'}</strong>
-                                            {' '}on {format(parseISO(leaveRequest.reverted_at), 'MMM d, yyyy h:mm a')}
-                                            {leaveRequest.status === 'pending' && ' — request is pending review again.'}
-                                        </p>
-                                        {leaveRequest.revert_reason && (
-                                            <p className="text-sm italic">"{leaveRequest.revert_reason}"</p>
-                                        )}
-                                        {(leaveRequest.previous_denier || leaveRequest.reverted_denial_notes) && (
-                                            <p className="text-xs text-amber-700 dark:text-amber-300">
-                                                Previously denied by {leaveRequest.previous_denier?.name || 'reviewer'}
-                                                {leaveRequest.reverted_denial_notes && `: "${leaveRequest.reverted_denial_notes}"`}
+                        {leaveRequest.reverted_at &&
+                            leaveRequest.status !== 'denied' && (
+                                <Alert className="border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+                                    <RotateCcw className="h-4 w-4 text-amber-600" />
+                                    <AlertDescription className="text-amber-800 dark:text-amber-200">
+                                        <div className="space-y-1">
+                                            <p>
+                                                <strong>
+                                                    Denial reverted by{' '}
+                                                    {leaveRequest.reverter
+                                                        ?.name || 'Super Admin'}
+                                                </strong>{' '}
+                                                on{' '}
+                                                {format(
+                                                    parseISO(
+                                                        leaveRequest.reverted_at,
+                                                    ),
+                                                    'MMM d, yyyy h:mm a',
+                                                )}
+                                                {leaveRequest.status ===
+                                                    'pending' &&
+                                                    ' — request is pending review again.'}
                                             </p>
-                                        )}
-                                    </div>
-                                </AlertDescription>
-                            </Alert>
-                        )}
+                                            {leaveRequest.revert_reason && (
+                                                <p className="text-sm italic">
+                                                    "
+                                                    {leaveRequest.revert_reason}
+                                                    "
+                                                </p>
+                                            )}
+                                            {(leaveRequest.previous_denier ||
+                                                leaveRequest.reverted_denial_notes) && (
+                                                <p className="text-xs text-amber-700 dark:text-amber-300">
+                                                    Previously denied by{' '}
+                                                    {leaveRequest
+                                                        .previous_denier
+                                                        ?.name || 'reviewer'}
+                                                    {leaveRequest.reverted_denial_notes &&
+                                                        `: "${leaveRequest.reverted_denial_notes}"`}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </AlertDescription>
+                                </Alert>
+                            )}
 
                         {/* TL Approval Status (for requests requiring TL approval) */}
-                        {leaveRequest.requires_tl_approval && leaveRequest.status === 'pending' && !leaveRequest.tl_rejected && (
-                            <div className="border-t pt-4">
-                                <h3 className="font-semibold mb-4">Team Lead Approval</h3>
-                                <div className={`p-4 rounded-lg border ${isTlApproved ? 'bg-green-500/10 border-green-500/30 dark:bg-green-500/20 dark:border-green-500/40' : 'bg-yellow-500/10 border-yellow-500/30 dark:bg-yellow-500/20 dark:border-yellow-500/40'}`}>
-                                    <div className="flex items-center gap-2 mb-2">
+                        {leaveRequest.requires_tl_approval &&
+                            leaveRequest.status === 'pending' &&
+                            !leaveRequest.tl_rejected && (
+                                <div className="border-t pt-4">
+                                    <h3 className="mb-4 font-semibold">
+                                        Team Lead Approval
+                                    </h3>
+                                    <div
+                                        className={`rounded-lg border p-4 ${isTlApproved ? 'border-green-500/30 bg-green-500/10 dark:border-green-500/40 dark:bg-green-500/20' : 'border-yellow-500/30 bg-yellow-500/10 dark:border-yellow-500/40 dark:bg-yellow-500/20'}`}
+                                    >
+                                        <div className="mb-2 flex items-center gap-2">
+                                            {isTlApproved ? (
+                                                <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+                                            ) : (
+                                                <Clock className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+                                            )}
+                                            <span className="font-medium">
+                                                Team Lead Approval
+                                            </span>
+                                        </div>
                                         {isTlApproved ? (
-                                            <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+                                            <>
+                                                <p className="text-sm text-muted-foreground">
+                                                    Approved by{' '}
+                                                    {leaveRequest.tl_approver
+                                                        ?.name || 'Team Lead'}
+                                                </p>
+                                                <p className="mt-1 text-xs text-muted-foreground">
+                                                    {leaveRequest.tl_approved_at &&
+                                                        format(
+                                                            parseISO(
+                                                                leaveRequest.tl_approved_at,
+                                                            ),
+                                                            'MMM d, yyyy h:mm a',
+                                                        )}
+                                                </p>
+                                                <p className="mt-2 text-sm text-muted-foreground italic">
+                                                    {leaveRequest.tl_review_notes
+                                                        ? `"${leaveRequest.tl_review_notes}"`
+                                                        : 'No notes provided'}
+                                                </p>
+                                            </>
                                         ) : (
-                                            <Clock className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+                                            <p className="text-sm text-yellow-700 dark:text-yellow-400">
+                                                Awaiting Team Lead approval
+                                            </p>
                                         )}
-                                        <span className="font-medium">Team Lead Approval</span>
                                     </div>
-                                    {isTlApproved ? (
-                                        <>
-                                            <p className="text-sm text-muted-foreground">
-                                                Approved by {leaveRequest.tl_approver?.name || 'Team Lead'}
-                                            </p>
-                                            <p className="text-xs text-muted-foreground mt-1">
-                                                {leaveRequest.tl_approved_at && format(parseISO(leaveRequest.tl_approved_at), 'MMM d, yyyy h:mm a')}
-                                            </p>
-                                            <p className="text-sm mt-2 italic text-muted-foreground">
-                                                {leaveRequest.tl_review_notes ? `"${leaveRequest.tl_review_notes}"` : 'No notes provided'}
-                                            </p>
-                                        </>
-                                    ) : (
-                                        <p className="text-sm text-yellow-700 dark:text-yellow-400">Awaiting Team Lead approval</p>
-                                    )}
                                 </div>
-                            </div>
-                        )}
+                            )}
 
                         {/* Dual Approval Status */}
-                        {leaveRequest.status === 'pending' && (isAdminApproved || isHrApproved || (leaveRequest.requires_tl_approval && isTlApproved)) && (
-                            <div className="border-t pt-4">
-                                <h3 className="font-semibold mb-4">Approval Progress</h3>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    {/* Admin Approval Status */}
-                                    <div className={`p-4 rounded-lg border ${isAdminApproved ? 'bg-green-500/10 border-green-500/30 dark:bg-green-500/20 dark:border-green-500/40' : 'bg-yellow-500/10 border-yellow-500/30 dark:bg-yellow-500/20 dark:border-yellow-500/40'}`}>
-                                        <div className="flex items-center gap-2 mb-2">
+                        {leaveRequest.status === 'pending' &&
+                            (isAdminApproved ||
+                                isHrApproved ||
+                                (leaveRequest.requires_tl_approval &&
+                                    isTlApproved)) && (
+                                <div className="border-t pt-4">
+                                    <h3 className="mb-4 font-semibold">
+                                        Approval Progress
+                                    </h3>
+                                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                        {/* Admin Approval Status */}
+                                        <div
+                                            className={`rounded-lg border p-4 ${isAdminApproved ? 'border-green-500/30 bg-green-500/10 dark:border-green-500/40 dark:bg-green-500/20' : 'border-yellow-500/30 bg-yellow-500/10 dark:border-yellow-500/40 dark:bg-yellow-500/20'}`}
+                                        >
+                                            <div className="mb-2 flex items-center gap-2">
+                                                {isAdminApproved ? (
+                                                    <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+                                                ) : (
+                                                    <Clock className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+                                                )}
+                                                <span className="font-medium">
+                                                    Admin Approval
+                                                </span>
+                                            </div>
                                             {isAdminApproved ? (
-                                                <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+                                                <>
+                                                    <p className="text-sm text-muted-foreground">
+                                                        Approved by{' '}
+                                                        {leaveRequest
+                                                            .admin_approver
+                                                            ?.name || 'Admin'}
+                                                    </p>
+                                                    <p className="mt-1 text-xs text-muted-foreground">
+                                                        {leaveRequest.admin_approved_at &&
+                                                            format(
+                                                                parseISO(
+                                                                    leaveRequest.admin_approved_at,
+                                                                ),
+                                                                'MMM d, yyyy h:mm a',
+                                                            )}
+                                                    </p>
+                                                    {leaveRequest.admin_review_notes && (
+                                                        <p className="mt-2 text-sm text-muted-foreground italic">
+                                                            "
+                                                            {
+                                                                leaveRequest.admin_review_notes
+                                                            }
+                                                            "
+                                                        </p>
+                                                    )}
+                                                </>
                                             ) : (
-                                                <Clock className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+                                                <p className="text-sm text-yellow-700 dark:text-yellow-400">
+                                                    Awaiting Admin approval
+                                                </p>
                                             )}
-                                            <span className="font-medium">Admin Approval</span>
                                         </div>
-                                        {isAdminApproved ? (
-                                            <>
-                                                <p className="text-sm text-muted-foreground">
-                                                    Approved by {leaveRequest.admin_approver?.name || 'Admin'}
-                                                </p>
-                                                <p className="text-xs text-muted-foreground mt-1">
-                                                    {leaveRequest.admin_approved_at && format(parseISO(leaveRequest.admin_approved_at), 'MMM d, yyyy h:mm a')}
-                                                </p>
-                                                {leaveRequest.admin_review_notes && (
-                                                    <p className="text-sm mt-2 italic text-muted-foreground">"{leaveRequest.admin_review_notes}"</p>
-                                                )}
-                                            </>
-                                        ) : (
-                                            <p className="text-sm text-yellow-700 dark:text-yellow-400">Awaiting Admin approval</p>
-                                        )}
-                                    </div>
 
-                                    {/* HR Approval Status */}
-                                    <div className={`p-4 rounded-lg border ${isHrApproved ? 'bg-green-500/10 border-green-500/30 dark:bg-green-500/20 dark:border-green-500/40' : 'bg-yellow-500/10 border-yellow-500/30 dark:bg-yellow-500/20 dark:border-yellow-500/40'}`}>
-                                        <div className="flex items-center gap-2 mb-2">
-                                            {isHrApproved ? (
-                                                <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
-                                            ) : (
-                                                <Clock className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
-                                            )}
-                                            <span className="font-medium">HR Approval</span>
-                                        </div>
-                                        {isHrApproved ? (
-                                            <>
-                                                <p className="text-sm text-muted-foreground">
-                                                    Approved by {leaveRequest.hr_approver?.name || 'HR'}
-                                                </p>
-                                                <p className="text-xs text-muted-foreground mt-1">
-                                                    {leaveRequest.hr_approved_at && format(parseISO(leaveRequest.hr_approved_at), 'MMM d, yyyy h:mm a')}
-                                                </p>
-                                                {leaveRequest.hr_review_notes && (
-                                                    <p className="text-sm mt-2 italic text-muted-foreground">"{leaveRequest.hr_review_notes}"</p>
+                                        {/* HR Approval Status */}
+                                        <div
+                                            className={`rounded-lg border p-4 ${isHrApproved ? 'border-green-500/30 bg-green-500/10 dark:border-green-500/40 dark:bg-green-500/20' : 'border-yellow-500/30 bg-yellow-500/10 dark:border-yellow-500/40 dark:bg-yellow-500/20'}`}
+                                        >
+                                            <div className="mb-2 flex items-center gap-2">
+                                                {isHrApproved ? (
+                                                    <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+                                                ) : (
+                                                    <Clock className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
                                                 )}
-                                            </>
-                                        ) : (
-                                            <p className="text-sm text-yellow-700 dark:text-yellow-400">Awaiting HR approval</p>
-                                        )}
+                                                <span className="font-medium">
+                                                    HR Approval
+                                                </span>
+                                            </div>
+                                            {isHrApproved ? (
+                                                <>
+                                                    <p className="text-sm text-muted-foreground">
+                                                        Approved by{' '}
+                                                        {leaveRequest
+                                                            .hr_approver
+                                                            ?.name || 'HR'}
+                                                    </p>
+                                                    <p className="mt-1 text-xs text-muted-foreground">
+                                                        {leaveRequest.hr_approved_at &&
+                                                            format(
+                                                                parseISO(
+                                                                    leaveRequest.hr_approved_at,
+                                                                ),
+                                                                'MMM d, yyyy h:mm a',
+                                                            )}
+                                                    </p>
+                                                    {leaveRequest.hr_review_notes && (
+                                                        <p className="mt-2 text-sm text-muted-foreground italic">
+                                                            "
+                                                            {
+                                                                leaveRequest.hr_review_notes
+                                                            }
+                                                            "
+                                                        </p>
+                                                    )}
+                                                </>
+                                            ) : (
+                                                <p className="text-sm text-yellow-700 dark:text-yellow-400">
+                                                    Awaiting HR approval
+                                                </p>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        )}
+                            )}
 
                         {/* Review Info (for final approved/denied status) */}
                         {leaveRequest.reviewed_at && (
                             <div className="border-t pt-4">
-                                <h3 className="font-semibold mb-4">Final Review Information</h3>
+                                <h3 className="mb-4 font-semibold">
+                                    Final Review Information
+                                </h3>
 
                                 {/* Show all approval info when fully approved */}
                                 {leaveRequest.status === 'approved' && (
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+                                    <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                                         {/* TL Approval (if required) */}
-                                        {leaveRequest.requires_tl_approval && isTlApproved && (
-                                            <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/30 dark:bg-green-500/20 dark:border-green-500/40">
-                                                <div className="flex items-center gap-2 mb-1">
-                                                    <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
-                                                    <span className="font-medium text-sm">Team Lead Approved</span>
+                                        {leaveRequest.requires_tl_approval &&
+                                            isTlApproved && (
+                                                <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-3 dark:border-green-500/40 dark:bg-green-500/20">
+                                                    <div className="mb-1 flex items-center gap-2">
+                                                        <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                                                        <span className="text-sm font-medium">
+                                                            Team Lead Approved
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-sm text-muted-foreground">
+                                                        {leaveRequest
+                                                            .tl_approver
+                                                            ?.name ||
+                                                            'Team Lead'}
+                                                    </p>
+                                                    <p className="text-xs text-muted-foreground">
+                                                        {leaveRequest.tl_approved_at &&
+                                                            format(
+                                                                parseISO(
+                                                                    leaveRequest.tl_approved_at,
+                                                                ),
+                                                                'MMM d, yyyy h:mm a',
+                                                            )}
+                                                    </p>
+                                                    <p className="mt-1 text-xs text-muted-foreground italic">
+                                                        {leaveRequest.tl_review_notes
+                                                            ? `"${leaveRequest.tl_review_notes}"`
+                                                            : 'No notes provided'}
+                                                    </p>
                                                 </div>
-                                                <p className="text-sm text-muted-foreground">
-                                                    {leaveRequest.tl_approver?.name || 'Team Lead'}
-                                                </p>
-                                                <p className="text-xs text-muted-foreground">
-                                                    {leaveRequest.tl_approved_at && format(parseISO(leaveRequest.tl_approved_at), 'MMM d, yyyy h:mm a')}
-                                                </p>
-                                                <p className="text-xs mt-1 italic text-muted-foreground">
-                                                    {leaveRequest.tl_review_notes ? `"${leaveRequest.tl_review_notes}"` : 'No notes provided'}
-                                                </p>
-                                            </div>
-                                        )}
+                                            )}
 
                                         {/* Admin Approval */}
                                         {isAdminApproved && (
-                                            <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/30 dark:bg-green-500/20 dark:border-green-500/40">
-                                                <div className="flex items-center gap-2 mb-1">
+                                            <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-3 dark:border-green-500/40 dark:bg-green-500/20">
+                                                <div className="mb-1 flex items-center gap-2">
                                                     <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
-                                                    <span className="font-medium text-sm">Admin Approved</span>
+                                                    <span className="text-sm font-medium">
+                                                        Admin Approved
+                                                    </span>
                                                 </div>
                                                 <p className="text-sm text-muted-foreground">
-                                                    {leaveRequest.admin_approver?.name || 'Admin'}
+                                                    {leaveRequest.admin_approver
+                                                        ?.name || 'Admin'}
                                                 </p>
                                                 <p className="text-xs text-muted-foreground">
-                                                    {leaveRequest.admin_approved_at && format(parseISO(leaveRequest.admin_approved_at), 'MMM d, yyyy h:mm a')}
+                                                    {leaveRequest.admin_approved_at &&
+                                                        format(
+                                                            parseISO(
+                                                                leaveRequest.admin_approved_at,
+                                                            ),
+                                                            'MMM d, yyyy h:mm a',
+                                                        )}
                                                 </p>
                                                 {leaveRequest.admin_review_notes && (
-                                                    <p className="text-xs mt-1 italic text-muted-foreground">"{leaveRequest.admin_review_notes}"</p>
+                                                    <p className="mt-1 text-xs text-muted-foreground italic">
+                                                        "
+                                                        {
+                                                            leaveRequest.admin_review_notes
+                                                        }
+                                                        "
+                                                    </p>
                                                 )}
                                             </div>
                                         )}
 
                                         {/* HR Approval */}
                                         {isHrApproved && (
-                                            <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/30 dark:bg-green-500/20 dark:border-green-500/40">
-                                                <div className="flex items-center gap-2 mb-1">
+                                            <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-3 dark:border-green-500/40 dark:bg-green-500/20">
+                                                <div className="mb-1 flex items-center gap-2">
                                                     <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
-                                                    <span className="font-medium text-sm">HR Approved</span>
+                                                    <span className="text-sm font-medium">
+                                                        HR Approved
+                                                    </span>
                                                 </div>
                                                 <p className="text-sm text-muted-foreground">
-                                                    {leaveRequest.hr_approver?.name || 'HR'}
+                                                    {leaveRequest.hr_approver
+                                                        ?.name || 'HR'}
                                                 </p>
                                                 <p className="text-xs text-muted-foreground">
-                                                    {leaveRequest.hr_approved_at && format(parseISO(leaveRequest.hr_approved_at), 'MMM d, yyyy h:mm a')}
+                                                    {leaveRequest.hr_approved_at &&
+                                                        format(
+                                                            parseISO(
+                                                                leaveRequest.hr_approved_at,
+                                                            ),
+                                                            'MMM d, yyyy h:mm a',
+                                                        )}
                                                 </p>
                                                 {leaveRequest.hr_review_notes && (
-                                                    <p className="text-xs mt-1 italic text-muted-foreground">"{leaveRequest.hr_review_notes}"</p>
+                                                    <p className="mt-1 text-xs text-muted-foreground italic">
+                                                        "
+                                                        {
+                                                            leaveRequest.hr_review_notes
+                                                        }
+                                                        "
+                                                    </p>
                                                 )}
                                             </div>
                                         )}
@@ -1778,45 +2665,68 @@ export default function Show({
                                 )}
 
                                 {/* TL Rejection Info */}
-                                {leaveRequest.status === 'denied' && leaveRequest.tl_rejected && (
-                                    <div className="mb-4">
-                                        <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 dark:bg-red-500/20 dark:border-red-500/40">
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
-                                                <span className="font-medium text-sm">Rejected by Team Lead</span>
+                                {leaveRequest.status === 'denied' &&
+                                    leaveRequest.tl_rejected && (
+                                        <div className="mb-4">
+                                            <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 dark:border-red-500/40 dark:bg-red-500/20">
+                                                <div className="mb-1 flex items-center gap-2">
+                                                    <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                                                    <span className="text-sm font-medium">
+                                                        Rejected by Team Lead
+                                                    </span>
+                                                </div>
+                                                <p className="text-sm text-muted-foreground">
+                                                    {leaveRequest.tl_approver
+                                                        ?.name || 'Team Lead'}
+                                                </p>
+                                                <p className="mt-1 text-xs text-muted-foreground italic">
+                                                    {leaveRequest.tl_review_notes
+                                                        ? `"${leaveRequest.tl_review_notes}"`
+                                                        : 'No notes provided'}
+                                                </p>
                                             </div>
-                                            <p className="text-sm text-muted-foreground">
-                                                {leaveRequest.tl_approver?.name || 'Team Lead'}
-                                            </p>
-                                            <p className="text-xs mt-1 italic text-muted-foreground">
-                                                {leaveRequest.tl_review_notes ? `"${leaveRequest.tl_review_notes}"` : 'No notes provided'}
-                                            </p>
                                         </div>
-                                    </div>
-                                )}
+                                    )}
 
                                 {/* Denied or old review info */}
-                                {(leaveRequest.status === 'denied' || (!isAdminApproved && !isHrApproved)) && (
+                                {(leaveRequest.status === 'denied' ||
+                                    (!isAdminApproved && !isHrApproved)) && (
                                     <>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                             <div>
-                                                <p className="text-sm font-medium text-muted-foreground">Reviewed By</p>
-                                                <p className="text-base">{leaveRequest.reviewer?.name || 'N/A'}</p>
+                                                <p className="text-sm font-medium text-muted-foreground">
+                                                    Reviewed By
+                                                </p>
+                                                <p className="text-base">
+                                                    {leaveRequest.reviewer
+                                                        ?.name || 'N/A'}
+                                                </p>
                                             </div>
                                             <div>
-                                                <p className="text-sm font-medium text-muted-foreground">Reviewed On</p>
+                                                <p className="text-sm font-medium text-muted-foreground">
+                                                    Reviewed On
+                                                </p>
                                                 <p className="text-base">
-                                                    {format(parseISO(leaveRequest.reviewed_at), 'MMMM d, yyyy')}
+                                                    {format(
+                                                        parseISO(
+                                                            leaveRequest.reviewed_at,
+                                                        ),
+                                                        'MMMM d, yyyy',
+                                                    )}
                                                 </p>
                                             </div>
                                         </div>
                                         {leaveRequest.review_notes && (
                                             <div className="mt-4">
-                                                <p className="text-sm font-medium text-muted-foreground mb-2">
+                                                <p className="mb-2 text-sm font-medium text-muted-foreground">
                                                     Review Notes
                                                 </p>
                                                 <Alert className="overflow-hidden">
-                                                    <AlertDescription className="wrap-break-word whitespace-pre-wrap">{leaveRequest.review_notes}</AlertDescription>
+                                                    <AlertDescription className="wrap-break-word whitespace-pre-wrap">
+                                                        {
+                                                            leaveRequest.review_notes
+                                                        }
+                                                    </AlertDescription>
                                                 </Alert>
                                             </div>
                                         )}
@@ -1829,48 +2739,94 @@ export default function Show({
             </div>
 
             {/* Approve Dialog */}
-            <Dialog open={showApproveDialog} onOpenChange={setShowApproveDialog}>
-                <DialogContent className={(hasDayStatuses || (isSpl && splCoverage && !splCoverage.allCovered)) ? 'max-w-2xl max-h-[90vh] overflow-y-auto' : undefined}>
+            <Dialog
+                open={showApproveDialog}
+                onOpenChange={setShowApproveDialog}
+            >
+                <DialogContent
+                    className={
+                        hasDayStatuses ||
+                        (isSpl && splCoverage && !splCoverage.allCovered)
+                            ? 'max-h-[90vh] max-w-2xl overflow-y-auto'
+                            : undefined
+                    }
+                >
                     <DialogHeader>
                         <DialogTitle>Approve Leave Request</DialogTitle>
                         <DialogDescription>
-                            Approve this leave request for {leaveRequest.user.name}?
+                            Approve this leave request for{' '}
+                            {leaveRequest.user.name}?
                             {!isFullyApproved && (
-                                <span className="block mt-2 text-yellow-600">
-                                    Note: Leave requests require approval from both Admin and HR.
-                                    {isAdminApproved && ' Admin has already approved. Your HR approval will finalize this request.'}
-                                    {isHrApproved && ' HR has already approved. Your Admin approval will finalize this request.'}
-                                    {!isAdminApproved && !isHrApproved && ' The other role will be notified to review.'}
+                                <span className="mt-2 block text-yellow-600">
+                                    Note: Leave requests require approval from
+                                    both Admin and HR.
+                                    {isAdminApproved &&
+                                        ' Admin has already approved. Your HR approval will finalize this request.'}
+                                    {isHrApproved &&
+                                        ' HR has already approved. Your Admin approval will finalize this request.'}
+                                    {!isAdminApproved &&
+                                        !isHrApproved &&
+                                        ' The other role will be notified to review.'}
                                 </span>
                             )}
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
                         {/* Partial denial info banner */}
-                        {leaveRequest.has_partial_denial && leaveRequest.denied_dates && leaveRequest.denied_dates.length > 0 && (
-                            <Alert className="border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950">
-                                <AlertTriangle className="h-4 w-4 text-orange-600" />
-                                <AlertDescription className="text-orange-800 dark:text-orange-200 text-sm">
-                                    <p className="font-medium">This request was partially denied — {leaveRequest.denied_dates.length} date(s) were denied:</p>
-                                    <div className="mt-1 space-y-0.5">
-                                        {leaveRequest.denied_dates.map((dd) => (
-                                            <div key={dd.id} className="text-xs flex items-center gap-1.5">
-                                                <Badge variant="destructive" className="text-[10px] px-1 py-0">Denied</Badge>
-                                                <span>{format(parseISO(dd.denied_date), 'EEEE, MMM d, yyyy')}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                    {leaveRequest.denied_dates[0]?.denier && (
-                                        <p className="text-xs mt-1.5 text-muted-foreground">
-                                            Denied by: {leaveRequest.denied_dates[0].denier.name}
+                        {leaveRequest.has_partial_denial &&
+                            leaveRequest.denied_dates &&
+                            leaveRequest.denied_dates.length > 0 && (
+                                <Alert className="border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950">
+                                    <AlertTriangle className="h-4 w-4 text-orange-600" />
+                                    <AlertDescription className="text-sm text-orange-800 dark:text-orange-200">
+                                        <p className="font-medium">
+                                            This request was partially denied —{' '}
+                                            {leaveRequest.denied_dates.length}{' '}
+                                            date(s) were denied:
                                         </p>
-                                    )}
-                                    <p className="text-xs mt-1 text-muted-foreground">
-                                        Approving now covers only the {leaveRequest.approved_days} remaining approved day(s).
-                                    </p>
-                                </AlertDescription>
-                            </Alert>
-                        )}
+                                        <div className="mt-1 space-y-0.5">
+                                            {leaveRequest.denied_dates.map(
+                                                (dd) => (
+                                                    <div
+                                                        key={dd.id}
+                                                        className="flex items-center gap-1.5 text-xs"
+                                                    >
+                                                        <Badge
+                                                            variant="destructive"
+                                                            className="px-1 py-0 text-[10px]"
+                                                        >
+                                                            Denied
+                                                        </Badge>
+                                                        <span>
+                                                            {format(
+                                                                parseISO(
+                                                                    dd.denied_date,
+                                                                ),
+                                                                'EEEE, MMM d, yyyy',
+                                                            )}
+                                                        </span>
+                                                    </div>
+                                                ),
+                                            )}
+                                        </div>
+                                        {leaveRequest.denied_dates[0]
+                                            ?.denier && (
+                                            <p className="mt-1.5 text-xs text-muted-foreground">
+                                                Denied by:{' '}
+                                                {
+                                                    leaveRequest.denied_dates[0]
+                                                        .denier.name
+                                                }
+                                            </p>
+                                        )}
+                                        <p className="mt-1 text-xs text-muted-foreground">
+                                            Approving now covers only the{' '}
+                                            {leaveRequest.approved_days}{' '}
+                                            remaining approved day(s).
+                                        </p>
+                                    </AlertDescription>
+                                </Alert>
+                            )}
                         {/* Credit Preview for VL */}
                         {creditPreview && isVl && (
                             <>
@@ -1878,8 +2834,13 @@ export default function Show({
                                     <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
                                         <AlertTriangle className="h-4 w-4 text-amber-600" />
                                         <AlertDescription className="text-amber-800 dark:text-amber-200">
-                                            <strong>Partial VL credits.</strong> Only {creditPreview.credits_to_deduct} day(s) can be credited.
-                                            {creditPreview.upto_days ? ` ${creditPreview.upto_days} day(s) will be converted to UPTO.` : ''}
+                                            <strong>Partial VL credits.</strong>{' '}
+                                            Only{' '}
+                                            {creditPreview.credits_to_deduct}{' '}
+                                            day(s) can be credited.
+                                            {creditPreview.upto_days
+                                                ? ` ${creditPreview.upto_days} day(s) will be converted to UPTO.`
+                                                : ''}
                                         </AlertDescription>
                                     </Alert>
                                 )}
@@ -1887,18 +2848,28 @@ export default function Show({
                                     <Alert className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950">
                                         <AlertTriangle className="h-4 w-4 text-red-600" />
                                         <AlertDescription className="text-red-800 dark:text-red-200">
-                                            <strong>No VL credits available.</strong> All days will be marked as UPTO (Unpaid Time Off).
+                                            <strong>
+                                                No VL credits available.
+                                            </strong>{' '}
+                                            All days will be marked as UPTO
+                                            (Unpaid Time Off).
                                         </AlertDescription>
                                     </Alert>
                                 )}
-                                {creditPreview.should_deduct && !creditPreview.partial_credit && !creditPreview.convert_to_upto && (
-                                    <Alert className="border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950">
-                                        <CheckCircle className="h-4 w-4 text-green-600" />
-                                        <AlertDescription className="text-green-800 dark:text-green-200">
-                                            Full VL credits available. {creditPreview.credits_to_deduct} day(s) will be deducted.
-                                        </AlertDescription>
-                                    </Alert>
-                                )}
+                                {creditPreview.should_deduct &&
+                                    !creditPreview.partial_credit &&
+                                    !creditPreview.convert_to_upto && (
+                                        <Alert className="border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950">
+                                            <CheckCircle className="h-4 w-4 text-green-600" />
+                                            <AlertDescription className="text-green-800 dark:text-green-200">
+                                                Full VL credits available.{' '}
+                                                {
+                                                    creditPreview.credits_to_deduct
+                                                }{' '}
+                                                day(s) will be deducted.
+                                            </AlertDescription>
+                                        </Alert>
+                                    )}
                             </>
                         )}
 
@@ -1909,62 +2880,144 @@ export default function Show({
                                     <Alert className="border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950">
                                         <CheckCircle className="h-4 w-4 text-green-600" />
                                         <AlertDescription className="text-green-800 dark:text-green-200">
-                                            <strong>SPL Credits:</strong> {splCoverage.balance.toFixed(2)} available — sufficient for all {workDays.length} day(s) ({splCoverage.creditsNeeded.toFixed(2)} credits needed).
-                                            {' '}Credits will be assigned chronologically (earliest first).
+                                            <strong>SPL Credits:</strong>{' '}
+                                            {splCoverage.balance.toFixed(2)}{' '}
+                                            available — sufficient for all{' '}
+                                            {workDays.length} day(s) (
+                                            {splCoverage.creditsNeeded.toFixed(
+                                                2,
+                                            )}{' '}
+                                            credits needed). Credits will be
+                                            assigned chronologically (earliest
+                                            first).
                                         </AlertDescription>
                                     </Alert>
                                 ) : splCoverage.noCoverage ? (
                                     <Alert className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950">
                                         <XCircle className="h-4 w-4 text-red-600" />
                                         <AlertDescription className="text-red-800 dark:text-red-200">
-                                            <strong>No SPL credits available.</strong> Balance is {splCoverage.balance.toFixed(2)} — cannot approve any dates.
+                                            <strong>
+                                                No SPL credits available.
+                                            </strong>{' '}
+                                            Balance is{' '}
+                                            {splCoverage.balance.toFixed(2)} —
+                                            cannot approve any dates.
                                         </AlertDescription>
                                     </Alert>
                                 ) : (
                                     <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
                                         <AlertTriangle className="h-4 w-4 text-amber-600" />
                                         <AlertDescription className="text-amber-800 dark:text-amber-200">
-                                            <strong>Insufficient SPL Credits:</strong> {splCoverage.balance.toFixed(2)} of {splCoverage.creditsNeeded.toFixed(2)} needed.
-                                            {' '}{splCoverage.coveredDates.length} day(s) will be credited, {splCoverage.uncoveredDates.length} day(s) will be automatically denied.
+                                            <strong>
+                                                Insufficient SPL Credits:
+                                            </strong>{' '}
+                                            {splCoverage.balance.toFixed(2)} of{' '}
+                                            {splCoverage.creditsNeeded.toFixed(
+                                                2,
+                                            )}{' '}
+                                            needed.{' '}
+                                            {splCoverage.coveredDates.length}{' '}
+                                            day(s) will be credited,{' '}
+                                            {splCoverage.uncoveredDates.length}{' '}
+                                            day(s) will be automatically denied.
                                         </AlertDescription>
                                     </Alert>
                                 )}
-                                <div className="border rounded-md p-3 space-y-2 text-sm">
-                                    <p className="text-xs text-muted-foreground mb-2">Toggle each day between whole day (1 credit) and half-day (0.5 credit).</p>
-                                    {[...splCoverage.coveredDates, ...splCoverage.uncoveredDates].sort().map(dateStr => {
-                                        const isCovered = splCoverage.coveredDates.includes(dateStr);
-                                        const isHalf = splCoverage.halfDayMap.get(dateStr) ?? false;
-                                        const isAutoHalf = splCoverage.autoHalfDays.has(dateStr);
-                                        return (
-                                            <div key={dateStr} className={`flex items-center gap-2 p-2 rounded-lg border transition-colors ${isHalf ? 'bg-violet-50 border-violet-200 dark:bg-violet-950/30 dark:border-violet-800' : isCovered ? 'bg-card border-border' : 'bg-muted/50 border-border opacity-60'}`}>
-                                                {isCovered ? (
-                                                    <CheckCircle className="h-3.5 w-3.5 text-green-600 shrink-0" />
-                                                ) : (
-                                                    <XCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
-                                                )}
-                                                <span className={`flex-1 ${!isCovered ? 'text-muted-foreground' : ''}`}>{format(parseISO(dateStr), 'EEE, MMM d, yyyy')}</span>
-                                                {isCovered ? (
-                                                    <Badge className="text-[10px] px-1 py-0 bg-green-600 text-white">Credited ({isHalf ? '0.5' : '1.0'})</Badge>
-                                                ) : (
-                                                    <Badge variant="destructive" className="text-[10px] px-1 py-0">Auto-Denied</Badge>
-                                                )}
-                                                {isAutoHalf && (
-                                                    <Badge variant="outline" className="text-[10px] px-1 py-0 border-violet-300 text-violet-700 dark:text-violet-300">Auto</Badge>
-                                                )}
-                                                {isCovered && (
-                                                    <div className="flex items-center gap-1.5 ml-auto">
-                                                        <span className={`text-[11px] ${isHalf ? 'text-violet-600 font-medium dark:text-violet-400' : 'text-muted-foreground'}`}>
-                                                            {isHalf ? 'Half' : 'Whole'}
-                                                        </span>
-                                                        <Switch
-                                                            checked={isHalf}
-                                                            onCheckedChange={(checked) => setSplHalfDayOverrides(prev => ({ ...prev, [dateStr]: checked }))}
-                                                        />
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
+                                <div className="space-y-2 rounded-md border p-3 text-sm">
+                                    <p className="mb-2 text-xs text-muted-foreground">
+                                        Toggle each day between whole day (1
+                                        credit) and half-day (0.5 credit).
+                                    </p>
+                                    {[
+                                        ...splCoverage.coveredDates,
+                                        ...splCoverage.uncoveredDates,
+                                    ]
+                                        .sort()
+                                        .map((dateStr) => {
+                                            const isCovered =
+                                                splCoverage.coveredDates.includes(
+                                                    dateStr,
+                                                );
+                                            const isHalf =
+                                                splCoverage.halfDayMap.get(
+                                                    dateStr,
+                                                ) ?? false;
+                                            const isAutoHalf =
+                                                splCoverage.autoHalfDays.has(
+                                                    dateStr,
+                                                );
+                                            return (
+                                                <div
+                                                    key={dateStr}
+                                                    className={`flex items-center gap-2 rounded-lg border p-2 transition-colors ${isHalf ? 'border-violet-200 bg-violet-50 dark:border-violet-800 dark:bg-violet-950/30' : isCovered ? 'border-border bg-card' : 'border-border bg-muted/50 opacity-60'}`}
+                                                >
+                                                    {isCovered ? (
+                                                        <CheckCircle className="h-3.5 w-3.5 shrink-0 text-green-600" />
+                                                    ) : (
+                                                        <XCircle className="h-3.5 w-3.5 shrink-0 text-red-500" />
+                                                    )}
+                                                    <span
+                                                        className={`flex-1 ${!isCovered ? 'text-muted-foreground' : ''}`}
+                                                    >
+                                                        {format(
+                                                            parseISO(dateStr),
+                                                            'EEE, MMM d, yyyy',
+                                                        )}
+                                                    </span>
+                                                    {isCovered ? (
+                                                        <Badge className="bg-green-600 px-1 py-0 text-[10px] text-white">
+                                                            Credited (
+                                                            {isHalf
+                                                                ? '0.5'
+                                                                : '1.0'}
+                                                            )
+                                                        </Badge>
+                                                    ) : (
+                                                        <Badge
+                                                            variant="destructive"
+                                                            className="px-1 py-0 text-[10px]"
+                                                        >
+                                                            Auto-Denied
+                                                        </Badge>
+                                                    )}
+                                                    {isAutoHalf && (
+                                                        <Badge
+                                                            variant="outline"
+                                                            className="border-violet-300 px-1 py-0 text-[10px] text-violet-700 dark:text-violet-300"
+                                                        >
+                                                            Auto
+                                                        </Badge>
+                                                    )}
+                                                    {isCovered && (
+                                                        <div className="ml-auto flex items-center gap-1.5">
+                                                            <span
+                                                                className={`text-[11px] ${isHalf ? 'font-medium text-violet-600 dark:text-violet-400' : 'text-muted-foreground'}`}
+                                                            >
+                                                                {isHalf
+                                                                    ? 'Half'
+                                                                    : 'Whole'}
+                                                            </span>
+                                                            <Switch
+                                                                checked={isHalf}
+                                                                onCheckedChange={(
+                                                                    checked,
+                                                                ) =>
+                                                                    setSplHalfDayOverrides(
+                                                                        (
+                                                                            prev,
+                                                                        ) => ({
+                                                                            ...prev,
+                                                                            [dateStr]:
+                                                                                checked,
+                                                                        }),
+                                                                    )
+                                                                }
+                                                            />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
                                 </div>
                             </div>
                         )}
@@ -1973,12 +3026,23 @@ export default function Show({
                         {hasDayStatuses && slDayStatuses.length > 0 && (
                             <div className="space-y-3">
                                 <div>
-                                    <Label className="text-sm font-medium">Assign Per-Day Status</Label>
-                                    <p className="text-xs text-muted-foreground mt-0.5">
-                                        Set the status for each day of this leave. Only &quot;{isVl ? 'VL' : 'SL'} Credited&quot; days use leave credits.
+                                    <Label className="text-sm font-medium">
+                                        Assign Per-Day Status
+                                    </Label>
+                                    <p className="mt-0.5 text-xs text-muted-foreground">
+                                        Set the status for each day of this
+                                        leave. Only &quot;{isVl ? 'VL' : 'SL'}{' '}
+                                        Credited&quot; days use leave credits.
                                         {creditPreview && (
                                             <span className="font-medium">
-                                                {' '}Available {isVl ? 'VL' : 'SL'} credits: {creditPreview.credits_to_deduct ?? 0} day(s).
+                                                {' '}
+                                                Available {isVl
+                                                    ? 'VL'
+                                                    : 'SL'}{' '}
+                                                credits:{' '}
+                                                {creditPreview.credits_to_deduct ??
+                                                    0}{' '}
+                                                day(s).
                                             </span>
                                         )}
                                     </p>
@@ -1986,8 +3050,9 @@ export default function Show({
                                 {preStoredAttribution && (
                                     <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
                                         <Info className="h-4 w-4 text-blue-600" />
-                                        <AlertDescription className="text-blue-800 dark:text-blue-200 text-xs">
-                                            {preStoredAttribution}. You can review and edit before approving.
+                                        <AlertDescription className="text-xs text-blue-800 dark:text-blue-200">
+                                            {preStoredAttribution}. You can
+                                            review and edit before approving.
                                         </AlertDescription>
                                     </Alert>
                                 )}
@@ -1996,10 +3061,19 @@ export default function Show({
                                     onChange={setSlDayStatuses}
                                     creditPreviewInfo={
                                         creditPreview
-                                            ? { availableCredits: Math.floor(creditPreview.credits_to_deduct ?? 0) }
+                                            ? {
+                                                  availableCredits: Math.floor(
+                                                      creditPreview.credits_to_deduct ??
+                                                          0,
+                                                  ),
+                                              }
                                             : null
                                     }
-                                    statusOptions={isVl ? [...VL_STATUS_OPTIONS] : slStatusOptions}
+                                    statusOptions={
+                                        isVl
+                                            ? [...VL_STATUS_OPTIONS]
+                                            : slStatusOptions
+                                    }
                                     creditLabel={isVl ? 'VL' : 'SL'}
                                     onCreditValidation={setDayStatusInvalid}
                                 />
@@ -2007,58 +3081,95 @@ export default function Show({
                         )}
 
                         {/* Credit Split Preview for SL (non per-day fallback) */}
-                        {creditPreview && isSl && slDayStatuses.length === 0 && (
-                            <>
-                                {creditPreview.convert_to_upto && (
-                                    <Alert className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950">
-                                        <AlertTriangle className="h-4 w-4 text-red-600" />
-                                        <AlertDescription className="text-red-800 dark:text-red-200">
-                                            <strong>No SL credits available.</strong> All days will be marked as Advised Absence (UPTO — Unpaid Time Off).
-                                        </AlertDescription>
-                                    </Alert>
-                                )}
-                            </>
-                        )}
+                        {creditPreview &&
+                            isSl &&
+                            slDayStatuses.length === 0 && (
+                                <>
+                                    {creditPreview.convert_to_upto && (
+                                        <Alert className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950">
+                                            <AlertTriangle className="h-4 w-4 text-red-600" />
+                                            <AlertDescription className="text-red-800 dark:text-red-200">
+                                                <strong>
+                                                    No SL credits available.
+                                                </strong>{' '}
+                                                All days will be marked as
+                                                Advised Absence (UPTO — Unpaid
+                                                Time Off).
+                                            </AlertDescription>
+                                        </Alert>
+                                    )}
+                                </>
+                            )}
 
                         {/* Short Notice Override Toggle */}
-                        {isShortNotice && canOverrideShortNotice && !leaveRequest.short_notice_override && (
-                            <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
-                                <AlertTriangle className="h-4 w-4 text-amber-600" />
-                                <AlertDescription className="text-amber-800 dark:text-amber-200">
-                                    <div className="flex items-center justify-between gap-3">
-                                        <div>
-                                            <strong>Short Notice Request</strong>
-                                            <p className="text-xs mt-0.5 opacity-80">This leave was filed less than 2 weeks in advance. Toggle to override the notice requirement.</p>
+                        {isShortNotice &&
+                            canOverrideShortNotice &&
+                            !leaveRequest.short_notice_override && (
+                                <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+                                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                                    <AlertDescription className="text-amber-800 dark:text-amber-200">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div>
+                                                <strong>
+                                                    Short Notice Request
+                                                </strong>
+                                                <p className="mt-0.5 text-xs opacity-80">
+                                                    This leave was filed less
+                                                    than 2 weeks in advance.
+                                                    Toggle to override the
+                                                    notice requirement.
+                                                </p>
+                                            </div>
+                                            <Switch
+                                                checked={shortNoticeOverride}
+                                                onCheckedChange={
+                                                    setShortNoticeOverride
+                                                }
+                                            />
                                         </div>
-                                        <Switch
-                                            checked={shortNoticeOverride}
-                                            onCheckedChange={setShortNoticeOverride}
-                                        />
-                                    </div>
-                                </AlertDescription>
-                            </Alert>
-                        )}
+                                    </AlertDescription>
+                                </Alert>
+                            )}
 
                         <div>
                             <label className="text-sm font-medium">
-                                Review Notes <span className="text-red-500">*</span>
+                                Review Notes{' '}
+                                <span className="text-red-500">*</span>
                             </label>
                             <Textarea
                                 value={approveForm.data.review_notes}
-                                onChange={(e) => approveForm.setData('review_notes', e.target.value)}
+                                onChange={(e) =>
+                                    approveForm.setData(
+                                        'review_notes',
+                                        e.target.value,
+                                    )
+                                }
                                 placeholder="Add comments (required, minimum 10 characters)..."
                                 rows={3}
                             />
                             {approveForm.errors.review_notes && (
-                                <p className="text-sm text-red-500 mt-1">{approveForm.errors.review_notes}</p>
+                                <p className="mt-1 text-sm text-red-500">
+                                    {approveForm.errors.review_notes}
+                                </p>
                             )}
                         </div>
                     </div>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowApproveDialog(false)}>
+                        <Button
+                            variant="outline"
+                            onClick={() => setShowApproveDialog(false)}
+                        >
                             Cancel
                         </Button>
-                        <Button onClick={handleApprove} disabled={approveForm.processing || !approveForm.data.review_notes.trim() || (hasDayStatuses && dayStatusInvalid) || (isSpl && splCoverage?.noCoverage)}>
+                        <Button
+                            onClick={handleApprove}
+                            disabled={
+                                approveForm.processing ||
+                                !approveForm.data.review_notes.trim() ||
+                                (hasDayStatuses && dayStatusInvalid) ||
+                                (isSpl && splCoverage?.noCoverage)
+                            }
+                        >
                             Approve
                         </Button>
                     </DialogFooter>
@@ -2070,26 +3181,39 @@ export default function Show({
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Deny Leave Request</DialogTitle>
-                        <DialogDescription>Provide a reason for denying this request.</DialogDescription>
+                        <DialogDescription>
+                            Provide a reason for denying this request.
+                        </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
                         <div>
                             <label className="text-sm font-medium">
-                                Review Notes <span className="text-red-500">*</span>
+                                Review Notes{' '}
+                                <span className="text-red-500">*</span>
                             </label>
                             <Textarea
                                 value={denyForm.data.review_notes}
-                                onChange={(e) => denyForm.setData('review_notes', e.target.value)}
+                                onChange={(e) =>
+                                    denyForm.setData(
+                                        'review_notes',
+                                        e.target.value,
+                                    )
+                                }
                                 placeholder="Reason for denial (required, minimum 10 characters)..."
                                 rows={3}
                             />
                             {denyForm.errors.review_notes && (
-                                <p className="text-sm text-red-500 mt-1">{denyForm.errors.review_notes}</p>
+                                <p className="mt-1 text-sm text-red-500">
+                                    {denyForm.errors.review_notes}
+                                </p>
                             )}
                         </div>
                     </div>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowDenyDialog(false)}>
+                        <Button
+                            variant="outline"
+                            onClick={() => setShowDenyDialog(false)}
+                        >
                             Cancel
                         </Button>
                         <Button
@@ -2104,29 +3228,51 @@ export default function Show({
             </Dialog>
 
             {/* Partial Deny Dialog */}
-            <Dialog open={showPartialDenyDialog} onOpenChange={(open) => {
-                setShowPartialDenyDialog(open);
-                if (open && leaveRequest.has_partial_denial && previouslyDeniedDateSet.size > 0) {
-                    // Pre-fill: check all original work days EXCEPT previously denied ones
-                    const preApproved = originalWorkDays
-                        .map(d => format(d, 'yyyy-MM-dd'))
-                        .filter(dateStr => !previouslyDeniedDateSet.has(dateStr));
-                    setSelectedApprovedDates(preApproved);
-                    if (hasDayStatuses) {
-                        setPartialDenySlDayStatuses(buildSlDayStatusesForDates(preApproved, []));
+            <Dialog
+                open={showPartialDenyDialog}
+                onOpenChange={(open) => {
+                    setShowPartialDenyDialog(open);
+                    if (
+                        open &&
+                        leaveRequest.has_partial_denial &&
+                        previouslyDeniedDateSet.size > 0
+                    ) {
+                        // Pre-fill: check all original work days EXCEPT previously denied ones
+                        const preApproved = originalWorkDays
+                            .map((d) => format(d, 'yyyy-MM-dd'))
+                            .filter(
+                                (dateStr) =>
+                                    !previouslyDeniedDateSet.has(dateStr),
+                            );
+                        setSelectedApprovedDates(preApproved);
+                        if (hasDayStatuses) {
+                            setPartialDenySlDayStatuses(
+                                buildSlDayStatusesForDates(preApproved, []),
+                            );
+                        }
                     }
-                }
-                if (!open) {
-                    setSelectedApprovedDates([]);
-                    partialDenyForm.reset();
-                    setPartialDenySlDayStatuses([]);
-                    setPartialDenyDayStatusInvalid(false);
-                    setIsEditingPartialDenial(false);
-                }
-            }}>
-                <DialogContent className={hasDayStatuses ? 'max-w-2xl max-h-[90vh] overflow-y-auto' : 'max-w-lg'}>
+                    if (!open) {
+                        setSelectedApprovedDates([]);
+                        partialDenyForm.reset();
+                        setPartialDenySlDayStatuses([]);
+                        setPartialDenyDayStatusInvalid(false);
+                        setIsEditingPartialDenial(false);
+                    }
+                }}
+            >
+                <DialogContent
+                    className={
+                        hasDayStatuses
+                            ? 'max-h-[90vh] max-w-2xl overflow-y-auto'
+                            : 'max-w-lg'
+                    }
+                >
                     <DialogHeader>
-                        <DialogTitle>{isEditingPartialDenial ? 'Edit Partial Approval Dates' : 'Partial Approval - Select Dates to Approve'}</DialogTitle>
+                        <DialogTitle>
+                            {isEditingPartialDenial
+                                ? 'Edit Partial Approval Dates'
+                                : 'Partial Approval - Select Dates to Approve'}
+                        </DialogTitle>
                         <DialogDescription>
                             {isEditingPartialDenial
                                 ? 'Adjust which dates are approved. Unselected dates will remain denied.'
@@ -2135,51 +3281,112 @@ export default function Show({
                     </DialogHeader>
                     <div className="space-y-4">
                         {/* Prior partial denial info banner */}
-                        {leaveRequest.has_partial_denial && leaveRequest.denied_dates && leaveRequest.denied_dates.length > 0 && (
-                            <Alert className="border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950">
-                                <AlertTriangle className="h-4 w-4 text-orange-600" />
-                                <AlertDescription className="text-orange-800 dark:text-orange-200 text-sm">
-                                    <p className="font-medium">A previous approver partially denied {previouslyDeniedDateSet.size} date(s).</p>
-                                    <p className="text-xs mt-1">
-                                        Previously denied dates are shown below. You may re-select them to override the prior decision.
-                                        {leaveRequest.denied_dates[0]?.denier && (
-                                            <span> Prior denial by: <strong>{leaveRequest.denied_dates[0].denier.name}</strong>.</span>
-                                        )}
-                                    </p>
-                                </AlertDescription>
-                            </Alert>
-                        )}
+                        {leaveRequest.has_partial_denial &&
+                            leaveRequest.denied_dates &&
+                            leaveRequest.denied_dates.length > 0 && (
+                                <Alert className="border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950">
+                                    <AlertTriangle className="h-4 w-4 text-orange-600" />
+                                    <AlertDescription className="text-sm text-orange-800 dark:text-orange-200">
+                                        <p className="font-medium">
+                                            A previous approver partially denied{' '}
+                                            {previouslyDeniedDateSet.size}{' '}
+                                            date(s).
+                                        </p>
+                                        <p className="mt-1 text-xs">
+                                            Previously denied dates are shown
+                                            below. You may re-select them to
+                                            override the prior decision.
+                                            {leaveRequest.denied_dates[0]
+                                                ?.denier && (
+                                                <span>
+                                                    {' '}
+                                                    Prior denial by:{' '}
+                                                    <strong>
+                                                        {
+                                                            leaveRequest
+                                                                .denied_dates[0]
+                                                                .denier.name
+                                                        }
+                                                    </strong>
+                                                    .
+                                                </span>
+                                            )}
+                                        </p>
+                                    </AlertDescription>
+                                </Alert>
+                            )}
                         <div>
-                            <Label className="text-sm font-medium mb-2 block">
-                                Leave Period: {format(parseISO(leaveRequest.original_start_date ?? leaveRequest.start_date), 'MMM d, yyyy')} - {format(parseISO(leaveRequest.original_end_date ?? leaveRequest.end_date), 'MMM d, yyyy')}
+                            <Label className="mb-2 block text-sm font-medium">
+                                Leave Period:{' '}
+                                {format(
+                                    parseISO(
+                                        leaveRequest.original_start_date ??
+                                            leaveRequest.start_date,
+                                    ),
+                                    'MMM d, yyyy',
+                                )}{' '}
+                                -{' '}
+                                {format(
+                                    parseISO(
+                                        leaveRequest.original_end_date ??
+                                            leaveRequest.end_date,
+                                    ),
+                                    'MMM d, yyyy',
+                                )}
                             </Label>
-                            <p className="text-sm text-muted-foreground mb-3">
-                                Total working days: {originalWorkDays.length} | Selected to approve: {selectedApprovedDates.length}
+                            <p className="mb-3 text-sm text-muted-foreground">
+                                Total working days: {originalWorkDays.length} |
+                                Selected to approve:{' '}
+                                {selectedApprovedDates.length}
                             </p>
-                            <div className="border rounded-md p-3 max-h-64 overflow-y-auto space-y-2">
+                            <div className="max-h-64 space-y-2 overflow-y-auto rounded-md border p-3">
                                 {originalWorkDays.map((date) => {
                                     const dateStr = format(date, 'yyyy-MM-dd');
-                                    const isSelected = selectedApprovedDates.includes(dateStr);
-                                    const wasPreviouslyDenied = previouslyDeniedDateSet.has(dateStr);
+                                    const isSelected =
+                                        selectedApprovedDates.includes(dateStr);
+                                    const wasPreviouslyDenied =
+                                        previouslyDeniedDateSet.has(dateStr);
                                     return (
                                         <div
                                             key={dateStr}
-                                            className={`flex items-center space-x-3 p-2 rounded cursor-pointer transition-colors ${isSelected ? 'bg-green-50 border border-green-200 text-green-900' : wasPreviouslyDenied ? 'bg-orange-50/50 border border-orange-200 dark:bg-orange-950/30 dark:border-orange-800' : 'hover:bg-muted'
-                                                }`}
-                                            onClick={() => toggleApprovedDate(dateStr)}
+                                            className={`flex cursor-pointer items-center space-x-3 rounded p-2 transition-colors ${
+                                                isSelected
+                                                    ? 'border border-green-200 bg-green-50 text-green-900'
+                                                    : wasPreviouslyDenied
+                                                      ? 'border border-orange-200 bg-orange-50/50 dark:border-orange-800 dark:bg-orange-950/30'
+                                                      : 'hover:bg-muted'
+                                            }`}
+                                            onClick={() =>
+                                                toggleApprovedDate(dateStr)
+                                            }
                                         >
                                             <Checkbox
                                                 checked={isSelected}
-                                                onCheckedChange={() => toggleApprovedDate(dateStr)}
+                                                onCheckedChange={() =>
+                                                    toggleApprovedDate(dateStr)
+                                                }
                                             />
-                                            <div className="flex-1 flex items-center gap-2">
-                                                <span className="font-medium">{format(date, 'EEEE, MMM d, yyyy')}</span>
-                                                {wasPreviouslyDenied && !isSelected && (
-                                                    <Badge variant="outline" className="text-xs border-orange-300 text-orange-700 dark:text-orange-300">Previously denied</Badge>
-                                                )}
+                                            <div className="flex flex-1 items-center gap-2">
+                                                <span className="font-medium">
+                                                    {format(
+                                                        date,
+                                                        'EEEE, MMM d, yyyy',
+                                                    )}
+                                                </span>
+                                                {wasPreviouslyDenied &&
+                                                    !isSelected && (
+                                                        <Badge
+                                                            variant="outline"
+                                                            className="border-orange-300 text-xs text-orange-700 dark:text-orange-300"
+                                                        >
+                                                            Previously denied
+                                                        </Badge>
+                                                    )}
                                             </div>
                                             {isSelected && (
-                                                <Badge className="text-xs bg-green-600 text-white">Will be approved</Badge>
+                                                <Badge className="bg-green-600 text-xs text-white">
+                                                    Will be approved
+                                                </Badge>
                                             )}
                                         </div>
                                     );
@@ -2189,98 +3396,166 @@ export default function Show({
                         {!isEditingPartialDenial && (
                             <div>
                                 <Label className="text-sm font-medium">
-                                    Reason for Partial Approval <span className="text-red-500">*</span>
+                                    Reason for Partial Approval{' '}
+                                    <span className="text-red-500">*</span>
                                 </Label>
                                 <Textarea
                                     value={partialDenyForm.data.denial_reason}
-                                    onChange={(e) => partialDenyForm.setData('denial_reason', e.target.value)}
+                                    onChange={(e) =>
+                                        partialDenyForm.setData(
+                                            'denial_reason',
+                                            e.target.value,
+                                        )
+                                    }
                                     placeholder="Why are some dates being denied? (required, minimum 10 characters)..."
                                     rows={2}
                                 />
                                 {partialDenyForm.errors.denial_reason && (
-                                    <p className="text-sm text-red-500 mt-1">{partialDenyForm.errors.denial_reason}</p>
+                                    <p className="mt-1 text-sm text-red-500">
+                                        {partialDenyForm.errors.denial_reason}
+                                    </p>
                                 )}
                             </div>
                         )}
                         {/* Short Notice Override Toggle */}
-                        {isShortNotice && canOverrideShortNotice && !leaveRequest.short_notice_override && (
-                            <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
-                                <AlertTriangle className="h-4 w-4 text-amber-600" />
-                                <AlertDescription className="text-amber-800 dark:text-amber-200">
-                                    <div className="flex items-center justify-between gap-3">
-                                        <div>
-                                            <strong>Short Notice Request</strong>
-                                            <p className="text-xs mt-0.5 opacity-80">This leave was filed less than 2 weeks in advance. Toggle to override the notice requirement.</p>
+                        {isShortNotice &&
+                            canOverrideShortNotice &&
+                            !leaveRequest.short_notice_override && (
+                                <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+                                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                                    <AlertDescription className="text-amber-800 dark:text-amber-200">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div>
+                                                <strong>
+                                                    Short Notice Request
+                                                </strong>
+                                                <p className="mt-0.5 text-xs opacity-80">
+                                                    This leave was filed less
+                                                    than 2 weeks in advance.
+                                                    Toggle to override the
+                                                    notice requirement.
+                                                </p>
+                                            </div>
+                                            <Switch
+                                                checked={shortNoticeOverride}
+                                                onCheckedChange={
+                                                    setShortNoticeOverride
+                                                }
+                                            />
                                         </div>
-                                        <Switch
-                                            checked={shortNoticeOverride}
-                                            onCheckedChange={setShortNoticeOverride}
-                                        />
-                                    </div>
-                                </AlertDescription>
-                            </Alert>
-                        )}
+                                    </AlertDescription>
+                                </Alert>
+                            )}
 
                         {!isEditingPartialDenial && (
                             <div>
-                                <Label className="text-sm font-medium">Additional Notes (Optional)</Label>
+                                <Label className="text-sm font-medium">
+                                    Additional Notes (Optional)
+                                </Label>
                                 <Textarea
                                     value={partialDenyForm.data.review_notes}
-                                    onChange={(e) => partialDenyForm.setData('review_notes', e.target.value)}
+                                    onChange={(e) =>
+                                        partialDenyForm.setData(
+                                            'review_notes',
+                                            e.target.value,
+                                        )
+                                    }
                                     placeholder="Any additional notes..."
                                     rows={2}
                                 />
                             </div>
                         )}
-                        {selectedApprovedDates.length > 0 && selectedApprovedDates.length < originalWorkDays.length && (
-                            <Alert className="bg-green-50 border-green-200">
-                                <Check className="h-4 w-4 text-green-600" />
-                                <AlertDescription className="text-green-800">
-                                    <p>{selectedApprovedDates.length} day(s) will be <strong>approved</strong>, {originalWorkDays.length - selectedApprovedDates.length} day(s) will be <strong>denied</strong>.</p>
-                                </AlertDescription>
-                            </Alert>
-                        )}
+                        {selectedApprovedDates.length > 0 &&
+                            selectedApprovedDates.length <
+                                originalWorkDays.length && (
+                                <Alert className="border-green-200 bg-green-50">
+                                    <Check className="h-4 w-4 text-green-600" />
+                                    <AlertDescription className="text-green-800">
+                                        <p>
+                                            {selectedApprovedDates.length}{' '}
+                                            day(s) will be{' '}
+                                            <strong>approved</strong>,{' '}
+                                            {originalWorkDays.length -
+                                                selectedApprovedDates.length}{' '}
+                                            day(s) will be{' '}
+                                            <strong>denied</strong>.
+                                        </p>
+                                    </AlertDescription>
+                                </Alert>
+                            )}
 
                         {/* SL/VL Per-Day Status Assignment for approved dates */}
-                        {hasDayStatuses && selectedApprovedDates.length > 0 && partialDenySlDayStatuses.length > 0 && (
-                            <div className="space-y-2">
-                                <Label className="text-sm font-medium">Assign Per-Day Status for Approved Dates</Label>
-                                <p className="text-xs text-muted-foreground">
-                                    Set the status for each approved day. Only &quot;{isVl ? 'VL' : 'SL'} Credited&quot; days use leave credits.
-                                    {creditPreview && (
-                                        <span className="font-medium"> Available {isVl ? 'VL' : 'SL'} credits: {creditPreview.credits_to_deduct ?? 0} day(s).</span>
+                        {hasDayStatuses &&
+                            selectedApprovedDates.length > 0 &&
+                            partialDenySlDayStatuses.length > 0 && (
+                                <div className="space-y-2">
+                                    <Label className="text-sm font-medium">
+                                        Assign Per-Day Status for Approved Dates
+                                    </Label>
+                                    <p className="text-xs text-muted-foreground">
+                                        Set the status for each approved day.
+                                        Only &quot;{isVl ? 'VL' : 'SL'}{' '}
+                                        Credited&quot; days use leave credits.
+                                        {creditPreview && (
+                                            <span className="font-medium">
+                                                {' '}
+                                                Available {isVl
+                                                    ? 'VL'
+                                                    : 'SL'}{' '}
+                                                credits:{' '}
+                                                {creditPreview.credits_to_deduct ??
+                                                    0}{' '}
+                                                day(s).
+                                            </span>
+                                        )}
+                                    </p>
+                                    {preStoredAttribution && (
+                                        <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
+                                            <Info className="h-4 w-4 text-blue-600" />
+                                            <AlertDescription className="text-xs text-blue-800 dark:text-blue-200">
+                                                {preStoredAttribution}. You can
+                                                review and edit before
+                                                approving.
+                                            </AlertDescription>
+                                        </Alert>
                                     )}
-                                </p>
-                                {preStoredAttribution && (
-                                    <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
-                                        <Info className="h-4 w-4 text-blue-600" />
-                                        <AlertDescription className="text-blue-800 dark:text-blue-200 text-xs">
-                                            {preStoredAttribution}. You can review and edit before approving.
-                                        </AlertDescription>
-                                    </Alert>
-                                )}
-                                <DayStatusAssignment
-                                    dayStatuses={partialDenySlDayStatuses}
-                                    onChange={setPartialDenySlDayStatuses}
-                                    creditPreviewInfo={
-                                        creditPreview
-                                            ? { availableCredits: Math.floor(creditPreview.credits_to_deduct ?? 0) }
-                                            : null
-                                    }
-                                    statusOptions={isVl ? [...VL_STATUS_OPTIONS] : slStatusOptions}
-                                    creditLabel={isVl ? 'VL' : 'SL'}
-                                    onCreditValidation={setPartialDenyDayStatusInvalid}
-                                />
-                            </div>
-                        )}
+                                    <DayStatusAssignment
+                                        dayStatuses={partialDenySlDayStatuses}
+                                        onChange={setPartialDenySlDayStatuses}
+                                        creditPreviewInfo={
+                                            creditPreview
+                                                ? {
+                                                      availableCredits:
+                                                          Math.floor(
+                                                              creditPreview.credits_to_deduct ??
+                                                                  0,
+                                                          ),
+                                                  }
+                                                : null
+                                        }
+                                        statusOptions={
+                                            isVl
+                                                ? [...VL_STATUS_OPTIONS]
+                                                : slStatusOptions
+                                        }
+                                        creditLabel={isVl ? 'VL' : 'SL'}
+                                        onCreditValidation={
+                                            setPartialDenyDayStatusInvalid
+                                        }
+                                    />
+                                </div>
+                            )}
                     </div>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => {
-                            setShowPartialDenyDialog(false);
-                            setSelectedApprovedDates([]);
-                            partialDenyForm.reset();
-                            setPartialDenySlDayStatuses([]);
-                        }}>
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                setShowPartialDenyDialog(false);
+                                setSelectedApprovedDates([]);
+                                partialDenyForm.reset();
+                                setPartialDenySlDayStatuses([]);
+                            }}
+                        >
                             Cancel
                         </Button>
                         <Button
@@ -2290,7 +3565,9 @@ export default function Show({
                             disabled={
                                 partialDenyForm.processing ||
                                 selectedApprovedDates.length === 0 ||
-                                (!isEditingPartialDenial && selectedApprovedDates.length === originalWorkDays.length) ||
+                                (!isEditingPartialDenial &&
+                                    selectedApprovedDates.length ===
+                                        originalWorkDays.length) ||
                                 (hasDayStatuses && partialDenyDayStatusInvalid)
                             }
                         >
@@ -2303,35 +3580,53 @@ export default function Show({
             </Dialog>
 
             {/* TL Approve Dialog */}
-            <Dialog open={showTLApproveDialog} onOpenChange={setShowTLApproveDialog}>
+            <Dialog
+                open={showTLApproveDialog}
+                onOpenChange={setShowTLApproveDialog}
+            >
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Team Lead Approval</DialogTitle>
                         <DialogDescription>
-                            Approve this leave request as Team Lead. It will then proceed to Admin and HR for final approval.
+                            Approve this leave request as Team Lead. It will
+                            then proceed to Admin and HR for final approval.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
                         <div>
                             <label className="text-sm font-medium">
-                                Review Notes <span className="text-red-500">*</span>
+                                Review Notes{' '}
+                                <span className="text-red-500">*</span>
                             </label>
                             <Textarea
                                 value={tlApproveForm.data.review_notes}
-                                onChange={(e) => tlApproveForm.setData('review_notes', e.target.value)}
+                                onChange={(e) =>
+                                    tlApproveForm.setData(
+                                        'review_notes',
+                                        e.target.value,
+                                    )
+                                }
                                 placeholder="Add comments (required, minimum 10 characters)..."
                                 rows={3}
                             />
                             {tlApproveForm.errors.review_notes && (
-                                <p className="text-sm text-red-500 mt-1">{tlApproveForm.errors.review_notes}</p>
+                                <p className="mt-1 text-sm text-red-500">
+                                    {tlApproveForm.errors.review_notes}
+                                </p>
                             )}
                         </div>
                     </div>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowTLApproveDialog(false)}>
+                        <Button
+                            variant="outline"
+                            onClick={() => setShowTLApproveDialog(false)}
+                        >
                             Cancel
                         </Button>
-                        <Button onClick={handleTLApprove} disabled={tlApproveForm.processing}>
+                        <Button
+                            onClick={handleTLApprove}
+                            disabled={tlApproveForm.processing}
+                        >
                             Approve as Team Lead
                         </Button>
                     </DialogFooter>
@@ -2344,27 +3639,39 @@ export default function Show({
                     <DialogHeader>
                         <DialogTitle>Reject Leave Request</DialogTitle>
                         <DialogDescription>
-                            Rejecting this request as Team Lead will deny the leave request. Provide a reason for the rejection.
+                            Rejecting this request as Team Lead will deny the
+                            leave request. Provide a reason for the rejection.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
                         <div>
                             <label className="text-sm font-medium">
-                                Review Notes <span className="text-red-500">*</span>
+                                Review Notes{' '}
+                                <span className="text-red-500">*</span>
                             </label>
                             <Textarea
                                 value={tlDenyForm.data.review_notes}
-                                onChange={(e) => tlDenyForm.setData('review_notes', e.target.value)}
+                                onChange={(e) =>
+                                    tlDenyForm.setData(
+                                        'review_notes',
+                                        e.target.value,
+                                    )
+                                }
                                 placeholder="Reason for rejection (required, minimum 10 characters)..."
                                 rows={3}
                             />
                             {tlDenyForm.errors.review_notes && (
-                                <p className="text-sm text-red-500 mt-1">{tlDenyForm.errors.review_notes}</p>
+                                <p className="mt-1 text-sm text-red-500">
+                                    {tlDenyForm.errors.review_notes}
+                                </p>
                             )}
                         </div>
                     </div>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowTLDenyDialog(false)}>
+                        <Button
+                            variant="outline"
+                            onClick={() => setShowTLDenyDialog(false)}
+                        >
                             Cancel
                         </Button>
                         <Button
@@ -2379,55 +3686,85 @@ export default function Show({
             </Dialog>
 
             {/* Cancel Dialog */}
-            <Dialog open={showCancelDialog} onOpenChange={(open) => { setShowCancelDialog(open); if (!open) cancelForm.reset(); }}>
+            <Dialog
+                open={showCancelDialog}
+                onOpenChange={(open) => {
+                    setShowCancelDialog(open);
+                    if (!open) cancelForm.reset();
+                }}
+            >
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Cancel Leave Request</DialogTitle>
                         <DialogDescription>
-                            {leaveRequest.status === 'approved' && leaveRequest.has_partial_denial
+                            {leaveRequest.status === 'approved' &&
+                            leaveRequest.has_partial_denial
                                 ? 'This leave request was partially approved. Cancelling will restore any deducted credits and remove associated attendance records. This action cannot be undone.'
                                 : 'Are you sure you want to cancel this leave request? This action cannot be undone.'}
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-2">
-                        <Label htmlFor="cancel-reason">Reason for cancellation <span className="text-red-500">*</span></Label>
+                        <Label htmlFor="cancel-reason">
+                            Reason for cancellation{' '}
+                            <span className="text-red-500">*</span>
+                        </Label>
                         <Textarea
                             id="cancel-reason"
                             placeholder="Please provide a reason for cancelling this leave request..."
                             value={cancelForm.data.cancellation_reason}
-                            onChange={(e) => cancelForm.setData('cancellation_reason', e.target.value)}
+                            onChange={(e) =>
+                                cancelForm.setData(
+                                    'cancellation_reason',
+                                    e.target.value,
+                                )
+                            }
                             rows={3}
                         />
                         {cancelForm.errors.cancellation_reason && (
-                            <p className="text-sm text-red-500">{cancelForm.errors.cancellation_reason}</p>
+                            <p className="text-sm text-red-500">
+                                {cancelForm.errors.cancellation_reason}
+                            </p>
                         )}
                     </div>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowCancelDialog(false)}>
+                        <Button
+                            variant="outline"
+                            onClick={() => setShowCancelDialog(false)}
+                        >
                             No, Keep It
                         </Button>
                         <Button
                             variant="destructive"
                             onClick={handleCancel}
-                            disabled={cancelForm.processing || !cancelForm.data.cancellation_reason.trim()}
+                            disabled={
+                                cancelForm.processing ||
+                                !cancelForm.data.cancellation_reason.trim()
+                            }
                         >
-                            {cancelForm.processing ? 'Cancelling...' : 'Yes, Cancel Request'}
+                            {cancelForm.processing
+                                ? 'Cancelling...'
+                                : 'Yes, Cancel Request'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
 
             {/* Admin Cancel Leave Dialog */}
-            <Dialog open={showAdminCancelDialog} onOpenChange={setShowAdminCancelDialog}>
+            <Dialog
+                open={showAdminCancelDialog}
+                onOpenChange={setShowAdminCancelDialog}
+            >
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <AlertTriangle className="h-5 w-5 text-red-600" />
-                            {leaveRequest.status === 'approved' ? 'Cancel Approved Leave Request' : 'Cancel Leave Request'}
+                            {leaveRequest.status === 'approved'
+                                ? 'Cancel Approved Leave Request'
+                                : 'Cancel Leave Request'}
                         </DialogTitle>
                         <DialogDescription>
                             {leaveRequest.status === 'approved'
-                                ? 'You are about to cancel an approved leave request. This will restore the employee\'s leave credits and delete any associated attendance records.'
+                                ? "You are about to cancel an approved leave request. This will restore the employee's leave credits and delete any associated attendance records."
                                 : 'You are about to cancel this pending leave request. This action cannot be undone.'}
                         </DialogDescription>
                     </DialogHeader>
@@ -2435,48 +3772,81 @@ export default function Show({
                         <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
                             <AlertTriangle className="h-4 w-4 text-amber-600" />
                             <AlertDescription className="text-amber-800 dark:text-amber-200">
-                                <ul className="list-disc list-inside text-sm space-y-1">
+                                <ul className="list-inside list-disc space-y-1 text-sm">
                                     <li>Leave credits will be restored</li>
-                                    <li>Attendance records for leave dates will be deleted</li>
-                                    <li>The employee will be notified of this cancellation</li>
+                                    <li>
+                                        Attendance records for leave dates will
+                                        be deleted
+                                    </li>
+                                    <li>
+                                        The employee will be notified of this
+                                        cancellation
+                                    </li>
                                 </ul>
                             </AlertDescription>
                         </Alert>
                     )}
                     <div className="space-y-4">
                         <div className="space-y-2">
-                            <Label htmlFor="cancellation_reason">Reason for Cancellation <span className="text-red-500">*</span></Label>
+                            <Label htmlFor="cancellation_reason">
+                                Reason for Cancellation{' '}
+                                <span className="text-red-500">*</span>
+                            </Label>
                             <Textarea
                                 id="cancellation_reason"
                                 value={adminCancelForm.data.cancellation_reason}
-                                onChange={(e) => adminCancelForm.setData('cancellation_reason', e.target.value)}
-                                placeholder={leaveRequest.status === 'approved'
-                                    ? 'Please provide a reason for cancelling this approved leave...'
-                                    : 'Please provide a reason for cancelling this leave request...'}
+                                onChange={(e) =>
+                                    adminCancelForm.setData(
+                                        'cancellation_reason',
+                                        e.target.value,
+                                    )
+                                }
+                                placeholder={
+                                    leaveRequest.status === 'approved'
+                                        ? 'Please provide a reason for cancelling this approved leave...'
+                                        : 'Please provide a reason for cancelling this leave request...'
+                                }
                                 rows={3}
                             />
                             <p className="text-xs text-muted-foreground">
-                                This reason will be recorded in the audit log and sent to the employee.
+                                This reason will be recorded in the audit log
+                                and sent to the employee.
                             </p>
                         </div>
                     </div>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowAdminCancelDialog(false)}>
-                            {leaveRequest.status === 'approved' ? 'Keep Approved' : 'Keep Request'}
+                        <Button
+                            variant="outline"
+                            onClick={() => setShowAdminCancelDialog(false)}
+                        >
+                            {leaveRequest.status === 'approved'
+                                ? 'Keep Approved'
+                                : 'Keep Request'}
                         </Button>
                         <Button
                             variant="destructive"
                             onClick={handleAdminCancel}
-                            disabled={adminCancelForm.processing || !adminCancelForm.data.cancellation_reason.trim()}
+                            disabled={
+                                adminCancelForm.processing ||
+                                !adminCancelForm.data.cancellation_reason.trim()
+                            }
                         >
-                            {leaveRequest.status === 'approved' ? 'Cancel Approved Leave' : 'Cancel Leave Request'}
+                            {leaveRequest.status === 'approved'
+                                ? 'Cancel Approved Leave'
+                                : 'Cancel Leave Request'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
 
             {/* Revert Denial Dialog (Super Admin) */}
-            <Dialog open={showRevertDenialDialog} onOpenChange={(open) => { setShowRevertDenialDialog(open); if (!open) revertDenialForm.reset(); }}>
+            <Dialog
+                open={showRevertDenialDialog}
+                onOpenChange={(open) => {
+                    setShowRevertDenialDialog(open);
+                    if (!open) revertDenialForm.reset();
+                }}
+            >
                 <DialogContent className="max-w-[90vw] sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
@@ -2484,50 +3854,81 @@ export default function Show({
                             Revert Denial
                         </DialogTitle>
                         <DialogDescription>
-                            This will undo the denial and return the leave request to pending so it can be reviewed again.
+                            This will undo the denial and return the leave
+                            request to pending so it can be reviewed again.
                         </DialogDescription>
                     </DialogHeader>
                     <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
                         <AlertTriangle className="h-4 w-4 text-amber-600" />
                         <AlertDescription className="text-amber-800 dark:text-amber-200">
-                            <ul className="list-disc list-inside text-sm space-y-1">
+                            <ul className="list-inside list-disc space-y-1 text-sm">
                                 {leaveRequest.tl_rejected ? (
-                                    <li>Request returns to the Team Lead approval stage</li>
+                                    <li>
+                                        Request returns to the Team Lead
+                                        approval stage
+                                    </li>
                                 ) : (
-                                    <li>Any prior Team Lead / Admin / HR approvals are kept</li>
+                                    <li>
+                                        Any prior Team Lead / Admin / HR
+                                        approvals are kept
+                                    </li>
                                 )}
-                                <li>The employee and the original reviewer will be notified</li>
-                                <li>The original denial reason is preserved for reference</li>
+                                <li>
+                                    The employee and the original reviewer will
+                                    be notified
+                                </li>
+                                <li>
+                                    The original denial reason is preserved for
+                                    reference
+                                </li>
                             </ul>
                         </AlertDescription>
                     </Alert>
                     <div className="space-y-2">
-                        <Label htmlFor="revert_reason">Reason for Revert <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                        <Label htmlFor="revert_reason">
+                            Reason for Revert{' '}
+                            <span className="font-normal text-muted-foreground">
+                                (optional)
+                            </span>
+                        </Label>
                         <Textarea
                             id="revert_reason"
                             value={revertDenialForm.data.revert_reason}
-                            onChange={(e) => revertDenialForm.setData('revert_reason', e.target.value)}
+                            onChange={(e) =>
+                                revertDenialForm.setData(
+                                    'revert_reason',
+                                    e.target.value,
+                                )
+                            }
                             placeholder="Why is this denial being reverted?"
                             rows={3}
                             maxLength={1000}
                         />
                         {revertDenialForm.errors.revert_reason && (
-                            <p className="text-sm text-red-500">{revertDenialForm.errors.revert_reason}</p>
+                            <p className="text-sm text-red-500">
+                                {revertDenialForm.errors.revert_reason}
+                            </p>
                         )}
                         <p className="text-xs text-muted-foreground">
-                            This reason will be recorded in the audit log and shown to the employee.
+                            This reason will be recorded in the audit log and
+                            shown to the employee.
                         </p>
                     </div>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowRevertDenialDialog(false)}>
+                        <Button
+                            variant="outline"
+                            onClick={() => setShowRevertDenialDialog(false)}
+                        >
                             Keep Denied
                         </Button>
                         <Button
-                            className="bg-amber-600 hover:bg-amber-700 text-white"
+                            className="bg-amber-600 text-white hover:bg-amber-700"
                             onClick={handleRevertDenial}
                             disabled={revertDenialForm.processing}
                         >
-                            {revertDenialForm.processing ? 'Reverting...' : 'Revert to Pending'}
+                            {revertDenialForm.processing
+                                ? 'Reverting...'
+                                : 'Revert to Pending'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -2539,11 +3940,16 @@ export default function Show({
                     <DialogHeader>
                         <DialogTitle>Delete Leave Request</DialogTitle>
                         <DialogDescription>
-                            Are you sure you want to permanently delete this leave request? This action cannot be undone and will remove all associated data.
+                            Are you sure you want to permanently delete this
+                            leave request? This action cannot be undone and will
+                            remove all associated data.
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
+                        <Button
+                            variant="outline"
+                            onClick={() => setShowDeleteDialog(false)}
+                        >
                             Cancel
                         </Button>
                         <Button variant="destructive" onClick={handleDelete}>
@@ -2554,30 +3960,42 @@ export default function Show({
             </Dialog>
 
             {/* Force Approve Dialog (Super Admin Only) */}
-            <Dialog open={showForceApproveDialog} onOpenChange={(open) => {
-                setShowForceApproveDialog(open);
-                if (!open) {
-                    setForceApprovePartialMode(false);
-                    setForceApproveSelectedDates([]);
-                    setForceApproveSlDayStatuses([]);
-                    forceApproveForm.reset();
-                }
-            }}>
-                <DialogContent className={(hasDayStatuses || (isSpl && splCoverage)) ? 'max-w-2xl max-h-[90vh] flex flex-col' : 'max-w-lg max-h-[90vh] flex flex-col'}>
+            <Dialog
+                open={showForceApproveDialog}
+                onOpenChange={(open) => {
+                    setShowForceApproveDialog(open);
+                    if (!open) {
+                        setForceApprovePartialMode(false);
+                        setForceApproveSelectedDates([]);
+                        setForceApproveSlDayStatuses([]);
+                        forceApproveForm.reset();
+                    }
+                }}
+            >
+                <DialogContent
+                    className={
+                        hasDayStatuses || (isSpl && splCoverage)
+                            ? 'flex max-h-[90vh] max-w-2xl flex-col'
+                            : 'flex max-h-[90vh] max-w-lg flex-col'
+                    }
+                >
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <Shield className="h-5 w-5 text-purple-600" />
                             Force Approve Leave Request
                         </DialogTitle>
                         <DialogDescription>
-                            As Super Admin, you can force approve this leave request, bypassing the requirement for HR approval. This action will immediately approve the request.
+                            As Super Admin, you can force approve this leave
+                            request, bypassing the requirement for HR approval.
+                            This action will immediately approve the request.
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="overflow-y-auto flex-1 space-y-4 pr-1">
+                    <div className="flex-1 space-y-4 overflow-y-auto pr-1">
                         <Alert className="border-purple-200 bg-purple-50 dark:border-purple-800 dark:bg-purple-950">
                             <Shield className="h-4 w-4 text-purple-600" />
                             <AlertDescription className="text-purple-800 dark:text-purple-200">
-                                This will override any pending approvals from Team Lead, Admin, or HR.
+                                This will override any pending approvals from
+                                Team Lead, Admin, or HR.
                             </AlertDescription>
                         </Alert>
                         {/* Credit Preview for VL in Force Approve */}
@@ -2587,8 +4005,13 @@ export default function Show({
                                     <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
                                         <AlertTriangle className="h-4 w-4 text-amber-600" />
                                         <AlertDescription className="text-amber-800 dark:text-amber-200">
-                                            <strong>Partial VL credits.</strong> Only {creditPreview.credits_to_deduct} day(s) can be credited.
-                                            {creditPreview.upto_days ? ` ${creditPreview.upto_days} day(s) will be converted to UPTO.` : ''}
+                                            <strong>Partial VL credits.</strong>{' '}
+                                            Only{' '}
+                                            {creditPreview.credits_to_deduct}{' '}
+                                            day(s) can be credited.
+                                            {creditPreview.upto_days
+                                                ? ` ${creditPreview.upto_days} day(s) will be converted to UPTO.`
+                                                : ''}
                                         </AlertDescription>
                                     </Alert>
                                 )}
@@ -2596,33 +4019,49 @@ export default function Show({
                                     <Alert className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950">
                                         <AlertTriangle className="h-4 w-4 text-red-600" />
                                         <AlertDescription className="text-red-800 dark:text-red-200">
-                                            <strong>No VL credits available.</strong> All days will be marked as UPTO (Unpaid Time Off).
+                                            <strong>
+                                                No VL credits available.
+                                            </strong>{' '}
+                                            All days will be marked as UPTO
+                                            (Unpaid Time Off).
                                         </AlertDescription>
                                     </Alert>
                                 )}
-                                {creditPreview.should_deduct && !creditPreview.partial_credit && !creditPreview.convert_to_upto && (
-                                    <Alert className="border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950">
-                                        <CheckCircle className="h-4 w-4 text-green-600" />
-                                        <AlertDescription className="text-green-800 dark:text-green-200">
-                                            Full VL credits available ({creditPreview.credits_to_deduct} day(s)).
-                                        </AlertDescription>
-                                    </Alert>
-                                )}
+                                {creditPreview.should_deduct &&
+                                    !creditPreview.partial_credit &&
+                                    !creditPreview.convert_to_upto && (
+                                        <Alert className="border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950">
+                                            <CheckCircle className="h-4 w-4 text-green-600" />
+                                            <AlertDescription className="text-green-800 dark:text-green-200">
+                                                Full VL credits available (
+                                                {
+                                                    creditPreview.credits_to_deduct
+                                                }{' '}
+                                                day(s)).
+                                            </AlertDescription>
+                                        </Alert>
+                                    )}
                             </>
                         )}
                         {/* Credit Preview for SL in Force Approve */}
-                        {creditPreview && isSl && !leaveRequest.sl_with_undertime && (
-                            <>
-                                {creditPreview.should_deduct && (
-                                    <Alert className="border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950">
-                                        <CheckCircle className="h-4 w-4 text-green-600" />
-                                        <AlertDescription className="text-green-800 dark:text-green-200">
-                                            Full SL credits available ({creditPreview.credits_to_deduct} day(s)).
-                                        </AlertDescription>
-                                    </Alert>
-                                )}
-                            </>
-                        )}
+                        {creditPreview &&
+                            isSl &&
+                            !leaveRequest.sl_with_undertime && (
+                                <>
+                                    {creditPreview.should_deduct && (
+                                        <Alert className="border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950">
+                                            <CheckCircle className="h-4 w-4 text-green-600" />
+                                            <AlertDescription className="text-green-800 dark:text-green-200">
+                                                Full SL credits available (
+                                                {
+                                                    creditPreview.credits_to_deduct
+                                                }{' '}
+                                                day(s)).
+                                            </AlertDescription>
+                                        </Alert>
+                                    )}
+                                </>
+                            )}
                         {/* SPL Credit Coverage Preview in Force Approve */}
                         {isSpl && splCreditsSummary && splCoverage && (
                             <div className="space-y-2">
@@ -2630,68 +4069,163 @@ export default function Show({
                                     <Alert className="border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950">
                                         <CheckCircle className="h-4 w-4 text-green-600" />
                                         <AlertDescription className="text-green-800 dark:text-green-200">
-                                            <strong>SPL Credits:</strong> {splCoverage.balance.toFixed(2)} available — sufficient for all {workDays.length} day(s) ({splCoverage.creditsNeeded.toFixed(2)} credits needed).
-                                            {' '}Credits will be assigned chronologically (earliest first).
+                                            <strong>SPL Credits:</strong>{' '}
+                                            {splCoverage.balance.toFixed(2)}{' '}
+                                            available — sufficient for all{' '}
+                                            {workDays.length} day(s) (
+                                            {splCoverage.creditsNeeded.toFixed(
+                                                2,
+                                            )}{' '}
+                                            credits needed). Credits will be
+                                            assigned chronologically (earliest
+                                            first).
                                         </AlertDescription>
                                     </Alert>
                                 ) : splCoverage.noCoverage ? (
                                     <Alert className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950">
                                         <XCircle className="h-4 w-4 text-red-600" />
                                         <AlertDescription className="text-red-800 dark:text-red-200">
-                                            <strong>No SPL credits available.</strong> Balance is {splCoverage.balance.toFixed(2)} — cannot approve any dates.
+                                            <strong>
+                                                No SPL credits available.
+                                            </strong>{' '}
+                                            Balance is{' '}
+                                            {splCoverage.balance.toFixed(2)} —
+                                            cannot approve any dates.
                                         </AlertDescription>
                                     </Alert>
                                 ) : (
                                     <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
                                         <AlertTriangle className="h-4 w-4 text-amber-600" />
                                         <AlertDescription className="text-amber-800 dark:text-amber-200">
-                                            <strong>Insufficient SPL Credits:</strong> {splCoverage.balance.toFixed(2)} of {splCoverage.creditsNeeded.toFixed(2)} needed.
-                                            {' '}{splCoverage.coveredDates.length} day(s) will be credited, {splCoverage.uncoveredDates.length} day(s) will be automatically denied.
+                                            <strong>
+                                                Insufficient SPL Credits:
+                                            </strong>{' '}
+                                            {splCoverage.balance.toFixed(2)} of{' '}
+                                            {splCoverage.creditsNeeded.toFixed(
+                                                2,
+                                            )}{' '}
+                                            needed.{' '}
+                                            {splCoverage.coveredDates.length}{' '}
+                                            day(s) will be credited,{' '}
+                                            {splCoverage.uncoveredDates.length}{' '}
+                                            day(s) will be automatically denied.
                                         </AlertDescription>
                                     </Alert>
                                 )}
-                                <div className="border rounded-md p-3 space-y-2 text-sm">
-                                    <p className="text-xs text-muted-foreground mb-2">Toggle each day between whole day (1 credit) and half-day (0.5 credit).</p>
-                                    {[...splCoverage.coveredDates, ...splCoverage.uncoveredDates].sort().map(dateStr => {
-                                        const isCovered = splCoverage.coveredDates.includes(dateStr);
-                                        const isDeniedByPartial = forceApprovePartialMode && forceApproveSelectedDates.length > 0 && !forceApproveSelectedDates.includes(dateStr);
-                                        const isHalf = splCoverage.halfDayMap.get(dateStr) ?? false;
-                                        const isAutoHalf = splCoverage.autoHalfDays.has(dateStr);
-                                        const showToggle = isCovered && !isDeniedByPartial;
-                                        return (
-                                            <div key={dateStr} className={`flex items-center gap-2 p-2 rounded-lg border transition-colors ${isDeniedByPartial ? 'bg-red-50/50 border-red-200 opacity-60 dark:bg-red-950/20 dark:border-red-800' : isHalf ? 'bg-violet-50 border-violet-200 dark:bg-violet-950/30 dark:border-violet-800' : isCovered ? 'bg-card border-border' : 'bg-muted/50 border-border opacity-60'}`}>
-                                                {isDeniedByPartial ? (
-                                                    <XCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
-                                                ) : isCovered ? (
-                                                    <CheckCircle className="h-3.5 w-3.5 text-green-600 shrink-0" />
-                                                ) : (
-                                                    <XCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
-                                                )}
-                                                <span className={`flex-1 ${(!isCovered || isDeniedByPartial) ? 'text-muted-foreground' : ''}`}>{format(parseISO(dateStr), 'EEE, MMM d, yyyy')}</span>
-                                                {isDeniedByPartial ? (
-                                                    <Badge variant="destructive" className="text-[10px] px-1 py-0">Denied</Badge>
-                                                ) : isCovered ? (
-                                                    <Badge className="text-[10px] px-1 py-0 bg-green-600 text-white">Credited ({isHalf ? '0.5' : '1.0'})</Badge>
-                                                ) : (
-                                                    <Badge variant="destructive" className="text-[10px] px-1 py-0">Auto-Denied</Badge>
-                                                )}
-                                                {isAutoHalf && !isDeniedByPartial && (
-                                                    <Badge variant="outline" className="text-[10px] px-1 py-0 border-violet-300 text-violet-700 dark:text-violet-300">Auto</Badge>
-                                                )}
-                                                {showToggle && (
-                                                    <div className="flex items-center gap-1.5 ml-auto">
-                                                        <span className={`text-[11px] ${isHalf ? 'text-violet-600 font-medium dark:text-violet-400' : 'text-muted-foreground'}`}>
-                                                            {isHalf ? 'Half' : 'Whole'}
-                                                        </span>
-                                                        <Switch
-                                                            checked={isHalf}
-                                                            onCheckedChange={(checked) => setSplHalfDayOverrides(prev => ({ ...prev, [dateStr]: checked }))}
-                                                        />
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
+                                <div className="space-y-2 rounded-md border p-3 text-sm">
+                                    <p className="mb-2 text-xs text-muted-foreground">
+                                        Toggle each day between whole day (1
+                                        credit) and half-day (0.5 credit).
+                                    </p>
+                                    {[
+                                        ...splCoverage.coveredDates,
+                                        ...splCoverage.uncoveredDates,
+                                    ]
+                                        .sort()
+                                        .map((dateStr) => {
+                                            const isCovered =
+                                                splCoverage.coveredDates.includes(
+                                                    dateStr,
+                                                );
+                                            const isDeniedByPartial =
+                                                forceApprovePartialMode &&
+                                                forceApproveSelectedDates.length >
+                                                    0 &&
+                                                !forceApproveSelectedDates.includes(
+                                                    dateStr,
+                                                );
+                                            const isHalf =
+                                                splCoverage.halfDayMap.get(
+                                                    dateStr,
+                                                ) ?? false;
+                                            const isAutoHalf =
+                                                splCoverage.autoHalfDays.has(
+                                                    dateStr,
+                                                );
+                                            const showToggle =
+                                                isCovered && !isDeniedByPartial;
+                                            return (
+                                                <div
+                                                    key={dateStr}
+                                                    className={`flex items-center gap-2 rounded-lg border p-2 transition-colors ${isDeniedByPartial ? 'border-red-200 bg-red-50/50 opacity-60 dark:border-red-800 dark:bg-red-950/20' : isHalf ? 'border-violet-200 bg-violet-50 dark:border-violet-800 dark:bg-violet-950/30' : isCovered ? 'border-border bg-card' : 'border-border bg-muted/50 opacity-60'}`}
+                                                >
+                                                    {isDeniedByPartial ? (
+                                                        <XCircle className="h-3.5 w-3.5 shrink-0 text-red-500" />
+                                                    ) : isCovered ? (
+                                                        <CheckCircle className="h-3.5 w-3.5 shrink-0 text-green-600" />
+                                                    ) : (
+                                                        <XCircle className="h-3.5 w-3.5 shrink-0 text-red-500" />
+                                                    )}
+                                                    <span
+                                                        className={`flex-1 ${!isCovered || isDeniedByPartial ? 'text-muted-foreground' : ''}`}
+                                                    >
+                                                        {format(
+                                                            parseISO(dateStr),
+                                                            'EEE, MMM d, yyyy',
+                                                        )}
+                                                    </span>
+                                                    {isDeniedByPartial ? (
+                                                        <Badge
+                                                            variant="destructive"
+                                                            className="px-1 py-0 text-[10px]"
+                                                        >
+                                                            Denied
+                                                        </Badge>
+                                                    ) : isCovered ? (
+                                                        <Badge className="bg-green-600 px-1 py-0 text-[10px] text-white">
+                                                            Credited (
+                                                            {isHalf
+                                                                ? '0.5'
+                                                                : '1.0'}
+                                                            )
+                                                        </Badge>
+                                                    ) : (
+                                                        <Badge
+                                                            variant="destructive"
+                                                            className="px-1 py-0 text-[10px]"
+                                                        >
+                                                            Auto-Denied
+                                                        </Badge>
+                                                    )}
+                                                    {isAutoHalf &&
+                                                        !isDeniedByPartial && (
+                                                            <Badge
+                                                                variant="outline"
+                                                                className="border-violet-300 px-1 py-0 text-[10px] text-violet-700 dark:text-violet-300"
+                                                            >
+                                                                Auto
+                                                            </Badge>
+                                                        )}
+                                                    {showToggle && (
+                                                        <div className="ml-auto flex items-center gap-1.5">
+                                                            <span
+                                                                className={`text-[11px] ${isHalf ? 'font-medium text-violet-600 dark:text-violet-400' : 'text-muted-foreground'}`}
+                                                            >
+                                                                {isHalf
+                                                                    ? 'Half'
+                                                                    : 'Whole'}
+                                                            </span>
+                                                            <Switch
+                                                                checked={isHalf}
+                                                                onCheckedChange={(
+                                                                    checked,
+                                                                ) =>
+                                                                    setSplHalfDayOverrides(
+                                                                        (
+                                                                            prev,
+                                                                        ) => ({
+                                                                            ...prev,
+                                                                            [dateStr]:
+                                                                                checked,
+                                                                        }),
+                                                                    )
+                                                                }
+                                                            />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
                                 </div>
                             </div>
                         )}
@@ -2703,15 +4237,28 @@ export default function Show({
                                         id="forceApprovePartialMode"
                                         checked={forceApprovePartialMode}
                                         onCheckedChange={(checked) => {
-                                            setForceApprovePartialMode(checked === true);
+                                            setForceApprovePartialMode(
+                                                checked === true,
+                                            );
                                             if (!checked) {
-                                                setForceApproveSelectedDates([]);
-                                                forceApproveForm.setData('denied_dates', []);
-                                                forceApproveForm.setData('denial_reason', '');
+                                                setForceApproveSelectedDates(
+                                                    [],
+                                                );
+                                                forceApproveForm.setData(
+                                                    'denied_dates',
+                                                    [],
+                                                );
+                                                forceApproveForm.setData(
+                                                    'denial_reason',
+                                                    '',
+                                                );
                                             }
                                         }}
                                     />
-                                    <label htmlFor="forceApprovePartialMode" className="text-sm font-medium cursor-pointer">
+                                    <label
+                                        htmlFor="forceApprovePartialMode"
+                                        className="cursor-pointer text-sm font-medium"
+                                    >
                                         Partial Approval (deny some dates)
                                     </label>
                                 </div>
@@ -2720,29 +4267,57 @@ export default function Show({
                             {/* Date Selection for Partial Approval */}
                             {forceApprovePartialMode && workDays.length > 1 && (
                                 <div>
-                                    <Label className="text-sm font-medium mb-2 block">
-                                        Select dates to APPROVE ({forceApproveSelectedDates.length} of {workDays.length} selected)
+                                    <Label className="mb-2 block text-sm font-medium">
+                                        Select dates to APPROVE (
+                                        {forceApproveSelectedDates.length} of{' '}
+                                        {workDays.length} selected)
                                     </Label>
-                                    <div className="border rounded-md p-3 max-h-48 overflow-y-auto space-y-2">
+                                    <div className="max-h-48 space-y-2 overflow-y-auto rounded-md border p-3">
                                         {workDays.map((date) => {
-                                            const dateStr = format(date, 'yyyy-MM-dd');
-                                            const isSelected = forceApproveSelectedDates.includes(dateStr);
+                                            const dateStr = format(
+                                                date,
+                                                'yyyy-MM-dd',
+                                            );
+                                            const isSelected =
+                                                forceApproveSelectedDates.includes(
+                                                    dateStr,
+                                                );
                                             return (
                                                 <div
                                                     key={dateStr}
-                                                    className={`flex items-center space-x-3 p-2 rounded cursor-pointer transition-colors ${isSelected ? 'bg-green-50 border border-green-200 dark:bg-green-950 dark:border-green-800' : 'hover:bg-muted'}`}
-                                                    onClick={() => toggleForceApproveDate(dateStr)}
+                                                    className={`flex cursor-pointer items-center space-x-3 rounded p-2 transition-colors ${isSelected ? 'border border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950' : 'hover:bg-muted'}`}
+                                                    onClick={() =>
+                                                        toggleForceApproveDate(
+                                                            dateStr,
+                                                        )
+                                                    }
                                                 >
                                                     <Checkbox
                                                         checked={isSelected}
-                                                        onCheckedChange={() => toggleForceApproveDate(dateStr)}
+                                                        onCheckedChange={() =>
+                                                            toggleForceApproveDate(
+                                                                dateStr,
+                                                            )
+                                                        }
                                                     />
-                                                    <span className="font-medium text-sm">{format(date, 'EEE, MMM d, yyyy')}</span>
+                                                    <span className="text-sm font-medium">
+                                                        {format(
+                                                            date,
+                                                            'EEE, MMM d, yyyy',
+                                                        )}
+                                                    </span>
                                                     {isSelected && (
-                                                        <Badge className="text-xs bg-green-600 text-white ml-auto">Approve</Badge>
+                                                        <Badge className="ml-auto bg-green-600 text-xs text-white">
+                                                            Approve
+                                                        </Badge>
                                                     )}
                                                     {!isSelected && (
-                                                        <Badge variant="destructive" className="text-xs ml-auto">Deny</Badge>
+                                                        <Badge
+                                                            variant="destructive"
+                                                            className="ml-auto text-xs"
+                                                        >
+                                                            Deny
+                                                        </Badge>
                                                     )}
                                                 </div>
                                             );
@@ -2752,113 +4327,206 @@ export default function Show({
                             )}
 
                             {/* Denial Reason for Partial Approval */}
-                            {forceApprovePartialMode && forceApproveSelectedDates.length > 0 && forceApproveSelectedDates.length < workDays.length && (
-                                <div>
-                                    <label className="text-sm font-medium">
-                                        Reason for Denying {workDays.length - forceApproveSelectedDates.length} Date(s) <span className="text-red-500">*</span>
-                                    </label>
-                                    <Textarea
-                                        value={forceApproveForm.data.denial_reason}
-                                        onChange={(e) => forceApproveForm.setData('denial_reason', e.target.value)}
-                                        placeholder="Why are some dates being denied? (required, minimum 10 characters)..."
-                                        rows={2}
-                                    />
-                                    {forceApproveForm.errors.denial_reason && (
-                                        <p className="text-sm text-red-500 mt-1">{forceApproveForm.errors.denial_reason}</p>
-                                    )}
-                                </div>
-                            )}
+                            {forceApprovePartialMode &&
+                                forceApproveSelectedDates.length > 0 &&
+                                forceApproveSelectedDates.length <
+                                    workDays.length && (
+                                    <div>
+                                        <label className="text-sm font-medium">
+                                            Reason for Denying{' '}
+                                            {workDays.length -
+                                                forceApproveSelectedDates.length}{' '}
+                                            Date(s){' '}
+                                            <span className="text-red-500">
+                                                *
+                                            </span>
+                                        </label>
+                                        <Textarea
+                                            value={
+                                                forceApproveForm.data
+                                                    .denial_reason
+                                            }
+                                            onChange={(e) =>
+                                                forceApproveForm.setData(
+                                                    'denial_reason',
+                                                    e.target.value,
+                                                )
+                                            }
+                                            placeholder="Why are some dates being denied? (required, minimum 10 characters)..."
+                                            rows={2}
+                                        />
+                                        {forceApproveForm.errors
+                                            .denial_reason && (
+                                            <p className="mt-1 text-sm text-red-500">
+                                                {
+                                                    forceApproveForm.errors
+                                                        .denial_reason
+                                                }
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
 
                             {/* SL/VL Per-Day Status Assignment */}
                             {hasDayStatuses && (
                                 <div className="space-y-2">
-                                    <Label className="text-sm font-medium">Assign Per-Day Status</Label>
+                                    <Label className="text-sm font-medium">
+                                        Assign Per-Day Status
+                                    </Label>
                                     <p className="text-xs text-muted-foreground">
-                                        Set the status for each day of this leave. Only &quot;{isVl ? 'VL' : 'SL'} Credited&quot; days use leave credits.
+                                        Set the status for each day of this
+                                        leave. Only &quot;{isVl ? 'VL' : 'SL'}{' '}
+                                        Credited&quot; days use leave credits.
                                         {creditPreview && (
-                                            <span className="font-medium"> Available {isVl ? 'VL' : 'SL'} credits: {creditPreview.credits_to_deduct ?? 0} day(s).</span>
+                                            <span className="font-medium">
+                                                {' '}
+                                                Available {isVl
+                                                    ? 'VL'
+                                                    : 'SL'}{' '}
+                                                credits:{' '}
+                                                {creditPreview.credits_to_deduct ??
+                                                    0}{' '}
+                                                day(s).
+                                            </span>
                                         )}
                                     </p>
                                     {preStoredAttribution && (
                                         <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
                                             <Info className="h-4 w-4 text-blue-600" />
-                                            <AlertDescription className="text-blue-800 dark:text-blue-200 text-xs">
-                                                {preStoredAttribution}. You can review and edit before approving.
+                                            <AlertDescription className="text-xs text-blue-800 dark:text-blue-200">
+                                                {preStoredAttribution}. You can
+                                                review and edit before
+                                                approving.
                                             </AlertDescription>
                                         </Alert>
                                     )}
                                     <DayStatusAssignment
-                                        dayStatuses={forceApprovePartialMode && forceApproveSlDayStatuses.length > 0
-                                            ? forceApproveSlDayStatuses
-                                            : forceApproveSlDayStatuses.length > 0
+                                        dayStatuses={
+                                            forceApprovePartialMode &&
+                                            forceApproveSlDayStatuses.length > 0
                                                 ? forceApproveSlDayStatuses
-                                                : forceApproveAllSlDayStatuses}
+                                                : forceApproveSlDayStatuses.length >
+                                                    0
+                                                  ? forceApproveSlDayStatuses
+                                                  : forceApproveAllSlDayStatuses
+                                        }
                                         onChange={setForceApproveSlDayStatuses}
                                         creditPreviewInfo={
                                             creditPreview
-                                                ? { availableCredits: Math.floor(creditPreview.credits_to_deduct ?? 0) }
+                                                ? {
+                                                      availableCredits:
+                                                          Math.floor(
+                                                              creditPreview.credits_to_deduct ??
+                                                                  0,
+                                                          ),
+                                                  }
                                                 : null
                                         }
-                                        statusOptions={isVl ? [...VL_STATUS_OPTIONS] : slStatusOptions}
+                                        statusOptions={
+                                            isVl
+                                                ? [...VL_STATUS_OPTIONS]
+                                                : slStatusOptions
+                                        }
                                         creditLabel={isVl ? 'VL' : 'SL'}
-                                        onCreditValidation={setForceApproveDayStatusInvalid}
+                                        onCreditValidation={
+                                            setForceApproveDayStatusInvalid
+                                        }
                                     />
                                 </div>
                             )}
 
                             {/* Short Notice Override Toggle */}
-                            {isShortNotice && canOverrideShortNotice && !leaveRequest.short_notice_override && (
-                                <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
-                                    <AlertTriangle className="h-4 w-4 text-amber-600" />
-                                    <AlertDescription className="text-amber-800 dark:text-amber-200">
-                                        <div className="flex items-center justify-between gap-3">
-                                            <div>
-                                                <strong>Short Notice Request</strong>
-                                                <p className="text-xs mt-0.5 opacity-80">This leave was filed less than 2 weeks in advance. Toggle to override the notice requirement.</p>
+                            {isShortNotice &&
+                                canOverrideShortNotice &&
+                                !leaveRequest.short_notice_override && (
+                                    <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+                                        <AlertTriangle className="h-4 w-4 text-amber-600" />
+                                        <AlertDescription className="text-amber-800 dark:text-amber-200">
+                                            <div className="flex items-center justify-between gap-3">
+                                                <div>
+                                                    <strong>
+                                                        Short Notice Request
+                                                    </strong>
+                                                    <p className="mt-0.5 text-xs opacity-80">
+                                                        This leave was filed
+                                                        less than 2 weeks in
+                                                        advance. Toggle to
+                                                        override the notice
+                                                        requirement.
+                                                    </p>
+                                                </div>
+                                                <Switch
+                                                    checked={
+                                                        shortNoticeOverride
+                                                    }
+                                                    onCheckedChange={
+                                                        setShortNoticeOverride
+                                                    }
+                                                />
                                             </div>
-                                            <Switch
-                                                checked={shortNoticeOverride}
-                                                onCheckedChange={setShortNoticeOverride}
-                                            />
-                                        </div>
-                                    </AlertDescription>
-                                </Alert>
-                            )}
+                                        </AlertDescription>
+                                    </Alert>
+                                )}
 
                             <div>
                                 <label className="text-sm font-medium">
-                                    Review Notes <span className="text-red-500">*</span>
+                                    Review Notes{' '}
+                                    <span className="text-red-500">*</span>
                                 </label>
                                 <Textarea
                                     value={forceApproveForm.data.review_notes}
-                                    onChange={(e) => forceApproveForm.setData('review_notes', e.target.value)}
+                                    onChange={(e) =>
+                                        forceApproveForm.setData(
+                                            'review_notes',
+                                            e.target.value,
+                                        )
+                                    }
                                     placeholder="Add comments for the force approval (required, minimum 10 characters)..."
                                     rows={3}
                                 />
                                 {forceApproveForm.errors.review_notes && (
-                                    <p className="text-sm text-red-500 mt-1">{forceApproveForm.errors.review_notes}</p>
+                                    <p className="mt-1 text-sm text-red-500">
+                                        {forceApproveForm.errors.review_notes}
+                                    </p>
                                 )}
                             </div>
 
                             {/* Summary for Partial Approval */}
-                            {forceApprovePartialMode && forceApproveSelectedDates.length > 0 && forceApproveSelectedDates.length < workDays.length && (
-                                <Alert className="bg-orange-50 border-orange-200 dark:bg-orange-950 dark:border-orange-800">
-                                    <AlertTriangle className="h-4 w-4 text-orange-600" />
-                                    <AlertDescription className="text-orange-800 dark:text-orange-200">
-                                        <p> {forceApproveSelectedDates.length} day(s) will be <strong>approved</strong>, {workDays.length - forceApproveSelectedDates.length} day(s) will be <strong>denied</strong>. </p>
-                                    </AlertDescription>
-                                </Alert>
-                            )}
+                            {forceApprovePartialMode &&
+                                forceApproveSelectedDates.length > 0 &&
+                                forceApproveSelectedDates.length <
+                                    workDays.length && (
+                                    <Alert className="border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950">
+                                        <AlertTriangle className="h-4 w-4 text-orange-600" />
+                                        <AlertDescription className="text-orange-800 dark:text-orange-200">
+                                            <p>
+                                                {' '}
+                                                {
+                                                    forceApproveSelectedDates.length
+                                                }{' '}
+                                                day(s) will be{' '}
+                                                <strong>approved</strong>,{' '}
+                                                {workDays.length -
+                                                    forceApproveSelectedDates.length}{' '}
+                                                day(s) will be{' '}
+                                                <strong>denied</strong>.{' '}
+                                            </p>
+                                        </AlertDescription>
+                                    </Alert>
+                                )}
                         </div>
                     </div>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => {
-                            setShowForceApproveDialog(false);
-                            setForceApprovePartialMode(false);
-                            setForceApproveSelectedDates([]);
-                            setForceApproveSlDayStatuses([]);
-                            forceApproveForm.reset();
-                        }}>
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                setShowForceApproveDialog(false);
+                                setForceApprovePartialMode(false);
+                                setForceApproveSelectedDates([]);
+                                setForceApproveSlDayStatuses([]);
+                                forceApproveForm.reset();
+                            }}
+                        >
                             Cancel
                         </Button>
                         <Button
@@ -2866,24 +4534,32 @@ export default function Show({
                             onClick={handleForceApprove}
                             disabled={
                                 forceApproveForm.processing ||
-                                (forceApprovePartialMode && forceApproveSelectedDates.length === 0) ||
-                                (forceApprovePartialMode && forceApproveSelectedDates.length === workDays.length) ||
-                                (hasDayStatuses && forceApproveDayStatusInvalid) ||
+                                (forceApprovePartialMode &&
+                                    forceApproveSelectedDates.length === 0) ||
+                                (forceApprovePartialMode &&
+                                    forceApproveSelectedDates.length ===
+                                        workDays.length) ||
+                                (hasDayStatuses &&
+                                    forceApproveDayStatusInvalid) ||
                                 (isSpl && splCoverage?.noCoverage)
                             }
                         >
                             <Shield className="mr-1 h-4 w-4" />
-                            {forceApprovePartialMode && forceApproveSelectedDates.length > 0 && forceApproveSelectedDates.length < workDays.length
+                            {forceApprovePartialMode &&
+                            forceApproveSelectedDates.length > 0 &&
+                            forceApproveSelectedDates.length < workDays.length
                                 ? `Force Approve (${forceApproveSelectedDates.length} days)`
-                                : 'Force Approve All'
-                            }
+                                : 'Force Approve All'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
 
             {/* Adjust for Work Day Dialog */}
-            <Dialog open={showAdjustForWorkDialog} onOpenChange={setShowAdjustForWorkDialog}>
+            <Dialog
+                open={showAdjustForWorkDialog}
+                onOpenChange={setShowAdjustForWorkDialog}
+            >
                 <DialogContent className="max-w-md">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
@@ -2891,7 +4567,9 @@ export default function Show({
                             Adjust Leave for Work Day
                         </DialogTitle>
                         <DialogDescription>
-                            Adjust this leave when the employee reported to work on one of the leave days. Credits will be restored for the adjusted days.
+                            Adjust this leave when the employee reported to work
+                            on one of the leave days. Credits will be restored
+                            for the adjusted days.
                         </DialogDescription>
                     </DialogHeader>
 
@@ -2899,22 +4577,42 @@ export default function Show({
                         <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
                             <Info className="h-4 w-4 text-blue-600" />
                             <AlertDescription className="text-blue-800 dark:text-blue-200">
-                                Current leave: {format(parseISO(leaveRequest.start_date), 'MMM d')} - {format(parseISO(leaveRequest.end_date), 'MMM d, yyyy')} ({leaveRequest.days_requested} days)
+                                Current leave:{' '}
+                                {format(
+                                    parseISO(leaveRequest.start_date),
+                                    'MMM d',
+                                )}{' '}
+                                -{' '}
+                                {format(
+                                    parseISO(leaveRequest.end_date),
+                                    'MMM d, yyyy',
+                                )}{' '}
+                                ({leaveRequest.days_requested} days)
                             </AlertDescription>
                         </Alert>
 
                         <div className="space-y-2">
-                            <Label htmlFor="work_date">Date Employee Reported to Work</Label>
+                            <Label htmlFor="work_date">
+                                Date Employee Reported to Work
+                            </Label>
                             <Select
                                 value={adjustForWorkForm.data.work_date}
-                                onValueChange={(value) => adjustForWorkForm.setData('work_date', value)}
+                                onValueChange={(value) =>
+                                    adjustForWorkForm.setData(
+                                        'work_date',
+                                        value,
+                                    )
+                                }
                             >
                                 <SelectTrigger>
                                     <SelectValue placeholder="Select the work date" />
                                 </SelectTrigger>
                                 <SelectContent>
                                     {getLeaveDates().map((date) => (
-                                        <SelectItem key={date.toISOString()} value={format(date, 'yyyy-MM-dd')}>
+                                        <SelectItem
+                                            key={date.toISOString()}
+                                            value={format(date, 'yyyy-MM-dd')}
+                                        >
                                             {format(date, 'EEEE, MMM d, yyyy')}
                                         </SelectItem>
                                     ))}
@@ -2923,11 +4621,21 @@ export default function Show({
                         </div>
 
                         <div className="space-y-2">
-                            <Label htmlFor="adjustment_type">How to Adjust Leave</Label>
+                            <Label htmlFor="adjustment_type">
+                                How to Adjust Leave
+                            </Label>
                             <Select
                                 value={adjustForWorkForm.data.adjustment_type}
-                                onValueChange={(value: 'end_early' | 'start_late' | 'remove_day') =>
-                                    adjustForWorkForm.setData('adjustment_type', value)
+                                onValueChange={(
+                                    value:
+                                        | 'end_early'
+                                        | 'start_late'
+                                        | 'remove_day',
+                                ) =>
+                                    adjustForWorkForm.setData(
+                                        'adjustment_type',
+                                        value,
+                                    )
                                 }
                             >
                                 <SelectTrigger>
@@ -2935,18 +4643,20 @@ export default function Show({
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="start_late">
-                                        Start leave later (reported on work date, on leave after)
+                                        Start leave later (reported on work
+                                        date, on leave after)
                                     </SelectItem>
                                     <SelectItem value="end_early">
-                                        End leave early (reported on work date, worked remaining days)
+                                        End leave early (reported on work date,
+                                        worked remaining days)
                                     </SelectItem>
                                 </SelectContent>
                             </Select>
                             <p className="text-xs text-muted-foreground">
-                                {adjustForWorkForm.data.adjustment_type === 'end_early'
+                                {adjustForWorkForm.data.adjustment_type ===
+                                'end_early'
                                     ? 'Leave will end the day before the work date. Days after will be restored.'
-                                    : 'Leave will start the day after the work date. Days before will be restored.'
-                                }
+                                    : 'Leave will start the day after the work date. Days before will be restored.'}
                             </p>
                         </div>
 
@@ -2955,7 +4665,12 @@ export default function Show({
                             <Textarea
                                 id="notes"
                                 value={adjustForWorkForm.data.notes}
-                                onChange={(e) => adjustForWorkForm.setData('notes', e.target.value)}
+                                onChange={(e) =>
+                                    adjustForWorkForm.setData(
+                                        'notes',
+                                        e.target.value,
+                                    )
+                                }
                                 placeholder="Add any notes about this adjustment..."
                                 rows={2}
                             />
@@ -2963,15 +4678,21 @@ export default function Show({
                     </div>
 
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => {
-                            setShowAdjustForWorkDialog(false);
-                            adjustForWorkForm.reset();
-                        }}>
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                setShowAdjustForWorkDialog(false);
+                                adjustForWorkForm.reset();
+                            }}
+                        >
                             Cancel
                         </Button>
                         <Button
                             onClick={handleAdjustForWork}
-                            disabled={adjustForWorkForm.processing || !adjustForWorkForm.data.work_date}
+                            disabled={
+                                adjustForWorkForm.processing ||
+                                !adjustForWorkForm.data.work_date
+                            }
                             className="bg-blue-600 hover:bg-blue-700"
                         >
                             <Calendar className="mr-1 h-4 w-4" />
@@ -2982,17 +4703,24 @@ export default function Show({
             </Dialog>
 
             {/* Medical Certificate Dialog */}
-            <Dialog open={showMedicalCertDialog} onOpenChange={setShowMedicalCertDialog}>
-                <DialogContent className="max-w-[92vw] sm:max-w-3xl lg:max-w-4xl max-h-[90vh] overflow-auto">
+            <Dialog
+                open={showMedicalCertDialog}
+                onOpenChange={setShowMedicalCertDialog}
+            >
+                <DialogContent className="max-h-[90vh] max-w-[92vw] overflow-auto sm:max-w-3xl lg:max-w-4xl">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <FileImage className="h-5 w-5" />
-                            {leaveRequest.leave_type === 'SL' ? 'Medical Certificate' : 'Supporting Document'}
-                            {hasMultipleDocuments && selectedDocumentIndex !== -1 && (
-                                <span className="text-sm font-normal text-muted-foreground">
-                                    ({selectedDocumentIndex + 1} of {documentList.length})
-                                </span>
-                            )}
+                            {leaveRequest.leave_type === 'SL'
+                                ? 'Medical Certificate'
+                                : 'Supporting Document'}
+                            {hasMultipleDocuments &&
+                                selectedDocumentIndex !== -1 && (
+                                    <span className="text-sm font-normal text-muted-foreground">
+                                        ({selectedDocumentIndex + 1} of{' '}
+                                        {documentList.length})
+                                    </span>
+                                )}
                         </DialogTitle>
                         <DialogDescription>
                             {selectedDocument?.original_filename
@@ -3008,8 +4736,10 @@ export default function Show({
                                     type="button"
                                     variant="secondary"
                                     size="icon"
-                                    onClick={() => handleShowDocumentByOffset(-1)}
-                                    className="absolute left-2 top-1/2 z-10 h-9 w-9 -translate-y-1/2 rounded-full opacity-80 shadow-md hover:opacity-100"
+                                    onClick={() =>
+                                        handleShowDocumentByOffset(-1)
+                                    }
+                                    className="absolute top-1/2 left-2 z-10 h-9 w-9 -translate-y-1/2 rounded-full opacity-80 shadow-md hover:opacity-100"
                                     title="Previous document"
                                 >
                                     <ChevronLeft className="h-5 w-5" />
@@ -3018,27 +4748,38 @@ export default function Show({
                                     type="button"
                                     variant="secondary"
                                     size="icon"
-                                    onClick={() => handleShowDocumentByOffset(1)}
-                                    className="absolute right-2 top-1/2 z-10 h-9 w-9 -translate-y-1/2 rounded-full opacity-80 shadow-md hover:opacity-100"
+                                    onClick={() =>
+                                        handleShowDocumentByOffset(1)
+                                    }
+                                    className="absolute top-1/2 right-2 z-10 h-9 w-9 -translate-y-1/2 rounded-full opacity-80 shadow-md hover:opacity-100"
                                     title="Next document"
                                 >
                                     <ChevronRight className="h-5 w-5" />
                                 </Button>
                             </>
                         )}
-                        {selectedDocument && (selectedDocument.mime_type === 'application/pdf' || selectedDocument.original_filename.toLowerCase().endsWith('.pdf')) ? (
+                        {selectedDocument &&
+                        (selectedDocument.mime_type === 'application/pdf' ||
+                            selectedDocument.original_filename
+                                .toLowerCase()
+                                .endsWith('.pdf')) ? (
                             /* PDF Viewer */
                             <div className="overflow-hidden rounded-lg border">
                                 <iframe
-                                    src={leaveDocumentRoute({ leaveRequest: leaveRequest.id, document: selectedDocument.id }).url}
+                                    src={
+                                        leaveDocumentRoute({
+                                            leaveRequest: leaveRequest.id,
+                                            document: selectedDocument.id,
+                                        }).url
+                                    }
                                     title={selectedDocument.original_filename}
-                                    className="w-full h-[70vh]"
+                                    className="h-[70vh] w-full"
                                 />
                             </div>
                         ) : (
                             <>
                                 {/* Zoom Slider */}
-                                <div className="flex items-center gap-3 pb-2 border-b px-2">
+                                <div className="flex items-center gap-3 border-b px-2 pb-2">
                                     <ZoomOut className="h-4 w-4 shrink-0 text-muted-foreground" />
                                     <input
                                         type="range"
@@ -3046,12 +4787,18 @@ export default function Show({
                                         max={300}
                                         step={5}
                                         value={medicalCertZoom}
-                                        onChange={(e) => handleZoomChange(Number(e.target.value))}
-                                        className="w-full h-2 accent-primary cursor-pointer"
+                                        onChange={(e) =>
+                                            handleZoomChange(
+                                                Number(e.target.value),
+                                            )
+                                        }
+                                        className="h-2 w-full cursor-pointer accent-primary"
                                         title="Zoom level"
                                     />
                                     <ZoomIn className="h-4 w-4 shrink-0 text-muted-foreground" />
-                                    <span className="text-sm font-medium min-w-12.5 text-center tabular-nums">{medicalCertZoom}%</span>
+                                    <span className="min-w-12.5 text-center text-sm font-medium tabular-nums">
+                                        {medicalCertZoom}%
+                                    </span>
                                     <Button
                                         size="sm"
                                         variant="ghost"
@@ -3063,14 +4810,25 @@ export default function Show({
                                     </Button>
                                 </div>
                                 {/* Image Container */}
-                                <div className="overflow-auto max-h-[68vh] rounded-lg bg-muted/30">
-                                    <div className="min-w-full min-h-full flex items-start p-4">
+                                <div className="max-h-[68vh] overflow-auto rounded-lg bg-muted/30">
+                                    <div className="flex min-h-full min-w-full items-start p-4">
                                         {selectedDocument && (
                                             <img
-                                                src={leaveDocumentRoute({ leaveRequest: leaveRequest.id, document: selectedDocument.id }).url}
-                                                alt={selectedDocument.original_filename}
-                                                className="object-contain rounded-lg border transition-transform duration-200 origin-top-left"
-                                                style={{ transform: `scale(${medicalCertZoom / 100})` }}
+                                                src={
+                                                    leaveDocumentRoute({
+                                                        leaveRequest:
+                                                            leaveRequest.id,
+                                                        document:
+                                                            selectedDocument.id,
+                                                    }).url
+                                                }
+                                                alt={
+                                                    selectedDocument.original_filename
+                                                }
+                                                className="origin-top-left rounded-lg border object-contain transition-transform duration-200"
+                                                style={{
+                                                    transform: `scale(${medicalCertZoom / 100})`,
+                                                }}
                                             />
                                         )}
                                     </div>
@@ -3086,29 +4844,40 @@ export default function Show({
                                     type="button"
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => handleShowDocumentByOffset(-1)}
+                                    onClick={() =>
+                                        handleShowDocumentByOffset(-1)
+                                    }
                                 >
-                                    <ChevronLeft className="h-4 w-4 mr-1" />
+                                    <ChevronLeft className="mr-1 h-4 w-4" />
                                     Previous
                                 </Button>
                                 <Button
                                     type="button"
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => handleShowDocumentByOffset(1)}
+                                    onClick={() =>
+                                        handleShowDocumentByOffset(1)
+                                    }
                                 >
                                     Next
-                                    <ChevronRight className="h-4 w-4 ml-1" />
+                                    <ChevronRight className="ml-1 h-4 w-4" />
                                 </Button>
                             </div>
                         )}
                         <a
-                            href={selectedDocument ? leaveDocumentRoute({ leaveRequest: leaveRequest.id, document: selectedDocument.id }).url : '#'}
+                            href={
+                                selectedDocument
+                                    ? leaveDocumentRoute({
+                                          leaveRequest: leaveRequest.id,
+                                          document: selectedDocument.id,
+                                      }).url
+                                    : '#'
+                            }
                             target="_blank"
                             rel="noopener noreferrer"
                         >
                             <Button variant="outline">
-                                <ExternalLink className="h-4 w-4 mr-2" />
+                                <ExternalLink className="mr-2 h-4 w-4" />
                                 Open in New Tab
                             </Button>
                         </a>
@@ -3120,144 +4889,237 @@ export default function Show({
             </Dialog>
 
             {/* Attendance Points Details Dialog */}
-            <Dialog open={showAttendancePointsDialog} onOpenChange={setShowAttendancePointsDialog}>
-                <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+            <Dialog
+                open={showAttendancePointsDialog}
+                onOpenChange={setShowAttendancePointsDialog}
+            >
+                <DialogContent className="max-h-[80vh] max-w-3xl overflow-y-auto">
                     <DialogHeader>
-                        <DialogTitle>Attendance Points at Time of Request</DialogTitle>
+                        <DialogTitle>
+                            Attendance Points at Time of Request
+                        </DialogTitle>
                         <DialogDescription>
-                            Points that were active when {leaveRequest.user.name} submitted this leave request
+                            Points that were active when{' '}
+                            {leaveRequest.user.name} submitted this leave
+                            request
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
-                        {activeAttendancePoints && activeAttendancePoints.length > 0 ? (
+                        {activeAttendancePoints &&
+                        activeAttendancePoints.length > 0 ? (
                             <>
-                                <div className="bg-muted/50 p-3 rounded-lg">
+                                <div className="rounded-lg bg-muted/50 p-3">
                                     <div className="flex items-center justify-between">
-                                        <span className="text-sm font-medium">Total Points at Request:</span>
+                                        <span className="text-sm font-medium">
+                                            Total Points at Request:
+                                        </span>
                                         <span className="text-2xl font-bold text-destructive">
-                                            {Number(leaveRequest.attendance_points_at_request || 0).toFixed(1)}
+                                            {Number(
+                                                leaveRequest.attendance_points_at_request ||
+                                                    0,
+                                            ).toFixed(1)}
                                         </span>
                                     </div>
                                 </div>
 
                                 <div className="space-y-3">
-                                    {activeAttendancePoints.map((point, index) => (
-                                        <div key={point.id} className={`border rounded-lg p-4 ${point.current_status !== 'active' ? 'opacity-60 bg-muted/30' : ''}`}>
-                                            <div className="flex items-start justify-between gap-4">
-                                                <div className="space-y-3 flex-1">
-                                                    <div className="space-y-1">
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="text-muted-foreground text-sm font-medium">#{index + 1}</span>
-                                                            <div className="flex items-center gap-2 text-sm font-medium">
-                                                                <Calendar className="h-4 w-4 text-muted-foreground" />
-                                                                <span>
-                                                                    {format(parseISO(point.shift_date), 'EEEE, MMMM d, yyyy')}
+                                    {activeAttendancePoints.map(
+                                        (point, index) => (
+                                            <div
+                                                key={point.id}
+                                                className={`rounded-lg border p-4 ${point.current_status !== 'active' ? 'bg-muted/30 opacity-60' : ''}`}
+                                            >
+                                                <div className="flex items-start justify-between gap-4">
+                                                    <div className="flex-1 space-y-3">
+                                                        <div className="space-y-1">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-sm font-medium text-muted-foreground">
+                                                                    #{index + 1}
                                                                 </span>
+                                                                <div className="flex items-center gap-2 text-sm font-medium">
+                                                                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                                                                    <span>
+                                                                        {format(
+                                                                            parseISO(
+                                                                                point.shift_date,
+                                                                            ),
+                                                                            'EEEE, MMMM d, yyyy',
+                                                                        )}
+                                                                    </span>
+                                                                </div>
                                                             </div>
-                                                        </div>
 
-                                                        <div className="flex items-start gap-2 text-sm ml-6">
-                                                            <AlertTriangle className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-                                                            <div>
-                                                                <p className="font-medium text-muted-foreground">
-                                                                    {formatPointType(point.point_type)}
-                                                                </p>
-                                                                {point.violation_details && (
-                                                                    <p className="text-xs text-muted-foreground mt-1">
-                                                                        {point.violation_details}
+                                                            <div className="ml-6 flex items-start gap-2 text-sm">
+                                                                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                                                                <div>
+                                                                    <p className="font-medium text-muted-foreground">
+                                                                        {formatPointType(
+                                                                            point.point_type,
+                                                                        )}
                                                                     </p>
-                                                                )}
+                                                                    {point.violation_details && (
+                                                                        <p className="mt-1 text-xs text-muted-foreground">
+                                                                            {
+                                                                                point.violation_details
+                                                                            }
+                                                                        </p>
+                                                                    )}
+                                                                </div>
                                                             </div>
                                                         </div>
-                                                    </div>
 
-                                                    <div className="ml-6 space-y-1">
-                                                        {point.current_status === 'active' && (point.expires_at || point.gbro_expires_at) && (
-                                                            <>
-                                                                {point.expires_at && (
-                                                                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                                                        <Clock className="h-3.5 w-3.5" />
-                                                                        <span>
-                                                                            SRO Expires: {format(parseISO(point.expires_at), 'MMM d, yyyy')}
-                                                                        </span>
-                                                                    </div>
+                                                        <div className="ml-6 space-y-1">
+                                                            {point.current_status ===
+                                                                'active' &&
+                                                                (point.expires_at ||
+                                                                    point.gbro_expires_at) && (
+                                                                    <>
+                                                                        {point.expires_at && (
+                                                                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                                                                <Clock className="h-3.5 w-3.5" />
+                                                                                <span>
+                                                                                    SRO
+                                                                                    Expires:{' '}
+                                                                                    {format(
+                                                                                        parseISO(
+                                                                                            point.expires_at,
+                                                                                        ),
+                                                                                        'MMM d, yyyy',
+                                                                                    )}
+                                                                                </span>
+                                                                            </div>
+                                                                        )}
+                                                                        {point.eligible_for_gbro &&
+                                                                            point.gbro_expires_at && (
+                                                                                <div className="flex items-center gap-2 text-xs text-green-600 dark:text-green-400">
+                                                                                    <CheckCircle className="h-3.5 w-3.5" />
+                                                                                    <span>
+                                                                                        GBRO
+                                                                                        Expires:{' '}
+                                                                                        {format(
+                                                                                            parseISO(
+                                                                                                point.gbro_expires_at,
+                                                                                            ),
+                                                                                            'MMM d, yyyy',
+                                                                                        )}
+                                                                                    </span>
+                                                                                </div>
+                                                                            )}
+                                                                        {!point.eligible_for_gbro && (
+                                                                            <div className="flex items-center gap-2 text-xs text-orange-600 dark:text-orange-400">
+                                                                                <AlertTriangle className="h-3.5 w-3.5" />
+                                                                                <span>
+                                                                                    Not
+                                                                                    eligible
+                                                                                    for
+                                                                                    GBRO
+                                                                                </span>
+                                                                            </div>
+                                                                        )}
+                                                                    </>
                                                                 )}
-                                                                {point.eligible_for_gbro && point.gbro_expires_at && (
-                                                                    <div className="flex items-center gap-2 text-xs text-green-600 dark:text-green-400">
+                                                            {point.current_status ===
+                                                                'excused' &&
+                                                                point.excused_at && (
+                                                                    <div className="flex items-center gap-2 text-xs text-green-600">
                                                                         <CheckCircle className="h-3.5 w-3.5" />
                                                                         <span>
-                                                                            GBRO Expires: {format(parseISO(point.gbro_expires_at), 'MMM d, yyyy')}
+                                                                            Excused
+                                                                            on:{' '}
+                                                                            {format(
+                                                                                parseISO(
+                                                                                    point.excused_at,
+                                                                                ),
+                                                                                'MMM d, yyyy',
+                                                                            )}
                                                                         </span>
                                                                     </div>
                                                                 )}
-                                                                {!point.eligible_for_gbro && (
-                                                                    <div className="flex items-center gap-2 text-xs text-orange-600 dark:text-orange-400">
-                                                                        <AlertTriangle className="h-3.5 w-3.5" />
-                                                                        <span>Not eligible for GBRO</span>
+                                                            {point.current_status ===
+                                                                'expired' &&
+                                                                point.expired_at && (
+                                                                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                                                                        <Clock className="h-3.5 w-3.5" />
+                                                                        <span>
+                                                                            Expired
+                                                                            on:{' '}
+                                                                            {format(
+                                                                                parseISO(
+                                                                                    point.expired_at,
+                                                                                ),
+                                                                                'MMM d, yyyy',
+                                                                            )}
+                                                                        </span>
                                                                     </div>
                                                                 )}
-                                                            </>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex shrink-0 flex-col items-end gap-2">
+                                                        <Badge
+                                                            variant="destructive"
+                                                            className="px-3 py-1 text-sm"
+                                                        >
+                                                            {point.points}{' '}
+                                                            {point.points === 1
+                                                                ? 'Point'
+                                                                : 'Points'}
+                                                        </Badge>
+                                                        {point.current_status ===
+                                                            'excused' && (
+                                                            <Badge
+                                                                variant="outline"
+                                                                className="border-green-300 bg-green-100 text-xs text-green-700"
+                                                            >
+                                                                <CheckCircle className="mr-1 h-3 w-3" />
+                                                                Now Excused
+                                                            </Badge>
                                                         )}
-                                                        {point.current_status === 'excused' && point.excused_at && (
-                                                            <div className="flex items-center gap-2 text-xs text-green-600">
-                                                                <CheckCircle className="h-3.5 w-3.5" />
-                                                                <span>
-                                                                    Excused on: {format(parseISO(point.excused_at), 'MMM d, yyyy')}
-                                                                </span>
-                                                            </div>
-                                                        )}
-                                                        {point.current_status === 'expired' && point.expired_at && (
-                                                            <div className="flex items-center gap-2 text-xs text-gray-500">
-                                                                <Clock className="h-3.5 w-3.5" />
-                                                                <span>
-                                                                    Expired on: {format(parseISO(point.expired_at), 'MMM d, yyyy')}
-                                                                </span>
-                                                            </div>
+                                                        {point.current_status ===
+                                                            'expired' && (
+                                                            <Badge
+                                                                variant="outline"
+                                                                className="border-gray-300 bg-gray-100 text-xs text-gray-600"
+                                                            >
+                                                                <Clock className="mr-1 h-3 w-3" />
+                                                                Now Expired
+                                                            </Badge>
                                                         )}
                                                     </div>
                                                 </div>
-
-                                                <div className="flex flex-col items-end gap-2 shrink-0">
-                                                    <Badge variant="destructive" className="text-sm px-3 py-1">
-                                                        {point.points} {point.points === 1 ? 'Point' : 'Points'}
-                                                    </Badge>
-                                                    {point.current_status === 'excused' && (
-                                                        <Badge variant="outline" className="text-xs bg-green-100 text-green-700 border-green-300">
-                                                            <CheckCircle className="h-3 w-3 mr-1" />
-                                                            Now Excused
-                                                        </Badge>
-                                                    )}
-                                                    {point.current_status === 'expired' && (
-                                                        <Badge variant="outline" className="text-xs bg-gray-100 text-gray-600 border-gray-300">
-                                                            <Clock className="h-3 w-3 mr-1" />
-                                                            Now Expired
-                                                        </Badge>
-                                                    )}
-                                                </div>
                                             </div>
-                                        </div>
-                                    ))}
+                                        ),
+                                    )}
                                 </div>
 
                                 {/* Show note if any points have changed status */}
-                                {activeAttendancePoints.some(p => p.current_status !== 'active') && (
+                                {activeAttendancePoints.some(
+                                    (p) => p.current_status !== 'active',
+                                ) && (
                                     <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
                                         <Info className="h-4 w-4 text-blue-600" />
-                                        <AlertDescription className="text-blue-800 dark:text-blue-200 text-sm">
-                                            Some points shown above have been excused or expired since this request was submitted.
-                                            The grayed-out entries were active at the time of submission but are no longer counted.
+                                        <AlertDescription className="text-sm text-blue-800 dark:text-blue-200">
+                                            Some points shown above have been
+                                            excused or expired since this
+                                            request was submitted. The
+                                            grayed-out entries were active at
+                                            the time of submission but are no
+                                            longer counted.
                                         </AlertDescription>
                                     </Alert>
                                 )}
                             </>
                         ) : (
-                            <div className="text-center py-8 text-muted-foreground">
-                                No attendance points were recorded at the time of this request
+                            <div className="py-8 text-center text-muted-foreground">
+                                No attendance points were recorded at the time
+                                of this request
                             </div>
                         )}
                     </div>
                     <DialogFooter>
-                        <Button onClick={() => setShowAttendancePointsDialog(false)}>
+                        <Button
+                            onClick={() => setShowAttendancePointsDialog(false)}
+                        >
                             Close
                         </Button>
                     </DialogFooter>
@@ -3265,25 +5127,32 @@ export default function Show({
             </Dialog>
 
             {/* Edit Day Statuses Dialog (post-approval editing for SL/VL) */}
-            <Dialog open={showEditDayStatusesDialog} onOpenChange={(open) => {
-                setShowEditDayStatusesDialog(open);
-                if (!open) {
-                    setEditDayStatuses([]);
-                    setEditDayStatusesProcessing(false);
-                    setEditDayStatusesError(null);
-                }
-            }}>
-                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <Dialog
+                open={showEditDayStatusesDialog}
+                onOpenChange={(open) => {
+                    setShowEditDayStatusesDialog(open);
+                    if (!open) {
+                        setEditDayStatuses([]);
+                        setEditDayStatusesProcessing(false);
+                        setEditDayStatusesError(null);
+                    }
+                }}
+            >
+                <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>Edit Per-Day Statuses</DialogTitle>
                         <DialogDescription>
-                            Update the day-by-day status assignment for this approved {leaveRequest.leave_type} request. Changes will recalculate credits and attendance records.
+                            Update the day-by-day status assignment for this
+                            approved {leaveRequest.leave_type} request. Changes
+                            will recalculate credits and attendance records.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
                         {editDayStatusesError && (
                             <Alert className="border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300">
-                                <AlertDescription>{editDayStatusesError}</AlertDescription>
+                                <AlertDescription>
+                                    {editDayStatusesError}
+                                </AlertDescription>
                             </Alert>
                         )}
                         {editDayStatuses.length > 0 && (
@@ -3292,23 +5161,45 @@ export default function Show({
                                 onChange={setEditDayStatuses}
                                 creditPreviewInfo={
                                     creditPreview
-                                        ? { availableCredits: Math.floor(creditPreview.credits_to_deduct ?? 0) + (leaveRequest.credits_deducted ?? 0) }
+                                        ? {
+                                              availableCredits:
+                                                  Math.floor(
+                                                      creditPreview.credits_to_deduct ??
+                                                          0,
+                                                  ) +
+                                                  (leaveRequest.credits_deducted ??
+                                                      0),
+                                          }
                                         : null
                                 }
-                                statusOptions={isVl ? [...VL_STATUS_OPTIONS] : slStatusOptions}
+                                statusOptions={
+                                    isVl
+                                        ? [...VL_STATUS_OPTIONS]
+                                        : slStatusOptions
+                                }
                                 creditLabel={isVl ? 'VL' : 'SL'}
                             />
                         )}
                     </div>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowEditDayStatusesDialog(false)}>
+                        <Button
+                            variant="outline"
+                            onClick={() => setShowEditDayStatusesDialog(false)}
+                        >
                             Cancel
                         </Button>
                         <Button
                             onClick={handleSaveEditDayStatuses}
-                            disabled={editDayStatusesProcessing || editDayStatuses.some((d) => d.status === 'pending')}
+                            disabled={
+                                editDayStatusesProcessing ||
+                                editDayStatuses.some(
+                                    (d) => d.status === 'pending',
+                                )
+                            }
                         >
-                            {editDayStatusesProcessing ? 'Saving...' : 'Save Changes'}
+                            {editDayStatusesProcessing
+                                ? 'Saving...'
+                                : 'Save Changes'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

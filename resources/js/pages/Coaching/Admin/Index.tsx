@@ -1,40 +1,41 @@
-import { Fragment, useMemo, useState } from 'react';
-import { Head, Link, usePage, router, useForm } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import {
     AlertTriangle,
     BarChart3,
-    Calendar as CalendarIcon,
     CalendarClock,
+    Calendar as CalendarIcon,
     CheckCircle,
+    ChevronDown,
+    ClipboardCheck,
+    Clock,
     Eye,
     Filter,
     Plus,
     ShieldCheck,
     ShieldX,
     Users,
-    Clock,
-    ClipboardCheck,
-    ChevronDown,
 } from 'lucide-react';
+import { Fragment, useMemo, useState } from 'react';
 
-import AppLayout from '@/layouts/app-layout';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
-import { Calendar } from '@/components/ui/calendar';
+import AppLayout from '@/layouts/app-layout';
 import { formatDate } from '@/lib/utils';
 
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
+    CoachingStatusBadge,
+    SeverityBadge,
+} from '@/components/coaching/CoachingStatusBadge';
+import { CoachingSummaryCards } from '@/components/coaching/CoachingSummaryCards';
+import { WeekIndicator } from '@/components/coaching/WeekIndicator';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { MultiSelectFilter } from '@/components/multi-select-filter';
+import { PageHeader } from '@/components/PageHeader';
 import {
     Dialog,
     DialogContent,
@@ -45,6 +46,13 @@ import {
     DialogTrigger,
 } from '@/components/ui/dialog';
 import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import {
     Table,
     TableBody,
     TableCell,
@@ -52,28 +60,23 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
-import { PageHeader } from '@/components/PageHeader';
-import { LoadingOverlay } from '@/components/LoadingOverlay';
-import { usePageMeta, useFlashMessage, usePageLoading } from '@/hooks';
-import { CoachingStatusBadge, SeverityBadge } from '@/components/coaching/CoachingStatusBadge';
-import { CoachingSummaryCards } from '@/components/coaching/CoachingSummaryCards';
-import { WeekIndicator } from '@/components/coaching/WeekIndicator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
 import { getCurrentWeekOfMonth } from '@/lib/coaching';
-import { MultiSelectFilter } from '@/components/multi-select-filter';
 
 import { dashboard as coachingDashboard } from '@/routes/coaching';
 import {
     create as sessionsCreate,
-    show as sessionsShow,
     review as sessionsReview,
+    show as sessionsShow,
 } from '@/routes/coaching/sessions';
 
 import type {
-    CoachingSession,
+    Campaign,
     CoachingPurposeLabels,
+    CoachingSession,
     CoachingStatusColors,
     CoachingStatusLabel,
-    Campaign,
     User,
 } from '@/types';
 
@@ -105,7 +108,13 @@ interface DashboardData {
 interface QueueData {
     unacknowledged: CoachingSession[];
     for_review: CoachingSession[];
-    at_risk_agents: { id: number; name: string; account: string; coaching_status: CoachingStatusLabel; status_color: string }[];
+    at_risk_agents: {
+        id: number;
+        name: string;
+        account: string;
+        coaching_status: CoachingStatusLabel;
+        status_color: string;
+    }[];
 }
 
 interface Filters {
@@ -132,7 +141,11 @@ interface Props extends InertiaPageProps {
     queueData: QueueData;
     upcomingFollowUps: FollowUp[];
     overdueFollowUps: FollowUp[];
-    followUpComplianceRate?: { rate: number | null; completed: number; total: number };
+    followUpComplianceRate?: {
+        rate: number | null;
+        completed: number;
+        total: number;
+    };
     campaigns: Campaign[];
     teamLeads: User[];
     filters: Filters;
@@ -188,7 +201,8 @@ interface CampaignCompletionData {
     totals: CampaignCompletionRow & { health: 'green' | 'amber' | 'red' };
 }
 
-type TabKey = 'overview' | 'unacknowledged' | 'for_review' | 'at_risk' | 'upcoming';
+type TabKey =
+    'overview' | 'unacknowledged' | 'for_review' | 'at_risk' | 'upcoming';
 
 function daysUntil(dateStr: string): number {
     const now = new Date();
@@ -198,16 +212,39 @@ function daysUntil(dateStr: string): number {
 }
 
 function getUrgencyStyles(days: number) {
-    if (days < 0) return { border: 'border-red-500/50 bg-red-500/5', text: 'text-red-600 dark:text-red-400', label: `${Math.abs(days)}d overdue` };
-    if (days === 0) return { border: 'border-red-500/50 bg-red-500/5', text: 'text-red-600 dark:text-red-400', label: 'Today' };
-    if (days === 1) return { border: 'border-orange-500/50 bg-orange-500/5', text: 'text-orange-600 dark:text-orange-400', label: 'Tomorrow' };
-    return { border: 'border-yellow-500/50 bg-yellow-500/5', text: 'text-yellow-600 dark:text-yellow-400', label: `${days}d away` };
+    if (days < 0)
+        return {
+            border: 'border-red-500/50 bg-red-500/5',
+            text: 'text-red-600 dark:text-red-400',
+            label: `${Math.abs(days)}d overdue`,
+        };
+    if (days === 0)
+        return {
+            border: 'border-red-500/50 bg-red-500/5',
+            text: 'text-red-600 dark:text-red-400',
+            label: 'Today',
+        };
+    if (days === 1)
+        return {
+            border: 'border-orange-500/50 bg-orange-500/5',
+            text: 'text-orange-600 dark:text-orange-400',
+            label: 'Tomorrow',
+        };
+    return {
+        border: 'border-yellow-500/50 bg-yellow-500/5',
+        text: 'text-yellow-600 dark:text-yellow-400',
+        label: `${days}d away`,
+    };
 }
 
-const getAgingLabel = (dateStr: string): { text: string; className: string } => {
+const getAgingLabel = (
+    dateStr: string,
+): { text: string; className: string } => {
     const p = dateStr.split('-');
     const target = new Date(+p[0], +p[1] - 1, +p[2]);
-    const days = Math.floor((Date.now() - target.getTime()) / (1000 * 60 * 60 * 24));
+    const days = Math.floor(
+        (Date.now() - target.getTime()) / (1000 * 60 * 60 * 24),
+    );
     if (days <= 2) return { text: `${days}d ago`, className: 'text-green-600' };
     if (days <= 5) return { text: `${days}d ago`, className: 'text-amber-600' };
     return { text: `${days}d ago`, className: 'text-red-600 font-semibold' };
@@ -215,34 +252,64 @@ const getAgingLabel = (dateStr: string): { text: string; className: string } => 
 
 const getStatusRowClass = (status: string): string => {
     switch (status) {
-        case 'Please Coach ASAP': return 'bg-red-50/50 dark:bg-red-950/20';
-        case 'Badly Needs Coaching': return 'bg-orange-50/50 dark:bg-orange-950/20';
-        case 'Needs Coaching': return 'bg-yellow-50/50 dark:bg-yellow-950/20';
-        case 'Coaching Done': return 'bg-green-50/50 dark:bg-green-950/20';
-        case 'Draft': return 'bg-blue-50/50 dark:bg-blue-950/20';
-        case 'Excluded': return 'bg-slate-50/50 dark:bg-slate-950/20 opacity-70';
-        default: return '';
+        case 'Please Coach ASAP':
+            return 'bg-red-50/50 dark:bg-red-950/20';
+        case 'Badly Needs Coaching':
+            return 'bg-orange-50/50 dark:bg-orange-950/20';
+        case 'Needs Coaching':
+            return 'bg-yellow-50/50 dark:bg-yellow-950/20';
+        case 'Coaching Done':
+            return 'bg-green-50/50 dark:bg-green-950/20';
+        case 'Draft':
+            return 'bg-blue-50/50 dark:bg-blue-950/20';
+        case 'Excluded':
+            return 'bg-slate-50/50 dark:bg-slate-950/20 opacity-70';
+        default:
+            return '';
     }
 };
 
 export default function CoachingAdminIndex() {
-    const { dashboardData, teamLeadCoachingData, queueData, upcomingFollowUps, overdueFollowUps, followUpComplianceRate, campaigns, teamLeads, filters: initialFilters, purposes, monthlySessionTarget, campaignCompletion, coachedThisWeekIds = [], draftedThisWeekIds = [] } = usePage<Props>().props;
+    const {
+        dashboardData,
+        teamLeadCoachingData,
+        queueData,
+        upcomingFollowUps,
+        overdueFollowUps,
+        followUpComplianceRate,
+        campaigns,
+        teamLeads,
+        filters: initialFilters,
+        purposes,
+        monthlySessionTarget,
+        campaignCompletion,
+        coachedThisWeekIds = [],
+        draftedThisWeekIds = [],
+    } = usePage<Props>().props;
     const sessionTarget = monthlySessionTarget ?? 4;
 
     const { title, breadcrumbs } = usePageMeta({
         title: 'Coaching Compliance',
-        breadcrumbs: [{ title: 'Coaching Compliance', href: coachingDashboard().url }],
+        breadcrumbs: [
+            { title: 'Coaching Compliance', href: coachingDashboard().url },
+        ],
     });
     useFlashMessage();
     const isLoading = usePageLoading();
 
     const [activeTab, setActiveTab] = useState<TabKey>('overview');
-    const [campaignCompletionOpen, setCampaignCompletionOpen] = useState<boolean>(() => {
-        if (typeof window === 'undefined') return false;
-        return window.localStorage.getItem('coaching:campaignCompletionOpen') === '1';
-    });
+    const [campaignCompletionOpen, setCampaignCompletionOpen] =
+        useState<boolean>(() => {
+            if (typeof window === 'undefined') return false;
+            return (
+                window.localStorage.getItem(
+                    'coaching:campaignCompletionOpen',
+                ) === '1'
+            );
+        });
     const [exportingCompletion, setExportingCompletion] = useState(false);
-    const [completionBreakdown, setCompletionBreakdown] = useState<CompletionBreakdown | null>(null);
+    const [completionBreakdown, setCompletionBreakdown] =
+        useState<CompletionBreakdown | null>(null);
     const [breakdownSearch, setBreakdownSearch] = useState('');
     const [selectedForReview, setSelectedForReview] = useState<number[]>([]);
     const [campaignIds, setCampaignIds] = useState<string[]>(() => {
@@ -250,18 +317,31 @@ export default function CoachingAdminIndex() {
         if (!v) return [];
         return String(v).split(',').filter(Boolean);
     });
-    const campaignIdsParam = campaignIds.length > 0 ? campaignIds.join(',') : undefined;
+    const campaignIdsParam =
+        campaignIds.length > 0 ? campaignIds.join(',') : undefined;
     const [coachId, setCoachId] = useState(initialFilters.coach_id || '');
-    const [coachingStatus, setCoachingStatus] = useState(initialFilters.coaching_status || '');
-    const [coacheeRole, setCoacheeRole] = useState(initialFilters.coachee_role || 'Agent');
+    const [coachingStatus, setCoachingStatus] = useState(
+        initialFilters.coaching_status || '',
+    );
+    const [coacheeRole, setCoacheeRole] = useState(
+        initialFilters.coachee_role || 'Agent',
+    );
     const [dateFrom, setDateFrom] = useState(initialFilters.date_from || '');
     const [dateTo, setDateTo] = useState(initialFilters.date_to || '');
 
-    const reviewForm = useForm({ compliance_status: '' as string, compliance_notes: '' });
+    const reviewForm = useForm({
+        compliance_status: '' as string,
+        compliance_notes: '',
+    });
 
-    const [calendarSelectedDate, setCalendarSelectedDate] = useState<Date | undefined>(undefined);
+    const [calendarSelectedDate, setCalendarSelectedDate] = useState<
+        Date | undefined
+    >(undefined);
 
-    const allFollowUps = useMemo(() => [...overdueFollowUps, ...upcomingFollowUps], [overdueFollowUps, upcomingFollowUps]);
+    const allFollowUps = useMemo(
+        () => [...overdueFollowUps, ...upcomingFollowUps],
+        [overdueFollowUps, upcomingFollowUps],
+    );
 
     const selectedDateFollowUps = useMemo(() => {
         if (!calendarSelectedDate) return allFollowUps;
@@ -292,7 +372,8 @@ export default function CoachingAdminIndex() {
         );
     };
 
-    const activeData = coacheeRole === 'Team Lead' ? teamLeadCoachingData : dashboardData;
+    const activeData =
+        coacheeRole === 'Team Lead' ? teamLeadCoachingData : dashboardData;
 
     const handleFilter = () => {
         router.get(
@@ -325,7 +406,9 @@ export default function CoachingAdminIndex() {
         });
     };
 
-    const formatName = (user?: { first_name: string; last_name: string } | null) => {
+    const formatName = (
+        user?: { first_name: string; last_name: string } | null,
+    ) => {
         if (!user) return 'N/A';
         return `${user.first_name} ${user.last_name}`;
     };
@@ -342,27 +425,39 @@ export default function CoachingAdminIndex() {
 
     const teamLeadSummary = useMemo<CampaignCompletionRow[]>(() => {
         if (coacheeRole === 'Team Lead') return [];
-        return (campaignCompletion?.campaigns ?? []).filter((c) => c.eligible > 0);
+        return (campaignCompletion?.campaigns ?? []).filter(
+            (c) => c.eligible > 0,
+        );
     }, [campaignCompletion, coacheeRole]);
 
     const totalsRow = campaignCompletion?.totals ?? null;
-    const expectedSoFarPerAgent = campaignCompletion?.expected_so_far_per_agent ?? sessionTarget;
+    const expectedSoFarPerAgent =
+        campaignCompletion?.expected_so_far_per_agent ?? sessionTarget;
     const weeksElapsed = campaignCompletion?.weeks_elapsed ?? sessionTarget;
     const periodLabel = campaignCompletion?.period_label ?? '';
 
     const persistCampaignCompletionOpen = (open: boolean) => {
         setCampaignCompletionOpen(open);
         if (typeof window !== 'undefined') {
-            window.localStorage.setItem('coaching:campaignCompletionOpen', open ? '1' : '0');
+            window.localStorage.setItem(
+                'coaching:campaignCompletionOpen',
+                open ? '1' : '0',
+            );
         }
     };
 
-    const openCompletionBreakdown = (type: CompletionBreakdown['type'], scope: string, row: CampaignCompletionRow) => {
+    const openCompletionBreakdown = (
+        type: CompletionBreakdown['type'],
+        scope: string,
+        row: CampaignCompletionRow,
+    ) => {
         setBreakdownSearch('');
         setCompletionBreakdown({
             type,
             scope,
-            agents: (type === 'behind' ? row.behind_agents : row.at_risk_agents) ?? [],
+            agents:
+                (type === 'behind' ? row.behind_agents : row.at_risk_agents) ??
+                [],
         });
     };
 
@@ -370,7 +465,11 @@ export default function CoachingAdminIndex() {
         const agents = completionBreakdown?.agents ?? [];
         const term = breakdownSearch.trim().toLowerCase();
         if (!term) return agents;
-        return agents.filter((a) => a.name.toLowerCase().includes(term) || a.account.toLowerCase().includes(term));
+        return agents.filter(
+            (a) =>
+                a.name.toLowerCase().includes(term) ||
+                a.account.toLowerCase().includes(term),
+        );
     }, [completionBreakdown, breakdownSearch]);
 
     const drillIntoCampaign = (accountName: string) => {
@@ -396,27 +495,39 @@ export default function CoachingAdminIndex() {
         if (exportingCompletion) return;
         setExportingCompletion(true);
         try {
-            const res = await fetch('/coaching/campaign-completion/export/start', {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement | null)?.content ?? '',
+            const res = await fetch(
+                '/coaching/campaign-completion/export/start',
+                {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Accept: 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-TOKEN':
+                            (
+                                document.querySelector(
+                                    'meta[name="csrf-token"]',
+                                ) as HTMLMetaElement | null
+                            )?.content ?? '',
+                    },
+                    body: JSON.stringify({
+                        campaign_id: campaignIdsParam ?? null,
+                        coach_id: coachId || null,
+                    }),
                 },
-                body: JSON.stringify({
-                    campaign_id: campaignIdsParam ?? null,
-                    coach_id: coachId || null,
-                }),
-            });
+            );
             if (!res.ok) throw new Error('Failed to start export');
             const { jobId } = await res.json();
             const poll = async () => {
-                const p = await fetch(`/coaching/campaign-completion/export/progress/${jobId}`, { credentials: 'same-origin' });
+                const p = await fetch(
+                    `/coaching/campaign-completion/export/progress/${jobId}`,
+                    { credentials: 'same-origin' },
+                );
                 const data = await p.json();
                 if (data.finished) {
-                    if (data.downloadUrl) window.location.href = data.downloadUrl;
+                    if (data.downloadUrl)
+                        window.location.href = data.downloadUrl;
                     setExportingCompletion(false);
                     return;
                 }
@@ -432,20 +543,56 @@ export default function CoachingAdminIndex() {
         if (!confirm(`Verify ${selectedForReview.length} sessions?`)) return;
 
         selectedForReview.forEach((sessionId) => {
-            router.patch(sessionsReview(sessionId).url, {
-                compliance_status: 'Verified',
-                compliance_notes: 'Bulk verified by admin',
-            }, { preserveState: true, preserveScroll: true });
+            router.patch(
+                sessionsReview(sessionId).url,
+                {
+                    compliance_status: 'Verified',
+                    compliance_notes: 'Bulk verified by admin',
+                },
+                { preserveState: true, preserveScroll: true },
+            );
         });
         setSelectedForReview([]);
     };
 
-    const tabs: { key: TabKey; label: string; icon: React.ComponentType<{ className?: string }>; count?: number; overdueCount?: number }[] = [
-        { key: 'overview', label: 'Overview', icon: Users, count: activeData.agents.length },
-        { key: 'unacknowledged', label: 'Unacknowledged', icon: Clock, count: queueData.unacknowledged.length },
-        { key: 'for_review', label: 'For Review', icon: ClipboardCheck, count: queueData.for_review.length },
-        { key: 'at_risk', label: 'At Risk', icon: AlertTriangle, count: queueData.at_risk_agents.length },
-        { key: 'upcoming', label: 'Upcoming', icon: CalendarClock, count: allFollowUps.length, overdueCount: overdueFollowUps.length },
+    const tabs: {
+        key: TabKey;
+        label: string;
+        icon: React.ComponentType<{ className?: string }>;
+        count?: number;
+        overdueCount?: number;
+    }[] = [
+        {
+            key: 'overview',
+            label: 'Overview',
+            icon: Users,
+            count: activeData.agents.length,
+        },
+        {
+            key: 'unacknowledged',
+            label: 'Unacknowledged',
+            icon: Clock,
+            count: queueData.unacknowledged.length,
+        },
+        {
+            key: 'for_review',
+            label: 'For Review',
+            icon: ClipboardCheck,
+            count: queueData.for_review.length,
+        },
+        {
+            key: 'at_risk',
+            label: 'At Risk',
+            icon: AlertTriangle,
+            count: queueData.at_risk_agents.length,
+        },
+        {
+            key: 'upcoming',
+            label: 'Upcoming',
+            icon: CalendarClock,
+            count: allFollowUps.length,
+            overdueCount: overdueFollowUps.length,
+        },
     ];
 
     return (
@@ -461,11 +608,22 @@ export default function CoachingAdminIndex() {
                 {isLoading ? (
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
                         {Array.from({ length: 6 }).map((_, i) => (
-                            <div key={i} className="h-20 animate-pulse rounded-lg bg-muted" />
+                            <div
+                                key={i}
+                                className="h-20 animate-pulse rounded-lg bg-muted"
+                            />
                         ))}
                     </div>
                 ) : (
-                    <CoachingSummaryCards totalAgents={activeData.total_agents} statusCounts={activeData.status_counts} totalLabel={coacheeRole === 'Team Lead' ? 'Total Team Leads' : 'Total Agents'} />
+                    <CoachingSummaryCards
+                        totalAgents={activeData.total_agents}
+                        statusCounts={activeData.status_counts}
+                        totalLabel={
+                            coacheeRole === 'Team Lead'
+                                ? 'Total Team Leads'
+                                : 'Total Agents'
+                        }
+                    />
                 )}
 
                 {/* Follow-up Compliance Rate */}
@@ -473,20 +631,34 @@ export default function CoachingAdminIndex() {
                     <div className="rounded-lg border bg-card p-4 shadow-sm">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm font-medium text-muted-foreground">Follow-up Compliance</p>
-                                <p className="text-2xl font-bold">{followUpComplianceRate.rate ?? 0}%</p>
+                                <p className="text-sm font-medium text-muted-foreground">
+                                    Follow-up Compliance
+                                </p>
+                                <p className="text-2xl font-bold">
+                                    {followUpComplianceRate.rate ?? 0}%
+                                </p>
                             </div>
                             <div className="text-right text-xs text-muted-foreground">
-                                <p>{followUpComplianceRate.completed} of {followUpComplianceRate.total}</p>
+                                <p>
+                                    {followUpComplianceRate.completed} of{' '}
+                                    {followUpComplianceRate.total}
+                                </p>
                                 <p>follow-ups completed</p>
                             </div>
                         </div>
                         <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted">
                             <div
-                                className={`h-full rounded-full transition-all ${(followUpComplianceRate.rate ?? 0) >= 80 ? 'bg-green-500' :
-                                    (followUpComplianceRate.rate ?? 0) >= 50 ? 'bg-amber-500' : 'bg-red-500'
-                                    }`}
-                                style={{ width: `${followUpComplianceRate.rate ?? 0}%` }}
+                                className={`h-full rounded-full transition-all ${
+                                    (followUpComplianceRate.rate ?? 0) >= 80
+                                        ? 'bg-green-500'
+                                        : (followUpComplianceRate.rate ?? 0) >=
+                                            50
+                                          ? 'bg-amber-500'
+                                          : 'bg-red-500'
+                                }`}
+                                style={{
+                                    width: `${followUpComplianceRate.rate ?? 0}%`,
+                                }}
                             />
                         </div>
                     </div>
@@ -495,7 +667,10 @@ export default function CoachingAdminIndex() {
                 {/* Filters */}
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-8">
                     <MultiSelectFilter
-                        options={campaigns.map((c) => ({ label: c.name, value: String(c.id) }))}
+                        options={campaigns.map((c) => ({
+                            label: c.name,
+                            value: String(c.id),
+                        }))}
                         value={campaignIds}
                         onChange={setCampaignIds}
                         placeholder="Campaign"
@@ -508,27 +683,44 @@ export default function CoachingAdminIndex() {
                             </SelectTrigger>
                             <SelectContent>
                                 {teamLeads.map((tl) => (
-                                    <SelectItem key={tl.id} value={String(tl.id)}>
+                                    <SelectItem
+                                        key={tl.id}
+                                        value={String(tl.id)}
+                                    >
                                         {tl.first_name} {tl.last_name}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
                     )}
-                    <Select value={coachingStatus} onValueChange={setCoachingStatus}>
+                    <Select
+                        value={coachingStatus}
+                        onValueChange={setCoachingStatus}
+                    >
                         <SelectTrigger>
                             <SelectValue placeholder="Coaching Status" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="Coaching Done">Coaching Done</SelectItem>
-                            <SelectItem value="Needs Coaching">Needs Coaching</SelectItem>
-                            <SelectItem value="Badly Needs Coaching">Badly Needs Coaching</SelectItem>
-                            <SelectItem value="Please Coach ASAP">Please Coach ASAP</SelectItem>
+                            <SelectItem value="Coaching Done">
+                                Coaching Done
+                            </SelectItem>
+                            <SelectItem value="Needs Coaching">
+                                Needs Coaching
+                            </SelectItem>
+                            <SelectItem value="Badly Needs Coaching">
+                                Badly Needs Coaching
+                            </SelectItem>
+                            <SelectItem value="Please Coach ASAP">
+                                Please Coach ASAP
+                            </SelectItem>
                             <SelectItem value="No Record">No Record</SelectItem>
                             <SelectItem value="Draft">Draft</SelectItem>
                         </SelectContent>
                     </Select>
-                    <Select value={coacheeRole} onValueChange={handleCoacheeRoleChange}>
+                    <Select
+                        value={coacheeRole}
+                        onValueChange={handleCoacheeRoleChange}
+                    >
                         <SelectTrigger>
                             <SelectValue placeholder="Coachee Role" />
                         </SelectTrigger>
@@ -537,8 +729,18 @@ export default function CoachingAdminIndex() {
                             <SelectItem value="Agent">Agent</SelectItem>
                         </SelectContent>
                     </Select>
-                    <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} placeholder="Date from" />
-                    <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} placeholder="Date to" />
+                    <Input
+                        type="date"
+                        value={dateFrom}
+                        onChange={(e) => setDateFrom(e.target.value)}
+                        placeholder="Date from"
+                    />
+                    <Input
+                        type="date"
+                        value={dateTo}
+                        onChange={(e) => setDateTo(e.target.value)}
+                        placeholder="Date to"
+                    />
                     <Button onClick={handleFilter}>
                         <Filter className="mr-2 h-4 w-4" /> Filter
                     </Button>
@@ -549,173 +751,336 @@ export default function CoachingAdminIndex() {
 
                 {/* Tabs */}
                 <div className="flex flex-wrap gap-1 rounded-lg border bg-muted/30 p-1">
-                    {tabs.map(({ key, label, icon: Icon, count, overdueCount }) => (
-                        <button
-                            key={key}
-                            onClick={() => setActiveTab(key)}
-                            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${activeTab === key
-                                ? 'bg-background text-foreground shadow-sm'
-                                : 'text-muted-foreground hover:text-foreground'
+                    {tabs.map(
+                        ({ key, label, icon: Icon, count, overdueCount }) => (
+                            <button
+                                key={key}
+                                onClick={() => setActiveTab(key)}
+                                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                                    activeTab === key
+                                        ? 'bg-background text-foreground shadow-sm'
+                                        : 'text-muted-foreground hover:text-foreground'
                                 }`}
-                        >
-                            <Icon className="h-3.5 w-3.5" />
-                            <span className="hidden sm:inline">{label}</span>
-                            {(count ?? 0) > 0 && (
-                                <span className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${activeTab === key
-                                    ? 'bg-primary/10 text-primary'
-                                    : 'bg-muted text-muted-foreground'
-                                    }`}>
-                                    {count}
+                            >
+                                <Icon className="h-3.5 w-3.5" />
+                                <span className="hidden sm:inline">
+                                    {label}
                                 </span>
-                            )}
-                            {(overdueCount ?? 0) > 0 && (
-                                <Badge variant="destructive" className="ml-0.5 px-1 py-0 text-[10px]">
-                                    {overdueCount}
-                                </Badge>
-                            )}
-                        </button>
-                    ))}
+                                {(count ?? 0) > 0 && (
+                                    <span
+                                        className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                                            activeTab === key
+                                                ? 'bg-primary/10 text-primary'
+                                                : 'bg-muted text-muted-foreground'
+                                        }`}
+                                    >
+                                        {count}
+                                    </span>
+                                )}
+                                {(overdueCount ?? 0) > 0 && (
+                                    <Badge
+                                        variant="destructive"
+                                        className="ml-0.5 px-1 py-0 text-[10px]"
+                                    >
+                                        {overdueCount}
+                                    </Badge>
+                                )}
+                            </button>
+                        ),
+                    )}
                 </div>
 
                 {/* Tab Content */}
                 {activeTab === 'overview' && (
                     <div className="space-y-2">
-                        {coacheeRole !== 'Team Lead' && teamLeadSummary.length > 0 && (
-                            <div className="rounded-lg border bg-card p-4 shadow-sm">
-                                <div className="flex w-full items-center justify-between gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => persistCampaignCompletionOpen(!campaignCompletionOpen)}
-                                        className="flex flex-1 items-center justify-between text-left text-sm font-semibold"
-                                    >
-                                        <span className="flex flex-wrap items-center gap-2">
-                                            <BarChart3 className="h-4 w-4" /> Campaign Coaching Completion
-                                            <span className="text-[10px] font-normal text-muted-foreground">
-                                                {periodLabel} · target {sessionTarget}/agent · week {weeksElapsed} so far
-                                            </span>
-                                        </span>
-                                        <ChevronDown className={`h-4 w-4 transition-transform ${campaignCompletionOpen ? 'rotate-180' : ''}`} />
-                                    </button>
-                                    {campaignCompletionOpen && (
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={startCampaignCompletionExport}
-                                            disabled={exportingCompletion}
+                        {coacheeRole !== 'Team Lead' &&
+                            teamLeadSummary.length > 0 && (
+                                <div className="rounded-lg border bg-card p-4 shadow-sm">
+                                    <div className="flex w-full items-center justify-between gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                persistCampaignCompletionOpen(
+                                                    !campaignCompletionOpen,
+                                                )
+                                            }
+                                            className="flex flex-1 items-center justify-between text-left text-sm font-semibold"
                                         >
-                                            {exportingCompletion ? 'Exporting…' : 'Export'}
-                                        </Button>
+                                            <span className="flex flex-wrap items-center gap-2">
+                                                <BarChart3 className="h-4 w-4" />{' '}
+                                                Campaign Coaching Completion
+                                                <span className="text-[10px] font-normal text-muted-foreground">
+                                                    {periodLabel} · target{' '}
+                                                    {sessionTarget}/agent · week{' '}
+                                                    {weeksElapsed} so far
+                                                </span>
+                                            </span>
+                                            <ChevronDown
+                                                className={`h-4 w-4 transition-transform ${campaignCompletionOpen ? 'rotate-180' : ''}`}
+                                            />
+                                        </button>
+                                        {campaignCompletionOpen && (
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={
+                                                    startCampaignCompletionExport
+                                                }
+                                                disabled={exportingCompletion}
+                                            >
+                                                {exportingCompletion
+                                                    ? 'Exporting…'
+                                                    : 'Export'}
+                                            </Button>
+                                        )}
+                                    </div>
+                                    {campaignCompletionOpen && (
+                                        <div className="mt-3 space-y-2">
+                                            {totalsRow && (
+                                                <div className="flex items-center gap-3 rounded-md border border-dashed bg-muted/30 p-2">
+                                                    <span
+                                                        className="w-32 truncate text-sm font-semibold"
+                                                        title="All campaigns"
+                                                    >
+                                                        All Campaigns
+                                                    </span>
+                                                    <div className="flex-1">
+                                                        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                                                            <div
+                                                                className={`h-full rounded-full transition-all ${
+                                                                    totalsRow.health ===
+                                                                    'green'
+                                                                        ? 'bg-green-500'
+                                                                        : totalsRow.health ===
+                                                                            'amber'
+                                                                          ? 'bg-amber-500'
+                                                                          : 'bg-red-500'
+                                                                }`}
+                                                                style={{
+                                                                    width: `${totalsRow.rate}%`,
+                                                                }}
+                                                            />
+                                                        </div>
+                                                        <div className="mt-0.5 text-[10px] text-muted-foreground">
+                                                            {
+                                                                totalsRow.fully_coached
+                                                            }
+                                                            /
+                                                            {totalsRow.eligible}{' '}
+                                                            fully coached ·{' '}
+                                                            {
+                                                                totalsRow.total_sessions_this_month
+                                                            }
+                                                            /
+                                                            {
+                                                                totalsRow.expected_sessions
+                                                            }{' '}
+                                                            sessions
+                                                            {totalsRow.excluded_coaching >
+                                                            0
+                                                                ? ` · ${totalsRow.excluded_coaching} coaching excluded`
+                                                                : ''}
+                                                            {totalsRow.excluded_mid_month >
+                                                            0
+                                                                ? ` · ${totalsRow.excluded_mid_month} excluded (mid-month)`
+                                                                : ''}
+                                                        </div>
+                                                    </div>
+                                                    <span className="w-12 text-right text-xs font-bold">
+                                                        {totalsRow.rate}%
+                                                    </span>
+                                                    {totalsRow.behind_weekly >
+                                                        0 && (
+                                                        <Badge
+                                                            asChild
+                                                            variant="secondary"
+                                                            className="cursor-pointer text-[10px] hover:opacity-80"
+                                                        >
+                                                            <button
+                                                                type="button"
+                                                                onClick={() =>
+                                                                    openCompletionBreakdown(
+                                                                        'behind',
+                                                                        'All Campaigns',
+                                                                        totalsRow,
+                                                                    )
+                                                                }
+                                                                title="View agents behind schedule"
+                                                            >
+                                                                {
+                                                                    totalsRow.behind_weekly
+                                                                }{' '}
+                                                                behind
+                                                            </button>
+                                                        </Badge>
+                                                    )}
+                                                    {totalsRow.at_risk > 0 && (
+                                                        <Badge
+                                                            asChild
+                                                            variant="destructive"
+                                                            className="cursor-pointer text-[10px] hover:opacity-80"
+                                                        >
+                                                            <button
+                                                                type="button"
+                                                                onClick={() =>
+                                                                    openCompletionBreakdown(
+                                                                        'at_risk',
+                                                                        'All Campaigns',
+                                                                        totalsRow,
+                                                                    )
+                                                                }
+                                                                title="View at-risk agents"
+                                                            >
+                                                                {
+                                                                    totalsRow.at_risk
+                                                                }{' '}
+                                                                at risk
+                                                            </button>
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                            )}
+                                            {teamLeadSummary.map((tl) => (
+                                                <div
+                                                    key={tl.account}
+                                                    role="button"
+                                                    tabIndex={0}
+                                                    onClick={() =>
+                                                        drillIntoCampaign(
+                                                            tl.account,
+                                                        )
+                                                    }
+                                                    onKeyDown={(e) => {
+                                                        if (
+                                                            e.target !==
+                                                            e.currentTarget
+                                                        )
+                                                            return;
+                                                        if (
+                                                            e.key === 'Enter' ||
+                                                            e.key === ' '
+                                                        ) {
+                                                            e.preventDefault();
+                                                            drillIntoCampaign(
+                                                                tl.account,
+                                                            );
+                                                        }
+                                                    }}
+                                                    className="flex w-full cursor-pointer items-center gap-3 rounded-md p-1 text-left transition-colors hover:bg-muted/50"
+                                                    title={`Filter dashboard by ${tl.account}`}
+                                                >
+                                                    <span className="w-32 truncate text-sm font-medium">
+                                                        {tl.account}
+                                                    </span>
+                                                    <div className="flex-1">
+                                                        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                                                            <div
+                                                                className={`h-full rounded-full transition-all ${
+                                                                    tl.health ===
+                                                                    'green'
+                                                                        ? 'bg-green-500'
+                                                                        : tl.health ===
+                                                                            'amber'
+                                                                          ? 'bg-amber-500'
+                                                                          : 'bg-red-500'
+                                                                }`}
+                                                                style={{
+                                                                    width: `${tl.rate}%`,
+                                                                }}
+                                                            />
+                                                        </div>
+                                                        <div className="mt-0.5 text-[10px] text-muted-foreground">
+                                                            {tl.fully_coached}/
+                                                            {tl.eligible} fully
+                                                            coached ·{' '}
+                                                            {tl.capped_sessions}
+                                                            /
+                                                            {
+                                                                tl.expected_sessions
+                                                            }{' '}
+                                                            effective (
+                                                            {
+                                                                tl.total_sessions_this_month
+                                                            }{' '}
+                                                            raw)
+                                                            {tl.excluded_coaching >
+                                                            0
+                                                                ? ` · ${tl.excluded_coaching} coaching excluded`
+                                                                : ''}
+                                                            {tl.excluded_mid_month >
+                                                            0
+                                                                ? ` · ${tl.excluded_mid_month} excluded (mid-month)`
+                                                                : ''}
+                                                        </div>
+                                                    </div>
+                                                    <span className="w-12 text-right text-xs font-medium">
+                                                        {tl.rate}%
+                                                    </span>
+                                                    {tl.behind_weekly > 0 && (
+                                                        <Badge
+                                                            asChild
+                                                            variant="secondary"
+                                                            className="cursor-pointer text-[10px] hover:opacity-80"
+                                                        >
+                                                            <button
+                                                                type="button"
+                                                                onClick={(
+                                                                    e,
+                                                                ) => {
+                                                                    e.stopPropagation();
+                                                                    openCompletionBreakdown(
+                                                                        'behind',
+                                                                        tl.account,
+                                                                        tl,
+                                                                    );
+                                                                }}
+                                                                title={`Agents below ${expectedSoFarPerAgent} session(s) so far this month — click to view`}
+                                                            >
+                                                                {
+                                                                    tl.behind_weekly
+                                                                }{' '}
+                                                                behind
+                                                            </button>
+                                                        </Badge>
+                                                    )}
+                                                    {tl.at_risk > 0 && (
+                                                        <Badge
+                                                            asChild
+                                                            variant="destructive"
+                                                            className="cursor-pointer text-[10px] hover:opacity-80"
+                                                        >
+                                                            <button
+                                                                type="button"
+                                                                onClick={(
+                                                                    e,
+                                                                ) => {
+                                                                    e.stopPropagation();
+                                                                    openCompletionBreakdown(
+                                                                        'at_risk',
+                                                                        tl.account,
+                                                                        tl,
+                                                                    );
+                                                                }}
+                                                                title="View at-risk agents"
+                                                            >
+                                                                {tl.at_risk} at
+                                                                risk
+                                                            </button>
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
                                     )}
                                 </div>
-                                {campaignCompletionOpen && <div className="mt-3 space-y-2">
-                                    {totalsRow && (
-                                        <div className="flex items-center gap-3 rounded-md border border-dashed bg-muted/30 p-2">
-                                            <span className="w-32 truncate text-sm font-semibold" title="All campaigns">All Campaigns</span>
-                                            <div className="flex-1">
-                                                <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-                                                    <div
-                                                        className={`h-full rounded-full transition-all ${totalsRow.health === 'green' ? 'bg-green-500' :
-                                                            totalsRow.health === 'amber' ? 'bg-amber-500' : 'bg-red-500'
-                                                            }`}
-                                                        style={{ width: `${totalsRow.rate}%` }}
-                                                    />
-                                                </div>
-                                                <div className="mt-0.5 text-[10px] text-muted-foreground">
-                                                    {totalsRow.fully_coached}/{totalsRow.eligible} fully coached · {totalsRow.total_sessions_this_month}/{totalsRow.expected_sessions} sessions{totalsRow.excluded_coaching > 0 ? ` · ${totalsRow.excluded_coaching} coaching excluded` : ''}{totalsRow.excluded_mid_month > 0 ? ` · ${totalsRow.excluded_mid_month} excluded (mid-month)` : ''}
-                                                </div>
-                                            </div>
-                                            <span className="w-12 text-right text-xs font-bold">{totalsRow.rate}%</span>
-                                            {totalsRow.behind_weekly > 0 && (
-                                                <Badge asChild variant="secondary" className="cursor-pointer text-[10px] hover:opacity-80">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => openCompletionBreakdown('behind', 'All Campaigns', totalsRow)}
-                                                        title="View agents behind schedule"
-                                                    >
-                                                        {totalsRow.behind_weekly} behind
-                                                    </button>
-                                                </Badge>
-                                            )}
-                                            {totalsRow.at_risk > 0 && (
-                                                <Badge asChild variant="destructive" className="cursor-pointer text-[10px] hover:opacity-80">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => openCompletionBreakdown('at_risk', 'All Campaigns', totalsRow)}
-                                                        title="View at-risk agents"
-                                                    >
-                                                        {totalsRow.at_risk} at risk
-                                                    </button>
-                                                </Badge>
-                                            )}
-                                        </div>
-                                    )}
-                                    {teamLeadSummary.map((tl) => (
-                                        <div
-                                            key={tl.account}
-                                            role="button"
-                                            tabIndex={0}
-                                            onClick={() => drillIntoCampaign(tl.account)}
-                                            onKeyDown={(e) => {
-                                                if (e.target !== e.currentTarget) return;
-                                                if (e.key === 'Enter' || e.key === ' ') {
-                                                    e.preventDefault();
-                                                    drillIntoCampaign(tl.account);
-                                                }
-                                            }}
-                                            className="flex w-full cursor-pointer items-center gap-3 rounded-md p-1 text-left transition-colors hover:bg-muted/50"
-                                            title={`Filter dashboard by ${tl.account}`}
-                                        >
-                                            <span className="w-32 truncate text-sm font-medium">{tl.account}</span>
-                                            <div className="flex-1">
-                                                <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-                                                    <div
-                                                        className={`h-full rounded-full transition-all ${tl.health === 'green' ? 'bg-green-500' :
-                                                            tl.health === 'amber' ? 'bg-amber-500' : 'bg-red-500'
-                                                            }`}
-                                                        style={{ width: `${tl.rate}%` }}
-                                                    />
-                                                </div>
-                                                <div className="mt-0.5 text-[10px] text-muted-foreground">
-                                                    {tl.fully_coached}/{tl.eligible} fully coached · {tl.capped_sessions}/{tl.expected_sessions} effective ({tl.total_sessions_this_month} raw){tl.excluded_coaching > 0 ? ` · ${tl.excluded_coaching} coaching excluded` : ''}{tl.excluded_mid_month > 0 ? ` · ${tl.excluded_mid_month} excluded (mid-month)` : ''}
-                                                </div>
-                                            </div>
-                                            <span className="w-12 text-right text-xs font-medium">{tl.rate}%</span>
-                                            {tl.behind_weekly > 0 && (
-                                                <Badge asChild variant="secondary" className="cursor-pointer text-[10px] hover:opacity-80">
-                                                    <button
-                                                        type="button"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            openCompletionBreakdown('behind', tl.account, tl);
-                                                        }}
-                                                        title={`Agents below ${expectedSoFarPerAgent} session(s) so far this month — click to view`}
-                                                    >
-                                                        {tl.behind_weekly} behind
-                                                    </button>
-                                                </Badge>
-                                            )}
-                                            {tl.at_risk > 0 && (
-                                                <Badge asChild variant="destructive" className="cursor-pointer text-[10px] hover:opacity-80">
-                                                    <button
-                                                        type="button"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            openCompletionBreakdown('at_risk', tl.account, tl);
-                                                        }}
-                                                        title="View at-risk agents"
-                                                    >
-                                                        {tl.at_risk} at risk
-                                                    </button>
-                                                </Badge>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>}
-                            </div>
-                        )}
+                            )}
 
                         <h3 className="flex items-center gap-2 text-sm font-semibold">
-                            <Users className="h-4 w-4" /> All {coacheeRole === 'Team Lead' ? 'Team Leads' : 'Agents'} ({activeData.agents.length})
+                            <Users className="h-4 w-4" /> All{' '}
+                            {coacheeRole === 'Team Lead'
+                                ? 'Team Leads'
+                                : 'Agents'}{' '}
+                            ({activeData.agents.length})
                         </h3>
 
                         {/* Desktop Table */}
@@ -724,90 +1089,183 @@ export default function CoachingAdminIndex() {
                                 <Table>
                                     <TableHeader className="sticky top-0 z-10">
                                         <TableRow className="bg-muted/50">
-                                            <TableHead>{coacheeRole === 'Team Lead' ? 'Team Lead' : 'Agent'}</TableHead>
+                                            <TableHead>
+                                                {coacheeRole === 'Team Lead'
+                                                    ? 'Team Lead'
+                                                    : 'Agent'}
+                                            </TableHead>
                                             <TableHead>Status</TableHead>
                                             <TableHead>Last Coached</TableHead>
                                             <TableHead>Sessions</TableHead>
-                                             <TableHead className="text-center" title="Weekly coaching breakdown">Wk</TableHead>
-                                             <TableHead>Pending Ack</TableHead>
+                                            <TableHead
+                                                className="text-center"
+                                                title="Weekly coaching breakdown"
+                                            >
+                                                Wk
+                                            </TableHead>
+                                            <TableHead>Pending Ack</TableHead>
                                             {coacheeRole === 'Team Lead' && (
-                                                <TableHead className="text-center">Actions</TableHead>
+                                                <TableHead className="text-center">
+                                                    Actions
+                                                </TableHead>
                                             )}
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {activeData.agents.length === 0 ? (
                                             <TableRow>
-                                                <TableCell colSpan={coacheeRole === 'Team Lead' ? 7 : 6} className="py-8 text-center text-muted-foreground">
-                                                    No {coacheeRole === 'Team Lead' ? 'team leads' : 'agents'} found.
+                                                <TableCell
+                                                    colSpan={
+                                                        coacheeRole ===
+                                                        'Team Lead'
+                                                            ? 7
+                                                            : 6
+                                                    }
+                                                    className="py-8 text-center text-muted-foreground"
+                                                >
+                                                    No{' '}
+                                                    {coacheeRole === 'Team Lead'
+                                                        ? 'team leads'
+                                                        : 'agents'}{' '}
+                                                    found.
                                                 </TableCell>
                                             </TableRow>
                                         ) : (
-                                            groupedAgents.map(([account, agents]) => (
-                                                <Fragment key={account}>
-                                                    <TableRow className="bg-muted/30">
-                                                        <TableCell colSpan={coacheeRole === 'Team Lead' ? 7 : 6} className="py-2">
-                                                            <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                                                {account} ({agents.length})
-                                                            </span>
-                                                        </TableCell>
-                                                    </TableRow>
-                                                    {agents.map((agent) => (
-                                                        <TableRow key={agent.id} className={getStatusRowClass(agent.coaching_status)}>
-                                                            <TableCell className="pl-6 font-medium">
-                                                                <div className="flex flex-col">
-                                                                    <div className="flex items-center gap-1.5">
-                                                                        <span>{agent.name}</span>
-                                                                        {coachedThisWeekIds.includes(agent.id) && (
-                                                                            <Badge className="bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 text-[10px] px-1.5 py-0 font-medium leading-none">
-                                                                                Wk {getCurrentWeekOfMonth()}
-                                                                            </Badge>
-                                                                        )}
-                                                                        {draftedThisWeekIds.includes(agent.id) && !coachedThisWeekIds.includes(agent.id) && (
-                                                                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-medium leading-none">
-                                                                                Draft
-                                                                            </Badge>
-                                                                        )}
-                                                                    </div>
-                                                                    {agent.is_coaching_excluded && (
-                                                                        <span className="text-[10px] text-slate-500">
-                                                                            {agent.exclusion_expires_at
-                                                                                ? `Until ${formatDate(agent.exclusion_expires_at)}`
-                                                                                : 'Forever'}
-                                                                        </span>
-                                                                    )}
-                                                                </div>
+                                            groupedAgents.map(
+                                                ([account, agents]) => (
+                                                    <Fragment key={account}>
+                                                        <TableRow className="bg-muted/30">
+                                                            <TableCell
+                                                                colSpan={
+                                                                    coacheeRole ===
+                                                                    'Team Lead'
+                                                                        ? 7
+                                                                        : 6
+                                                                }
+                                                                className="py-2"
+                                                            >
+                                                                <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                                                                    {account} (
+                                                                    {
+                                                                        agents.length
+                                                                    }
+                                                                    )
+                                                                </span>
                                                             </TableCell>
-                                                            <TableCell>
-                                                                <CoachingStatusBadge status={agent.coaching_status} />
-                                                            </TableCell>
-                                                            <TableCell className="whitespace-nowrap">
-                                                                {agent.last_coached_date ? formatDate(agent.last_coached_date) : 'Never'}
-                                                            </TableCell>
-                                                            <TableCell>{agent.total_sessions}</TableCell>
-                                                            <TableCell className="text-center"><WeekIndicator coachedWeeks={agent.coached_weeks} /></TableCell>
-                                                            <TableCell>
-                                                                {agent.pending_acknowledgements > 0 ? (
-                                                                    <span className="font-medium text-amber-600">{agent.pending_acknowledgements}</span>
-                                                                ) : (
-                                                                    <span className="text-muted-foreground">0</span>
+                                                        </TableRow>
+                                                        {agents.map((agent) => (
+                                                            <TableRow
+                                                                key={agent.id}
+                                                                className={getStatusRowClass(
+                                                                    agent.coaching_status,
                                                                 )}
-                                                            </TableCell>
-                                                            {coacheeRole === 'Team Lead' && (
-                                                                <TableCell>
-                                                                    <div className="flex items-center justify-center">
-                                                                        <Link href={sessionsCreate().url + `?agent_id=${agent.id}&coaching_mode=direct`}>
-                                                                            <Button variant="ghost" size="icon" title={`Coach ${agent.name}`}>
-                                                                                <Plus className="h-4 w-4" />
-                                                                            </Button>
-                                                                        </Link>
+                                                            >
+                                                                <TableCell className="pl-6 font-medium">
+                                                                    <div className="flex flex-col">
+                                                                        <div className="flex items-center gap-1.5">
+                                                                            <span>
+                                                                                {
+                                                                                    agent.name
+                                                                                }
+                                                                            </span>
+                                                                            {coachedThisWeekIds.includes(
+                                                                                agent.id,
+                                                                            ) && (
+                                                                                <Badge className="bg-green-100 px-1.5 py-0 text-[10px] leading-none font-medium text-green-800 dark:bg-green-900/40 dark:text-green-300">
+                                                                                    Wk{' '}
+                                                                                    {getCurrentWeekOfMonth()}
+                                                                                </Badge>
+                                                                            )}
+                                                                            {draftedThisWeekIds.includes(
+                                                                                agent.id,
+                                                                            ) &&
+                                                                                !coachedThisWeekIds.includes(
+                                                                                    agent.id,
+                                                                                ) && (
+                                                                                    <Badge
+                                                                                        variant="secondary"
+                                                                                        className="px-1.5 py-0 text-[10px] leading-none font-medium"
+                                                                                    >
+                                                                                        Draft
+                                                                                    </Badge>
+                                                                                )}
+                                                                        </div>
+                                                                        {agent.is_coaching_excluded && (
+                                                                            <span className="text-[10px] text-slate-500">
+                                                                                {agent.exclusion_expires_at
+                                                                                    ? `Until ${formatDate(agent.exclusion_expires_at)}`
+                                                                                    : 'Forever'}
+                                                                            </span>
+                                                                        )}
                                                                     </div>
                                                                 </TableCell>
-                                                            )}
-                                                        </TableRow>
-                                                    ))}
-                                                </Fragment>
-                                            ))
+                                                                <TableCell>
+                                                                    <CoachingStatusBadge
+                                                                        status={
+                                                                            agent.coaching_status
+                                                                        }
+                                                                    />
+                                                                </TableCell>
+                                                                <TableCell className="whitespace-nowrap">
+                                                                    {agent.last_coached_date
+                                                                        ? formatDate(
+                                                                              agent.last_coached_date,
+                                                                          )
+                                                                        : 'Never'}
+                                                                </TableCell>
+                                                                <TableCell>
+                                                                    {
+                                                                        agent.total_sessions
+                                                                    }
+                                                                </TableCell>
+                                                                <TableCell className="text-center">
+                                                                    <WeekIndicator
+                                                                        coachedWeeks={
+                                                                            agent.coached_weeks
+                                                                        }
+                                                                    />
+                                                                </TableCell>
+                                                                <TableCell>
+                                                                    {agent.pending_acknowledgements >
+                                                                    0 ? (
+                                                                        <span className="font-medium text-amber-600">
+                                                                            {
+                                                                                agent.pending_acknowledgements
+                                                                            }
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="text-muted-foreground">
+                                                                            0
+                                                                        </span>
+                                                                    )}
+                                                                </TableCell>
+                                                                {coacheeRole ===
+                                                                    'Team Lead' && (
+                                                                    <TableCell>
+                                                                        <div className="flex items-center justify-center">
+                                                                            <Link
+                                                                                href={
+                                                                                    sessionsCreate()
+                                                                                        .url +
+                                                                                    `?agent_id=${agent.id}&coaching_mode=direct`
+                                                                                }
+                                                                            >
+                                                                                <Button
+                                                                                    variant="ghost"
+                                                                                    size="icon"
+                                                                                    title={`Coach ${agent.name}`}
+                                                                                >
+                                                                                    <Plus className="h-4 w-4" />
+                                                                                </Button>
+                                                                            </Link>
+                                                                        </div>
+                                                                    </TableCell>
+                                                                )}
+                                                            </TableRow>
+                                                        ))}
+                                                    </Fragment>
+                                                ),
+                                            )
                                         )}
                                     </TableBody>
                                 </Table>
@@ -817,51 +1275,111 @@ export default function CoachingAdminIndex() {
                         {/* Mobile Cards */}
                         <div className="space-y-4 md:hidden">
                             {activeData.agents.length === 0 ? (
-                                <div className="py-8 text-center text-muted-foreground">No {coacheeRole === 'Team Lead' ? 'team leads' : 'agents'} found.</div>
+                                <div className="py-8 text-center text-muted-foreground">
+                                    No{' '}
+                                    {coacheeRole === 'Team Lead'
+                                        ? 'team leads'
+                                        : 'agents'}{' '}
+                                    found.
+                                </div>
                             ) : (
                                 groupedAgents.map(([account, agents]) => (
                                     <div key={account} className="space-y-2">
-                                        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                        <h4 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
                                             {account} ({agents.length})
                                         </h4>
                                         {agents.map((agent) => (
-                                            <div key={agent.id} className={`rounded-lg border bg-card p-4 shadow-sm space-y-2 ${getStatusRowClass(agent.coaching_status)}`}>
+                                            <div
+                                                key={agent.id}
+                                                className={`space-y-2 rounded-lg border bg-card p-4 shadow-sm ${getStatusRowClass(agent.coaching_status)}`}
+                                            >
                                                 <div className="flex items-start justify-between">
                                                     <div>
                                                         <div className="flex items-center gap-1.5">
-                                                            <p className="font-medium">{agent.name}</p>
-                                                            {coachedThisWeekIds.includes(agent.id) && (
-                                                                <Badge className="bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 text-[10px] px-1.5 py-0 font-medium leading-none">
-                                                                    Wk {getCurrentWeekOfMonth()}
+                                                            <p className="font-medium">
+                                                                {agent.name}
+                                                            </p>
+                                                            {coachedThisWeekIds.includes(
+                                                                agent.id,
+                                                            ) && (
+                                                                <Badge className="bg-green-100 px-1.5 py-0 text-[10px] leading-none font-medium text-green-800 dark:bg-green-900/40 dark:text-green-300">
+                                                                    Wk{' '}
+                                                                    {getCurrentWeekOfMonth()}
                                                                 </Badge>
                                                             )}
-                                                            {draftedThisWeekIds.includes(agent.id) && !coachedThisWeekIds.includes(agent.id) && (
-                                                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-medium leading-none">
-                                                                    Draft
-                                                                </Badge>
-                                                            )}
+                                                            {draftedThisWeekIds.includes(
+                                                                agent.id,
+                                                            ) &&
+                                                                !coachedThisWeekIds.includes(
+                                                                    agent.id,
+                                                                ) && (
+                                                                    <Badge
+                                                                        variant="secondary"
+                                                                        className="px-1.5 py-0 text-[10px] leading-none font-medium"
+                                                                    >
+                                                                        Draft
+                                                                    </Badge>
+                                                                )}
                                                         </div>
                                                         {agent.is_coaching_excluded && (
                                                             <p className="text-[10px] text-slate-500">
-                                                                Excluded {agent.exclusion_expires_at
-                                                                     ? `until ${formatDate(agent.exclusion_expires_at)}`
-                                                                     : '(forever)'}
+                                                                Excluded{' '}
+                                                                {agent.exclusion_expires_at
+                                                                    ? `until ${formatDate(agent.exclusion_expires_at)}`
+                                                                    : '(forever)'}
                                                             </p>
                                                         )}
                                                     </div>
-                                                    <CoachingStatusBadge status={agent.coaching_status} />
+                                                    <CoachingStatusBadge
+                                                        status={
+                                                            agent.coaching_status
+                                                        }
+                                                    />
                                                 </div>
                                                 <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-                                                    <span>Last: {agent.last_coached_date ? formatDate(agent.last_coached_date) : 'Never'}</span>
-                                                    <span className="flex items-center gap-1.5">Sessions: {agent.total_sessions} <WeekIndicator coachedWeeks={agent.coached_weeks} /></span>
-                                                    {agent.pending_acknowledgements > 0 && (
-                                                        <span className="font-medium text-amber-600">{agent.pending_acknowledgements} Pending</span>
+                                                    <span>
+                                                        Last:{' '}
+                                                        {agent.last_coached_date
+                                                            ? formatDate(
+                                                                  agent.last_coached_date,
+                                                              )
+                                                            : 'Never'}
+                                                    </span>
+                                                    <span className="flex items-center gap-1.5">
+                                                        Sessions:{' '}
+                                                        {agent.total_sessions}{' '}
+                                                        <WeekIndicator
+                                                            coachedWeeks={
+                                                                agent.coached_weeks
+                                                            }
+                                                        />
+                                                    </span>
+                                                    {agent.pending_acknowledgements >
+                                                        0 && (
+                                                        <span className="font-medium text-amber-600">
+                                                            {
+                                                                agent.pending_acknowledgements
+                                                            }{' '}
+                                                            Pending
+                                                        </span>
                                                     )}
                                                 </div>
-                                                {coacheeRole === 'Team Lead' && (
-                                                    <Link href={sessionsCreate().url + `?agent_id=${agent.id}&coaching_mode=direct`}>
-                                                        <Button size="sm" variant="outline" className="w-full">
-                                                            <Plus className="mr-1.5 h-3.5 w-3.5" /> Coach
+                                                {coacheeRole ===
+                                                    'Team Lead' && (
+                                                    <Link
+                                                        href={
+                                                            sessionsCreate()
+                                                                .url +
+                                                            `?agent_id=${agent.id}&coaching_mode=direct`
+                                                        }
+                                                    >
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="w-full"
+                                                        >
+                                                            <Plus className="mr-1.5 h-3.5 w-3.5" />{' '}
+                                                            Coach
                                                         </Button>
                                                     </Link>
                                                 )}
@@ -888,16 +1406,25 @@ export default function CoachingAdminIndex() {
                 {activeTab === 'for_review' && (
                     <div className="space-y-2">
                         <h3 className="flex items-center gap-2 text-sm font-semibold">
-                            <ClipboardCheck className="h-4 w-4" /> Sessions For Review ({queueData.for_review.length})
+                            <ClipboardCheck className="h-4 w-4" /> Sessions For
+                            Review ({queueData.for_review.length})
                         </h3>
 
                         {selectedForReview.length > 0 && (
                             <div className="flex items-center gap-3 rounded-lg border bg-primary/5 p-3">
-                                <span className="text-sm font-medium">{selectedForReview.length} session(s) selected</span>
+                                <span className="text-sm font-medium">
+                                    {selectedForReview.length} session(s)
+                                    selected
+                                </span>
                                 <Button size="sm" onClick={handleBulkVerify}>
-                                    <CheckCircle className="mr-1.5 h-4 w-4" /> Bulk Verify
+                                    <CheckCircle className="mr-1.5 h-4 w-4" />{' '}
+                                    Bulk Verify
                                 </Button>
-                                <Button size="sm" variant="outline" onClick={() => setSelectedForReview([])}>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => setSelectedForReview([])}
+                                >
                                     Clear
                                 </Button>
                             </div>
@@ -914,12 +1441,24 @@ export default function CoachingAdminIndex() {
                                                     type="checkbox"
                                                     aria-label="Select all sessions"
                                                     className="rounded border-gray-300"
-                                                    checked={selectedForReview.length === queueData.for_review.length && queueData.for_review.length > 0}
+                                                    checked={
+                                                        selectedForReview.length ===
+                                                            queueData.for_review
+                                                                .length &&
+                                                        queueData.for_review
+                                                            .length > 0
+                                                    }
                                                     onChange={(e) => {
                                                         if (e.target.checked) {
-                                                            setSelectedForReview(queueData.for_review.map(s => s.id));
+                                                            setSelectedForReview(
+                                                                queueData.for_review.map(
+                                                                    (s) => s.id,
+                                                                ),
+                                                            );
                                                         } else {
-                                                            setSelectedForReview([]);
+                                                            setSelectedForReview(
+                                                                [],
+                                                            );
                                                         }
                                                     }}
                                                 />
@@ -930,65 +1469,140 @@ export default function CoachingAdminIndex() {
                                             <TableHead>Purpose</TableHead>
                                             <TableHead>Severity</TableHead>
                                             <TableHead>Age</TableHead>
-                                            <TableHead className="text-center">Actions</TableHead>
+                                            <TableHead className="text-center">
+                                                Actions
+                                            </TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {queueData.for_review.length === 0 ? (
                                             <TableRow>
-                                                <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
+                                                <TableCell
+                                                    colSpan={8}
+                                                    className="py-8 text-center text-muted-foreground"
+                                                >
                                                     No sessions pending review.
                                                 </TableCell>
                                             </TableRow>
                                         ) : (
-                                            queueData.for_review.map((session) => {
-                                                const aging = getAgingLabel(session.session_date);
-                                                return (
-                                                    <TableRow key={session.id}>
-                                                        <TableCell>
-                                                            <input
-                                                                type="checkbox"
-                                                                aria-label={`Select session ${session.id}`}
-                                                                className="rounded border-gray-300"
-                                                                checked={selectedForReview.includes(session.id)}
-                                                                onChange={(e) => {
-                                                                    if (e.target.checked) {
-                                                                        setSelectedForReview(prev => [...prev, session.id]);
-                                                                    } else {
-                                                                        setSelectedForReview(prev => prev.filter(id => id !== session.id));
-                                                                    }
-                                                                }}
-                                                            />
-                                                        </TableCell>
-                                                        <TableCell className="whitespace-nowrap">
-                                                            {formatDate(session.session_date)}
-                                                        </TableCell>
-                                                        <TableCell className="font-medium">{formatName(session.coachee)}</TableCell>
-                                                        <TableCell>{formatName(session.coach)}</TableCell>
-                                                        <TableCell>{purposes[session.purpose] ?? session.purpose}</TableCell>
-                                                        <TableCell>
-                                                            <SeverityBadge flag={session.severity_flag} />
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <span className={`text-xs font-medium ${aging.className}`}>{aging.text}</span>
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <div className="flex items-center justify-center gap-1">
-                                                                <Link href={sessionsShow.url(session.id)}>
-                                                                    <Button variant="ghost" size="icon" title="View">
-                                                                        <Eye className="h-4 w-4" />
-                                                                    </Button>
-                                                                </Link>
-                                                                <ReviewDialog
-                                                                    sessionId={session.id}
-                                                                    reviewForm={reviewForm}
-                                                                    onReview={handleReview}
+                                            queueData.for_review.map(
+                                                (session) => {
+                                                    const aging = getAgingLabel(
+                                                        session.session_date,
+                                                    );
+                                                    return (
+                                                        <TableRow
+                                                            key={session.id}
+                                                        >
+                                                            <TableCell>
+                                                                <input
+                                                                    type="checkbox"
+                                                                    aria-label={`Select session ${session.id}`}
+                                                                    className="rounded border-gray-300"
+                                                                    checked={selectedForReview.includes(
+                                                                        session.id,
+                                                                    )}
+                                                                    onChange={(
+                                                                        e,
+                                                                    ) => {
+                                                                        if (
+                                                                            e
+                                                                                .target
+                                                                                .checked
+                                                                        ) {
+                                                                            setSelectedForReview(
+                                                                                (
+                                                                                    prev,
+                                                                                ) => [
+                                                                                    ...prev,
+                                                                                    session.id,
+                                                                                ],
+                                                                            );
+                                                                        } else {
+                                                                            setSelectedForReview(
+                                                                                (
+                                                                                    prev,
+                                                                                ) =>
+                                                                                    prev.filter(
+                                                                                        (
+                                                                                            id,
+                                                                                        ) =>
+                                                                                            id !==
+                                                                                            session.id,
+                                                                                    ),
+                                                                            );
+                                                                        }
+                                                                    }}
                                                                 />
-                                                            </div>
-                                                        </TableCell>
-                                                    </TableRow>
-                                                );
-                                            })
+                                                            </TableCell>
+                                                            <TableCell className="whitespace-nowrap">
+                                                                {formatDate(
+                                                                    session.session_date,
+                                                                )}
+                                                            </TableCell>
+                                                            <TableCell className="font-medium">
+                                                                {formatName(
+                                                                    session.coachee,
+                                                                )}
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                {formatName(
+                                                                    session.coach,
+                                                                )}
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                {purposes[
+                                                                    session
+                                                                        .purpose
+                                                                ] ??
+                                                                    session.purpose}
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <SeverityBadge
+                                                                    flag={
+                                                                        session.severity_flag
+                                                                    }
+                                                                />
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <span
+                                                                    className={`text-xs font-medium ${aging.className}`}
+                                                                >
+                                                                    {aging.text}
+                                                                </span>
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <div className="flex items-center justify-center gap-1">
+                                                                    <Link
+                                                                        href={sessionsShow.url(
+                                                                            session.id,
+                                                                        )}
+                                                                    >
+                                                                        <Button
+                                                                            variant="ghost"
+                                                                            size="icon"
+                                                                            title="View"
+                                                                        >
+                                                                            <Eye className="h-4 w-4" />
+                                                                        </Button>
+                                                                    </Link>
+                                                                    <ReviewDialog
+                                                                        sessionId={
+                                                                            session.id
+                                                                        }
+                                                                        reviewForm={
+                                                                            reviewForm
+                                                                        }
+                                                                        onReview={
+                                                                            handleReview
+                                                                        }
+                                                                    />
+                                                                </div>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    );
+                                                },
+                                            )
                                         )}
                                     </TableBody>
                                 </Table>
@@ -998,24 +1612,61 @@ export default function CoachingAdminIndex() {
                         {/* Mobile Cards */}
                         <div className="space-y-3 md:hidden">
                             {queueData.for_review.length === 0 ? (
-                                <div className="py-8 text-center text-muted-foreground">No sessions pending review.</div>
+                                <div className="py-8 text-center text-muted-foreground">
+                                    No sessions pending review.
+                                </div>
                             ) : (
                                 queueData.for_review.map((session) => {
-                                    const aging = getAgingLabel(session.session_date);
+                                    const aging = getAgingLabel(
+                                        session.session_date,
+                                    );
                                     return (
-                                        <div key={session.id} className="rounded-lg border bg-card p-4 shadow-sm space-y-3">
+                                        <div
+                                            key={session.id}
+                                            className="space-y-3 rounded-lg border bg-card p-4 shadow-sm"
+                                        >
                                             <div className="flex items-start justify-between gap-2">
                                                 <div>
-                                                    <p className="text-xs text-muted-foreground">{formatDate(session.session_date)} <span className={`ml-1 ${aging.className}`}>{aging.text}</span></p>
-                                                    <p className="text-sm font-medium">{formatName(session.coachee)}</p>
-                                                    <p className="text-xs text-muted-foreground">Coach: {formatName(session.coach)}</p>
+                                                    <p className="text-xs text-muted-foreground">
+                                                        {formatDate(
+                                                            session.session_date,
+                                                        )}{' '}
+                                                        <span
+                                                            className={`ml-1 ${aging.className}`}
+                                                        >
+                                                            {aging.text}
+                                                        </span>
+                                                    </p>
+                                                    <p className="text-sm font-medium">
+                                                        {formatName(
+                                                            session.coachee,
+                                                        )}
+                                                    </p>
+                                                    <p className="text-xs text-muted-foreground">
+                                                        Coach:{' '}
+                                                        {formatName(
+                                                            session.coach,
+                                                        )}
+                                                    </p>
                                                 </div>
-                                                <SeverityBadge flag={session.severity_flag} />
+                                                <SeverityBadge
+                                                    flag={session.severity_flag}
+                                                />
                                             </div>
                                             <div className="flex flex-col gap-2 sm:flex-row">
-                                                <Link href={sessionsShow.url(session.id)} className="flex-1">
-                                                    <Button variant="outline" size="sm" className="w-full">
-                                                        <Eye className="mr-1.5 h-3.5 w-3.5" /> View
+                                                <Link
+                                                    href={sessionsShow.url(
+                                                        session.id,
+                                                    )}
+                                                    className="flex-1"
+                                                >
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="w-full"
+                                                    >
+                                                        <Eye className="mr-1.5 h-3.5 w-3.5" />{' '}
+                                                        View
                                                     </Button>
                                                 </Link>
                                                 <ReviewDialog
@@ -1036,7 +1687,8 @@ export default function CoachingAdminIndex() {
                 {activeTab === 'at_risk' && (
                     <div className="space-y-2">
                         <h3 className="flex items-center gap-2 text-sm font-semibold">
-                            <AlertTriangle className="h-4 w-4" /> At-Risk ({queueData.at_risk_agents.length})
+                            <AlertTriangle className="h-4 w-4" /> At-Risk (
+                            {queueData.at_risk_agents.length})
                         </h3>
 
                         {/* Desktop Table */}
@@ -1045,42 +1697,76 @@ export default function CoachingAdminIndex() {
                                 <Table>
                                     <TableHeader className="sticky top-0 z-10">
                                         <TableRow className="bg-muted/50">
-                                            <TableHead>{coacheeRole === 'Team Lead' ? 'Team Lead' : 'Agent'}</TableHead>
+                                            <TableHead>
+                                                {coacheeRole === 'Team Lead'
+                                                    ? 'Team Lead'
+                                                    : 'Agent'}
+                                            </TableHead>
                                             <TableHead>Account</TableHead>
                                             <TableHead>Status</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {queueData.at_risk_agents.length === 0 ? (
+                                        {queueData.at_risk_agents.length ===
+                                        0 ? (
                                             <TableRow>
-                                                <TableCell colSpan={3} className="py-8 text-center text-muted-foreground">
+                                                <TableCell
+                                                    colSpan={3}
+                                                    className="py-8 text-center text-muted-foreground"
+                                                >
                                                     No at-risk agents found.
                                                 </TableCell>
                                             </TableRow>
                                         ) : (
-                                            queueData.at_risk_agents.map((agent) => (
-                                                <TableRow key={agent.id} className={getStatusRowClass(agent.coaching_status)}>
-                                                    <TableCell className="font-medium">
-                                                        <div className="flex items-center gap-1.5">
-                                                            <span>{agent.name}</span>
-                                                            {coachedThisWeekIds.includes(agent.id) && (
-                                                                <Badge className="bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 text-[10px] px-1.5 py-0 font-medium leading-none">
-                                                                    Wk {getCurrentWeekOfMonth()}
-                                                                </Badge>
-                                                            )}
-                                                            {draftedThisWeekIds.includes(agent.id) && !coachedThisWeekIds.includes(agent.id) && (
-                                                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-medium leading-none">
-                                                                    Draft
-                                                                </Badge>
-                                                            )}
-                                                        </div>
-                                                    </TableCell>
-                                                    <TableCell>{agent.account}</TableCell>
-                                                    <TableCell>
-                                                        <CoachingStatusBadge status={agent.coaching_status} />
-                                                    </TableCell>
-                                                </TableRow>
-                                            ))
+                                            queueData.at_risk_agents.map(
+                                                (agent) => (
+                                                    <TableRow
+                                                        key={agent.id}
+                                                        className={getStatusRowClass(
+                                                            agent.coaching_status,
+                                                        )}
+                                                    >
+                                                        <TableCell className="font-medium">
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span>
+                                                                    {agent.name}
+                                                                </span>
+                                                                {coachedThisWeekIds.includes(
+                                                                    agent.id,
+                                                                ) && (
+                                                                    <Badge className="bg-green-100 px-1.5 py-0 text-[10px] leading-none font-medium text-green-800 dark:bg-green-900/40 dark:text-green-300">
+                                                                        Wk{' '}
+                                                                        {getCurrentWeekOfMonth()}
+                                                                    </Badge>
+                                                                )}
+                                                                {draftedThisWeekIds.includes(
+                                                                    agent.id,
+                                                                ) &&
+                                                                    !coachedThisWeekIds.includes(
+                                                                        agent.id,
+                                                                    ) && (
+                                                                        <Badge
+                                                                            variant="secondary"
+                                                                            className="px-1.5 py-0 text-[10px] leading-none font-medium"
+                                                                        >
+                                                                            Draft
+                                                                        </Badge>
+                                                                    )}
+                                                            </div>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {agent.account}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <CoachingStatusBadge
+                                                                status={
+                                                                    agent.coaching_status
+                                                                }
+                                                            />
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ),
+                                            )
                                         )}
                                     </TableBody>
                                 </Table>
@@ -1090,27 +1776,49 @@ export default function CoachingAdminIndex() {
                         {/* Mobile Cards */}
                         <div className="space-y-3 md:hidden">
                             {queueData.at_risk_agents.length === 0 ? (
-                                <div className="py-8 text-center text-muted-foreground">No at-risk agents.</div>
+                                <div className="py-8 text-center text-muted-foreground">
+                                    No at-risk agents.
+                                </div>
                             ) : (
                                 queueData.at_risk_agents.map((agent) => (
-                                    <div key={agent.id} className={`flex items-center justify-between rounded-lg border bg-card p-4 shadow-sm ${getStatusRowClass(agent.coaching_status)}`}>
-                                                    <div>
-                                                        <div className="flex items-center gap-1.5">
-                                                            <p className="font-medium">{agent.name}</p>
-                                                            {coachedThisWeekIds.includes(agent.id) && (
-                                                                <Badge className="bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 text-[10px] px-1.5 py-0 font-medium leading-none">
-                                                                    Wk {getCurrentWeekOfMonth()}
-                                                                </Badge>
-                                                            )}
-                                                            {draftedThisWeekIds.includes(agent.id) && !coachedThisWeekIds.includes(agent.id) && (
-                                                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-medium leading-none">
-                                                                    Draft
-                                                                </Badge>
-                                                            )}
-                                                        </div>
-                                                        <p className="text-xs text-muted-foreground">{agent.account}</p>
-                                                    </div>
-                                                    <CoachingStatusBadge status={agent.coaching_status} />
+                                    <div
+                                        key={agent.id}
+                                        className={`flex items-center justify-between rounded-lg border bg-card p-4 shadow-sm ${getStatusRowClass(agent.coaching_status)}`}
+                                    >
+                                        <div>
+                                            <div className="flex items-center gap-1.5">
+                                                <p className="font-medium">
+                                                    {agent.name}
+                                                </p>
+                                                {coachedThisWeekIds.includes(
+                                                    agent.id,
+                                                ) && (
+                                                    <Badge className="bg-green-100 px-1.5 py-0 text-[10px] leading-none font-medium text-green-800 dark:bg-green-900/40 dark:text-green-300">
+                                                        Wk{' '}
+                                                        {getCurrentWeekOfMonth()}
+                                                    </Badge>
+                                                )}
+                                                {draftedThisWeekIds.includes(
+                                                    agent.id,
+                                                ) &&
+                                                    !coachedThisWeekIds.includes(
+                                                        agent.id,
+                                                    ) && (
+                                                        <Badge
+                                                            variant="secondary"
+                                                            className="px-1.5 py-0 text-[10px] leading-none font-medium"
+                                                        >
+                                                            Draft
+                                                        </Badge>
+                                                    )}
+                                            </div>
+                                            <p className="text-xs text-muted-foreground">
+                                                {agent.account}
+                                            </p>
+                                        </div>
+                                        <CoachingStatusBadge
+                                            status={agent.coaching_status}
+                                        />
                                     </div>
                                 ))
                             )}
@@ -1119,38 +1827,74 @@ export default function CoachingAdminIndex() {
                 )}
 
                 {activeTab === 'upcoming' && (
-                    <Tabs defaultValue="upcoming" className="space-y-4" onValueChange={(v) => { if (v === 'calendar') setCalendarSelectedDate(undefined); }}>
+                    <Tabs
+                        defaultValue="upcoming"
+                        className="space-y-4"
+                        onValueChange={(v) => {
+                            if (v === 'calendar')
+                                setCalendarSelectedDate(undefined);
+                        }}
+                    >
                         <TabsList className="grid w-full grid-cols-3">
-                            <TabsTrigger value="upcoming" className="flex items-center gap-2">
+                            <TabsTrigger
+                                value="upcoming"
+                                className="flex items-center gap-2"
+                            >
                                 <CalendarClock className="h-4 w-4" />
-                                <span className="hidden sm:inline">Upcoming</span>
+                                <span className="hidden sm:inline">
+                                    Upcoming
+                                </span>
                                 {upcomingFollowUps.length > 0 && (
-                                    <Badge variant="secondary" className="ml-0.5 px-1.5 py-0 text-[10px]">
+                                    <Badge
+                                        variant="secondary"
+                                        className="ml-0.5 px-1.5 py-0 text-[10px]"
+                                    >
                                         {upcomingFollowUps.length}
                                     </Badge>
                                 )}
                             </TabsTrigger>
-                            <TabsTrigger value="overdue" className="flex items-center gap-2">
+                            <TabsTrigger
+                                value="overdue"
+                                className="flex items-center gap-2"
+                            >
                                 <AlertTriangle className="h-4 w-4" />
-                                <span className="hidden sm:inline">Overdue</span>
+                                <span className="hidden sm:inline">
+                                    Overdue
+                                </span>
                                 {overdueFollowUps.length > 0 && (
-                                    <Badge variant="destructive" className="ml-0.5 px-1.5 py-0 text-[10px]">
+                                    <Badge
+                                        variant="destructive"
+                                        className="ml-0.5 px-1.5 py-0 text-[10px]"
+                                    >
                                         {overdueFollowUps.length}
                                     </Badge>
                                 )}
                             </TabsTrigger>
-                            <TabsTrigger value="calendar" className="flex items-center gap-2">
+                            <TabsTrigger
+                                value="calendar"
+                                className="flex items-center gap-2"
+                            >
                                 <CalendarIcon className="h-4 w-4" />
-                                <span className="hidden sm:inline">Calendar</span>
+                                <span className="hidden sm:inline">
+                                    Calendar
+                                </span>
                             </TabsTrigger>
                         </TabsList>
 
                         <TabsContent value="upcoming">
-                            <FollowUpTable items={upcomingFollowUps} emptyMessage="No upcoming follow-ups scheduled." emptyDescription="Follow-up dates are set when creating coaching sessions." />
+                            <FollowUpTable
+                                items={upcomingFollowUps}
+                                emptyMessage="No upcoming follow-ups scheduled."
+                                emptyDescription="Follow-up dates are set when creating coaching sessions."
+                            />
                         </TabsContent>
 
                         <TabsContent value="overdue">
-                            <FollowUpTable items={overdueFollowUps} emptyMessage="No overdue follow-ups." emptyDescription="All follow-ups are on track." />
+                            <FollowUpTable
+                                items={overdueFollowUps}
+                                emptyMessage="No overdue follow-ups."
+                                emptyDescription="All follow-ups are on track."
+                            />
                         </TabsContent>
 
                         <TabsContent value="calendar">
@@ -1162,27 +1906,64 @@ export default function CoachingAdminIndex() {
                                             selected={calendarSelectedDate}
                                             onSelect={setCalendarSelectedDate}
                                             modifiers={{
-                                                upcoming: upcomingFollowUps.map(f => new Date(f.follow_up_date + 'T00:00:00')),
-                                                overdue: overdueFollowUps.map(f => new Date(f.follow_up_date + 'T00:00:00')),
+                                                upcoming: upcomingFollowUps.map(
+                                                    (f) =>
+                                                        new Date(
+                                                            f.follow_up_date +
+                                                                'T00:00:00',
+                                                        ),
+                                                ),
+                                                overdue: overdueFollowUps.map(
+                                                    (f) =>
+                                                        new Date(
+                                                            f.follow_up_date +
+                                                                'T00:00:00',
+                                                        ),
+                                                ),
                                             }}
                                             modifiersClassNames={{
-                                                upcoming: 'ring-2 ring-green-400/60 ring-offset-1',
-                                                overdue: 'ring-2 ring-red-400/60 ring-offset-1',
+                                                upcoming:
+                                                    'ring-2 ring-green-400/60 ring-offset-1',
+                                                overdue:
+                                                    'ring-2 ring-red-400/60 ring-offset-1',
                                             }}
                                         />
                                         <div className="flex items-center gap-4 border-t px-3 pt-2 text-[10px] text-muted-foreground">
-                                            <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full ring-2 ring-green-400/60" /> Upcoming</span>
-                                            <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full ring-2 ring-red-400/60" /> Overdue</span>
+                                            <span className="flex items-center gap-1">
+                                                <span className="inline-block h-2 w-2 rounded-full ring-2 ring-green-400/60" />{' '}
+                                                Upcoming
+                                            </span>
+                                            <span className="flex items-center gap-1">
+                                                <span className="inline-block h-2 w-2 rounded-full ring-2 ring-red-400/60" />{' '}
+                                                Overdue
+                                            </span>
                                             {calendarSelectedDate && (
-                                                <button onClick={() => setCalendarSelectedDate(undefined)} className="text-primary hover:underline">Clear selection</button>
+                                                <button
+                                                    onClick={() =>
+                                                        setCalendarSelectedDate(
+                                                            undefined,
+                                                        )
+                                                    }
+                                                    className="text-primary hover:underline"
+                                                >
+                                                    Clear selection
+                                                </button>
                                             )}
                                         </div>
                                     </div>
                                 </div>
                                 <FollowUpTable
                                     items={selectedDateFollowUps}
-                                    emptyMessage={calendarSelectedDate ? 'No follow-ups on this date.' : 'No follow-ups scheduled.'}
-                                    emptyDescription={calendarSelectedDate ? `${calendarSelectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}` : undefined}
+                                    emptyMessage={
+                                        calendarSelectedDate
+                                            ? 'No follow-ups on this date.'
+                                            : 'No follow-ups scheduled.'
+                                    }
+                                    emptyDescription={
+                                        calendarSelectedDate
+                                            ? `${calendarSelectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}`
+                                            : undefined
+                                    }
                                     compact
                                 />
                             </div>
@@ -1191,20 +1972,30 @@ export default function CoachingAdminIndex() {
                 )}
             </div>
 
-            <Dialog open={completionBreakdown !== null} onOpenChange={(open) => { if (!open) setCompletionBreakdown(null); }}>
+            <Dialog
+                open={completionBreakdown !== null}
+                onOpenChange={(open) => {
+                    if (!open) setCompletionBreakdown(null);
+                }}
+            >
                 <DialogContent className="max-w-[95vw] sm:max-w-3xl lg:max-w-4xl">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
+                            {completionBreakdown?.type === 'at_risk' ? (
+                                <AlertTriangle className="h-4 w-4 text-red-500" />
+                            ) : (
+                                <Clock className="h-4 w-4 text-muted-foreground" />
+                            )}
                             {completionBreakdown?.type === 'at_risk'
-                                ? <AlertTriangle className="h-4 w-4 text-red-500" />
-                                : <Clock className="h-4 w-4 text-muted-foreground" />}
-                            {completionBreakdown?.type === 'at_risk' ? 'At-Risk Agents' : 'Agents Behind Schedule'} — {completionBreakdown?.scope}
+                                ? 'At-Risk Agents'
+                                : 'Agents Behind Schedule'}{' '}
+                            — {completionBreakdown?.scope}
                         </DialogTitle>
                         <DialogDescription>
                             {completionBreakdown?.type === 'at_risk'
                                 ? 'Agents with status Please Coach ASAP, Badly Needs Coaching, or No Record.'
-                                : `Agents with fewer than ${expectedSoFarPerAgent} session(s) so far in ${periodLabel} (week ${weeksElapsed}).`}
-                            {' '}({completionBreakdown?.agents.length ?? 0} total)
+                                : `Agents with fewer than ${expectedSoFarPerAgent} session(s) so far in ${periodLabel} (week ${weeksElapsed}).`}{' '}
+                            ({completionBreakdown?.agents.length ?? 0} total)
                         </DialogDescription>
                     </DialogHeader>
 
@@ -1216,7 +2007,9 @@ export default function CoachingAdminIndex() {
 
                     <div className="max-h-[60vh] overflow-y-auto rounded-md border">
                         {filteredBreakdownAgents.length === 0 ? (
-                            <p className="p-6 text-center text-sm text-muted-foreground">No agents found.</p>
+                            <p className="p-6 text-center text-sm text-muted-foreground">
+                                No agents found.
+                            </p>
                         ) : (
                             <>
                                 <div className="hidden md:block">
@@ -1224,41 +2017,91 @@ export default function CoachingAdminIndex() {
                                         <TableHeader className="sticky top-0 z-10 bg-muted">
                                             <TableRow>
                                                 <TableHead>Agent</TableHead>
-                                                {completionBreakdown?.scope === 'All Campaigns' && <TableHead>Campaign</TableHead>}
+                                                {completionBreakdown?.scope ===
+                                                    'All Campaigns' && (
+                                                    <TableHead>
+                                                        Campaign
+                                                    </TableHead>
+                                                )}
                                                 <TableHead>Status</TableHead>
-                                                <TableHead className="text-center">Sessions</TableHead>
-                                                <TableHead>Last Coached</TableHead>
+                                                <TableHead className="text-center">
+                                                    Sessions
+                                                </TableHead>
+                                                <TableHead>
+                                                    Last Coached
+                                                </TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
-                                            {filteredBreakdownAgents.map((agent) => (
-                                                <TableRow key={agent.id}>
-                                                    <TableCell className="whitespace-normal font-medium">{agent.name}</TableCell>
-                                                    {completionBreakdown?.scope === 'All Campaigns' && (
-                                                        <TableCell className="whitespace-normal text-muted-foreground">{agent.account}</TableCell>
-                                                    )}
-                                                    <TableCell>
-                                                        {agent.coaching_status && <CoachingStatusBadge status={agent.coaching_status} />}
-                                                    </TableCell>
-                                                    <TableCell className="text-center">{agent.sessions_this_month}/{sessionTarget}</TableCell>
-                                                    <TableCell className="whitespace-nowrap">
-                                                        {agent.last_coached_date ? formatDate(agent.last_coached_date) : 'Never'}
-                                                    </TableCell>
-                                                </TableRow>
-                                            ))}
+                                            {filteredBreakdownAgents.map(
+                                                (agent) => (
+                                                    <TableRow key={agent.id}>
+                                                        <TableCell className="font-medium whitespace-normal">
+                                                            {agent.name}
+                                                        </TableCell>
+                                                        {completionBreakdown?.scope ===
+                                                            'All Campaigns' && (
+                                                            <TableCell className="whitespace-normal text-muted-foreground">
+                                                                {agent.account}
+                                                            </TableCell>
+                                                        )}
+                                                        <TableCell>
+                                                            {agent.coaching_status && (
+                                                                <CoachingStatusBadge
+                                                                    status={
+                                                                        agent.coaching_status
+                                                                    }
+                                                                />
+                                                            )}
+                                                        </TableCell>
+                                                        <TableCell className="text-center">
+                                                            {
+                                                                agent.sessions_this_month
+                                                            }
+                                                            /{sessionTarget}
+                                                        </TableCell>
+                                                        <TableCell className="whitespace-nowrap">
+                                                            {agent.last_coached_date
+                                                                ? formatDate(
+                                                                      agent.last_coached_date,
+                                                                  )
+                                                                : 'Never'}
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ),
+                                            )}
                                         </TableBody>
                                     </Table>
                                 </div>
                                 <div className="divide-y md:hidden">
                                     {filteredBreakdownAgents.map((agent) => (
-                                        <div key={agent.id} className="space-y-1 p-3">
+                                        <div
+                                            key={agent.id}
+                                            className="space-y-1 p-3"
+                                        >
                                             <div className="flex items-center justify-between gap-2">
-                                                <span className="text-sm font-medium">{agent.name}</span>
-                                                {agent.coaching_status && <CoachingStatusBadge status={agent.coaching_status} />}
+                                                <span className="text-sm font-medium">
+                                                    {agent.name}
+                                                </span>
+                                                {agent.coaching_status && (
+                                                    <CoachingStatusBadge
+                                                        status={
+                                                            agent.coaching_status
+                                                        }
+                                                    />
+                                                )}
                                             </div>
                                             <div className="text-xs text-muted-foreground">
-                                                {completionBreakdown?.scope === 'All Campaigns' && `${agent.account} · `}
-                                                {agent.sessions_this_month}/{sessionTarget} sessions · Last: {agent.last_coached_date ? formatDate(agent.last_coached_date) : 'Never'}
+                                                {completionBreakdown?.scope ===
+                                                    'All Campaigns' &&
+                                                    `${agent.account} · `}
+                                                {agent.sessions_this_month}/
+                                                {sessionTarget} sessions · Last:{' '}
+                                                {agent.last_coached_date
+                                                    ? formatDate(
+                                                          agent.last_coached_date,
+                                                      )
+                                                    : 'Never'}
                                             </div>
                                         </div>
                                     ))}
@@ -1268,7 +2111,12 @@ export default function CoachingAdminIndex() {
                     </div>
 
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setCompletionBreakdown(null)}>Close</Button>
+                        <Button
+                            variant="outline"
+                            onClick={() => setCompletionBreakdown(null)}
+                        >
+                            Close
+                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
@@ -1290,7 +2138,9 @@ function SessionQueueTable({
     icon: React.ReactNode;
     sessions: CoachingSession[];
     purposes: CoachingPurposeLabels;
-    formatName: (user?: { first_name: string; last_name: string } | null) => string;
+    formatName: (
+        user?: { first_name: string; last_name: string } | null,
+    ) => string;
     emptyMessage: string;
 }) {
     return (
@@ -1311,37 +2161,67 @@ function SessionQueueTable({
                                 <TableHead>Purpose</TableHead>
                                 <TableHead>Severity</TableHead>
                                 <TableHead>Age</TableHead>
-                                <TableHead className="text-center">Actions</TableHead>
+                                <TableHead className="text-center">
+                                    Actions
+                                </TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {sessions.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+                                    <TableCell
+                                        colSpan={7}
+                                        className="py-8 text-center text-muted-foreground"
+                                    >
                                         {emptyMessage}
                                     </TableCell>
                                 </TableRow>
                             ) : (
                                 sessions.map((session) => {
-                                    const aging = getAgingLabel(session.session_date);
+                                    const aging = getAgingLabel(
+                                        session.session_date,
+                                    );
                                     return (
                                         <TableRow key={session.id}>
                                             <TableCell className="whitespace-nowrap">
-                                                {formatDate(session.session_date)}
+                                                {formatDate(
+                                                    session.session_date,
+                                                )}
                                             </TableCell>
-                                            <TableCell className="font-medium">{formatName(session.coachee)}</TableCell>
-                                            <TableCell>{formatName(session.coach)}</TableCell>
-                                            <TableCell>{purposes[session.purpose] ?? session.purpose}</TableCell>
-                                            <TableCell>
-                                                <SeverityBadge flag={session.severity_flag} />
+                                            <TableCell className="font-medium">
+                                                {formatName(session.coachee)}
                                             </TableCell>
                                             <TableCell>
-                                                <span className={`text-xs font-medium ${aging.className}`}>{aging.text}</span>
+                                                {formatName(session.coach)}
+                                            </TableCell>
+                                            <TableCell>
+                                                {purposes[session.purpose] ??
+                                                    session.purpose}
+                                            </TableCell>
+                                            <TableCell>
+                                                <SeverityBadge
+                                                    flag={session.severity_flag}
+                                                />
+                                            </TableCell>
+                                            <TableCell>
+                                                <span
+                                                    className={`text-xs font-medium ${aging.className}`}
+                                                >
+                                                    {aging.text}
+                                                </span>
                                             </TableCell>
                                             <TableCell>
                                                 <div className="flex items-center justify-center">
-                                                    <Link href={sessionsShow.url(session.id)}>
-                                                        <Button variant="ghost" size="icon" title="View">
+                                                    <Link
+                                                        href={sessionsShow.url(
+                                                            session.id,
+                                                        )}
+                                                    >
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            title="View"
+                                                        >
                                                             <Eye className="h-4 w-4" />
                                                         </Button>
                                                     </Link>
@@ -1359,23 +2239,46 @@ function SessionQueueTable({
             {/* Mobile Cards */}
             <div className="space-y-3 md:hidden">
                 {sessions.length === 0 ? (
-                    <div className="py-8 text-center text-muted-foreground">{emptyMessage}</div>
+                    <div className="py-8 text-center text-muted-foreground">
+                        {emptyMessage}
+                    </div>
                 ) : (
                     sessions.map((session) => {
                         const aging = getAgingLabel(session.session_date);
                         return (
-                            <div key={session.id} className="rounded-lg border bg-card p-3 shadow-sm">
+                            <div
+                                key={session.id}
+                                className="rounded-lg border bg-card p-3 shadow-sm"
+                            >
                                 <div className="flex items-start justify-between gap-2">
                                     <div>
-                                        <p className="text-xs text-muted-foreground">{formatDate(session.session_date)} <span className={`ml-1 ${aging.className}`}>{aging.text}</span></p>
-                                        <p className="text-sm font-medium">{formatName(session.coachee)}</p>
-                                        <p className="text-xs text-muted-foreground">Coach: {formatName(session.coach)}</p>
+                                        <p className="text-xs text-muted-foreground">
+                                            {formatDate(session.session_date)}{' '}
+                                            <span
+                                                className={`ml-1 ${aging.className}`}
+                                            >
+                                                {aging.text}
+                                            </span>
+                                        </p>
+                                        <p className="text-sm font-medium">
+                                            {formatName(session.coachee)}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground">
+                                            Coach: {formatName(session.coach)}
+                                        </p>
                                     </div>
-                                    <SeverityBadge flag={session.severity_flag} />
+                                    <SeverityBadge
+                                        flag={session.severity_flag}
+                                    />
                                 </div>
                                 <Link href={sessionsShow.url(session.id)}>
-                                    <Button variant="outline" size="sm" className="mt-2 w-full">
-                                        <Eye className="mr-1.5 h-3.5 w-3.5" /> View
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="mt-2 w-full"
+                                    >
+                                        <Eye className="mr-1.5 h-3.5 w-3.5" />{' '}
+                                        View
                                     </Button>
                                 </Link>
                             </div>
@@ -1394,7 +2297,9 @@ function ReviewDialog({
     mobile = false,
 }: {
     sessionId: number;
-    reviewForm: ReturnType<typeof useForm<{ compliance_status: string; compliance_notes: string }>>;
+    reviewForm: ReturnType<
+        typeof useForm<{ compliance_status: string; compliance_notes: string }>
+    >;
     onReview: (sessionId: number) => void;
     mobile?: boolean;
 }) {
@@ -1402,11 +2307,19 @@ function ReviewDialog({
         <Dialog>
             <DialogTrigger asChild>
                 {mobile ? (
-                    <Button size="sm" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white">
+                    <Button
+                        size="sm"
+                        className="flex-1 bg-blue-600 text-white hover:bg-blue-700"
+                    >
                         <ShieldCheck className="mr-1.5 h-3.5 w-3.5" /> Review
                     </Button>
                 ) : (
-                    <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700" title="Review">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-blue-600 hover:text-blue-700"
+                        title="Review"
+                    >
                         <ShieldCheck className="h-4 w-4" />
                     </Button>
                 )}
@@ -1420,10 +2333,14 @@ function ReviewDialog({
                 </DialogHeader>
                 <div className="space-y-3 py-2">
                     <div>
-                        <Label htmlFor={`review-status-${sessionId}`}>Decision</Label>
+                        <Label htmlFor={`review-status-${sessionId}`}>
+                            Decision
+                        </Label>
                         <Select
                             value={reviewForm.data.compliance_status}
-                            onValueChange={(val) => reviewForm.setData('compliance_status', val)}
+                            onValueChange={(val) =>
+                                reviewForm.setData('compliance_status', val)
+                            }
                         >
                             <SelectTrigger id={`review-status-${sessionId}`}>
                                 <SelectValue placeholder="Select decision" />
@@ -1431,26 +2348,37 @@ function ReviewDialog({
                             <SelectContent>
                                 <SelectItem value="Verified">
                                     <span className="flex items-center gap-2">
-                                        <ShieldCheck className="h-4 w-4 text-green-600" /> Verify
+                                        <ShieldCheck className="h-4 w-4 text-green-600" />{' '}
+                                        Verify
                                     </span>
                                 </SelectItem>
                                 <SelectItem value="Rejected">
                                     <span className="flex items-center gap-2">
-                                        <ShieldX className="h-4 w-4 text-red-600" /> Reject
+                                        <ShieldX className="h-4 w-4 text-red-600" />{' '}
+                                        Reject
                                     </span>
                                 </SelectItem>
                             </SelectContent>
                         </Select>
                         {reviewForm.errors.compliance_status && (
-                            <p className="text-sm text-red-600">{reviewForm.errors.compliance_status}</p>
+                            <p className="text-sm text-red-600">
+                                {reviewForm.errors.compliance_status}
+                            </p>
                         )}
                     </div>
                     <div>
-                        <Label htmlFor={`review-notes-${sessionId}`}>Notes (optional)</Label>
+                        <Label htmlFor={`review-notes-${sessionId}`}>
+                            Notes (optional)
+                        </Label>
                         <Textarea
                             id={`review-notes-${sessionId}`}
                             value={reviewForm.data.compliance_notes}
-                            onChange={(e) => reviewForm.setData('compliance_notes', e.target.value)}
+                            onChange={(e) =>
+                                reviewForm.setData(
+                                    'compliance_notes',
+                                    e.target.value,
+                                )
+                            }
                             placeholder="Add compliance review notes..."
                             rows={3}
                         />
@@ -1459,10 +2387,15 @@ function ReviewDialog({
                 <DialogFooter>
                     <Button
                         onClick={() => onReview(sessionId)}
-                        disabled={reviewForm.processing || !reviewForm.data.compliance_status}
+                        disabled={
+                            reviewForm.processing ||
+                            !reviewForm.data.compliance_status
+                        }
                         className="bg-blue-600 hover:bg-blue-700"
                     >
-                        {reviewForm.processing ? 'Submitting...' : 'Submit Review'}
+                        {reviewForm.processing
+                            ? 'Submitting...'
+                            : 'Submit Review'}
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -1490,8 +2423,14 @@ function FollowUpTable({
         return (
             <div className="rounded-lg border border-dashed p-6 text-center">
                 <CalendarClock className="mx-auto h-8 w-8 text-muted-foreground/50" />
-                <p className="mt-2 text-sm text-muted-foreground">{emptyMessage}</p>
-                {emptyDescription && <p className="text-xs text-muted-foreground">{emptyDescription}</p>}
+                <p className="mt-2 text-sm text-muted-foreground">
+                    {emptyMessage}
+                </p>
+                {emptyDescription && (
+                    <p className="text-xs text-muted-foreground">
+                        {emptyDescription}
+                    </p>
+                )}
             </div>
         );
     }
@@ -1508,8 +2447,12 @@ function FollowUpTable({
                                 <TableHead>Coachee</TableHead>
                                 <TableHead>Coach</TableHead>
                                 <TableHead>Purpose</TableHead>
-                                {!compact && <TableHead>Session Date</TableHead>}
-                                <TableHead className="text-center">Actions</TableHead>
+                                {!compact && (
+                                    <TableHead>Session Date</TableHead>
+                                )}
+                                <TableHead className="text-center">
+                                    Actions
+                                </TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -1519,12 +2462,27 @@ function FollowUpTable({
                                 return (
                                     <TableRow key={item.id}>
                                         <TableCell className="whitespace-nowrap">
-                                            <span>{new Date(item.follow_up_date + 'T00:00:00').toLocaleDateString()}</span>
-                                            <span className={`ml-2 text-xs font-semibold ${s.text}`}>{s.label}</span>
+                                            <span>
+                                                {new Date(
+                                                    item.follow_up_date +
+                                                        'T00:00:00',
+                                                ).toLocaleDateString()}
+                                            </span>
+                                            <span
+                                                className={`ml-2 text-xs font-semibold ${s.text}`}
+                                            >
+                                                {s.label}
+                                            </span>
                                         </TableCell>
-                                        <TableCell className="font-medium">{item.agent_name}</TableCell>
-                                        <TableCell>{item.team_lead_name}</TableCell>
-                                        <TableCell>{item.purpose_label}</TableCell>
+                                        <TableCell className="font-medium">
+                                            {item.agent_name}
+                                        </TableCell>
+                                        <TableCell>
+                                            {item.team_lead_name}
+                                        </TableCell>
+                                        <TableCell>
+                                            {item.purpose_label}
+                                        </TableCell>
                                         {!compact && (
                                             <TableCell className="whitespace-nowrap">
                                                 {formatDate(item.session_date)}
@@ -1532,8 +2490,16 @@ function FollowUpTable({
                                         )}
                                         <TableCell>
                                             <div className="flex items-center justify-center">
-                                                <Link href={sessionsShow.url(item.id)}>
-                                                    <Button variant="ghost" size="icon" title="View Session">
+                                                <Link
+                                                    href={sessionsShow.url(
+                                                        item.id,
+                                                    )}
+                                                >
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        title="View Session"
+                                                    >
                                                         <Eye className="h-4 w-4" />
                                                     </Button>
                                                 </Link>
@@ -1553,16 +2519,42 @@ function FollowUpTable({
                     const days = daysUntil(item.follow_up_date);
                     const s = getUrgencyStyles(days);
                     return (
-                        <Link key={item.id} href={sessionsShow.url(item.id)} className={`block rounded-lg border p-3 space-y-1 transition-colors hover:bg-muted/50 ${s.border}`}>
+                        <Link
+                            key={item.id}
+                            href={sessionsShow.url(item.id)}
+                            className={`block space-y-1 rounded-lg border p-3 transition-colors hover:bg-muted/50 ${s.border}`}
+                        >
                             <div className="flex items-start justify-between gap-2">
-                                <p className="text-sm font-medium leading-tight truncate">{item.agent_name}</p>
-                                <span className={`text-xs font-semibold shrink-0 ${s.text}`}>{s.label}</span>
+                                <p className="truncate text-sm leading-tight font-medium">
+                                    {item.agent_name}
+                                </p>
+                                <span
+                                    className={`shrink-0 text-xs font-semibold ${s.text}`}
+                                >
+                                    {s.label}
+                                </span>
                             </div>
-                            <p className="text-xs text-muted-foreground truncate">Coach: {item.team_lead_name}</p>
-                            <p className="text-xs text-muted-foreground truncate">{item.purpose_label}</p>
+                            <p className="truncate text-xs text-muted-foreground">
+                                Coach: {item.team_lead_name}
+                            </p>
+                            <p className="truncate text-xs text-muted-foreground">
+                                {item.purpose_label}
+                            </p>
                             <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                                <span>Follow-up: {new Date(item.follow_up_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                                {!compact && <span>Session: {formatDate(item.session_date)}</span>}
+                                <span>
+                                    Follow-up:{' '}
+                                    {new Date(
+                                        item.follow_up_date + 'T00:00:00',
+                                    ).toLocaleDateString('en-US', {
+                                        month: 'short',
+                                        day: 'numeric',
+                                    })}
+                                </span>
+                                {!compact && (
+                                    <span>
+                                        Session: {formatDate(item.session_date)}
+                                    </span>
+                                )}
                             </div>
                         </Link>
                     );
@@ -1573,13 +2565,25 @@ function FollowUpTable({
             {totalPages > 1 && (
                 <div className="flex items-center justify-between border-t pt-3">
                     <p className="text-xs text-muted-foreground">
-                        {(page - 1) * perPage + 1}–{Math.min(page * perPage, items.length)} of {items.length}
+                        {(page - 1) * perPage + 1}–
+                        {Math.min(page * perPage, items.length)} of{' '}
+                        {items.length}
                     </p>
                     <div className="flex gap-2">
-                        <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={page <= 1}
+                            onClick={() => setPage(page - 1)}
+                        >
                             Previous
                         </Button>
-                        <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={page >= totalPages}
+                            onClick={() => setPage(page + 1)}
+                        >
                             Next
                         </Button>
                     </div>

@@ -1,11 +1,13 @@
-import React from 'react';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle, AlertCircle, XCircle } from 'lucide-react';
+import { AlertCircle, CheckCircle, XCircle } from 'lucide-react';
 
 /**
  * Attendance status configuration - Single source of truth for all status badges
  */
-export const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
+export const STATUS_CONFIG: Record<
+    string,
+    { label: string; className: string }
+> = {
     on_time: { label: 'On Time', className: 'bg-green-500' },
     tardy: { label: 'Tardy', className: 'bg-yellow-500' },
     half_day_absence: { label: 'Half Day', className: 'bg-orange-500' },
@@ -25,7 +27,10 @@ export const STATUS_CONFIG: Record<string, { label: string; className: string }>
  * Get a single status badge
  */
 export const getStatusBadge = (status: string) => {
-    const config = STATUS_CONFIG[status] || { label: status, className: 'bg-gray-500' };
+    const config = STATUS_CONFIG[status] || {
+        label: status,
+        className: 'bg-gray-500',
+    };
     return <Badge className={config.className}>{config.label}</Badge>;
 };
 
@@ -58,7 +63,7 @@ export const AttendanceStatusBadges = ({
     showManualLeaveLabel = false,
 }: AttendanceStatusProps) => {
     return (
-        <div className="flex flex-col gap-1 items-start">
+        <div className="flex flex-col items-start gap-1">
             {/* Primary Status Row */}
             <div className="flex items-center gap-1">
                 {showManualLeaveLabel && status === 'on_leave' ? (
@@ -86,7 +91,11 @@ export const AttendanceStatusBadges = ({
             {/* Overtime Row - only show if overtime is more than 30 minutes (threshold) */}
             {overtimeMinutes && overtimeMinutes > 30 && (
                 <div className="flex items-center gap-1">
-                    <Badge className={overtimeApproved ? 'bg-green-500' : 'bg-red-500'}>
+                    <Badge
+                        className={
+                            overtimeApproved ? 'bg-green-500' : 'bg-red-500'
+                        }
+                    >
                         Overtime
                     </Badge>
                     {overtimeApproved ? (

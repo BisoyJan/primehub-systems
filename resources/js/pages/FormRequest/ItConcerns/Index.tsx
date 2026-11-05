@@ -1,27 +1,21 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Head, router, usePage } from "@inertiajs/react";
-import AppLayout from "@/layouts/app-layout";
-import { useDebounce, useFlashMessage, usePageLoading, usePageMeta, withReturnTo } from "@/hooks";
-import { usePermission } from "@/hooks/useAuthorization";
-import type { SharedData } from "@/types";
-import { PageHeader } from "@/components/PageHeader";
-import { LoadingOverlay } from "@/components/LoadingOverlay";
+import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { PageHeader } from '@/components/PageHeader';
 import { TableSkeleton } from '@/components/TableSkeleton';
-import { Can } from "@/components/authorization";
-
-import { Button } from "@/components/ui/button";
+import { Can } from '@/components/authorization';
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue
-} from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { Plus, Edit, Trash2, CheckCircle, Clock, XCircle, AlertCircle, RefreshCw, Search, Play, Pause } from "lucide-react";
+    useDebounce,
+    useFlashMessage,
+    usePageLoading,
+    usePageMeta,
+    withReturnTo,
+} from '@/hooks';
+import { usePermission } from '@/hooks/useAuthorization';
+import AppLayout from '@/layouts/app-layout';
+import type { SharedData } from '@/types';
+import { Head, router, usePage } from '@inertiajs/react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+
+import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -31,9 +25,40 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
+} from '@/components/ui/alert-dialog';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table';
+import { Textarea } from '@/components/ui/textarea';
+import {
+    AlertCircle,
+    CheckCircle,
+    Clock,
+    Edit,
+    Pause,
+    Play,
+    Plus,
+    RefreshCw,
+    Search,
+    Trash2,
+    XCircle,
+} from 'lucide-react';
 
 interface User {
     id: number;
@@ -52,10 +77,10 @@ interface ItConcern {
     user?: User;
     site: Site;
     station_number: string;
-    category: "Hardware" | "Software" | "Network/Connectivity" | "Other";
+    category: 'Hardware' | 'Software' | 'Network/Connectivity' | 'Other';
     description: string;
-    status: "pending" | "in_progress" | "resolved" | "cancelled";
-    priority: "low" | "medium" | "high" | "urgent";
+    status: 'pending' | 'in_progress' | 'resolved' | 'cancelled';
+    priority: 'low' | 'medium' | 'high' | 'urgent';
     assigned_to?: User;
     resolved_by?: User;
     resolution_notes?: string;
@@ -98,43 +123,52 @@ interface PageProps extends SharedData {
 
 const getCategoryBadge = (category: string) => {
     const config: Record<string, { label: string; className: string }> = {
-        Hardware: { label: "Hardware", className: "bg-blue-500" },
-        Software: { label: "Software", className: "bg-purple-500" },
-        "Network/Connectivity": { label: "Network/Connectivity", className: "bg-orange-500" },
-        Other: { label: "Other", className: "bg-gray-500" },
+        Hardware: { label: 'Hardware', className: 'bg-blue-500' },
+        Software: { label: 'Software', className: 'bg-purple-500' },
+        'Network/Connectivity': {
+            label: 'Network/Connectivity',
+            className: 'bg-orange-500',
+        },
+        Other: { label: 'Other', className: 'bg-gray-500' },
     };
 
-    const { label, className } = config[category] || { label: category, className: "bg-gray-500" };
+    const { label, className } = config[category] || {
+        label: category,
+        className: 'bg-gray-500',
+    };
     return <Badge className={className}>{label}</Badge>;
 };
 
 const getStatusBadge = (status: string) => {
-    const config: Record<string, { label: string; className: string; icon: React.ReactNode }> = {
+    const config: Record<
+        string,
+        { label: string; className: string; icon: React.ReactNode }
+    > = {
         pending: {
-            label: "Pending",
-            className: "bg-yellow-500",
+            label: 'Pending',
+            className: 'bg-yellow-500',
             icon: <Clock className="mr-1 h-3 w-3" />,
         },
         in_progress: {
-            label: "In Progress",
-            className: "bg-blue-500",
+            label: 'In Progress',
+            className: 'bg-blue-500',
             icon: <AlertCircle className="mr-1 h-3 w-3" />,
         },
         resolved: {
-            label: "Resolved",
-            className: "bg-green-500",
+            label: 'Resolved',
+            className: 'bg-green-500',
             icon: <CheckCircle className="mr-1 h-3 w-3" />,
         },
         cancelled: {
-            label: "Cancelled",
-            className: "bg-gray-500",
+            label: 'Cancelled',
+            className: 'bg-gray-500',
             icon: <XCircle className="mr-1 h-3 w-3" />,
         },
     };
 
     const { label, className, icon } = config[status] || {
         label: status,
-        className: "bg-gray-500",
+        className: 'bg-gray-500',
         icon: null,
     };
 
@@ -148,18 +182,28 @@ const getStatusBadge = (status: string) => {
 
 const getPriorityBadge = (priority: string) => {
     const config: Record<string, { label: string; className: string }> = {
-        low: { label: "Low", className: "bg-gray-500" },
-        medium: { label: "Medium", className: "bg-blue-500" },
-        high: { label: "High", className: "bg-orange-500" },
-        urgent: { label: "Urgent", className: "bg-red-500 animate-pulse" },
+        low: { label: 'Low', className: 'bg-gray-500' },
+        medium: { label: 'Medium', className: 'bg-blue-500' },
+        high: { label: 'High', className: 'bg-orange-500' },
+        urgent: { label: 'Urgent', className: 'bg-red-500 animate-pulse' },
     };
 
-    const { label, className } = config[priority] || { label: priority, className: "bg-gray-500" };
+    const { label, className } = config[priority] || {
+        label: priority,
+        className: 'bg-gray-500',
+    };
     return <Badge className={className}>{label}</Badge>;
 };
 
 export default function ItConcernsIndex() {
-    const { concerns, sites, campaigns = [], teamLeadCampaignIds, filters, auth } = usePage<PageProps>().props;
+    const {
+        concerns,
+        sites,
+        campaigns = [],
+        teamLeadCampaignIds,
+        filters,
+        auth,
+    } = usePage<PageProps>().props;
     const isTeamLead = !!teamLeadCampaignIds?.length;
     const concernData = {
         data: concerns?.data ?? [],
@@ -175,8 +219,10 @@ export default function ItConcernsIndex() {
     const sitesList = sites ?? [];
 
     const { title, breadcrumbs } = usePageMeta({
-        title: "IT Concerns",
-        breadcrumbs: [{ title: "IT Concerns", href: "/form-requests/it-concerns" }],
+        title: 'IT Concerns',
+        breadcrumbs: [
+            { title: 'IT Concerns', href: '/form-requests/it-concerns' },
+        ],
     });
 
     useFlashMessage();
@@ -184,26 +230,36 @@ export default function ItConcernsIndex() {
     const { can } = usePermission();
 
     const [loading, setLoading] = useState(false);
-    const [search, setSearch] = useState(appliedFilters.search || "");
+    const [search, setSearch] = useState(appliedFilters.search || '');
     const debouncedSearch = useDebounce(search, 500);
-    const [siteFilter, setSiteFilter] = useState(appliedFilters.site_id || "all");
-    const [categoryFilter, setCategoryFilter] = useState(appliedFilters.category || "all");
-    const [statusFilter, setStatusFilter] = useState(appliedFilters.status || "all");
-    const [priorityFilter, setPriorityFilter] = useState(appliedFilters.priority || "all");
+    const [siteFilter, setSiteFilter] = useState(
+        appliedFilters.site_id || 'all',
+    );
+    const [categoryFilter, setCategoryFilter] = useState(
+        appliedFilters.category || 'all',
+    );
+    const [statusFilter, setStatusFilter] = useState(
+        appliedFilters.status || 'all',
+    );
+    const [priorityFilter, setPriorityFilter] = useState(
+        appliedFilters.priority || 'all',
+    );
     const [campaignFilter, setCampaignFilter] = useState(() => {
         if (appliedFilters.campaign_id) return appliedFilters.campaign_id;
-        return "all";
+        return 'all';
     });
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     // Auto-enable polling for IT staff so they receive desktop notifications about new concerns
-    const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(() => can('it_concerns.resolve'));
+    const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(() =>
+        can('it_concerns.resolve'),
+    );
 
     useEffect(() => {
-        setSearch(appliedFilters.search || "");
-        setSiteFilter(appliedFilters.site_id || "all");
-        setCategoryFilter(appliedFilters.category || "all");
-        setStatusFilter(appliedFilters.status || "all");
-        setPriorityFilter(appliedFilters.priority || "all");
+        setSearch(appliedFilters.search || '');
+        setSiteFilter(appliedFilters.site_id || 'all');
+        setCategoryFilter(appliedFilters.category || 'all');
+        setStatusFilter(appliedFilters.status || 'all');
+        setPriorityFilter(appliedFilters.priority || 'all');
     }, [
         appliedFilters.search,
         appliedFilters.site_id,
@@ -215,12 +271,16 @@ export default function ItConcernsIndex() {
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [concernToDelete, setConcernToDelete] = useState<number | null>(null);
     const [resolveDialogOpen, setResolveDialogOpen] = useState(false);
-    const [concernToResolve, setConcernToResolve] = useState<ItConcern | null>(null);
-    const [resolutionNotes, setResolutionNotes] = useState("");
-    const [resolveStatus, setResolveStatus] = useState("resolved");
-    const [resolvePriority, setResolvePriority] = useState("medium");
+    const [concernToResolve, setConcernToResolve] = useState<ItConcern | null>(
+        null,
+    );
+    const [resolutionNotes, setResolutionNotes] = useState('');
+    const [resolveStatus, setResolveStatus] = useState('resolved');
+    const [resolvePriority, setResolvePriority] = useState('medium');
     const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
-    const [concernToCancel, setConcernToCancel] = useState<ItConcern | null>(null);
+    const [concernToCancel, setConcernToCancel] = useState<ItConcern | null>(
+        null,
+    );
 
     // Auto-refresh every 30 seconds to check for new concerns
     const isPollingRef = useRef(false);
@@ -231,19 +291,21 @@ export default function ItConcernsIndex() {
             isPollingRef.current = true;
             const params: Record<string, string> = {};
             if (debouncedSearch) params.search = debouncedSearch;
-            if (siteFilter !== "all") params.site_id = siteFilter;
-            if (categoryFilter !== "all") params.category = categoryFilter;
-            if (statusFilter !== "all") params.status = statusFilter;
-            if (priorityFilter !== "all") params.priority = priorityFilter;
-            if (campaignFilter !== "all") params.campaign_id = campaignFilter;
+            if (siteFilter !== 'all') params.site_id = siteFilter;
+            if (categoryFilter !== 'all') params.category = categoryFilter;
+            if (statusFilter !== 'all') params.status = statusFilter;
+            if (priorityFilter !== 'all') params.priority = priorityFilter;
+            if (campaignFilter !== 'all') params.campaign_id = campaignFilter;
 
-            router.get("/form-requests/it-concerns", params, {
+            router.get('/form-requests/it-concerns', params, {
                 preserveState: true,
                 preserveScroll: true,
                 replace: true,
-                only: ["concerns"],
+                only: ['concerns'],
                 onSuccess: () => setLastRefresh(new Date()),
-                onFinish: () => { isPollingRef.current = false; },
+                onFinish: () => {
+                    isPollingRef.current = false;
+                },
                 onError: (errors) => {
                     console.error('Auto-refresh failed:', errors);
                 },
@@ -251,7 +313,15 @@ export default function ItConcernsIndex() {
         }, 30000); // 30 seconds
 
         return () => clearInterval(interval);
-    }, [autoRefreshEnabled, debouncedSearch, siteFilter, categoryFilter, statusFilter, priorityFilter, campaignFilter]);
+    }, [
+        autoRefreshEnabled,
+        debouncedSearch,
+        siteFilter,
+        categoryFilter,
+        statusFilter,
+        priorityFilter,
+        campaignFilter,
+    ]);
 
     // ---------- Browser desktop notification on new IT concerns ----------
     // Mirrors the Break Timer overbreak notification pattern: tab title flash + Notification API.
@@ -262,7 +332,11 @@ export default function ItConcernsIndex() {
 
     // Request notification permission once on mount
     useEffect(() => {
-        if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+        if (
+            typeof window !== 'undefined' &&
+            'Notification' in window &&
+            Notification.permission === 'default'
+        ) {
             Notification.requestPermission();
         }
         baseTitleRef.current = document.title;
@@ -280,7 +354,10 @@ export default function ItConcernsIndex() {
 
     const startTitleFlash = useCallback((count: number) => {
         if (titleFlashRef.current) clearInterval(titleFlashRef.current);
-        baseTitleRef.current = document.title.replace(/^🔧 \d+ New IT Concern[s]?! - /, '');
+        baseTitleRef.current = document.title.replace(
+            /^🔧 \d+ New IT Concern[s]?! - /,
+            '',
+        );
         let toggle = false;
         titleFlashRef.current = setInterval(() => {
             toggle = !toggle;
@@ -291,7 +368,8 @@ export default function ItConcernsIndex() {
     }, []);
 
     const showConcernNotification = useCallback((concern: ItConcern) => {
-        if (typeof window === 'undefined' || !('Notification' in window)) return;
+        if (typeof window === 'undefined' || !('Notification' in window))
+            return;
         const reporter = concern.user?.name ?? 'A user';
         const title = `🔧 New IT Concern (${concern.priority.toUpperCase()})`;
         const body = `${reporter} reported a ${concern.category} issue at Station ${concern.station_number} — ${concern.site?.name ?? ''}`;
@@ -329,7 +407,8 @@ export default function ItConcernsIndex() {
         }
 
         const newConcerns = list.filter(
-            (c) => !seenConcernIdsRef.current.has(c.id) && c.status === 'pending',
+            (c) =>
+                !seenConcernIdsRef.current.has(c.id) && c.status === 'pending',
         );
 
         if (newConcerns.length > 0) {
@@ -361,52 +440,59 @@ export default function ItConcernsIndex() {
 
         const params: Record<string, string> = {};
         if (debouncedSearch) params.search = debouncedSearch;
-        if (siteFilter !== "all") params.site_id = siteFilter;
-        if (categoryFilter !== "all") params.category = categoryFilter;
-        if (statusFilter !== "all") params.status = statusFilter;
-        if (priorityFilter !== "all") params.priority = priorityFilter;
-        if (campaignFilter !== "all") params.campaign_id = campaignFilter;
+        if (siteFilter !== 'all') params.site_id = siteFilter;
+        if (categoryFilter !== 'all') params.category = categoryFilter;
+        if (statusFilter !== 'all') params.status = statusFilter;
+        if (priorityFilter !== 'all') params.priority = priorityFilter;
+        if (campaignFilter !== 'all') params.campaign_id = campaignFilter;
 
         setLoading(true);
-        router.get("/form-requests/it-concerns", params, {
+        router.get('/form-requests/it-concerns', params, {
             preserveState: true,
             preserveScroll: true,
             replace: true,
             onFinish: () => setLoading(false),
         });
-    }, [debouncedSearch, siteFilter, categoryFilter, statusFilter, priorityFilter, campaignFilter]);
+    }, [
+        debouncedSearch,
+        siteFilter,
+        categoryFilter,
+        statusFilter,
+        priorityFilter,
+        campaignFilter,
+    ]);
 
     const showClearFilters =
-        siteFilter !== "all" ||
-        categoryFilter !== "all" ||
-        statusFilter !== "all" ||
-        priorityFilter !== "all" ||
-        campaignFilter !== "all" ||
+        siteFilter !== 'all' ||
+        categoryFilter !== 'all' ||
+        statusFilter !== 'all' ||
+        priorityFilter !== 'all' ||
+        campaignFilter !== 'all' ||
         Boolean(search);
 
     const clearFilters = () => {
-        setSearch("");
-        setSiteFilter("all");
-        setCategoryFilter("all");
-        setStatusFilter("all");
-        setPriorityFilter("all");
-        setCampaignFilter("all");
+        setSearch('');
+        setSiteFilter('all');
+        setCategoryFilter('all');
+        setStatusFilter('all');
+        setPriorityFilter('all');
+        setCampaignFilter('all');
     };
 
     const handleManualRefresh = () => {
         const params: Record<string, string> = {};
         if (debouncedSearch) params.search = debouncedSearch;
-        if (siteFilter !== "all") params.site_id = siteFilter;
-        if (categoryFilter !== "all") params.category = categoryFilter;
-        if (statusFilter !== "all") params.status = statusFilter;
-        if (priorityFilter !== "all") params.priority = priorityFilter;
+        if (siteFilter !== 'all') params.site_id = siteFilter;
+        if (categoryFilter !== 'all') params.category = categoryFilter;
+        if (statusFilter !== 'all') params.status = statusFilter;
+        if (priorityFilter !== 'all') params.priority = priorityFilter;
 
         setLoading(true);
-        router.get("/form-requests/it-concerns", params, {
+        router.get('/form-requests/it-concerns', params, {
             preserveState: true,
             preserveScroll: true,
             replace: true,
-            only: ["concerns"],
+            only: ['concerns'],
             onSuccess: () => setLastRefresh(new Date()),
             onFinish: () => setLoading(false),
         });
@@ -419,7 +505,7 @@ export default function ItConcernsIndex() {
 
     const handleResolve = (concern: ItConcern) => {
         setConcernToResolve(concern);
-        setResolutionNotes(concern.resolution_notes || "");
+        setResolutionNotes(concern.resolution_notes || '');
         setResolveStatus(concern.status);
         setResolvePriority(concern.priority);
         setResolveDialogOpen(true);
@@ -427,20 +513,24 @@ export default function ItConcernsIndex() {
 
     const confirmResolve = () => {
         if (concernToResolve) {
-            router.post(`/form-requests/it-concerns/${concernToResolve.id}/resolve`, {
-                resolution_notes: resolutionNotes,
-                status: resolveStatus,
-                priority: resolvePriority,
-            }, {
-                preserveScroll: true,
-                onSuccess: () => {
-                    setResolveDialogOpen(false);
-                    setConcernToResolve(null);
-                    setResolutionNotes("");
-                    setResolveStatus("resolved");
-                    setResolvePriority("medium");
+            router.post(
+                `/form-requests/it-concerns/${concernToResolve.id}/resolve`,
+                {
+                    resolution_notes: resolutionNotes,
+                    status: resolveStatus,
+                    priority: resolvePriority,
                 },
-            });
+                {
+                    preserveScroll: true,
+                    onSuccess: () => {
+                        setResolveDialogOpen(false);
+                        setConcernToResolve(null);
+                        setResolutionNotes('');
+                        setResolveStatus('resolved');
+                        setResolvePriority('medium');
+                    },
+                },
+            );
         }
     };
 
@@ -463,30 +553,34 @@ export default function ItConcernsIndex() {
 
     const confirmCancel = () => {
         if (concernToCancel) {
-            router.post(`/form-requests/it-concerns/${concernToCancel.id}/cancel`, {}, {
-                preserveScroll: true,
-                onSuccess: () => {
-                    setCancelDialogOpen(false);
-                    setConcernToCancel(null);
+            router.post(
+                `/form-requests/it-concerns/${concernToCancel.id}/cancel`,
+                {},
+                {
+                    preserveScroll: true,
+                    onSuccess: () => {
+                        setCancelDialogOpen(false);
+                        setConcernToCancel(null);
+                    },
                 },
-            });
+            );
         }
     };
 
     const formatDate = (dateString: string) => {
-        return new Date(dateString).toLocaleDateString("en-US", {
-            year: "numeric",
-            month: "short",
-            day: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
+        return new Date(dateString).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
         });
     };
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={title} />
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3 relative">
+            <div className="relative flex h-full flex-1 flex-col gap-4 rounded-xl p-3">
                 <LoadingOverlay isLoading={isPageLoading || loading} />
 
                 <PageHeader
@@ -495,10 +589,10 @@ export default function ItConcernsIndex() {
                 />
 
                 <div className="flex flex-col gap-4">
-                    <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
-                        <div className="w-full sm:w-auto flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                    <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+                        <div className="grid w-full flex-1 grid-cols-1 gap-3 sm:w-auto sm:grid-cols-2 lg:grid-cols-5">
                             <div className="relative">
-                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Search className="absolute top-2.5 left-2.5 h-4 w-4 text-muted-foreground" />
                                 <Input
                                     placeholder="Search..."
                                     value={search}
@@ -507,67 +601,123 @@ export default function ItConcernsIndex() {
                                 />
                             </div>
 
-                            <Select value={siteFilter} onValueChange={setSiteFilter}>
+                            <Select
+                                value={siteFilter}
+                                onValueChange={setSiteFilter}
+                            >
                                 <SelectTrigger>
                                     <SelectValue placeholder="Site" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="all">All Sites</SelectItem>
+                                    <SelectItem value="all">
+                                        All Sites
+                                    </SelectItem>
                                     {sitesList.map((site) => (
-                                        <SelectItem key={site.id} value={String(site.id)}>
+                                        <SelectItem
+                                            key={site.id}
+                                            value={String(site.id)}
+                                        >
                                             {site.name}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
 
-                            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                            <Select
+                                value={categoryFilter}
+                                onValueChange={setCategoryFilter}
+                            >
                                 <SelectTrigger>
                                     <SelectValue placeholder="Category" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="all">All Categories</SelectItem>
-                                    <SelectItem value="Hardware">Hardware</SelectItem>
-                                    <SelectItem value="Software">Software</SelectItem>
-                                    <SelectItem value="Network/Connectivity">Network</SelectItem>
+                                    <SelectItem value="all">
+                                        All Categories
+                                    </SelectItem>
+                                    <SelectItem value="Hardware">
+                                        Hardware
+                                    </SelectItem>
+                                    <SelectItem value="Software">
+                                        Software
+                                    </SelectItem>
+                                    <SelectItem value="Network/Connectivity">
+                                        Network
+                                    </SelectItem>
                                     <SelectItem value="Other">Other</SelectItem>
                                 </SelectContent>
                             </Select>
 
-                            <Select value={statusFilter} onValueChange={setStatusFilter}>
+                            <Select
+                                value={statusFilter}
+                                onValueChange={setStatusFilter}
+                            >
                                 <SelectTrigger>
                                     <SelectValue placeholder="Status" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="all">All Status</SelectItem>
-                                    <SelectItem value="pending">Pending</SelectItem>
-                                    <SelectItem value="in_progress">In Progress</SelectItem>
-                                    <SelectItem value="resolved">Resolved</SelectItem>
-                                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                                    <SelectItem value="all">
+                                        All Status
+                                    </SelectItem>
+                                    <SelectItem value="pending">
+                                        Pending
+                                    </SelectItem>
+                                    <SelectItem value="in_progress">
+                                        In Progress
+                                    </SelectItem>
+                                    <SelectItem value="resolved">
+                                        Resolved
+                                    </SelectItem>
+                                    <SelectItem value="cancelled">
+                                        Cancelled
+                                    </SelectItem>
                                 </SelectContent>
                             </Select>
 
-                            <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+                            <Select
+                                value={priorityFilter}
+                                onValueChange={setPriorityFilter}
+                            >
                                 <SelectTrigger>
                                     <SelectValue placeholder="Priority" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="all">All Priorities</SelectItem>
+                                    <SelectItem value="all">
+                                        All Priorities
+                                    </SelectItem>
                                     <SelectItem value="low">Low</SelectItem>
-                                    <SelectItem value="medium">Medium</SelectItem>
+                                    <SelectItem value="medium">
+                                        Medium
+                                    </SelectItem>
                                     <SelectItem value="high">High</SelectItem>
-                                    <SelectItem value="urgent">Urgent</SelectItem>
+                                    <SelectItem value="urgent">
+                                        Urgent
+                                    </SelectItem>
                                 </SelectContent>
                             </Select>
 
-                            <Select value={campaignFilter} onValueChange={setCampaignFilter}>
+                            <Select
+                                value={campaignFilter}
+                                onValueChange={setCampaignFilter}
+                            >
                                 <SelectTrigger>
                                     <SelectValue placeholder="Campaign" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="all">All Campaigns</SelectItem>
-                                    {(teamLeadCampaignIds?.length ? campaigns.filter(c => teamLeadCampaignIds.includes(c.id)) : campaigns).map((campaign) => (
-                                        <SelectItem key={campaign.id} value={String(campaign.id)}>
+                                    <SelectItem value="all">
+                                        All Campaigns
+                                    </SelectItem>
+                                    {(teamLeadCampaignIds?.length
+                                        ? campaigns.filter((c) =>
+                                              teamLeadCampaignIds.includes(
+                                                  c.id,
+                                              ),
+                                          )
+                                        : campaigns
+                                    ).map((campaign) => (
+                                        <SelectItem
+                                            key={campaign.id}
+                                            value={String(campaign.id)}
+                                        >
                                             {campaign.name}
                                         </SelectItem>
                                     ))}
@@ -575,27 +725,62 @@ export default function ItConcernsIndex() {
                             </Select>
                         </div>
 
-                        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                        <div className="flex w-full flex-wrap gap-2 sm:w-auto">
                             <div className="flex gap-2">
-                                <Button variant="ghost" size="icon" onClick={handleManualRefresh} disabled={loading} title="Refresh">
-                                    <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={handleManualRefresh}
+                                    disabled={loading}
+                                    title="Refresh"
+                                >
+                                    <RefreshCw
+                                        className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`}
+                                    />
                                 </Button>
                                 <Button
-                                    variant={autoRefreshEnabled ? "default" : "ghost"}
+                                    variant={
+                                        autoRefreshEnabled ? 'default' : 'ghost'
+                                    }
                                     size="icon"
-                                    onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
-                                    title={autoRefreshEnabled ? "Disable auto-refresh" : "Enable auto-refresh (30s)"}
+                                    onClick={() =>
+                                        setAutoRefreshEnabled(
+                                            !autoRefreshEnabled,
+                                        )
+                                    }
+                                    title={
+                                        autoRefreshEnabled
+                                            ? 'Disable auto-refresh'
+                                            : 'Enable auto-refresh (30s)'
+                                    }
                                 >
-                                    {autoRefreshEnabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                                    {autoRefreshEnabled ? (
+                                        <Pause className="h-4 w-4" />
+                                    ) : (
+                                        <Play className="h-4 w-4" />
+                                    )}
                                 </Button>
                             </div>
                             {showClearFilters && (
-                                <Button variant="outline" onClick={clearFilters} className="flex-1 sm:flex-none">
+                                <Button
+                                    variant="outline"
+                                    onClick={clearFilters}
+                                    className="flex-1 sm:flex-none"
+                                >
                                     Reset
                                 </Button>
                             )}
                             <Can permission="it_concerns.create">
-                                <Button onClick={() => router.get(withReturnTo("/form-requests/it-concerns/create"))} className="flex-1 sm:flex-none">
+                                <Button
+                                    onClick={() =>
+                                        router.get(
+                                            withReturnTo(
+                                                '/form-requests/it-concerns/create',
+                                            ),
+                                        )
+                                    }
+                                    className="flex-1 sm:flex-none"
+                                >
                                     <Plus className="mr-2 h-4 w-4" />
                                     Submit
                                 </Button>
@@ -603,11 +788,12 @@ export default function ItConcernsIndex() {
                         </div>
                     </div>
 
-                    <div className="flex justify-between items-center text-sm">
+                    <div className="flex items-center justify-between text-sm">
                         <div className="text-muted-foreground">
-                            Showing {concernData.data.length} of {concernData.meta.total} concern
-                            {concernData.meta.total === 1 ? "" : "s"}
-                            {showClearFilters ? " (filtered)" : ""}
+                            Showing {concernData.data.length} of{' '}
+                            {concernData.meta.total} concern
+                            {concernData.meta.total === 1 ? '' : 's'}
+                            {showClearFilters ? ' (filtered)' : ''}
                         </div>
                         <div className="text-xs text-muted-foreground">
                             Last updated: {lastRefresh.toLocaleTimeString()}
@@ -615,7 +801,7 @@ export default function ItConcernsIndex() {
                     </div>
                 </div>
 
-                <div className="hidden md:block shadow rounded-md overflow-hidden">
+                <div className="hidden overflow-hidden rounded-md shadow md:block">
                     {loading ? (
                         <TableSkeleton columns={10} rows={8} />
                     ) : (
@@ -632,35 +818,66 @@ export default function ItConcernsIndex() {
                                         <TableHead>Description</TableHead>
                                         <TableHead>Status</TableHead>
                                         <TableHead>Resolved By</TableHead>
-                                        {!isTeamLead && <TableHead>Actions</TableHead>}
+                                        {!isTeamLead && (
+                                            <TableHead>Actions</TableHead>
+                                        )}
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {concernData.data.map((concern) => (
                                         <TableRow key={concern.id}>
-                                            <TableCell className="text-xs">{formatDate(concern.created_at)}</TableCell>
-                                            <TableCell>{getPriorityBadge(concern.priority)}</TableCell>
-                                            <TableCell className="font-medium">{concern.user?.name || 'N/A'}</TableCell>
-                                            <TableCell>{concern.site.name}</TableCell>
-                                            <TableCell>{concern.station_number}</TableCell>
-                                            <TableCell>{getCategoryBadge(concern.category)}</TableCell>
-                                            <TableCell className="max-w-xs truncate" title={concern.description}>
+                                            <TableCell className="text-xs">
+                                                {formatDate(concern.created_at)}
+                                            </TableCell>
+                                            <TableCell>
+                                                {getPriorityBadge(
+                                                    concern.priority,
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="font-medium">
+                                                {concern.user?.name || 'N/A'}
+                                            </TableCell>
+                                            <TableCell>
+                                                {concern.site.name}
+                                            </TableCell>
+                                            <TableCell>
+                                                {concern.station_number}
+                                            </TableCell>
+                                            <TableCell>
+                                                {getCategoryBadge(
+                                                    concern.category,
+                                                )}
+                                            </TableCell>
+                                            <TableCell
+                                                className="max-w-xs truncate"
+                                                title={concern.description}
+                                            >
                                                 {concern.description}
                                             </TableCell>
-                                            <TableCell>{getStatusBadge(concern.status)}</TableCell>
-                                            <TableCell className="text-sm">{concern.resolved_by?.name || '-'}</TableCell>
+                                            <TableCell>
+                                                {getStatusBadge(concern.status)}
+                                            </TableCell>
+                                            <TableCell className="text-sm">
+                                                {concern.resolved_by?.name ||
+                                                    '-'}
+                                            </TableCell>
                                             {!isTeamLead && (
                                                 <TableCell>
                                                     <div className="flex gap-2">
                                                         {/* Resolve Button - IT/Admin */}
                                                         <Can permission="it_concerns.resolve">
-                                                            {concern.status !== 'resolved' && (
+                                                            {concern.status !==
+                                                                'resolved' && (
                                                                 <Button
                                                                     variant="outline"
                                                                     size="icon"
-                                                                    onClick={() => handleResolve(concern)}
+                                                                    onClick={() =>
+                                                                        handleResolve(
+                                                                            concern,
+                                                                        )
+                                                                    }
                                                                     title="Resolve Concern"
-                                                                    className="text-green-600 hover:text-green-700 border-green-300"
+                                                                    className="border-green-300 text-green-600 hover:text-green-700"
                                                                 >
                                                                     <CheckCircle className="h-4 w-4" />
                                                                 </Button>
@@ -668,11 +885,28 @@ export default function ItConcernsIndex() {
                                                         </Can>
 
                                                         {/* Edit Button - Global permission OR Owner (pending/in_progress) */}
-                                                        {(can('it_concerns.edit') || (concern.user?.id === auth.user.id && ['pending', 'in_progress'].includes(concern.status))) && (
+                                                        {(can(
+                                                            'it_concerns.edit',
+                                                        ) ||
+                                                            (concern.user
+                                                                ?.id ===
+                                                                auth.user.id &&
+                                                                [
+                                                                    'pending',
+                                                                    'in_progress',
+                                                                ].includes(
+                                                                    concern.status,
+                                                                ))) && (
                                                             <Button
                                                                 variant="outline"
                                                                 size="icon"
-                                                                onClick={() => router.get(withReturnTo(`/form-requests/it-concerns/${concern.id}/edit`))}
+                                                                onClick={() =>
+                                                                    router.get(
+                                                                        withReturnTo(
+                                                                            `/form-requests/it-concerns/${concern.id}/edit`,
+                                                                        ),
+                                                                    )
+                                                                }
                                                                 title="Edit Concern"
                                                             >
                                                                 <Edit className="h-4 w-4" />
@@ -680,26 +914,48 @@ export default function ItConcernsIndex() {
                                                         )}
 
                                                         {/* Cancel Button - Owner (pending/in_progress) */}
-                                                        {concern.user?.id === auth.user.id && ['pending', 'in_progress'].includes(concern.status) && (
-                                                            <Button
-                                                                variant="outline"
-                                                                size="icon"
-                                                                onClick={() => handleCancel(concern)}
-                                                                title="Cancel Request"
-                                                                className="text-orange-600 hover:text-orange-700 border-orange-300"
-                                                            >
-                                                                <XCircle className="h-4 w-4" />
-                                                            </Button>
-                                                        )}
+                                                        {concern.user?.id ===
+                                                            auth.user.id &&
+                                                            [
+                                                                'pending',
+                                                                'in_progress',
+                                                            ].includes(
+                                                                concern.status,
+                                                            ) && (
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="icon"
+                                                                    onClick={() =>
+                                                                        handleCancel(
+                                                                            concern,
+                                                                        )
+                                                                    }
+                                                                    title="Cancel Request"
+                                                                    className="border-orange-300 text-orange-600 hover:text-orange-700"
+                                                                >
+                                                                    <XCircle className="h-4 w-4" />
+                                                                </Button>
+                                                            )}
 
                                                         {/* Delete Button - Global permission OR Owner (pending) */}
-                                                        {(can('it_concerns.delete') || (concern.user?.id === auth.user.id && concern.status === 'pending')) && (
+                                                        {(can(
+                                                            'it_concerns.delete',
+                                                        ) ||
+                                                            (concern.user
+                                                                ?.id ===
+                                                                auth.user.id &&
+                                                                concern.status ===
+                                                                    'pending')) && (
                                                             <Button
                                                                 variant="outline"
                                                                 size="icon"
-                                                                onClick={() => handleDelete(concern.id)}
+                                                                onClick={() =>
+                                                                    handleDelete(
+                                                                        concern.id,
+                                                                    )
+                                                                }
                                                                 title="Delete Concern"
-                                                                className="text-red-600 hover:text-red-700 border-red-300"
+                                                                className="border-red-300 text-red-600 hover:text-red-700"
                                                             >
                                                                 <Trash2 className="h-4 w-4" />
                                                             </Button>
@@ -709,26 +965,39 @@ export default function ItConcernsIndex() {
                                             )}
                                         </TableRow>
                                     ))}
-                                    {concernData.data.length === 0 && !loading && (
-                                        <TableRow>
-                                            <TableCell colSpan={isTeamLead ? 9 : 10} className="h-24 text-center text-muted-foreground">
-                                                No IT concerns found
-                                            </TableCell>
-                                        </TableRow>
-                                    )}
+                                    {concernData.data.length === 0 &&
+                                        !loading && (
+                                            <TableRow>
+                                                <TableCell
+                                                    colSpan={
+                                                        isTeamLead ? 9 : 10
+                                                    }
+                                                    className="h-24 text-center text-muted-foreground"
+                                                >
+                                                    No IT concerns found
+                                                </TableCell>
+                                            </TableRow>
+                                        )}
                                 </TableBody>
                             </Table>
                         </div>
                     )}
                 </div>
 
-                <div className="md:hidden space-y-4">
+                <div className="space-y-4 md:hidden">
                     {concernData.data.map((concern) => (
-                        <div key={concern.id} className="bg-card border rounded-lg p-4 shadow-sm space-y-3">
-                            <div className="flex justify-between items-start">
+                        <div
+                            key={concern.id}
+                            className="space-y-3 rounded-lg border bg-card p-4 shadow-sm"
+                        >
+                            <div className="flex items-start justify-between">
                                 <div>
-                                    <div className="text-lg font-semibold">{concern.user?.name || 'Anonymous'}</div>
-                                    <div className="text-sm text-muted-foreground">{concern.site.name}</div>
+                                    <div className="text-lg font-semibold">
+                                        {concern.user?.name || 'Anonymous'}
+                                    </div>
+                                    <div className="text-sm text-muted-foreground">
+                                        {concern.site.name}
+                                    </div>
                                 </div>
                                 <div className="flex flex-col gap-1">
                                     {getPriorityBadge(concern.priority)}
@@ -738,18 +1007,29 @@ export default function ItConcernsIndex() {
 
                             <div className="space-y-2 text-sm">
                                 <div className="flex items-center gap-2">
-                                    <span className="font-medium">Category:</span>
+                                    <span className="font-medium">
+                                        Category:
+                                    </span>
                                     {getCategoryBadge(concern.category)}
                                 </div>
                                 <div>
-                                    <span className="font-medium">Station:</span> {concern.station_number}
+                                    <span className="font-medium">
+                                        Station:
+                                    </span>{' '}
+                                    {concern.station_number}
                                 </div>
                                 <div>
-                                    <span className="font-medium">Description:</span> {concern.description}
+                                    <span className="font-medium">
+                                        Description:
+                                    </span>{' '}
+                                    {concern.description}
                                 </div>
                                 {concern.resolved_by && (
                                     <div>
-                                        <span className="font-medium">Resolved By:</span> {concern.resolved_by.name}
+                                        <span className="font-medium">
+                                            Resolved By:
+                                        </span>{' '}
+                                        {concern.resolved_by.name}
                                     </div>
                                 )}
                                 <div className="text-xs text-muted-foreground">
@@ -758,13 +1038,15 @@ export default function ItConcernsIndex() {
                             </div>
 
                             {!isTeamLead && (
-                                <div className="flex gap-2 pt-2 border-t">
+                                <div className="flex gap-2 border-t pt-2">
                                     <Can permission="it_concerns.resolve">
                                         {concern.status !== 'resolved' && (
                                             <Button
                                                 variant="outline"
                                                 size="sm"
-                                                onClick={() => handleResolve(concern)}
+                                                onClick={() =>
+                                                    handleResolve(concern)
+                                                }
                                             >
                                                 <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
                                                 Resolve
@@ -772,12 +1054,22 @@ export default function ItConcernsIndex() {
                                         )}
                                     </Can>
 
-                                    {(can('it_concerns.edit') || (concern.user?.id === auth.user.id && ['pending', 'in_progress'].includes(concern.status))) && (
+                                    {(can('it_concerns.edit') ||
+                                        (concern.user?.id === auth.user.id &&
+                                            ['pending', 'in_progress'].includes(
+                                                concern.status,
+                                            ))) && (
                                         <Button
                                             variant="outline"
                                             size="sm"
                                             className="flex-1"
-                                            onClick={() => router.get(withReturnTo(`/form-requests/it-concerns/${concern.id}/edit`))}
+                                            onClick={() =>
+                                                router.get(
+                                                    withReturnTo(
+                                                        `/form-requests/it-concerns/${concern.id}/edit`,
+                                                    ),
+                                                )
+                                            }
                                         >
                                             <Edit className="mr-2 h-4 w-4" />
                                             Edit
@@ -785,23 +1077,32 @@ export default function ItConcernsIndex() {
                                     )}
 
                                     {/* Cancel Button - Owner (pending/in_progress) */}
-                                    {concern.user?.id === auth.user.id && ['pending', 'in_progress'].includes(concern.status) && (
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => handleCancel(concern)}
-                                        >
-                                            <XCircle className="mr-2 h-4 w-4 text-orange-500" />
-                                            Cancel
-                                        </Button>
-                                    )}
+                                    {concern.user?.id === auth.user.id &&
+                                        ['pending', 'in_progress'].includes(
+                                            concern.status,
+                                        ) && (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() =>
+                                                    handleCancel(concern)
+                                                }
+                                            >
+                                                <XCircle className="mr-2 h-4 w-4 text-orange-500" />
+                                                Cancel
+                                            </Button>
+                                        )}
 
-                                    {(can('it_concerns.delete') || (concern.user?.id === auth.user.id && concern.status === 'pending')) && (
+                                    {(can('it_concerns.delete') ||
+                                        (concern.user?.id === auth.user.id &&
+                                            concern.status === 'pending')) && (
                                         <Button
                                             variant="outline"
                                             size="sm"
-                                            onClick={() => handleDelete(concern.id)}
-                                            className="text-red-600 hover:text-red-700 border-red-300"
+                                            onClick={() =>
+                                                handleDelete(concern.id)
+                                            }
+                                            className="border-red-300 text-red-600 hover:text-red-700"
                                         >
                                             <Trash2 className="mr-2 h-4 w-4" />
                                             Delete
@@ -813,95 +1114,163 @@ export default function ItConcernsIndex() {
                     ))}
 
                     {concernData.data.length === 0 && !loading && (
-                        <div className="py-12 text-center text-gray-500 border rounded-lg bg-card">
+                        <div className="rounded-lg border bg-card py-12 text-center text-gray-500">
                             No IT concerns found
                         </div>
                     )}
                 </div>
 
-                <div className="flex justify-center mt-4">
+                <div className="mt-4 flex justify-center">
                     {concernData.links && concernData.links.length > 0 && (
-                        <PaginationNav links={concernData.links} only={["concerns"]} />
+                        <PaginationNav
+                            links={concernData.links}
+                            only={['concerns']}
+                        />
                     )}
                 </div>
 
-                <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                <AlertDialog
+                    open={deleteDialogOpen}
+                    onOpenChange={setDeleteDialogOpen}
+                >
                     <AlertDialogContent>
                         <AlertDialogHeader>
                             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                             <AlertDialogDescription>
-                                This action cannot be undone. This will permanently delete the IT concern.
+                                This action cannot be undone. This will
+                                permanently delete the IT concern.
                             </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={confirmDelete}>Delete</AlertDialogAction>
+                            <AlertDialogAction onClick={confirmDelete}>
+                                Delete
+                            </AlertDialogAction>
                         </AlertDialogFooter>
                     </AlertDialogContent>
                 </AlertDialog>
 
-                <AlertDialog open={resolveDialogOpen} onOpenChange={setResolveDialogOpen}>
+                <AlertDialog
+                    open={resolveDialogOpen}
+                    onOpenChange={setResolveDialogOpen}
+                >
                     <AlertDialogContent>
                         <AlertDialogHeader>
-                            <AlertDialogTitle>Resolve IT Concern</AlertDialogTitle>
+                            <AlertDialogTitle>
+                                Resolve IT Concern
+                            </AlertDialogTitle>
                             <AlertDialogDescription>
                                 {concernToResolve && (
-                                    <div className="space-y-3 mt-4">
+                                    <div className="mt-4 space-y-3">
                                         <div>
-                                            <span className="font-medium">Station:</span> {concernToResolve.station_number}
+                                            <span className="font-medium">
+                                                Station:
+                                            </span>{' '}
+                                            {concernToResolve.station_number}
                                         </div>
                                         <div>
-                                            <span className="font-medium">Category:</span> {concernToResolve.category}
+                                            <span className="font-medium">
+                                                Category:
+                                            </span>{' '}
+                                            {concernToResolve.category}
                                         </div>
                                         <div>
-                                            <span className="font-medium">Description:</span> {concernToResolve.description}
+                                            <span className="font-medium">
+                                                Description:
+                                            </span>{' '}
+                                            {concernToResolve.description}
                                         </div>
 
-                                        <div className="grid grid-cols-2 gap-3 mt-4">
+                                        <div className="mt-4 grid grid-cols-2 gap-3">
                                             <div className="space-y-2">
-                                                <Label htmlFor="resolve_status" className="text-foreground">
-                                                    Status <span className="text-red-500">*</span>
+                                                <Label
+                                                    htmlFor="resolve_status"
+                                                    className="text-foreground"
+                                                >
+                                                    Status{' '}
+                                                    <span className="text-red-500">
+                                                        *
+                                                    </span>
                                                 </Label>
-                                                <Select value={resolveStatus} onValueChange={setResolveStatus}>
+                                                <Select
+                                                    value={resolveStatus}
+                                                    onValueChange={
+                                                        setResolveStatus
+                                                    }
+                                                >
                                                     <SelectTrigger id="resolve_status">
                                                         <SelectValue placeholder="Select status" />
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        <SelectItem value="pending">Pending</SelectItem>
-                                                        <SelectItem value="in_progress">In Progress</SelectItem>
-                                                        <SelectItem value="resolved">Resolved</SelectItem>
-                                                        <SelectItem value="cancelled">Cancelled</SelectItem>
+                                                        <SelectItem value="pending">
+                                                            Pending
+                                                        </SelectItem>
+                                                        <SelectItem value="in_progress">
+                                                            In Progress
+                                                        </SelectItem>
+                                                        <SelectItem value="resolved">
+                                                            Resolved
+                                                        </SelectItem>
+                                                        <SelectItem value="cancelled">
+                                                            Cancelled
+                                                        </SelectItem>
                                                     </SelectContent>
                                                 </Select>
                                             </div>
 
                                             <div className="space-y-2">
-                                                <Label htmlFor="resolve_priority" className="text-foreground">
-                                                    Priority <span className="text-red-500">*</span>
+                                                <Label
+                                                    htmlFor="resolve_priority"
+                                                    className="text-foreground"
+                                                >
+                                                    Priority{' '}
+                                                    <span className="text-red-500">
+                                                        *
+                                                    </span>
                                                 </Label>
-                                                <Select value={resolvePriority} onValueChange={setResolvePriority}>
+                                                <Select
+                                                    value={resolvePriority}
+                                                    onValueChange={
+                                                        setResolvePriority
+                                                    }
+                                                >
                                                     <SelectTrigger id="resolve_priority">
                                                         <SelectValue placeholder="Select priority" />
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        <SelectItem value="low">Low</SelectItem>
-                                                        <SelectItem value="medium">Medium</SelectItem>
-                                                        <SelectItem value="high">High</SelectItem>
-                                                        <SelectItem value="urgent">Urgent</SelectItem>
+                                                        <SelectItem value="low">
+                                                            Low
+                                                        </SelectItem>
+                                                        <SelectItem value="medium">
+                                                            Medium
+                                                        </SelectItem>
+                                                        <SelectItem value="high">
+                                                            High
+                                                        </SelectItem>
+                                                        <SelectItem value="urgent">
+                                                            Urgent
+                                                        </SelectItem>
                                                     </SelectContent>
                                                 </Select>
                                             </div>
                                         </div>
 
                                         <div className="mt-4">
-                                            <Label htmlFor="resolution_notes" className="text-foreground">
+                                            <Label
+                                                htmlFor="resolution_notes"
+                                                className="text-foreground"
+                                            >
                                                 Resolution Notes
                                             </Label>
                                             <Textarea
                                                 id="resolution_notes"
                                                 placeholder="Describe how this issue was resolved..."
                                                 value={resolutionNotes}
-                                                onChange={(e) => setResolutionNotes(e.target.value)}
+                                                onChange={(e) =>
+                                                    setResolutionNotes(
+                                                        e.target.value,
+                                                    )
+                                                }
                                                 rows={4}
                                                 className="mt-2"
                                             />
@@ -912,36 +1281,64 @@ export default function ItConcernsIndex() {
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                                onClick={confirmResolve}
-                            >
+                            <AlertDialogAction onClick={confirmResolve}>
                                 Update IT Concern
                             </AlertDialogAction>
                         </AlertDialogFooter>
                     </AlertDialogContent>
                 </AlertDialog>
 
-                <AlertDialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+                <AlertDialog
+                    open={cancelDialogOpen}
+                    onOpenChange={setCancelDialogOpen}
+                >
                     <AlertDialogContent>
                         <AlertDialogHeader>
-                            <AlertDialogTitle>Cancel IT Concern?</AlertDialogTitle>
+                            <AlertDialogTitle>
+                                Cancel IT Concern?
+                            </AlertDialogTitle>
                             <AlertDialogDescription>
                                 {concernToCancel && (
-                                    <div className="space-y-2 mt-2">
-                                        <p>Are you sure you want to cancel this IT concern?</p>
-                                        <div className="bg-muted p-3 rounded-md space-y-1 text-sm">
-                                            <div><span className="font-medium">Station:</span> {concernToCancel.station_number}</div>
-                                            <div><span className="font-medium">Category:</span> {concernToCancel.category}</div>
-                                            <div><span className="font-medium">Description:</span> {concernToCancel.description}</div>
+                                    <div className="mt-2 space-y-2">
+                                        <p>
+                                            Are you sure you want to cancel this
+                                            IT concern?
+                                        </p>
+                                        <div className="space-y-1 rounded-md bg-muted p-3 text-sm">
+                                            <div>
+                                                <span className="font-medium">
+                                                    Station:
+                                                </span>{' '}
+                                                {concernToCancel.station_number}
+                                            </div>
+                                            <div>
+                                                <span className="font-medium">
+                                                    Category:
+                                                </span>{' '}
+                                                {concernToCancel.category}
+                                            </div>
+                                            <div>
+                                                <span className="font-medium">
+                                                    Description:
+                                                </span>{' '}
+                                                {concernToCancel.description}
+                                            </div>
                                         </div>
-                                        <p className="text-muted-foreground text-sm">This will mark the request as cancelled and IT will no longer work on it.</p>
+                                        <p className="text-sm text-muted-foreground">
+                                            This will mark the request as
+                                            cancelled and IT will no longer work
+                                            on it.
+                                        </p>
                                     </div>
                                 )}
                             </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                             <AlertDialogCancel>Keep Request</AlertDialogCancel>
-                            <AlertDialogAction onClick={confirmCancel} className="bg-orange-500 hover:bg-orange-600">
+                            <AlertDialogAction
+                                onClick={confirmCancel}
+                                className="bg-orange-500 hover:bg-orange-600"
+                            >
                                 Cancel Request
                             </AlertDialogAction>
                         </AlertDialogFooter>

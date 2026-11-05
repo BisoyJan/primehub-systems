@@ -1,15 +1,23 @@
-import React, { useState, useCallback, useMemo } from 'react';
-import { Head, router } from '@inertiajs/react';
-import AppLayout from '@/layouts/app-layout';
-import { useFlashMessage, usePageMeta } from '@/hooks';
 import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from '@/components/ui/command';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { DatePicker } from '@/components/ui/date-picker';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
 import {
     Select,
     SelectContent,
@@ -17,6 +25,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
 import {
     Table,
     TableBody,
@@ -25,13 +34,11 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from '@/components/ui/popover';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Separator } from '@/components/ui/separator';
+import { Textarea } from '@/components/ui/textarea';
+import { useFlashMessage, usePageMeta } from '@/hooks';
+import AppLayout from '@/layouts/app-layout';
+import { Head, router } from '@inertiajs/react';
+import React, { useCallback, useMemo, useState } from 'react';
 
 import {
     AlertDialog,
@@ -43,26 +50,26 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { toast } from 'sonner';
-import {
-    Plus,
-    Trash2,
-    Users,
-    ChevronDown,
-    ChevronUp,
-    RefreshCw,
-    ArrowLeft,
-    Check,
-    ChevronsUpDown,
-    AlertCircle,
-    Info,
-    Pencil,
-} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
-    index as attendancePointsIndex,
     bulkStore as attendancePointsBulkStore,
+    index as attendancePointsIndex,
 } from '@/routes/attendance-points';
+import {
+    AlertCircle,
+    ArrowLeft,
+    Check,
+    ChevronDown,
+    ChevronsUpDown,
+    ChevronUp,
+    Info,
+    Pencil,
+    Plus,
+    RefreshCw,
+    Trash2,
+    Users,
+} from 'lucide-react';
+import { toast } from 'sonner';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -79,7 +86,12 @@ interface PageProps {
     campaigns: unknown[];
 }
 
-type PointType = 'whole_day_absence' | 'half_day_absence' | 'undertime' | 'undertime_more_than_hour' | 'tardy';
+type PointType =
+    | 'whole_day_absence'
+    | 'half_day_absence'
+    | 'undertime'
+    | 'undertime_more_than_hour'
+    | 'tardy';
 
 interface EntryRow {
     id: string; // local uuid for key
@@ -96,12 +108,20 @@ interface EntryRow {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const POINT_TYPE_OPTIONS: { value: PointType; label: string; points: string }[] = [
+const POINT_TYPE_OPTIONS: {
+    value: PointType;
+    label: string;
+    points: string;
+}[] = [
     { value: 'whole_day_absence', label: 'Whole Day Absence', points: '1.00' },
     { value: 'half_day_absence', label: 'Half-Day Absence', points: '0.50' },
     { value: 'tardy', label: 'Tardy', points: '0.25' },
     { value: 'undertime', label: 'Undertime (≤60 min)', points: '0.25' },
-    { value: 'undertime_more_than_hour', label: 'Undertime (61+ min)', points: '0.50' },
+    {
+        value: 'undertime_more_than_hour',
+        label: 'Undertime (61+ min)',
+        points: '0.50',
+    },
 ];
 
 const POINT_VALUES: Record<PointType, number> = {
@@ -119,7 +139,13 @@ const formatUserName = (user: User) => {
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
-const blankRow = (shared?: { shift_date: string; point_type: PointType | ''; is_advised: boolean; is_critical_day: boolean; tardy_minutes: string }): EntryRow => ({
+const blankRow = (shared?: {
+    shift_date: string;
+    point_type: PointType | '';
+    is_advised: boolean;
+    is_critical_day: boolean;
+    tardy_minutes: string;
+}): EntryRow => ({
     id: uid(),
     user_id: '',
     shift_date: shared?.shift_date ?? '',
@@ -154,7 +180,9 @@ function UserPicker({
         if (!query.trim()) return users;
         const q = query.toLowerCase();
         return users.filter(
-            (u) => formatUserName(u).toLowerCase().includes(q) || u.name.toLowerCase().includes(q),
+            (u) =>
+                formatUserName(u).toLowerCase().includes(q) ||
+                u.name.toLowerCase().includes(q),
         );
     }, [users, query]);
 
@@ -168,13 +196,17 @@ function UserPicker({
                     role="combobox"
                     aria-expanded={open}
                     className={cn(
-                        'w-full justify-between font-normal text-left',
+                        'w-full justify-between text-left font-normal',
                         !selected && 'text-muted-foreground',
                         error && 'border-red-500',
                     )}
                     disabled={disabled}
                 >
-                    <span className="truncate">{selected ? formatUserName(selected) : 'Select employee…'}</span>
+                    <span className="truncate">
+                        {selected
+                            ? formatUserName(selected)
+                            : 'Select employee…'}
+                    </span>
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
             </PopoverTrigger>
@@ -201,7 +233,9 @@ function UserPicker({
                                     <Check
                                         className={cn(
                                             'mr-2 h-4 w-4',
-                                            value === String(u.id) ? 'opacity-100' : 'opacity-0',
+                                            value === String(u.id)
+                                                ? 'opacity-100'
+                                                : 'opacity-0',
                                         )}
                                     />
                                     {formatUserName(u)}
@@ -254,21 +288,54 @@ export default function BulkCreatePage({ users }: PageProps) {
 
     const filteredUsers = useMemo(() => {
         const q = userSearch.toLowerCase();
-        return q ? users.filter((u) => formatUserName(u).toLowerCase().includes(q) || u.name.toLowerCase().includes(q)) : users;
+        return q
+            ? users.filter(
+                  (u) =>
+                      formatUserName(u).toLowerCase().includes(q) ||
+                      u.name.toLowerCase().includes(q),
+              )
+            : users;
     }, [users, userSearch]);
 
     const totalPoints = useMemo(
-        () => entries.reduce((sum, e) => sum + (e.point_type ? (POINT_VALUES[e.point_type] ?? 0) * (e.is_critical_day ? 2 : 1) : 0), 0),
+        () =>
+            entries.reduce(
+                (sum, e) =>
+                    sum +
+                    (e.point_type
+                        ? (POINT_VALUES[e.point_type] ?? 0) *
+                          (e.is_critical_day ? 2 : 1)
+                        : 0),
+                0,
+            ),
         [entries],
     );
 
-    const userIdsInEntries = useMemo(() => new Set(entries.map((e) => e.user_id).filter(Boolean)), [entries]);
+    const userIdsInEntries = useMemo(
+        () => new Set(entries.map((e) => e.user_id).filter(Boolean)),
+        [entries],
+    );
 
     // ─── Row helpers ───────────────────────────────────────────────────────────
 
     const addRow = useCallback(() => {
-        setEntries((prev) => [...prev, blankRow({ shift_date: sharedDate, point_type: sharedType, is_advised: sharedIsAdvised, is_critical_day: sharedIsCriticalDay, tardy_minutes: sharedTardyMinutes })]);
-    }, [sharedDate, sharedType, sharedIsAdvised, sharedIsCriticalDay, sharedTardyMinutes]);
+        setEntries((prev) => [
+            ...prev,
+            blankRow({
+                shift_date: sharedDate,
+                point_type: sharedType,
+                is_advised: sharedIsAdvised,
+                is_critical_day: sharedIsCriticalDay,
+                tardy_minutes: sharedTardyMinutes,
+            }),
+        ]);
+    }, [
+        sharedDate,
+        sharedType,
+        sharedIsAdvised,
+        sharedIsCriticalDay,
+        sharedTardyMinutes,
+    ]);
 
     const addUserRow = useCallback(
         (userId: string) => {
@@ -276,13 +343,26 @@ export default function BulkCreatePage({ users }: PageProps) {
                 toast.warning('This employee is already in the list.');
                 return;
             }
-            const row = blankRow({ shift_date: sharedDate, point_type: sharedType, is_advised: sharedIsAdvised, is_critical_day: sharedIsCriticalDay, tardy_minutes: sharedTardyMinutes });
+            const row = blankRow({
+                shift_date: sharedDate,
+                point_type: sharedType,
+                is_advised: sharedIsAdvised,
+                is_critical_day: sharedIsCriticalDay,
+                tardy_minutes: sharedTardyMinutes,
+            });
             row.user_id = userId;
             setEntries((prev) => [...prev, row]);
             setUserPickerOpen(false);
             setUserSearch('');
         },
-        [sharedDate, sharedType, sharedIsAdvised, sharedIsCriticalDay, sharedTardyMinutes, userIdsInEntries],
+        [
+            sharedDate,
+            sharedType,
+            sharedIsAdvised,
+            sharedIsCriticalDay,
+            sharedTardyMinutes,
+            userIdsInEntries,
+        ],
     );
 
     const handleSharedDateChange = (v: string) => {
@@ -296,8 +376,6 @@ export default function BulkCreatePage({ users }: PageProps) {
     const handleSharedAdvisedChange = (v: boolean) => {
         setSharedIsAdvised(v);
     };
-
-
 
     const removeRow = useCallback((id: string) => {
         setEntries((prev) => prev.filter((r) => r.id !== id));
@@ -313,9 +391,14 @@ export default function BulkCreatePage({ users }: PageProps) {
         });
     }, []);
 
-    const updateRow = useCallback(<K extends keyof EntryRow>(id: string, key: K, value: EntryRow[K]) => {
-        setEntries((prev) => prev.map((r) => (r.id === id ? { ...r, [key]: value } : r)));
-    }, []);
+    const updateRow = useCallback(
+        <K extends keyof EntryRow>(id: string, key: K, value: EntryRow[K]) => {
+            setEntries((prev) =>
+                prev.map((r) => (r.id === id ? { ...r, [key]: value } : r)),
+            );
+        },
+        [],
+    );
 
     const toggleExpand = useCallback((id: string) => {
         setExpandedRows((prev) => {
@@ -341,9 +424,17 @@ export default function BulkCreatePage({ users }: PageProps) {
             if (!row.user_id) errs.push('Employee is required.');
             if (!row.shift_date) errs.push('Violation date is required.');
             if (!row.point_type) errs.push('Violation type is required.');
-            if (row.point_type === 'undertime' && row.undertime_minutes && parseInt(row.undertime_minutes) > 60)
+            if (
+                row.point_type === 'undertime' &&
+                row.undertime_minutes &&
+                parseInt(row.undertime_minutes) > 60
+            )
                 errs.push('Undertime (≤60 min) must be 60 minutes or less.');
-            if (row.point_type === 'undertime_more_than_hour' && row.undertime_minutes && parseInt(row.undertime_minutes) < 61)
+            if (
+                row.point_type === 'undertime_more_than_hour' &&
+                row.undertime_minutes &&
+                parseInt(row.undertime_minutes) < 61
+            )
                 errs.push('Undertime (61+ min) must be at least 61 minutes.');
             if (errs.length) errors[row.id] = errs;
         }
@@ -354,7 +445,9 @@ export default function BulkCreatePage({ users }: PageProps) {
             const key = `${row.user_id}-${row.shift_date}`;
             if (seen.has(key)) {
                 if (!errors[row.id]) errors[row.id] = [];
-                errors[row.id].push('Duplicate: same employee and date already in this list.');
+                errors[row.id].push(
+                    'Duplicate: same employee and date already in this list.',
+                );
             }
             if (row.user_id && row.shift_date) seen.add(key);
         }
@@ -387,8 +480,12 @@ export default function BulkCreatePage({ users }: PageProps) {
                 is_critical_day: row.is_critical_day,
                 violation_details: row.violation_details || null,
                 notes: row.notes || null,
-                tardy_minutes: row.tardy_minutes ? parseInt(row.tardy_minutes) : null,
-                undertime_minutes: row.undertime_minutes ? parseInt(row.undertime_minutes) : null,
+                tardy_minutes: row.tardy_minutes
+                    ? parseInt(row.tardy_minutes)
+                    : null,
+                undertime_minutes: row.undertime_minutes
+                    ? parseInt(row.undertime_minutes)
+                    : null,
             })),
         };
 
@@ -397,7 +494,9 @@ export default function BulkCreatePage({ users }: PageProps) {
                 // Flash message handled by backend + useFlashMessage hook
             },
             onError: (errors) => {
-                const msg = Object.values(errors).flat().join(', ') || 'Failed to submit bulk entries.';
+                const msg =
+                    Object.values(errors).flat().join(', ') ||
+                    'Failed to submit bulk entries.';
                 toast.error(msg);
             },
             onFinish: () => setSubmitting(false),
@@ -416,20 +515,22 @@ export default function BulkCreatePage({ users }: PageProps) {
                     description="Add violation points for multiple employees at once."
                 />
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
                     {/* ── LEFT: Shared Defaults + Employee Picker + Summary ─────── */}
-                    <div className="lg:col-span-1 space-y-4">
+                    <div className="space-y-4 lg:col-span-1">
                         {/* Shared defaults card */}
                         <Card>
                             <CardHeader className="pb-3">
-                                <CardTitle className="text-base flex items-center gap-2">
+                                <CardTitle className="flex items-center gap-2 text-base">
                                     <Info className="h-4 w-4 text-blue-500" />
                                     Violation Details
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-3">
                                 <div className="space-y-1.5">
-                                    <Label className="text-sm">Violation Date</Label>
+                                    <Label className="text-sm">
+                                        Violation Date
+                                    </Label>
                                     <DatePicker
                                         value={sharedDate}
                                         onChange={handleSharedDateChange}
@@ -438,19 +539,30 @@ export default function BulkCreatePage({ users }: PageProps) {
                                 </div>
 
                                 <div className="space-y-1.5">
-                                    <Label className="text-sm">Violation Type</Label>
+                                    <Label className="text-sm">
+                                        Violation Type
+                                    </Label>
                                     <Select
                                         value={sharedType}
-                                        onValueChange={(v) => handleSharedTypeChange(v as PointType)}
+                                        onValueChange={(v) =>
+                                            handleSharedTypeChange(
+                                                v as PointType,
+                                            )
+                                        }
                                     >
                                         <SelectTrigger>
                                             <SelectValue placeholder="Select type" />
                                         </SelectTrigger>
                                         <SelectContent>
                                             {POINT_TYPE_OPTIONS.map((o) => (
-                                                <SelectItem key={o.value} value={o.value}>
+                                                <SelectItem
+                                                    key={o.value}
+                                                    value={o.value}
+                                                >
                                                     {o.label}
-                                                    <span className="ml-1 text-muted-foreground">({o.points} pt)</span>
+                                                    <span className="ml-1 text-muted-foreground">
+                                                        ({o.points} pt)
+                                                    </span>
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
@@ -459,13 +571,19 @@ export default function BulkCreatePage({ users }: PageProps) {
 
                                 {sharedType === 'tardy' && (
                                     <div className="space-y-1.5">
-                                        <Label className="text-sm">Tardy Minutes</Label>
+                                        <Label className="text-sm">
+                                            Tardy Minutes
+                                        </Label>
                                         <Input
                                             type="number"
                                             min="0"
                                             placeholder="Minutes late"
                                             value={sharedTardyMinutes}
-                                            onChange={(e) => setSharedTardyMinutes(e.target.value)}
+                                            onChange={(e) =>
+                                                setSharedTardyMinutes(
+                                                    e.target.value,
+                                                )
+                                            }
                                         />
                                     </div>
                                 )}
@@ -474,9 +592,16 @@ export default function BulkCreatePage({ users }: PageProps) {
                                     <Checkbox
                                         id="shared-advised"
                                         checked={sharedIsAdvised}
-                                        onCheckedChange={(v) => handleSharedAdvisedChange(Boolean(v))}
+                                        onCheckedChange={(v) =>
+                                            handleSharedAdvisedChange(
+                                                Boolean(v),
+                                            )
+                                        }
                                     />
-                                    <Label htmlFor="shared-advised" className="text-sm cursor-pointer">
+                                    <Label
+                                        htmlFor="shared-advised"
+                                        className="cursor-pointer text-sm"
+                                    >
                                         Advised absence
                                     </Label>
                                 </div>
@@ -485,33 +610,48 @@ export default function BulkCreatePage({ users }: PageProps) {
                                     <Checkbox
                                         id="shared-critical"
                                         checked={sharedIsCriticalDay}
-                                        onCheckedChange={(v) => setSharedIsCriticalDay(Boolean(v))}
+                                        onCheckedChange={(v) =>
+                                            setSharedIsCriticalDay(Boolean(v))
+                                        }
                                     />
-                                    <Label htmlFor="shared-critical" className="text-sm cursor-pointer">
+                                    <Label
+                                        htmlFor="shared-critical"
+                                        className="cursor-pointer text-sm"
+                                    >
                                         Critical Working Day (×2 points)
                                     </Label>
                                 </div>
-
                             </CardContent>
                         </Card>
 
                         {/* Employee Picker */}
                         <Card>
                             <CardHeader className="pb-3">
-                                <CardTitle className="text-base flex items-center gap-2">
+                                <CardTitle className="flex items-center gap-2 text-base">
                                     <Users className="h-4 w-4 text-primary" />
                                     Add Employees
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-3">
-                                <Popover open={userPickerOpen} onOpenChange={setUserPickerOpen}>
+                                <Popover
+                                    open={userPickerOpen}
+                                    onOpenChange={setUserPickerOpen}
+                                >
                                     <PopoverTrigger asChild>
-                                        <Button variant="outline" className="w-full justify-between font-normal">
-                                            <span className="text-muted-foreground">Search employee…</span>
+                                        <Button
+                                            variant="outline"
+                                            className="w-full justify-between font-normal"
+                                        >
+                                            <span className="text-muted-foreground">
+                                                Search employee…
+                                            </span>
                                             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                         </Button>
                                     </PopoverTrigger>
-                                    <PopoverContent className="w-72 p-0" align="start">
+                                    <PopoverContent
+                                        className="w-72 p-0"
+                                        align="start"
+                                    >
                                         <Command shouldFilter={false}>
                                             <CommandInput
                                                 placeholder="Search…"
@@ -519,25 +659,45 @@ export default function BulkCreatePage({ users }: PageProps) {
                                                 onValueChange={setUserSearch}
                                             />
                                             <CommandList>
-                                                <CommandEmpty>No employee found.</CommandEmpty>
+                                                <CommandEmpty>
+                                                    No employee found.
+                                                </CommandEmpty>
                                                 <CommandGroup>
                                                     {filteredUsers.map((u) => {
-                                                        const alreadyAdded = userIdsInEntries.has(String(u.id));
+                                                        const alreadyAdded =
+                                                            userIdsInEntries.has(
+                                                                String(u.id),
+                                                            );
                                                         return (
                                                             <CommandItem
                                                                 key={u.id}
-                                                                value={String(u.id)}
-                                                                onSelect={(v) => addUserRow(v)}
-                                                                disabled={alreadyAdded}
-                                                                className={cn(alreadyAdded && 'opacity-50')}
+                                                                value={String(
+                                                                    u.id,
+                                                                )}
+                                                                onSelect={(v) =>
+                                                                    addUserRow(
+                                                                        v,
+                                                                    )
+                                                                }
+                                                                disabled={
+                                                                    alreadyAdded
+                                                                }
+                                                                className={cn(
+                                                                    alreadyAdded &&
+                                                                        'opacity-50',
+                                                                )}
                                                             >
                                                                 <Check
                                                                     className={cn(
                                                                         'mr-2 h-4 w-4',
-                                                                        alreadyAdded ? 'opacity-100' : 'opacity-0',
+                                                                        alreadyAdded
+                                                                            ? 'opacity-100'
+                                                                            : 'opacity-0',
                                                                     )}
                                                                 />
-                                                                {formatUserName(u)}
+                                                                {formatUserName(
+                                                                    u,
+                                                                )}
                                                             </CommandItem>
                                                         );
                                                     })}
@@ -561,13 +721,19 @@ export default function BulkCreatePage({ users }: PageProps) {
                         {/* Summary */}
                         {entries.length > 0 && (
                             <Card className="border-primary/30 bg-primary/5">
-                                <CardContent className="pt-4 space-y-2">
+                                <CardContent className="space-y-2 pt-4">
                                     <div className="flex justify-between text-sm">
-                                        <span className="text-muted-foreground">Employees:</span>
-                                        <span className="font-semibold">{entries.length}</span>
+                                        <span className="text-muted-foreground">
+                                            Employees:
+                                        </span>
+                                        <span className="font-semibold">
+                                            {entries.length}
+                                        </span>
                                     </div>
                                     <div className="flex justify-between text-sm">
-                                        <span className="text-muted-foreground">Total points:</span>
+                                        <span className="text-muted-foreground">
+                                            Total points:
+                                        </span>
                                         <span className="font-semibold text-red-600 dark:text-red-400">
                                             {totalPoints.toFixed(2)} pts
                                         </span>
@@ -577,16 +743,23 @@ export default function BulkCreatePage({ users }: PageProps) {
                                         <Button
                                             variant="outline"
                                             className="flex-1"
-                                            onClick={() => router.visit(attendancePointsIndex().url)}
+                                            onClick={() =>
+                                                router.visit(
+                                                    attendancePointsIndex().url,
+                                                )
+                                            }
                                             disabled={submitting}
                                         >
-                                            <ArrowLeft className="h-4 w-4 mr-1" />
+                                            <ArrowLeft className="mr-1 h-4 w-4" />
                                             Cancel
                                         </Button>
                                         <Button
                                             className="flex-1 gap-2"
                                             onClick={handleSubmit}
-                                            disabled={submitting || entries.length === 0}
+                                            disabled={
+                                                submitting ||
+                                                entries.length === 0
+                                            }
                                         >
                                             {submitting ? (
                                                 <RefreshCw className="h-4 w-4 animate-spin" />
@@ -602,14 +775,19 @@ export default function BulkCreatePage({ users }: PageProps) {
                     </div>
 
                     {/* ── RIGHT: Entry Rows ─────────────────────────────────────── */}
-                    <div className="lg:col-span-2 space-y-3">
+                    <div className="space-y-3 lg:col-span-2">
                         {entries.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-muted-foreground/25 p-12 text-center gap-3">
+                            <div className="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-muted-foreground/25 p-12 text-center">
                                 <Users className="h-10 w-10 text-muted-foreground/40" />
                                 <p className="text-sm text-muted-foreground">
-                                    No employees added yet. Use the picker on the left to add employees.
+                                    No employees added yet. Use the picker on
+                                    the left to add employees.
                                 </p>
-                                <Button variant="outline" className="gap-2 mt-2" onClick={addRow}>
+                                <Button
+                                    variant="outline"
+                                    className="mt-2 gap-2"
+                                    onClick={addRow}
+                                >
                                     <Plus className="h-4 w-4" />
                                     Add blank row
                                 </Button>
@@ -617,78 +795,178 @@ export default function BulkCreatePage({ users }: PageProps) {
                         ) : (
                             <>
                                 {/* Desktop table view */}
-                                <div className="hidden md:block rounded-lg border overflow-hidden">
+                                <div className="hidden overflow-hidden rounded-lg border md:block">
                                     <Table>
                                         <TableHeader>
                                             <TableRow className="bg-muted/40">
-                                                <TableHead className="w-10 text-center text-xs">#</TableHead>
-                                                <TableHead className="w-52">Employee</TableHead>
-                                                <TableHead className="w-44">Date</TableHead>
+                                                <TableHead className="w-10 text-center text-xs">
+                                                    #
+                                                </TableHead>
+                                                <TableHead className="w-52">
+                                                    Employee
+                                                </TableHead>
+                                                <TableHead className="w-44">
+                                                    Date
+                                                </TableHead>
                                                 <TableHead>Type</TableHead>
-                                                <TableHead className="w-20 text-center">Advised</TableHead>
-                                                <TableHead className="w-20 text-center">Critical</TableHead>
-                                                <TableHead className="w-20 text-center">Actions</TableHead>
+                                                <TableHead className="w-20 text-center">
+                                                    Advised
+                                                </TableHead>
+                                                <TableHead className="w-20 text-center">
+                                                    Critical
+                                                </TableHead>
+                                                <TableHead className="w-20 text-center">
+                                                    Actions
+                                                </TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
                                             {entries.map((row, index) => {
-                                                const hasError = !!rowErrors[row.id];
-                                                const isExpanded = expandedRows.has(row.id);
+                                                const hasError =
+                                                    !!rowErrors[row.id];
+                                                const isExpanded =
+                                                    expandedRows.has(row.id);
 
                                                 return (
-                                                    <React.Fragment key={row.id}>
-                                                        <TableRow className={cn(
-                                                            'transition-colors',
-                                                            hasError && 'bg-red-50 dark:bg-red-950/20',
-                                                            isExpanded && !hasError && 'bg-muted/20',
-                                                        )}>
-                                                            <TableCell className="text-center text-xs text-muted-foreground font-medium tabular-nums">
+                                                    <React.Fragment
+                                                        key={row.id}
+                                                    >
+                                                        <TableRow
+                                                            className={cn(
+                                                                'transition-colors',
+                                                                hasError &&
+                                                                    'bg-red-50 dark:bg-red-950/20',
+                                                                isExpanded &&
+                                                                    !hasError &&
+                                                                    'bg-muted/20',
+                                                            )}
+                                                        >
+                                                            <TableCell className="text-center text-xs font-medium text-muted-foreground tabular-nums">
                                                                 {index + 1}
                                                             </TableCell>
                                                             <TableCell>
                                                                 <UserPicker
-                                                                    users={users}
-                                                                    value={row.user_id}
-                                                                    onChange={(v) => updateRow(row.id, 'user_id', v)}
-                                                                    error={hasError && !row.user_id}
+                                                                    users={
+                                                                        users
+                                                                    }
+                                                                    value={
+                                                                        row.user_id
+                                                                    }
+                                                                    onChange={(
+                                                                        v,
+                                                                    ) =>
+                                                                        updateRow(
+                                                                            row.id,
+                                                                            'user_id',
+                                                                            v,
+                                                                        )
+                                                                    }
+                                                                    error={
+                                                                        hasError &&
+                                                                        !row.user_id
+                                                                    }
                                                                 />
                                                             </TableCell>
                                                             <TableCell>
                                                                 <DatePicker
-                                                                    value={row.shift_date}
-                                                                    onChange={(v) => updateRow(row.id, 'shift_date', v)}
+                                                                    value={
+                                                                        row.shift_date
+                                                                    }
+                                                                    onChange={(
+                                                                        v,
+                                                                    ) =>
+                                                                        updateRow(
+                                                                            row.id,
+                                                                            'shift_date',
+                                                                            v,
+                                                                        )
+                                                                    }
                                                                     placeholder="Date"
                                                                 />
                                                             </TableCell>
                                                             <TableCell>
                                                                 <Select
-                                                                    value={row.point_type}
-                                                                    onValueChange={(v) => updateRow(row.id, 'point_type', v as PointType)}
+                                                                    value={
+                                                                        row.point_type
+                                                                    }
+                                                                    onValueChange={(
+                                                                        v,
+                                                                    ) =>
+                                                                        updateRow(
+                                                                            row.id,
+                                                                            'point_type',
+                                                                            v as PointType,
+                                                                        )
+                                                                    }
                                                                 >
                                                                     <SelectTrigger className="w-full">
                                                                         <SelectValue placeholder="Select type" />
                                                                     </SelectTrigger>
                                                                     <SelectContent>
-                                                                        {POINT_TYPE_OPTIONS.map((o) => (
-                                                                            <SelectItem key={o.value} value={o.value}>
-                                                                                {o.label}
-                                                                                <span className="ml-1 text-muted-foreground text-xs">({o.points})</span>
-                                                                            </SelectItem>
-                                                                        ))}
+                                                                        {POINT_TYPE_OPTIONS.map(
+                                                                            (
+                                                                                o,
+                                                                            ) => (
+                                                                                <SelectItem
+                                                                                    key={
+                                                                                        o.value
+                                                                                    }
+                                                                                    value={
+                                                                                        o.value
+                                                                                    }
+                                                                                >
+                                                                                    {
+                                                                                        o.label
+                                                                                    }
+                                                                                    <span className="ml-1 text-xs text-muted-foreground">
+                                                                                        (
+                                                                                        {
+                                                                                            o.points
+                                                                                        }
+
+                                                                                        )
+                                                                                    </span>
+                                                                                </SelectItem>
+                                                                            ),
+                                                                        )}
                                                                     </SelectContent>
                                                                 </Select>
                                                             </TableCell>
                                                             <TableCell className="text-center">
                                                                 <Checkbox
-                                                                    checked={row.is_advised}
-                                                                    onCheckedChange={(v) => updateRow(row.id, 'is_advised', Boolean(v))}
+                                                                    checked={
+                                                                        row.is_advised
+                                                                    }
+                                                                    onCheckedChange={(
+                                                                        v,
+                                                                    ) =>
+                                                                        updateRow(
+                                                                            row.id,
+                                                                            'is_advised',
+                                                                            Boolean(
+                                                                                v,
+                                                                            ),
+                                                                        )
+                                                                    }
                                                                     aria-label="Advised"
                                                                 />
                                                             </TableCell>
                                                             <TableCell className="text-center">
                                                                 <Checkbox
-                                                                    checked={row.is_critical_day}
-                                                                    onCheckedChange={(v) => updateRow(row.id, 'is_critical_day', Boolean(v))}
+                                                                    checked={
+                                                                        row.is_critical_day
+                                                                    }
+                                                                    onCheckedChange={(
+                                                                        v,
+                                                                    ) =>
+                                                                        updateRow(
+                                                                            row.id,
+                                                                            'is_critical_day',
+                                                                            Boolean(
+                                                                                v,
+                                                                            ),
+                                                                        )
+                                                                    }
                                                                     aria-label="Critical Working Day"
                                                                 />
                                                             </TableCell>
@@ -699,10 +977,19 @@ export default function BulkCreatePage({ users }: PageProps) {
                                                                         size="icon"
                                                                         className={cn(
                                                                             'h-7 w-7',
-                                                                            isExpanded && 'bg-muted text-foreground',
+                                                                            isExpanded &&
+                                                                                'bg-muted text-foreground',
                                                                         )}
-                                                                        onClick={() => toggleExpand(row.id)}
-                                                                        title={isExpanded ? 'Collapse details' : 'Edit details'}
+                                                                        onClick={() =>
+                                                                            toggleExpand(
+                                                                                row.id,
+                                                                            )
+                                                                        }
+                                                                        title={
+                                                                            isExpanded
+                                                                                ? 'Collapse details'
+                                                                                : 'Edit details'
+                                                                        }
                                                                     >
                                                                         {isExpanded ? (
                                                                             <ChevronUp className="h-3.5 w-3.5" />
@@ -713,8 +1000,12 @@ export default function BulkCreatePage({ users }: PageProps) {
                                                                     <Button
                                                                         variant="ghost"
                                                                         size="icon"
-                                                                        className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                                                        onClick={() => removeRow(row.id)}
+                                                                        className="h-7 w-7 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                                                        onClick={() =>
+                                                                            removeRow(
+                                                                                row.id,
+                                                                            )
+                                                                        }
                                                                         title="Remove row"
                                                                     >
                                                                         <Trash2 className="h-3.5 w-3.5" />
@@ -725,12 +1016,20 @@ export default function BulkCreatePage({ users }: PageProps) {
 
                                                         {/* Errors */}
                                                         {hasError && (
-                                                            <TableRow className="bg-red-50 dark:bg-red-950/20 hover:bg-red-50 dark:hover:bg-red-950/20">
-                                                                <TableCell colSpan={6} className="py-1 px-4">
+                                                            <TableRow className="bg-red-50 hover:bg-red-50 dark:bg-red-950/20 dark:hover:bg-red-950/20">
+                                                                <TableCell
+                                                                    colSpan={6}
+                                                                    className="px-4 py-1"
+                                                                >
                                                                     <div className="flex items-start gap-1.5">
-                                                                        <AlertCircle className="h-3.5 w-3.5 text-red-500 mt-0.5 shrink-0" />
+                                                                        <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-500" />
                                                                         <p className="text-xs text-red-600 dark:text-red-400">
-                                                                            {rowErrors[row.id].join(' ')}
+                                                                            {rowErrors[
+                                                                                row
+                                                                                    .id
+                                                                            ].join(
+                                                                                ' ',
+                                                                            )}
                                                                         </p>
                                                                     </div>
                                                                 </TableCell>
@@ -739,20 +1038,37 @@ export default function BulkCreatePage({ users }: PageProps) {
 
                                                         {/* Expanded detail row */}
                                                         {isExpanded && (
-                                                            <TableRow className="bg-muted/20 border-t-0">
-                                                                <TableCell colSpan={6} className="py-2 px-4 pb-3">
-                                                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pl-1 border-l-2 border-primary/30 ml-1">
+                                                            <TableRow className="border-t-0 bg-muted/20">
+                                                                <TableCell
+                                                                    colSpan={6}
+                                                                    className="px-4 py-2 pb-3"
+                                                                >
+                                                                    <div className="ml-1 flex flex-wrap items-center gap-x-4 gap-y-2 border-l-2 border-primary/30 pl-1">
                                                                         {/* Tardy minutes */}
-                                                                        {row.point_type === 'tardy' && (
-                                                                            <div className="flex items-center gap-1.5 shrink-0">
-                                                                                <Label className="text-xs whitespace-nowrap">Tardy min</Label>
+                                                                        {row.point_type ===
+                                                                            'tardy' && (
+                                                                            <div className="flex shrink-0 items-center gap-1.5">
+                                                                                <Label className="text-xs whitespace-nowrap">
+                                                                                    Tardy
+                                                                                    min
+                                                                                </Label>
                                                                                 <Input
                                                                                     type="number"
                                                                                     min="0"
                                                                                     placeholder="0"
-                                                                                    value={row.tardy_minutes}
-                                                                                    onChange={(e) =>
-                                                                                        updateRow(row.id, 'tardy_minutes', e.target.value)
+                                                                                    value={
+                                                                                        row.tardy_minutes
+                                                                                    }
+                                                                                    onChange={(
+                                                                                        e,
+                                                                                    ) =>
+                                                                                        updateRow(
+                                                                                            row.id,
+                                                                                            'tardy_minutes',
+                                                                                            e
+                                                                                                .target
+                                                                                                .value,
+                                                                                        )
                                                                                     }
                                                                                     className="h-7 w-20 text-xs"
                                                                                 />
@@ -760,52 +1076,102 @@ export default function BulkCreatePage({ users }: PageProps) {
                                                                         )}
 
                                                                         {/* Undertime minutes */}
-                                                                        {(row.point_type === 'undertime' ||
-                                                                            row.point_type === 'undertime_more_than_hour') && (
-                                                                                <div className="flex items-center gap-1.5 shrink-0">
-                                                                                    <Label className="text-xs whitespace-nowrap">
-                                                                                        Undertime min
-                                                                                        <span className="ml-1 text-muted-foreground">
-                                                                                            {row.point_type === 'undertime' ? '(1–60)' : '(61+)'}
-                                                                                        </span>
-                                                                                    </Label>
-                                                                                    <Input
-                                                                                        type="number"
-                                                                                        min={row.point_type === 'undertime_more_than_hour' ? 61 : 1}
-                                                                                        max={row.point_type === 'undertime' ? 60 : undefined}
-                                                                                        placeholder="0"
-                                                                                        value={row.undertime_minutes}
-                                                                                        onChange={(e) =>
-                                                                                            updateRow(row.id, 'undertime_minutes', e.target.value)
-                                                                                        }
-                                                                                        className="h-7 w-20 text-xs"
-                                                                                    />
-                                                                                </div>
-                                                                            )}
+                                                                        {(row.point_type ===
+                                                                            'undertime' ||
+                                                                            row.point_type ===
+                                                                                'undertime_more_than_hour') && (
+                                                                            <div className="flex shrink-0 items-center gap-1.5">
+                                                                                <Label className="text-xs whitespace-nowrap">
+                                                                                    Undertime
+                                                                                    min
+                                                                                    <span className="ml-1 text-muted-foreground">
+                                                                                        {row.point_type ===
+                                                                                        'undertime'
+                                                                                            ? '(1–60)'
+                                                                                            : '(61+)'}
+                                                                                    </span>
+                                                                                </Label>
+                                                                                <Input
+                                                                                    type="number"
+                                                                                    min={
+                                                                                        row.point_type ===
+                                                                                        'undertime_more_than_hour'
+                                                                                            ? 61
+                                                                                            : 1
+                                                                                    }
+                                                                                    max={
+                                                                                        row.point_type ===
+                                                                                        'undertime'
+                                                                                            ? 60
+                                                                                            : undefined
+                                                                                    }
+                                                                                    placeholder="0"
+                                                                                    value={
+                                                                                        row.undertime_minutes
+                                                                                    }
+                                                                                    onChange={(
+                                                                                        e,
+                                                                                    ) =>
+                                                                                        updateRow(
+                                                                                            row.id,
+                                                                                            'undertime_minutes',
+                                                                                            e
+                                                                                                .target
+                                                                                                .value,
+                                                                                        )
+                                                                                    }
+                                                                                    className="h-7 w-20 text-xs"
+                                                                                />
+                                                                            </div>
+                                                                        )}
 
                                                                         {/* Violation details */}
-                                                                        <div className="flex items-center gap-1.5 min-w-40 flex-1">
-                                                                            <Label className="text-xs whitespace-nowrap shrink-0 text-muted-foreground">Details</Label>
+                                                                        <div className="flex min-w-40 flex-1 items-center gap-1.5">
+                                                                            <Label className="shrink-0 text-xs whitespace-nowrap text-muted-foreground">
+                                                                                Details
+                                                                            </Label>
                                                                             <Input
                                                                                 placeholder="Auto-generated if blank"
-                                                                                value={row.violation_details}
-                                                                                onChange={(e) =>
-                                                                                    updateRow(row.id, 'violation_details', e.target.value)
+                                                                                value={
+                                                                                    row.violation_details
                                                                                 }
-                                                                                className="h-7 text-xs min-w-0"
+                                                                                onChange={(
+                                                                                    e,
+                                                                                ) =>
+                                                                                    updateRow(
+                                                                                        row.id,
+                                                                                        'violation_details',
+                                                                                        e
+                                                                                            .target
+                                                                                            .value,
+                                                                                    )
+                                                                                }
+                                                                                className="h-7 min-w-0 text-xs"
                                                                             />
                                                                         </div>
 
                                                                         {/* Notes */}
-                                                                        <div className="flex items-center gap-1.5 min-w-32 flex-1">
-                                                                            <Label className="text-xs whitespace-nowrap shrink-0 text-muted-foreground">Notes</Label>
+                                                                        <div className="flex min-w-32 flex-1 items-center gap-1.5">
+                                                                            <Label className="shrink-0 text-xs whitespace-nowrap text-muted-foreground">
+                                                                                Notes
+                                                                            </Label>
                                                                             <Input
                                                                                 placeholder="Optional"
-                                                                                value={row.notes}
-                                                                                onChange={(e) =>
-                                                                                    updateRow(row.id, 'notes', e.target.value)
+                                                                                value={
+                                                                                    row.notes
                                                                                 }
-                                                                                className="h-7 text-xs min-w-0"
+                                                                                onChange={(
+                                                                                    e,
+                                                                                ) =>
+                                                                                    updateRow(
+                                                                                        row.id,
+                                                                                        'notes',
+                                                                                        e
+                                                                                            .target
+                                                                                            .value,
+                                                                                    )
+                                                                                }
+                                                                                className="h-7 min-w-0 text-xs"
                                                                             />
                                                                         </div>
                                                                     </div>
@@ -820,13 +1186,22 @@ export default function BulkCreatePage({ users }: PageProps) {
                                 </div>
 
                                 {/* Mobile card view */}
-                                <div className="md:hidden space-y-3">
+                                <div className="space-y-3 md:hidden">
                                     {entries.map((row, index) => {
                                         const hasError = !!rowErrors[row.id];
-                                        const isExpanded = expandedRows.has(row.id);
+                                        const isExpanded = expandedRows.has(
+                                            row.id,
+                                        );
                                         return (
-                                            <Card key={row.id} className={cn('shadow-sm', hasError && 'border-red-500')}>
-                                                <CardHeader className="py-3 px-4">
+                                            <Card
+                                                key={row.id}
+                                                className={cn(
+                                                    'shadow-sm',
+                                                    hasError &&
+                                                        'border-red-500',
+                                                )}
+                                            >
+                                                <CardHeader className="px-4 py-3">
                                                     <div className="flex items-center justify-between">
                                                         <span className="text-sm font-medium text-muted-foreground">
                                                             Entry #{index + 1}
@@ -836,58 +1211,115 @@ export default function BulkCreatePage({ users }: PageProps) {
                                                                 variant="ghost"
                                                                 size="icon"
                                                                 className="h-7 w-7"
-                                                                onClick={() => toggleExpand(row.id)}
+                                                                onClick={() =>
+                                                                    toggleExpand(
+                                                                        row.id,
+                                                                    )
+                                                                }
                                                             >
-                                                                {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                                                                {isExpanded ? (
+                                                                    <ChevronUp className="h-4 w-4" />
+                                                                ) : (
+                                                                    <ChevronDown className="h-4 w-4" />
+                                                                )}
                                                             </Button>
                                                             <Button
                                                                 variant="ghost"
                                                                 size="icon"
                                                                 className="h-7 w-7 text-destructive hover:text-destructive"
-                                                                onClick={() => removeRow(row.id)}
+                                                                onClick={() =>
+                                                                    removeRow(
+                                                                        row.id,
+                                                                    )
+                                                                }
                                                             >
                                                                 <Trash2 className="h-4 w-4" />
                                                             </Button>
                                                         </div>
                                                     </div>
                                                 </CardHeader>
-                                                <CardContent className="pb-3 px-4 space-y-3">
+                                                <CardContent className="space-y-3 px-4 pb-3">
                                                     <UserPicker
                                                         users={users}
                                                         value={row.user_id}
-                                                        onChange={(v) => updateRow(row.id, 'user_id', v)}
-                                                        error={hasError && !row.user_id}
+                                                        onChange={(v) =>
+                                                            updateRow(
+                                                                row.id,
+                                                                'user_id',
+                                                                v,
+                                                            )
+                                                        }
+                                                        error={
+                                                            hasError &&
+                                                            !row.user_id
+                                                        }
                                                     />
 
                                                     <DatePicker
                                                         value={row.shift_date}
-                                                        onChange={(v) => updateRow(row.id, 'shift_date', v)}
+                                                        onChange={(v) =>
+                                                            updateRow(
+                                                                row.id,
+                                                                'shift_date',
+                                                                v,
+                                                            )
+                                                        }
                                                         placeholder="Violation date"
                                                     />
 
                                                     <Select
                                                         value={row.point_type}
-                                                        onValueChange={(v) => updateRow(row.id, 'point_type', v as PointType)}
+                                                        onValueChange={(v) =>
+                                                            updateRow(
+                                                                row.id,
+                                                                'point_type',
+                                                                v as PointType,
+                                                            )
+                                                        }
                                                     >
                                                         <SelectTrigger>
                                                             <SelectValue placeholder="Select type" />
                                                         </SelectTrigger>
                                                         <SelectContent>
-                                                            {POINT_TYPE_OPTIONS.map((o) => (
-                                                                <SelectItem key={o.value} value={o.value}>
-                                                                    {o.label}
-                                                                </SelectItem>
-                                                            ))}
+                                                            {POINT_TYPE_OPTIONS.map(
+                                                                (o) => (
+                                                                    <SelectItem
+                                                                        key={
+                                                                            o.value
+                                                                        }
+                                                                        value={
+                                                                            o.value
+                                                                        }
+                                                                    >
+                                                                        {
+                                                                            o.label
+                                                                        }
+                                                                    </SelectItem>
+                                                                ),
+                                                            )}
                                                         </SelectContent>
                                                     </Select>
 
                                                     <div className="flex items-center gap-2">
                                                         <Checkbox
                                                             id={`mob-advised-${row.id}`}
-                                                            checked={row.is_advised}
-                                                            onCheckedChange={(v) => updateRow(row.id, 'is_advised', Boolean(v))}
+                                                            checked={
+                                                                row.is_advised
+                                                            }
+                                                            onCheckedChange={(
+                                                                v,
+                                                            ) =>
+                                                                updateRow(
+                                                                    row.id,
+                                                                    'is_advised',
+                                                                    Boolean(v),
+                                                                )
+                                                            }
                                                         />
-                                                        <Label htmlFor={`mob-advised-${row.id}`} className="text-sm cursor-pointer">
+                                                        <Label
+                                                            htmlFor={`mob-advised-${row.id}`}
+                                                            className="cursor-pointer text-sm"
+                                                        >
                                                             Advised absence
                                                         </Label>
                                                         {row.is_advised && (
@@ -900,66 +1332,155 @@ export default function BulkCreatePage({ users }: PageProps) {
                                                     <div className="flex items-center gap-2">
                                                         <Checkbox
                                                             id={`mob-critical-${row.id}`}
-                                                            checked={row.is_critical_day}
-                                                            onCheckedChange={(v) => updateRow(row.id, 'is_critical_day', Boolean(v))}
+                                                            checked={
+                                                                row.is_critical_day
+                                                            }
+                                                            onCheckedChange={(
+                                                                v,
+                                                            ) =>
+                                                                updateRow(
+                                                                    row.id,
+                                                                    'is_critical_day',
+                                                                    Boolean(v),
+                                                                )
+                                                            }
                                                         />
-                                                        <Label htmlFor={`mob-critical-${row.id}`} className="text-sm cursor-pointer">
-                                                            Critical Working Day (×2)
+                                                        <Label
+                                                            htmlFor={`mob-critical-${row.id}`}
+                                                            className="cursor-pointer text-sm"
+                                                        >
+                                                            Critical Working Day
+                                                            (×2)
                                                         </Label>
                                                     </div>
 
                                                     {hasError && (
-                                                        <div className="flex items-start gap-1.5 bg-red-50 dark:bg-red-950/20 p-2 rounded">
-                                                            <AlertCircle className="h-3.5 w-3.5 text-red-500 mt-0.5 shrink-0" />
+                                                        <div className="flex items-start gap-1.5 rounded bg-red-50 p-2 dark:bg-red-950/20">
+                                                            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-500" />
                                                             <p className="text-xs text-red-600 dark:text-red-400">
-                                                                {rowErrors[row.id].join(' ')}
+                                                                {rowErrors[
+                                                                    row.id
+                                                                ].join(' ')}
                                                             </p>
                                                         </div>
                                                     )}
 
                                                     {isExpanded && (
-                                                        <div className="space-y-2 pt-1 border-t">
-                                                            {row.point_type === 'tardy' && (
+                                                        <div className="space-y-2 border-t pt-1">
+                                                            {row.point_type ===
+                                                                'tardy' && (
                                                                 <div className="space-y-1">
-                                                                    <Label className="text-xs">Tardy minutes</Label>
+                                                                    <Label className="text-xs">
+                                                                        Tardy
+                                                                        minutes
+                                                                    </Label>
                                                                     <Input
                                                                         type="number"
                                                                         min="0"
                                                                         placeholder="Minutes late"
-                                                                        value={row.tardy_minutes}
-                                                                        onChange={(e) => updateRow(row.id, 'tardy_minutes', e.target.value)}
+                                                                        value={
+                                                                            row.tardy_minutes
+                                                                        }
+                                                                        onChange={(
+                                                                            e,
+                                                                        ) =>
+                                                                            updateRow(
+                                                                                row.id,
+                                                                                'tardy_minutes',
+                                                                                e
+                                                                                    .target
+                                                                                    .value,
+                                                                            )
+                                                                        }
                                                                     />
                                                                 </div>
                                                             )}
-                                                            {(row.point_type === 'undertime' || row.point_type === 'undertime_more_than_hour') && (
+                                                            {(row.point_type ===
+                                                                'undertime' ||
+                                                                row.point_type ===
+                                                                    'undertime_more_than_hour') && (
                                                                 <div className="space-y-1">
-                                                                    <Label className="text-xs">Undertime minutes</Label>
+                                                                    <Label className="text-xs">
+                                                                        Undertime
+                                                                        minutes
+                                                                    </Label>
                                                                     <Input
                                                                         type="number"
-                                                                        min={row.point_type === 'undertime_more_than_hour' ? 61 : 1}
-                                                                        max={row.point_type === 'undertime' ? 60 : undefined}
+                                                                        min={
+                                                                            row.point_type ===
+                                                                            'undertime_more_than_hour'
+                                                                                ? 61
+                                                                                : 1
+                                                                        }
+                                                                        max={
+                                                                            row.point_type ===
+                                                                            'undertime'
+                                                                                ? 60
+                                                                                : undefined
+                                                                        }
                                                                         placeholder="Minutes"
-                                                                        value={row.undertime_minutes}
-                                                                        onChange={(e) => updateRow(row.id, 'undertime_minutes', e.target.value)}
+                                                                        value={
+                                                                            row.undertime_minutes
+                                                                        }
+                                                                        onChange={(
+                                                                            e,
+                                                                        ) =>
+                                                                            updateRow(
+                                                                                row.id,
+                                                                                'undertime_minutes',
+                                                                                e
+                                                                                    .target
+                                                                                    .value,
+                                                                            )
+                                                                        }
                                                                     />
                                                                 </div>
                                                             )}
                                                             <div className="space-y-1">
-                                                                <Label className="text-xs">Violation details</Label>
+                                                                <Label className="text-xs">
+                                                                    Violation
+                                                                    details
+                                                                </Label>
                                                                 <Textarea
                                                                     placeholder="Auto-generated if blank"
-                                                                    value={row.violation_details}
-                                                                    onChange={(e) => updateRow(row.id, 'violation_details', e.target.value)}
+                                                                    value={
+                                                                        row.violation_details
+                                                                    }
+                                                                    onChange={(
+                                                                        e,
+                                                                    ) =>
+                                                                        updateRow(
+                                                                            row.id,
+                                                                            'violation_details',
+                                                                            e
+                                                                                .target
+                                                                                .value,
+                                                                        )
+                                                                    }
                                                                     rows={2}
                                                                     className="resize-none text-xs"
                                                                 />
                                                             </div>
                                                             <div className="space-y-1">
-                                                                <Label className="text-xs">Notes</Label>
+                                                                <Label className="text-xs">
+                                                                    Notes
+                                                                </Label>
                                                                 <Textarea
                                                                     placeholder="Optional"
-                                                                    value={row.notes}
-                                                                    onChange={(e) => updateRow(row.id, 'notes', e.target.value)}
+                                                                    value={
+                                                                        row.notes
+                                                                    }
+                                                                    onChange={(
+                                                                        e,
+                                                                    ) =>
+                                                                        updateRow(
+                                                                            row.id,
+                                                                            'notes',
+                                                                            e
+                                                                                .target
+                                                                                .value,
+                                                                        )
+                                                                    }
                                                                     rows={2}
                                                                     className="resize-none text-xs"
                                                                 />
@@ -973,9 +1494,13 @@ export default function BulkCreatePage({ users }: PageProps) {
                                 </div>
 
                                 {/* Bottom submit bar */}
-                                <div className="flex items-center justify-between p-4 rounded-lg border bg-card">
+                                <div className="flex items-center justify-between rounded-lg border bg-card p-4">
                                     <div className="text-sm text-muted-foreground">
-                                        <span className="font-semibold text-foreground">{entries.length}</span> entr{entries.length === 1 ? 'y' : 'ies'} ·{' '}
+                                        <span className="font-semibold text-foreground">
+                                            {entries.length}
+                                        </span>{' '}
+                                        entr{entries.length === 1 ? 'y' : 'ies'}{' '}
+                                        ·{' '}
                                         <span className="font-semibold text-red-600 dark:text-red-400">
                                             {totalPoints.toFixed(2)} pts total
                                         </span>
@@ -983,15 +1508,22 @@ export default function BulkCreatePage({ users }: PageProps) {
                                     <div className="flex gap-2">
                                         <Button
                                             variant="outline"
-                                            onClick={() => router.visit(attendancePointsIndex().url)}
+                                            onClick={() =>
+                                                router.visit(
+                                                    attendancePointsIndex().url,
+                                                )
+                                            }
                                             disabled={submitting}
                                         >
-                                            <ArrowLeft className="h-4 w-4 mr-1" />
+                                            <ArrowLeft className="mr-1 h-4 w-4" />
                                             Cancel
                                         </Button>
                                         <Button
                                             onClick={handleSubmit}
-                                            disabled={submitting || entries.length === 0}
+                                            disabled={
+                                                submitting ||
+                                                entries.length === 0
+                                            }
                                             className="gap-2"
                                         >
                                             {submitting ? (
@@ -999,7 +1531,8 @@ export default function BulkCreatePage({ users }: PageProps) {
                                             ) : (
                                                 <Check className="h-4 w-4" />
                                             )}
-                                            Submit {entries.length} point{entries.length !== 1 ? 's' : ''}
+                                            Submit {entries.length} point
+                                            {entries.length !== 1 ? 's' : ''}
                                         </Button>
                                     </div>
                                 </div>
@@ -1013,29 +1546,56 @@ export default function BulkCreatePage({ users }: PageProps) {
             <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Confirm Bulk Submission</AlertDialogTitle>
+                        <AlertDialogTitle>
+                            Confirm Bulk Submission
+                        </AlertDialogTitle>
                         <AlertDialogDescription asChild>
                             <div className="space-y-3">
                                 <p>
-                                    You are about to create <strong>{entries.length}</strong> attendance point
-                                    {entries.length !== 1 ? 's' : ''} totalling{' '}
-                                    <strong className="text-red-600 dark:text-red-400">{totalPoints.toFixed(2)} pts</strong>.
+                                    You are about to create{' '}
+                                    <strong>{entries.length}</strong> attendance
+                                    point
+                                    {entries.length !== 1
+                                        ? 's'
+                                        : ''} totalling{' '}
+                                    <strong className="text-red-600 dark:text-red-400">
+                                        {totalPoints.toFixed(2)} pts
+                                    </strong>
+                                    .
                                 </p>
                                 <p className="text-sm">
-                                    Each affected employee will be notified. Existing active points for the same employee
+                                    Each affected employee will be notified.
+                                    Existing active points for the same employee
                                     and date will be replaced.
                                 </p>
-                                <div className="max-h-48 overflow-y-auto rounded border bg-muted/50 p-2 space-y-1 text-xs">
+                                <div className="max-h-48 space-y-1 overflow-y-auto rounded border bg-muted/50 p-2 text-xs">
                                     {entries.map((row) => {
-                                        const user = users.find((u) => String(u.id) === row.user_id);
-                                        const label = POINT_TYPE_OPTIONS.find((o) => o.value === row.point_type)?.label ?? row.point_type;
+                                        const user = users.find(
+                                            (u) => String(u.id) === row.user_id,
+                                        );
+                                        const label =
+                                            POINT_TYPE_OPTIONS.find(
+                                                (o) =>
+                                                    o.value === row.point_type,
+                                            )?.label ?? row.point_type;
                                         return (
-                                            <div key={row.id} className="flex justify-between gap-2">
-                                                <span className="font-medium truncate">
-                                                    {user ? formatUserName(user) : 'Unknown'}
+                                            <div
+                                                key={row.id}
+                                                className="flex justify-between gap-2"
+                                            >
+                                                <span className="truncate font-medium">
+                                                    {user
+                                                        ? formatUserName(user)
+                                                        : 'Unknown'}
                                                 </span>
-                                                <span className="text-muted-foreground shrink-0">
-                                                    {row.shift_date} · {label}{row.is_advised ? ' · Advised' : ''}{row.is_critical_day ? ' · ×2 Critical' : ''}
+                                                <span className="shrink-0 text-muted-foreground">
+                                                    {row.shift_date} · {label}
+                                                    {row.is_advised
+                                                        ? ' · Advised'
+                                                        : ''}
+                                                    {row.is_critical_day
+                                                        ? ' · ×2 Critical'
+                                                        : ''}
                                                 </span>
                                             </div>
                                         );

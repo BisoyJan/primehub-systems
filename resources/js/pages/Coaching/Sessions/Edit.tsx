@@ -1,26 +1,26 @@
-import React, { useState, useCallback } from 'react';
-import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { ArrowLeft, SendHorizontal } from 'lucide-react';
+import React, { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 
-import AppLayout from '@/layouts/app-layout';
-import { Button } from '@/components/ui/button';
-import { PageHeader } from '@/components/PageHeader';
-import { LoadingOverlay } from '@/components/LoadingOverlay';
-import { usePageMeta, useFlashMessage, usePageLoading } from '@/hooks';
 import { CoachingFormFields } from '@/components/coaching/CoachingFormFields';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { PageHeader } from '@/components/PageHeader';
+import { Button } from '@/components/ui/button';
+import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
+import AppLayout from '@/layouts/app-layout';
 import { formatDate } from '@/lib/utils';
 
 import {
+    attachment as sessionsAttachment,
     index as sessionsIndex,
     show as sessionsShow,
-    update as sessionsUpdate,
     submit as sessionsSubmit,
-    attachment as sessionsAttachment,
+    update as sessionsUpdate,
 } from '@/routes/coaching/sessions';
 
-import type { CoachingSession, CoachingPurposeLabels } from '@/types';
+import type { CoachingPurposeLabels, CoachingSession } from '@/types';
 
 interface Props extends InertiaPageProps {
     session: CoachingSession;
@@ -43,12 +43,15 @@ export default function CoachingSessionsEdit() {
     const isPageLoading = usePageLoading();
 
     const { data, setData, put, patch, errors, processing } = useForm({
-        session_date: session.session_date ? session.session_date.split('T')[0] : '',
+        session_date: session.session_date
+            ? session.session_date.split('T')[0]
+            : '',
         // Agent Profile
         profile_new_hire: session.profile_new_hire,
         profile_tenured: session.profile_tenured,
         profile_returning: session.profile_returning,
-        profile_previously_coached_same_issue: session.profile_previously_coached_same_issue,
+        profile_previously_coached_same_issue:
+            session.profile_previously_coached_same_issue,
         // Purpose
         purpose: session.purpose,
         // Focus Areas
@@ -66,7 +69,8 @@ export default function CoachingSessionsEdit() {
         root_cause_lack_of_skills: session.root_cause_lack_of_skills,
         root_cause_lack_of_clarity: session.root_cause_lack_of_clarity,
         root_cause_personal_issues: session.root_cause_personal_issues,
-        root_cause_motivation_engagement: session.root_cause_motivation_engagement,
+        root_cause_motivation_engagement:
+            session.root_cause_motivation_engagement,
         root_cause_health_fatigue: session.root_cause_health_fatigue,
         root_cause_workload_process: session.root_cause_workload_process,
         root_cause_peer_conflict: session.root_cause_peer_conflict,
@@ -81,21 +85,34 @@ export default function CoachingSessionsEdit() {
         removed_attachments: [] as number[],
     });
 
-    const [removedAttachmentIds, setRemovedAttachmentIds] = useState<number[]>([]);
+    const [removedAttachmentIds, setRemovedAttachmentIds] = useState<number[]>(
+        [],
+    );
 
-    const handleRemoveExistingAttachment = useCallback((id: number) => {
-        setRemovedAttachmentIds((prev) => {
-            const updated = [...prev, id];
-            setData('removed_attachments', updated);
-            return updated;
-        });
-    }, [setData]);
+    const handleRemoveExistingAttachment = useCallback(
+        (id: number) => {
+            setRemovedAttachmentIds((prev) => {
+                const updated = [...prev, id];
+                setData('removed_attachments', updated);
+                return updated;
+            });
+        },
+        [setData],
+    );
 
-    const getAttachmentViewUrl = useCallback((sessionId: number, attachmentId: number) => {
-        return sessionsAttachment.url({ session: sessionId, attachment: attachmentId });
-    }, []);
+    const getAttachmentViewUrl = useCallback(
+        (sessionId: number, attachmentId: number) => {
+            return sessionsAttachment.url({
+                session: sessionId,
+                attachment: attachmentId,
+            });
+        },
+        [],
+    );
 
-    const formatName = (user?: { first_name: string; last_name: string } | null) => {
+    const formatName = (
+        user?: { first_name: string; last_name: string } | null,
+    ) => {
         if (!user) return 'N/A';
         return `${user.first_name} ${user.last_name}`;
     };
@@ -112,10 +129,17 @@ export default function CoachingSessionsEdit() {
     const handleSubmitDraft = () => {
         // Frontend precheck for required fields before server round-trip
         const missing: string[] = [];
-        if (!data.performance_description || data.performance_description.replace(/<[^>]*>/g, '').trim().length < 10) {
+        if (
+            !data.performance_description ||
+            data.performance_description.replace(/<[^>]*>/g, '').trim().length <
+                10
+        ) {
             missing.push('Performance Description (min 10 characters)');
         }
-        if (!data.smart_action_plan || data.smart_action_plan.replace(/<[^>]*>/g, '').trim().length < 10) {
+        if (
+            !data.smart_action_plan ||
+            data.smart_action_plan.replace(/<[^>]*>/g, '').trim().length < 10
+        ) {
             missing.push('SMART Action Plan (min 10 characters)');
         }
         if (!data.purpose) {
@@ -124,13 +148,35 @@ export default function CoachingSessionsEdit() {
         if (!data.session_date) {
             missing.push('Session Date');
         }
-        if (!data.profile_new_hire && !data.profile_tenured && !data.profile_returning && !data.profile_previously_coached_same_issue) {
+        if (
+            !data.profile_new_hire &&
+            !data.profile_tenured &&
+            !data.profile_returning &&
+            !data.profile_previously_coached_same_issue
+        ) {
             missing.push('Agent Profile (select at least one)');
         }
-        if (!data.focus_attendance_tardiness && !data.focus_productivity && !data.focus_compliance && !data.focus_callouts && !data.focus_recognition_milestones && !data.focus_growth_development && !data.focus_other) {
+        if (
+            !data.focus_attendance_tardiness &&
+            !data.focus_productivity &&
+            !data.focus_compliance &&
+            !data.focus_callouts &&
+            !data.focus_recognition_milestones &&
+            !data.focus_growth_development &&
+            !data.focus_other
+        ) {
             missing.push('Focus Area (select at least one)');
         }
-        if (!data.root_cause_lack_of_skills && !data.root_cause_lack_of_clarity && !data.root_cause_personal_issues && !data.root_cause_motivation_engagement && !data.root_cause_health_fatigue && !data.root_cause_workload_process && !data.root_cause_peer_conflict && !data.root_cause_others) {
+        if (
+            !data.root_cause_lack_of_skills &&
+            !data.root_cause_lack_of_clarity &&
+            !data.root_cause_personal_issues &&
+            !data.root_cause_motivation_engagement &&
+            !data.root_cause_health_fatigue &&
+            !data.root_cause_workload_process &&
+            !data.root_cause_peer_conflict &&
+            !data.root_cause_others
+        ) {
             missing.push('Root Cause (select at least one)');
         }
         if (missing.length > 0) {
@@ -152,7 +198,10 @@ export default function CoachingSessionsEdit() {
             <Head title={title} />
 
             <div className="relative mx-auto flex w-full max-w-4xl flex-col gap-4 rounded-xl p-3 md:p-6">
-                <LoadingOverlay isLoading={isPageLoading || processing} message={processing ? 'Updating session...' : undefined} />
+                <LoadingOverlay
+                    isLoading={isPageLoading || processing}
+                    message={processing ? 'Updating session...' : undefined}
+                />
 
                 <PageHeader
                     title="Edit Coaching Session"
@@ -177,7 +226,9 @@ export default function CoachingSessionsEdit() {
                         showAgentSelect={false}
                         existingAttachments={session.attachments ?? []}
                         removedAttachmentIds={removedAttachmentIds}
-                        onRemoveExistingAttachment={handleRemoveExistingAttachment}
+                        onRemoveExistingAttachment={
+                            handleRemoveExistingAttachment
+                        }
                         attachmentViewUrl={getAttachmentViewUrl}
                     />
 
@@ -187,18 +238,28 @@ export default function CoachingSessionsEdit() {
                                 Cancel
                             </Button>
                         </Link>
-                        <Button type="submit" disabled={processing || submittingDraft} className="bg-blue-600 hover:bg-blue-700 text-white">
-                            {processing ? 'Updating...' : session.is_draft ? 'Save Draft' : 'Update Coaching Session'}
+                        <Button
+                            type="submit"
+                            disabled={processing || submittingDraft}
+                            className="bg-blue-600 text-white hover:bg-blue-700"
+                        >
+                            {processing
+                                ? 'Updating...'
+                                : session.is_draft
+                                  ? 'Save Draft'
+                                  : 'Update Coaching Session'}
                         </Button>
                         {session.is_draft && (
                             <Button
                                 type="button"
                                 disabled={processing || submittingDraft}
                                 onClick={handleSubmitDraft}
-                                className="bg-green-600 hover:bg-green-700 text-white"
+                                className="bg-green-600 text-white hover:bg-green-700"
                             >
                                 <SendHorizontal className="mr-2 h-4 w-4" />
-                                {submittingDraft ? 'Submitting...' : 'Submit Coaching Session'}
+                                {submittingDraft
+                                    ? 'Submitting...'
+                                    : 'Submit Coaching Session'}
                             </Button>
                         )}
                     </div>

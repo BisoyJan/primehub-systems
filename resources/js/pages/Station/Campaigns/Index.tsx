@@ -1,26 +1,39 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Head, router } from '@inertiajs/react';
+import { Can } from '@/components/authorization';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { PageHeader } from '@/components/PageHeader';
+import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Switch } from '@/components/ui/switch';
-import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import AppLayout from '@/layouts/app-layout';
-import { Label } from '@/components/ui/label';
-import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
-import { Can } from '@/components/authorization';
-import { PageHeader } from '@/components/PageHeader';
-import { LoadingOverlay } from '@/components/LoadingOverlay';
-import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
-import { Search, RefreshCw, Plus, Filter, Play, Pause } from 'lucide-react';
 import {
+    Dialog,
+    DialogContent,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table';
+import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
+import AppLayout from '@/layouts/app-layout';
+import {
+    destroy as campaignsDestroyRoute,
     index as campaignsIndexRoute,
     store as campaignsStoreRoute,
     update as campaignsUpdateRoute,
-    destroy as campaignsDestroyRoute,
 } from '@/routes/campaigns';
 import { index as stationsIndexRoute } from '@/routes/stations';
+import { Head, router } from '@inertiajs/react';
+import { Filter, Pause, Play, Plus, RefreshCw, Search } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 interface Campaign {
     id: number;
@@ -60,7 +73,10 @@ interface CampaignPageProps {
     filters?: Filters;
 }
 
-export default function CampaignManagement({ campaigns, filters = {} }: CampaignPageProps) {
+export default function CampaignManagement({
+    campaigns,
+    filters = {},
+}: CampaignPageProps) {
     const { title, breadcrumbs } = usePageMeta({
         title: 'Campaign Management',
         breadcrumbs: [
@@ -78,26 +94,38 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
     const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
 
     const [isDialogOpen, setIsDialogOpen] = useState(false);
-    const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
+    const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(
+        null,
+    );
     const [formName, setFormName] = useState('');
     const [formAllowsWeekendLeave, setFormAllowsWeekendLeave] = useState(false);
     const [formError, setFormError] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-    const [campaignPendingDelete, setCampaignPendingDelete] = useState<Campaign | null>(null);
+    const [campaignPendingDelete, setCampaignPendingDelete] =
+        useState<Campaign | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
 
     const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
-    const [assignmentCampaign, setAssignmentCampaign] = useState<Campaign | null>(null);
-    const [assignmentTeamLeads, setAssignmentTeamLeads] = useState<TeamLeadOption[]>([]);
+    const [assignmentCampaign, setAssignmentCampaign] =
+        useState<Campaign | null>(null);
+    const [assignmentTeamLeads, setAssignmentTeamLeads] = useState<
+        TeamLeadOption[]
+    >([]);
     const [assignmentAgents, setAssignmentAgents] = useState<AgentOption[]>([]);
-    const [assignmentMap, setAssignmentMap] = useState<Record<number, number[]>>({});
-    const [initialAssignmentMap, setInitialAssignmentMap] = useState<Record<number, number[]>>({});
+    const [assignmentMap, setAssignmentMap] = useState<
+        Record<number, number[]>
+    >({});
+    const [initialAssignmentMap, setInitialAssignmentMap] = useState<
+        Record<number, number[]>
+    >({});
     const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
     const [leadSearch, setLeadSearch] = useState('');
     const [agentSearch, setAgentSearch] = useState('');
-    const [agentFilter, setAgentFilter] = useState<'all' | 'assigned' | 'unassigned'>('all');
+    const [agentFilter, setAgentFilter] = useState<
+        'all' | 'assigned' | 'unassigned'
+    >('all');
     const [assignmentError, setAssignmentError] = useState<string | null>(null);
     const [isAssignmentLoading, setIsAssignmentLoading] = useState(false);
     const [isAssignmentSaving, setIsAssignmentSaving] = useState(false);
@@ -149,7 +177,9 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
                 replace: true,
                 only: ['campaigns'],
                 onSuccess: () => setLastRefresh(new Date()),
-                onFinish: () => { isPollingRef.current = false; },
+                onFinish: () => {
+                    isPollingRef.current = false;
+                },
             });
         }, 30000);
 
@@ -216,18 +246,25 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
             return;
         }
 
-        const isDuplicate = campaigns.data.some((campaign) =>
-            campaign.name.toLowerCase() === trimmedName.toLowerCase() && campaign.id !== editingCampaign?.id
+        const isDuplicate = campaigns.data.some(
+            (campaign) =>
+                campaign.name.toLowerCase() === trimmedName.toLowerCase() &&
+                campaign.id !== editingCampaign?.id,
         );
 
         if (isDuplicate) {
-            setFormError(`A campaign with the name "${trimmedName}" already exists.`);
+            setFormError(
+                `A campaign with the name "${trimmedName}" already exists.`,
+            );
             return;
         }
 
         setIsSubmitting(true);
 
-        const payload = { name: trimmedName, allows_weekend_leave: formAllowsWeekendLeave };
+        const payload = {
+            name: trimmedName,
+            allows_weekend_leave: formAllowsWeekendLeave,
+        };
         const requestOptions = {
             preserveState: true,
             preserveScroll: true,
@@ -238,14 +275,22 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
             },
             onError: (errors: Record<string, string | string[]>) => {
                 if (errors.name) {
-                    setFormError(Array.isArray(errors.name) ? errors.name[0] : errors.name);
+                    setFormError(
+                        Array.isArray(errors.name)
+                            ? errors.name[0]
+                            : errors.name,
+                    );
                 }
             },
             onFinish: () => setIsSubmitting(false),
         } as const;
 
         if (editingCampaign) {
-            router.put(campaignsUpdateRoute(editingCampaign.id).url, payload, requestOptions);
+            router.put(
+                campaignsUpdateRoute(editingCampaign.id).url,
+                payload,
+                requestOptions,
+            );
         } else {
             router.post(campaignsStoreRoute().url, payload, requestOptions);
         }
@@ -267,38 +312,55 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
         });
     };
 
-    const normalizeAssignmentMap = useCallback((map: Record<number, number[]>) => {
-        const normalized: Record<number, number[]> = {};
+    const normalizeAssignmentMap = useCallback(
+        (map: Record<number, number[]>) => {
+            const normalized: Record<number, number[]> = {};
 
-        Object.entries(map ?? {}).forEach(([teamLeadId, agentIds]) => {
-            const ids = [...new Set((agentIds ?? []).map((id) => Number(id)).filter((id) => Number.isFinite(id)))].sort((a, b) => a - b);
-            if (ids.length > 0) {
-                normalized[Number(teamLeadId)] = ids;
-            }
-        });
+            Object.entries(map ?? {}).forEach(([teamLeadId, agentIds]) => {
+                const ids = [
+                    ...new Set(
+                        (agentIds ?? [])
+                            .map((id) => Number(id))
+                            .filter((id) => Number.isFinite(id)),
+                    ),
+                ].sort((a, b) => a - b);
+                if (ids.length > 0) {
+                    normalized[Number(teamLeadId)] = ids;
+                }
+            });
 
-        return normalized;
-    }, []);
+            return normalized;
+        },
+        [],
+    );
 
     const assignmentHasChanges = useMemo(() => {
         const normalizedCurrent = normalizeAssignmentMap(assignmentMap);
         const normalizedInitial = normalizeAssignmentMap(initialAssignmentMap);
 
-        return JSON.stringify(normalizedCurrent) !== JSON.stringify(normalizedInitial);
+        return (
+            JSON.stringify(normalizedCurrent) !==
+            JSON.stringify(normalizedInitial)
+        );
     }, [assignmentMap, initialAssignmentMap, normalizeAssignmentMap]);
 
     const filteredTeamLeads = useMemo(() => {
         const query = leadSearch.trim().toLowerCase();
 
-        return assignmentTeamLeads.filter((teamLead) => !query || teamLead.name.toLowerCase().includes(query));
+        return assignmentTeamLeads.filter(
+            (teamLead) => !query || teamLead.name.toLowerCase().includes(query),
+        );
     }, [assignmentTeamLeads, leadSearch]);
 
     const filteredAgents = useMemo(() => {
         const query = agentSearch.trim().toLowerCase();
 
         return assignmentAgents.filter((agent) => {
-            const matchesQuery = !query || agent.name.toLowerCase().includes(query);
-            const currentLeadAssignments = selectedLeadId ? assignmentMap[selectedLeadId] ?? [] : [];
+            const matchesQuery =
+                !query || agent.name.toLowerCase().includes(query);
+            const currentLeadAssignments = selectedLeadId
+                ? (assignmentMap[selectedLeadId] ?? [])
+                : [];
             const isAssigned = currentLeadAssignments.includes(agent.id);
 
             if (agentFilter === 'assigned' && !isAssigned) {
@@ -311,16 +373,29 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
 
             return matchesQuery;
         });
-    }, [agentFilter, agentSearch, assignmentAgents, assignmentMap, selectedLeadId]);
+    }, [
+        agentFilter,
+        agentSearch,
+        assignmentAgents,
+        assignmentMap,
+        selectedLeadId,
+    ]);
 
-    const selectedLead = assignmentTeamLeads.find((teamLead) => teamLead.id === selectedLeadId) ?? null;
-    const selectedLeadAssignments = selectedLead ? assignmentMap[selectedLead.id] ?? [] : [];
+    const selectedLead =
+        assignmentTeamLeads.find(
+            (teamLead) => teamLead.id === selectedLeadId,
+        ) ?? null;
+    const selectedLeadAssignments = selectedLead
+        ? (assignmentMap[selectedLead.id] ?? [])
+        : [];
     const totalAgentsCount = assignmentAgents.length;
     const agentLeadNameMap = useMemo(() => {
         const map: Record<number, string[]> = {};
 
         Object.entries(assignmentMap).forEach(([teamLeadId, agentIds]) => {
-            const teamLead = assignmentTeamLeads.find((item) => item.id === Number(teamLeadId));
+            const teamLead = assignmentTeamLeads.find(
+                (item) => item.id === Number(teamLeadId),
+            );
             if (!teamLead) {
                 return;
             }
@@ -337,7 +412,11 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
         return map;
     }, [assignmentMap, assignmentTeamLeads]);
     const totalAssignedCount = useMemo(
-        () => Object.values(assignmentMap).reduce((total, agentIds) => total + agentIds.length, 0),
+        () =>
+            Object.values(assignmentMap).reduce(
+                (total, agentIds) => total + agentIds.length,
+                0,
+            ),
         [assignmentMap],
     );
 
@@ -351,17 +430,20 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
         setIsAssignmentLoading(true);
 
         try {
-            const response = await fetch(`/campaigns/${campaign.id}/team-assignments`, {
-                headers: {
-                    Accept: 'application/json',
+            const response = await fetch(
+                `/campaigns/${campaign.id}/team-assignments`,
+                {
+                    headers: {
+                        Accept: 'application/json',
+                    },
                 },
-            });
+            );
 
             if (!response.ok) {
                 throw new Error('Failed to load team assignments');
             }
 
-            const payload = await response.json() as {
+            const payload = (await response.json()) as {
                 teamLeads: TeamLeadOption[];
                 agents: AgentOption[];
                 assignments: Record<string, number[]>;
@@ -369,7 +451,12 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
 
             const normalized = normalizeAssignmentMap(
                 Object.fromEntries(
-                    Object.entries(payload.assignments ?? {}).map(([teamLeadId, agentIds]) => [Number(teamLeadId), agentIds ?? []]),
+                    Object.entries(payload.assignments ?? {}).map(
+                        ([teamLeadId, agentIds]) => [
+                            Number(teamLeadId),
+                            agentIds ?? [],
+                        ],
+                    ),
                 ) as Record<number, number[]>,
             );
 
@@ -377,7 +464,7 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
             setAssignmentAgents(payload.agents ?? []);
             setAssignmentMap(normalized);
             setInitialAssignmentMap(normalized);
-            setSelectedLeadId((payload.teamLeads?.[0]?.id) ?? null);
+            setSelectedLeadId(payload.teamLeads?.[0]?.id ?? null);
             setAssignmentError(null);
         } catch {
             setAssignmentTeamLeads([]);
@@ -385,7 +472,9 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
             setAssignmentMap({});
             setInitialAssignmentMap({});
             setSelectedLeadId(null);
-            setAssignmentError('Unable to load team assignments. Please try again.');
+            setAssignmentError(
+                'Unable to load team assignments. Please try again.',
+            );
         } finally {
             setIsAssignmentLoading(false);
         }
@@ -412,19 +501,28 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
 
             return {
                 ...prev,
-                [teamLeadId]: exists ? current.filter((id) => id !== agentId) : [...current, agentId].sort((a, b) => a - b),
+                [teamLeadId]: exists
+                    ? current.filter((id) => id !== agentId)
+                    : [...current, agentId].sort((a, b) => a - b),
             };
         });
     };
 
-    const toggleVisibleAgentsForLead = (teamLeadId: number, shouldSelect: boolean) => {
+    const toggleVisibleAgentsForLead = (
+        teamLeadId: number,
+        shouldSelect: boolean,
+    ) => {
         const visibleAgentIds = filteredAgents.map((agent) => agent.id);
 
         setAssignmentMap((prev) => {
             const current = prev[teamLeadId] ?? [];
             const next = shouldSelect
-                ? [...new Set([...current, ...visibleAgentIds])].sort((a, b) => a - b)
-                : current.filter((agentId) => !visibleAgentIds.includes(agentId));
+                ? [...new Set([...current, ...visibleAgentIds])].sort(
+                      (a, b) => a - b,
+                  )
+                : current.filter(
+                      (agentId) => !visibleAgentIds.includes(agentId),
+                  );
 
             return {
                 ...prev,
@@ -433,12 +531,17 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
         });
     };
 
-    const toggleAllAgentsForLead = (teamLeadId: number, shouldSelect: boolean) => {
+    const toggleAllAgentsForLead = (
+        teamLeadId: number,
+        shouldSelect: boolean,
+    ) => {
         setAssignmentMap((prev) => {
             const current = prev[teamLeadId] ?? [];
             const allAgentIds = assignmentAgents.map((agent) => agent.id);
             const next = shouldSelect
-                ? [...new Set([...current, ...allAgentIds])].sort((a, b) => a - b)
+                ? [...new Set([...current, ...allAgentIds])].sort(
+                      (a, b) => a - b,
+                  )
                 : [];
 
             return {
@@ -466,7 +569,9 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
                     setLastRefresh(new Date());
                 },
                 onError: () => {
-                    setAssignmentError('Unable to save team assignments. Please try again.');
+                    setAssignmentError(
+                        'Unable to save team assignments. Please try again.',
+                    );
                 },
                 onFinish: () => setIsAssignmentSaving(false),
             },
@@ -482,8 +587,12 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
 
     const paginationLinks = campaigns.links || [];
     const hasResults = campaigns.data.length > 0;
-    const showingStart = hasResults ? paginationMeta.per_page * (paginationMeta.current_page - 1) + 1 : 0;
-    const showingEnd = hasResults ? showingStart + campaigns.data.length - 1 : 0;
+    const showingStart = hasResults
+        ? paginationMeta.per_page * (paginationMeta.current_page - 1) + 1
+        : 0;
+    const showingEnd = hasResults
+        ? showingStart + campaigns.data.length - 1
+        : 0;
     const summaryText = hasResults
         ? `Showing ${showingStart}-${showingEnd} of ${paginationMeta.total} campaigns`
         : 'No campaigns to display';
@@ -492,7 +601,7 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={title} />
 
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3 relative">
+            <div className="relative flex h-full flex-1 flex-col gap-4 rounded-xl p-3">
                 <LoadingOverlay isLoading={isPageLoading || isFilterLoading} />
 
                 <PageHeader
@@ -501,48 +610,86 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
                 />
 
                 <div className="flex flex-col gap-4">
-                    <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
-                        <div className="w-full sm:w-auto flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+                        <div className="grid w-full flex-1 grid-cols-1 gap-3 sm:w-auto sm:grid-cols-2 lg:grid-cols-4">
                             <div className="relative">
-                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Search className="absolute top-2.5 left-2.5 h-4 w-4 text-muted-foreground" />
                                 <Input
                                     placeholder="Search campaigns by name..."
                                     value={search}
-                                    onChange={(event) => setSearch(event.target.value)}
-                                    onKeyDown={(event) => event.key === 'Enter' && handleApplyFilters()}
+                                    onChange={(event) =>
+                                        setSearch(event.target.value)
+                                    }
+                                    onKeyDown={(event) =>
+                                        event.key === 'Enter' &&
+                                        handleApplyFilters()
+                                    }
                                     className="pl-8"
                                 />
                             </div>
                         </div>
 
-                        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-                            <Button variant="outline" onClick={handleApplyFilters} disabled={isFilterLoading} className="flex-1 sm:flex-none">
+                        <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+                            <Button
+                                variant="outline"
+                                onClick={handleApplyFilters}
+                                disabled={isFilterLoading}
+                                className="flex-1 sm:flex-none"
+                            >
                                 <Filter className="mr-2 h-4 w-4" />
                                 Filter
                             </Button>
 
                             {showClearFilters && (
-                                <Button variant="outline" onClick={handleClearFilters} disabled={isFilterLoading} className="flex-1 sm:flex-none">
+                                <Button
+                                    variant="outline"
+                                    onClick={handleClearFilters}
+                                    disabled={isFilterLoading}
+                                    className="flex-1 sm:flex-none"
+                                >
                                     Reset
                                 </Button>
                             )}
 
                             <div className="flex gap-2">
-                                <Button variant="ghost" size="icon" onClick={handleManualRefresh} disabled={isFilterLoading} title="Refresh">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={handleManualRefresh}
+                                    disabled={isFilterLoading}
+                                    title="Refresh"
+                                >
                                     <RefreshCw className="h-4 w-4" />
                                 </Button>
                                 <Button
-                                    variant={autoRefreshEnabled ? "default" : "ghost"}
+                                    variant={
+                                        autoRefreshEnabled ? 'default' : 'ghost'
+                                    }
                                     size="icon"
-                                    onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
-                                    title={autoRefreshEnabled ? "Disable auto-refresh" : "Enable auto-refresh (30s)"}
+                                    onClick={() =>
+                                        setAutoRefreshEnabled(
+                                            !autoRefreshEnabled,
+                                        )
+                                    }
+                                    title={
+                                        autoRefreshEnabled
+                                            ? 'Disable auto-refresh'
+                                            : 'Enable auto-refresh (30s)'
+                                    }
                                 >
-                                    {autoRefreshEnabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                                    {autoRefreshEnabled ? (
+                                        <Pause className="h-4 w-4" />
+                                    ) : (
+                                        <Play className="h-4 w-4" />
+                                    )}
                                 </Button>
                             </div>
 
                             <Can permission="campaigns.create">
-                                <Button onClick={openCreateDialog} className="flex-1 sm:flex-none">
+                                <Button
+                                    onClick={openCreateDialog}
+                                    className="flex-1 sm:flex-none"
+                                >
                                     <Plus className="mr-2 h-4 w-4" />
                                     Add Campaign
                                 </Button>
@@ -550,12 +697,16 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
                         </div>
                     </div>
 
-                    <div className="flex justify-between items-center text-sm">
+                    <div className="flex items-center justify-between text-sm">
                         <div className="text-muted-foreground">
                             {summaryText}
-                            {showClearFilters && hasResults ? ' (filtered)' : ''}
+                            {showClearFilters && hasResults
+                                ? ' (filtered)'
+                                : ''}
                         </div>
-                        <div className="text-xs text-muted-foreground">Last updated: {lastRefresh.toLocaleTimeString()}</div>
+                        <div className="text-xs text-muted-foreground">
+                            Last updated: {lastRefresh.toLocaleTimeString()}
+                        </div>
                     </div>
                 </div>
 
@@ -567,13 +718,18 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
                                     <TableHead>ID</TableHead>
                                     <TableHead>Name</TableHead>
                                     <TableHead>Weekend Leave</TableHead>
-                                    <TableHead className="text-right">Actions</TableHead>
+                                    <TableHead className="text-right">
+                                        Actions
+                                    </TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {!hasResults ? (
                                     <TableRow>
-                                        <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
+                                        <TableCell
+                                            colSpan={4}
+                                            className="py-8 text-center text-muted-foreground"
+                                        >
                                             No campaigns found
                                         </TableCell>
                                     </TableRow>
@@ -581,12 +737,18 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
                                     campaigns.data.map((campaign) => (
                                         <TableRow key={campaign.id}>
                                             <TableCell>{campaign.id}</TableCell>
-                                            <TableCell className="font-medium">{campaign.name}</TableCell>
+                                            <TableCell className="font-medium">
+                                                {campaign.name}
+                                            </TableCell>
                                             <TableCell>
                                                 {campaign.allows_weekend_leave ? (
-                                                    <span className="text-xs font-medium text-emerald-600">Yes</span>
+                                                    <span className="text-xs font-medium text-emerald-600">
+                                                        Yes
+                                                    </span>
                                                 ) : (
-                                                    <span className="text-xs text-muted-foreground">No</span>
+                                                    <span className="text-xs text-muted-foreground">
+                                                        No
+                                                    </span>
                                                 )}
                                             </TableCell>
                                             <TableCell className="text-right">
@@ -595,14 +757,22 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
                                                         <Button
                                                             variant="outline"
                                                             size="sm"
-                                                            onClick={() => openEditDialog(campaign)}
+                                                            onClick={() =>
+                                                                openEditDialog(
+                                                                    campaign,
+                                                                )
+                                                            }
                                                         >
                                                             Edit
                                                         </Button>
                                                         <Button
                                                             variant="outline"
                                                             size="sm"
-                                                            onClick={() => openAssignmentDialog(campaign)}
+                                                            onClick={() =>
+                                                                openAssignmentDialog(
+                                                                    campaign,
+                                                                )
+                                                            }
                                                         >
                                                             Manage Team
                                                         </Button>
@@ -611,7 +781,11 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
                                                         <Button
                                                             variant="destructive"
                                                             size="sm"
-                                                            onClick={() => openDeleteDialog(campaign)}
+                                                            onClick={() =>
+                                                                openDeleteDialog(
+                                                                    campaign,
+                                                                )
+                                                            }
                                                         >
                                                             Delete
                                                         </Button>
@@ -626,7 +800,7 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
                     </div>
 
                     {paginationLinks.length > 0 && (
-                        <div className="border-t px-4 py-3 flex justify-center">
+                        <div className="flex justify-center border-t px-4 py-3">
                             <PaginationNav links={paginationLinks} />
                         </div>
                     )}
@@ -636,7 +810,9 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
             <Dialog open={isDialogOpen} onOpenChange={handleDialogOpenChange}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>{editingCampaign ? 'Edit Campaign' : 'Add Campaign'}</DialogTitle>
+                        <DialogTitle>
+                            {editingCampaign ? 'Edit Campaign' : 'Add Campaign'}
+                        </DialogTitle>
                     </DialogHeader>
                     <form onSubmit={handleSave} className="space-y-4">
                         <div className="space-y-2">
@@ -644,7 +820,9 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
                             <Input
                                 id="campaign-name"
                                 value={formName}
-                                onChange={(event) => setFormName(event.target.value)}
+                                onChange={(event) =>
+                                    setFormName(event.target.value)
+                                }
                                 placeholder="Campaign name"
                                 disabled={isSubmitting}
                                 required
@@ -652,9 +830,12 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
                         </div>
                         <div className="flex items-center justify-between rounded-md border p-3">
                             <div className="space-y-0.5">
-                                <Label htmlFor="campaign-weekend-leave">Allow Weekend Leave</Label>
+                                <Label htmlFor="campaign-weekend-leave">
+                                    Allow Weekend Leave
+                                </Label>
                                 <p className="text-xs text-muted-foreground">
-                                    Employees in this campaign can file leave requests covering Saturdays and Sundays.
+                                    Employees in this campaign can file leave
+                                    requests covering Saturdays and Sundays.
                                 </p>
                             </div>
                             <Switch
@@ -664,9 +845,18 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
                                 disabled={isSubmitting}
                             />
                         </div>
-                        {formError && <p className="text-sm text-destructive">{formError}</p>}
+                        {formError && (
+                            <p className="text-sm text-destructive">
+                                {formError}
+                            </p>
+                        )}
                         <DialogFooter>
-                            <Button type="button" variant="outline" onClick={closeDialog} disabled={isSubmitting}>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={closeDialog}
+                                disabled={isSubmitting}
+                            >
                                 Cancel
                             </Button>
                             <Button type="submit" disabled={isSubmitting}>
@@ -677,34 +867,54 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
                 </DialogContent>
             </Dialog>
 
-            <Dialog open={isDeleteDialogOpen} onOpenChange={handleDeleteOpenChange}>
+            <Dialog
+                open={isDeleteDialogOpen}
+                onOpenChange={handleDeleteOpenChange}
+            >
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Delete Campaign</DialogTitle>
                     </DialogHeader>
                     <div className="py-2 text-sm text-muted-foreground">
                         {campaignPendingDelete ? (
-                            <>Are you sure you want to delete the campaign <b>{campaignPendingDelete.name}</b>? This action cannot be undone.</>
+                            <>
+                                Are you sure you want to delete the campaign{' '}
+                                <b>{campaignPendingDelete.name}</b>? This action
+                                cannot be undone.
+                            </>
                         ) : (
                             'Select a campaign to delete.'
                         )}
                     </div>
                     <DialogFooter className="flex gap-2">
-                        <Button variant="outline" onClick={closeDeleteDialog} disabled={isDeleting}>
+                        <Button
+                            variant="outline"
+                            onClick={closeDeleteDialog}
+                            disabled={isDeleting}
+                        >
                             Cancel
                         </Button>
-                        <Button variant="destructive" onClick={handleDeleteConfirm} disabled={isDeleting || !campaignPendingDelete}>
+                        <Button
+                            variant="destructive"
+                            onClick={handleDeleteConfirm}
+                            disabled={isDeleting || !campaignPendingDelete}
+                        >
                             {isDeleting ? 'Deleting...' : 'Delete'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
 
-            <Dialog open={isAssignDialogOpen} onOpenChange={(open) => !open && closeAssignmentDialog()}>
+            <Dialog
+                open={isAssignDialogOpen}
+                onOpenChange={(open) => !open && closeAssignmentDialog()}
+            >
                 <DialogContent className="max-h-[85vh] overflow-hidden sm:max-w-5xl">
                     <DialogHeader>
                         <DialogTitle>
-                            {assignmentCampaign ? `Team Assignments: ${assignmentCampaign.name}` : 'Team Assignments'}
+                            {assignmentCampaign
+                                ? `Team Assignments: ${assignmentCampaign.name}`
+                                : 'Team Assignments'}
                         </DialogTitle>
                     </DialogHeader>
 
@@ -729,49 +939,79 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
                         )}
 
                         {isAssignmentLoading ? (
-                            <p className="text-sm text-muted-foreground">Loading assignments...</p>
+                            <p className="text-sm text-muted-foreground">
+                                Loading assignments...
+                            </p>
                         ) : assignmentTeamLeads.length === 0 ? (
-                            <p className="text-sm text-muted-foreground">No active team leads assigned to this campaign.</p>
+                            <p className="text-sm text-muted-foreground">
+                                No active team leads assigned to this campaign.
+                            </p>
                         ) : assignmentAgents.length === 0 ? (
-                            <p className="text-sm text-muted-foreground">No active agents in this campaign.</p>
+                            <p className="text-sm text-muted-foreground">
+                                No active agents in this campaign.
+                            </p>
                         ) : (
                             <div className="grid grid-cols-1 gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
                                 <div className="rounded-md border bg-muted/20 p-3">
                                     <div className="mb-3">
                                         <Input
                                             value={leadSearch}
-                                            onChange={(event) => setLeadSearch(event.target.value)}
+                                            onChange={(event) =>
+                                                setLeadSearch(
+                                                    event.target.value,
+                                                )
+                                            }
                                             placeholder="Search team leads..."
                                         />
                                     </div>
 
                                     <div className="max-h-[52vh] space-y-2 overflow-y-auto pr-1">
                                         {filteredTeamLeads.length === 0 ? (
-                                            <p className="text-sm text-muted-foreground">No team leads match your search.</p>
+                                            <p className="text-sm text-muted-foreground">
+                                                No team leads match your search.
+                                            </p>
                                         ) : (
-                                            filteredTeamLeads.map((teamLead) => {
-                                                const isSelected = selectedLeadId === teamLead.id;
-                                                const leadAssignmentCount = assignmentMap[teamLead.id]?.length ?? 0;
+                                            filteredTeamLeads.map(
+                                                (teamLead) => {
+                                                    const isSelected =
+                                                        selectedLeadId ===
+                                                        teamLead.id;
+                                                    const leadAssignmentCount =
+                                                        assignmentMap[
+                                                            teamLead.id
+                                                        ]?.length ?? 0;
 
-                                                return (
-                                                    <button
-                                                        key={teamLead.id}
-                                                        type="button"
-                                                        onClick={() => setSelectedLeadId(teamLead.id)}
-                                                        className={`w-full rounded-md border p-3 text-left transition-colors ${isSelected
-                                                                ? 'border-primary bg-primary/5'
-                                                                : 'border-transparent bg-background hover:border-muted-foreground/30'
+                                                    return (
+                                                        <button
+                                                            key={teamLead.id}
+                                                            type="button"
+                                                            onClick={() =>
+                                                                setSelectedLeadId(
+                                                                    teamLead.id,
+                                                                )
+                                                            }
+                                                            className={`w-full rounded-md border p-3 text-left transition-colors ${
+                                                                isSelected
+                                                                    ? 'border-primary bg-primary/5'
+                                                                    : 'border-transparent bg-background hover:border-muted-foreground/30'
                                                             }`}
-                                                    >
-                                                        <div className="flex items-center justify-between gap-2">
-                                                            <span className="font-medium">{teamLead.name}</span>
-                                                            <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
-                                                                {leadAssignmentCount}
-                                                            </span>
-                                                        </div>
-                                                    </button>
-                                                );
-                                            })
+                                                        >
+                                                            <div className="flex items-center justify-between gap-2">
+                                                                <span className="font-medium">
+                                                                    {
+                                                                        teamLead.name
+                                                                    }
+                                                                </span>
+                                                                <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
+                                                                    {
+                                                                        leadAssignmentCount
+                                                                    }
+                                                                </span>
+                                                            </div>
+                                                        </button>
+                                                    );
+                                                },
+                                            )
                                         )}
                                     </div>
                                 </div>
@@ -781,23 +1021,72 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
                                         <div className="space-y-4">
                                             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                                 <div>
-                                                    <p className="font-semibold">{selectedLead.name}</p>
+                                                    <p className="font-semibold">
+                                                        {selectedLead.name}
+                                                    </p>
                                                     <p className="text-xs text-muted-foreground">
-                                                        {selectedLeadAssignments.length} assigned agent{selectedLeadAssignments.length === 1 ? '' : 's'}
+                                                        {
+                                                            selectedLeadAssignments.length
+                                                        }{' '}
+                                                        assigned agent
+                                                        {selectedLeadAssignments.length ===
+                                                        1
+                                                            ? ''
+                                                            : 's'}
                                                     </p>
                                                 </div>
 
                                                 <div className="flex flex-wrap gap-2">
-                                                    <Button type="button" variant="outline" size="sm" onClick={() => toggleAllAgentsForLead(selectedLead.id, true)}>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() =>
+                                                            toggleAllAgentsForLead(
+                                                                selectedLead.id,
+                                                                true,
+                                                            )
+                                                        }
+                                                    >
                                                         Assign all
                                                     </Button>
-                                                    <Button type="button" variant="outline" size="sm" onClick={() => toggleVisibleAgentsForLead(selectedLead.id, true)}>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() =>
+                                                            toggleVisibleAgentsForLead(
+                                                                selectedLead.id,
+                                                                true,
+                                                            )
+                                                        }
+                                                    >
                                                         Select visible
                                                     </Button>
-                                                    <Button type="button" variant="outline" size="sm" onClick={() => toggleVisibleAgentsForLead(selectedLead.id, false)}>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() =>
+                                                            toggleVisibleAgentsForLead(
+                                                                selectedLead.id,
+                                                                false,
+                                                            )
+                                                        }
+                                                    >
                                                         Clear visible
                                                     </Button>
-                                                    <Button type="button" variant="outline" size="sm" onClick={() => toggleAllAgentsForLead(selectedLead.id, false)}>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() =>
+                                                            toggleAllAgentsForLead(
+                                                                selectedLead.id,
+                                                                false,
+                                                            )
+                                                        }
+                                                    >
                                                         Clear all
                                                     </Button>
                                                 </div>
@@ -806,20 +1095,44 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
                                             <div className="space-y-3">
                                                 <Input
                                                     value={agentSearch}
-                                                    onChange={(event) => setAgentSearch(event.target.value)}
+                                                    onChange={(event) =>
+                                                        setAgentSearch(
+                                                            event.target.value,
+                                                        )
+                                                    }
                                                     placeholder="Search agents..."
                                                 />
 
                                                 <div className="flex flex-wrap gap-2">
-                                                    {(['all', 'assigned', 'unassigned'] as const).map((filter) => (
+                                                    {(
+                                                        [
+                                                            'all',
+                                                            'assigned',
+                                                            'unassigned',
+                                                        ] as const
+                                                    ).map((filter) => (
                                                         <Button
                                                             key={filter}
                                                             type="button"
-                                                            variant={agentFilter === filter ? 'default' : 'outline'}
+                                                            variant={
+                                                                agentFilter ===
+                                                                filter
+                                                                    ? 'default'
+                                                                    : 'outline'
+                                                            }
                                                             size="sm"
-                                                            onClick={() => setAgentFilter(filter)}
+                                                            onClick={() =>
+                                                                setAgentFilter(
+                                                                    filter,
+                                                                )
+                                                            }
                                                         >
-                                                            {filter === 'all' ? 'All' : filter === 'assigned' ? 'Assigned' : 'Unassigned'}
+                                                            {filter === 'all'
+                                                                ? 'All'
+                                                                : filter ===
+                                                                    'assigned'
+                                                                  ? 'Assigned'
+                                                                  : 'Unassigned'}
                                                         </Button>
                                                     ))}
                                                 </div>
@@ -827,44 +1140,82 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
 
                                             <div className="max-h-[52vh] space-y-2 overflow-y-auto pr-1">
                                                 {filteredAgents.length === 0 ? (
-                                                    <p className="text-sm text-muted-foreground">No agents match your current filter.</p>
+                                                    <p className="text-sm text-muted-foreground">
+                                                        No agents match your
+                                                        current filter.
+                                                    </p>
                                                 ) : (
-                                                    filteredAgents.map((agent) => {
-                                                        const checked = selectedLeadAssignments.includes(agent.id);
-                                                        const existingLeadNames = (agentLeadNameMap[agent.id] ?? []).filter((name) => name !== selectedLead.name);
+                                                    filteredAgents.map(
+                                                        (agent) => {
+                                                            const checked =
+                                                                selectedLeadAssignments.includes(
+                                                                    agent.id,
+                                                                );
+                                                            const existingLeadNames =
+                                                                (
+                                                                    agentLeadNameMap[
+                                                                        agent.id
+                                                                    ] ?? []
+                                                                ).filter(
+                                                                    (name) =>
+                                                                        name !==
+                                                                        selectedLead.name,
+                                                                );
 
-                                                        return (
-                                                            <label
-                                                                key={`${selectedLead.id}-${agent.id}`}
-                                                                className="flex cursor-pointer items-center gap-2 rounded-md border p-2 text-sm hover:bg-muted/40"
-                                                            >
-                                                                <Checkbox
-                                                                    checked={checked}
-                                                                    onCheckedChange={() => toggleAssignment(selectedLead.id, agent.id)}
-                                                                />
-                                                                <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
-                                                                    <span className="truncate">{agent.name}</span>
-                                                                    {existingLeadNames.length > 0 && (
-                                                                        <div className="flex shrink-0 flex-wrap justify-end gap-1">
-                                                                            {existingLeadNames.map((leadName) => (
-                                                                                <span
-                                                                                    key={`${agent.id}-${leadName}`}
-                                                                                    className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/60 dark:text-amber-200"
-                                                                                >
-                                                                                    {leadName}
-                                                                                </span>
-                                                                            ))}
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            </label>
-                                                        );
-                                                    })
+                                                            return (
+                                                                <label
+                                                                    key={`${selectedLead.id}-${agent.id}`}
+                                                                    className="flex cursor-pointer items-center gap-2 rounded-md border p-2 text-sm hover:bg-muted/40"
+                                                                >
+                                                                    <Checkbox
+                                                                        checked={
+                                                                            checked
+                                                                        }
+                                                                        onCheckedChange={() =>
+                                                                            toggleAssignment(
+                                                                                selectedLead.id,
+                                                                                agent.id,
+                                                                            )
+                                                                        }
+                                                                    />
+                                                                    <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                                                                        <span className="truncate">
+                                                                            {
+                                                                                agent.name
+                                                                            }
+                                                                        </span>
+                                                                        {existingLeadNames.length >
+                                                                            0 && (
+                                                                            <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                                                                                {existingLeadNames.map(
+                                                                                    (
+                                                                                        leadName,
+                                                                                    ) => (
+                                                                                        <span
+                                                                                            key={`${agent.id}-${leadName}`}
+                                                                                            className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/60 dark:text-amber-200"
+                                                                                        >
+                                                                                            {
+                                                                                                leadName
+                                                                                            }
+                                                                                        </span>
+                                                                                    ),
+                                                                                )}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                </label>
+                                                            );
+                                                        },
+                                                    )
                                                 )}
                                             </div>
                                         </div>
                                     ) : (
-                                        <p className="text-sm text-muted-foreground">Select a team lead to manage assignments.</p>
+                                        <p className="text-sm text-muted-foreground">
+                                            Select a team lead to manage
+                                            assignments.
+                                        </p>
                                     )}
                                 </div>
                             </div>
@@ -872,11 +1223,26 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
                     </div>
 
                     <DialogFooter>
-                        <Button type="button" variant="outline" onClick={closeAssignmentDialog} disabled={isAssignmentSaving}>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={closeAssignmentDialog}
+                            disabled={isAssignmentSaving}
+                        >
                             Cancel
                         </Button>
-                        <Button type="button" onClick={saveAssignments} disabled={isAssignmentSaving || isAssignmentLoading || !assignmentHasChanges}>
-                            {isAssignmentSaving ? 'Saving...' : 'Save Assignments'}
+                        <Button
+                            type="button"
+                            onClick={saveAssignments}
+                            disabled={
+                                isAssignmentSaving ||
+                                isAssignmentLoading ||
+                                !assignmentHasChanges
+                            }
+                        >
+                            {isAssignmentSaving
+                                ? 'Saving...'
+                                : 'Save Assignments'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

@@ -1,13 +1,12 @@
-import React from 'react';
-import { formatDistanceToNow } from 'date-fns';
-import { Bell, Check, X, Send } from 'lucide-react';
-import { Link } from '@inertiajs/react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { send as notificationSendRoute } from '@/routes/notifications';
+import { Link } from '@inertiajs/react';
+import { formatDistanceToNow } from 'date-fns';
+import { Bell, Check, Send, X } from 'lucide-react';
 
 interface Notification {
     id: number;
@@ -112,7 +111,7 @@ export function NotificationDropdown({
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3">
                 <div>
-                    <h3 className="font-semibold text-sm">Notifications</h3>
+                    <h3 className="text-sm font-semibold">Notifications</h3>
                     {unreadCount > 0 && (
                         <p className="text-xs text-muted-foreground">
                             {unreadCount} unread
@@ -126,7 +125,7 @@ export function NotificationDropdown({
                         className="h-7 text-xs"
                         onClick={onMarkAllAsRead}
                     >
-                        <Check className="h-3 w-3 mr-1" />
+                        <Check className="mr-1 h-3 w-3" />
                         Mark all read
                     </Button>
                 )}
@@ -138,8 +137,10 @@ export function NotificationDropdown({
             <ScrollArea className="h-[400px]">
                 {notifications.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-12 text-center">
-                        <Bell className="h-12 w-12 text-muted-foreground/50 mb-3" />
-                        <p className="text-sm text-muted-foreground">No notifications</p>
+                        <Bell className="mb-3 h-12 w-12 text-muted-foreground/50" />
+                        <p className="text-sm text-muted-foreground">
+                            No notifications
+                        </p>
                     </div>
                 ) : (
                     <div className="divide-y">
@@ -147,42 +148,62 @@ export function NotificationDropdown({
                             <div
                                 key={notification.id}
                                 className={cn(
-                                    'group relative px-4 py-3 hover:bg-muted/50 transition-colors cursor-pointer',
-                                    !notification.read_at && 'bg-blue-50/50 dark:bg-blue-950/10'
+                                    'group relative cursor-pointer px-4 py-3 transition-colors hover:bg-muted/50',
+                                    !notification.read_at &&
+                                        'bg-blue-50/50 dark:bg-blue-950/10',
                                 )}
-                                onClick={() => onNotificationClick(notification)}
+                                onClick={() =>
+                                    onNotificationClick(notification)
+                                }
                             >
                                 <div className="flex gap-3">
-                                    <div className={cn('mt-1', getNotificationColor(notification.type))}>
+                                    <div
+                                        className={cn(
+                                            'mt-1',
+                                            getNotificationColor(
+                                                notification.type,
+                                            ),
+                                        )}
+                                    >
                                         {getNotificationIcon()}
                                     </div>
                                     <div className="flex-1 space-y-1">
                                         <div className="flex items-start justify-between gap-2">
-                                            <div className="flex flex-col gap-1 flex-1">
-                                                <p className="text-sm font-medium leading-none">
+                                            <div className="flex flex-1 flex-col gap-1">
+                                                <p className="text-sm leading-none font-medium">
                                                     {notification.title}
                                                 </p>
-                                                <Badge variant="outline" className="text-xs w-fit">
-                                                    {getNotificationTypeLabel(notification.type)}
+                                                <Badge
+                                                    variant="outline"
+                                                    className="w-fit text-xs"
+                                                >
+                                                    {getNotificationTypeLabel(
+                                                        notification.type,
+                                                    )}
                                                 </Badge>
                                             </div>
                                             {!notification.read_at && (
-                                                <span className="h-2 w-2 rounded-full bg-blue-500 shrink-0 mt-1" />
+                                                <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-blue-500" />
                                             )}
                                         </div>
-                                        <p className="text-sm text-muted-foreground line-clamp-2">
+                                        <p className="line-clamp-2 text-sm text-muted-foreground">
                                             {notification.message}
                                         </p>
                                         <p className="text-xs text-muted-foreground">
-                                            {formatDistanceToNow(new Date(notification.created_at), {
-                                                addSuffix: true,
-                                            })}
+                                            {formatDistanceToNow(
+                                                new Date(
+                                                    notification.created_at,
+                                                ),
+                                                {
+                                                    addSuffix: true,
+                                                },
+                                            )}
                                         </p>
                                     </div>
                                 </div>
 
                                 {/* Action buttons — always visible on touch, hover on desktop */}
-                                <div className="absolute top-2 right-2 flex gap-1 md:opacity-0 md:group-hover:opacity-100 md:transition-opacity">
+                                <div className="absolute top-2 right-2 flex gap-1 md:opacity-0 md:transition-opacity md:group-hover:opacity-100">
                                     {!notification.read_at && (
                                         <Button
                                             variant="ghost"
@@ -218,7 +239,7 @@ export function NotificationDropdown({
 
             {/* Footer */}
             <Separator />
-            <div className="p-2 flex flex-col gap-2">
+            <div className="flex flex-col gap-2 p-2">
                 {notifications.length > 0 && (
                     <div className="grid grid-cols-2 gap-2">
                         {confirmingClearAll ? (
@@ -245,7 +266,7 @@ export function NotificationDropdown({
                                 <Button
                                     variant="ghost"
                                     size="sm"
-                                    className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
+                                    className="w-full text-destructive hover:bg-destructive/10 hover:text-destructive"
                                     onClick={onDeleteAll}
                                 >
                                     Clear all
@@ -274,12 +295,8 @@ export function NotificationDropdown({
                 )}
                 {canSend && (
                     <Link href={notificationSendRoute().url}>
-                        <Button
-                            variant="default"
-                            size="sm"
-                            className="w-full"
-                        >
-                            <Send className="h-4 w-4 mr-2" />
+                        <Button variant="default" size="sm" className="w-full">
+                            <Send className="mr-2 h-4 w-4" />
                             Send Notification
                         </Button>
                     </Link>

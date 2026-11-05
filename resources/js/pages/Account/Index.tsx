@@ -1,47 +1,104 @@
-import React, { useState, useMemo, useEffect, useRef } from "react";
-import { router, usePage, Link, Head } from "@inertiajs/react";
-import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import AppLayout from "@/layouts/app-layout";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useInitials } from "@/hooks/use-initials";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
+import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
-    index as accountsIndex,
-    create as accountsCreate,
-    edit as accountsEdit,
-    destroy as accountsDestroy,
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from '@/components/ui/command';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table';
+import { useInitials } from '@/hooks/use-initials';
+import AppLayout from '@/layouts/app-layout';
+import {
     approve as accountsApprove,
-    unapprove as accountsUnapprove,
-    toggleActive as accountsToggleActive,
-    confirmDelete as accountsConfirmDelete,
-    restore as accountsRestore,
-    forceDelete as accountsForceDelete,
     bulkApprove as accountsBulkApprove,
-    bulkUnapprove as accountsBulkUnapprove,
-    staleAccounts as accountsStaleAccounts,
     bulkDeleteStale as accountsBulkDeleteStale,
-} from "@/routes/accounts";
-import { getUserSchedules, toggleActive as employeeScheduleToggleActive, create as employeeSchedulesCreate, edit as employeeSchedulesEdit } from "@/routes/employee-schedules";
-import { toast } from "sonner";
-import { Plus, RefreshCw, Search, RotateCcw, CheckCircle, XCircle, CheckSquare, XSquare, X, UserX, Play, Pause, Check, ChevronsUpDown, UserCheck, Mail, AlertTriangle, Pencil, Trash2, UserCheck2, UserMinus, Clock } from "lucide-react";
+    bulkUnapprove as accountsBulkUnapprove,
+    confirmDelete as accountsConfirmDelete,
+    create as accountsCreate,
+    destroy as accountsDestroy,
+    edit as accountsEdit,
+    forceDelete as accountsForceDelete,
+    index as accountsIndex,
+    restore as accountsRestore,
+    staleAccounts as accountsStaleAccounts,
+    toggleActive as accountsToggleActive,
+    unapprove as accountsUnapprove,
+} from '@/routes/accounts';
+import {
+    toggleActive as employeeScheduleToggleActive,
+    create as employeeSchedulesCreate,
+    edit as employeeSchedulesEdit,
+    getUserSchedules,
+} from '@/routes/employee-schedules';
+import { Head, Link, router, usePage } from '@inertiajs/react';
+import {
+    AlertTriangle,
+    Check,
+    CheckCircle,
+    CheckSquare,
+    ChevronsUpDown,
+    Clock,
+    Mail,
+    Pause,
+    Pencil,
+    Play,
+    Plus,
+    RefreshCw,
+    RotateCcw,
+    Search,
+    Trash2,
+    UserCheck,
+    UserCheck2,
+    UserMinus,
+    UserX,
+    X,
+    XCircle,
+    XSquare,
+} from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 
 // New reusable hooks and components
-import { usePageMeta, useFlashMessage, usePageLoading, withReturnTo } from "@/hooks";
-import { PageHeader } from "@/components/PageHeader";
-import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
-import { LoadingOverlay } from "@/components/LoadingOverlay";
-import { TableSkeleton } from "@/components/TableSkeleton";
+import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { PageHeader } from '@/components/PageHeader';
+import { TableSkeleton } from '@/components/TableSkeleton';
+import {
+    useFlashMessage,
+    usePageLoading,
+    usePageMeta,
+    withReturnTo,
+} from '@/hooks';
 
 // Authorization components and hooks
-import { Can, HasRole } from "@/components/authorization";
+import { Can, HasRole } from '@/components/authorization';
 
 import {
     AlertDialog,
@@ -52,7 +109,7 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+} from '@/components/ui/alert-dialog';
 
 interface User {
     id: number;
@@ -146,7 +203,19 @@ interface FilterState {
 }
 
 export default function AccountIndex() {
-    const { users, allUsers = [], campaigns = [], filters, staleCount = 0 } = usePage<{ users: UsersPayload; allUsers: UserOption[]; campaigns: CampaignOption[]; filters: Filters; staleCount: number }>().props;
+    const {
+        users,
+        allUsers = [],
+        campaigns = [],
+        filters,
+        staleCount = 0,
+    } = usePage<{
+        users: UsersPayload;
+        allUsers: UserOption[];
+        campaigns: CampaignOption[];
+        filters: Filters;
+        staleCount: number;
+    }>().props;
 
     const to12Hour = (time: string) => {
         const [h, m] = time.split(':').map(Number);
@@ -156,21 +225,29 @@ export default function AccountIndex() {
     };
     const [loading, setLoading] = useState(false);
     const getInitials = useInitials();
-    const [search, setSearch] = useState(filters.search || "");
+    const [search, setSearch] = useState(filters.search || '');
     const [selectedUserIds, setSelectedUserIds] = useState<string[]>(
-        Array.isArray(filters.user_ids) ? filters.user_ids.map(String) : []
+        Array.isArray(filters.user_ids) ? filters.user_ids.map(String) : [],
     );
     const [isUserPopoverOpen, setIsUserPopoverOpen] = useState(false);
-    const [userSearchQuery, setUserSearchQuery] = useState("");
-    const [roleFilter, setRoleFilter] = useState(filters.role || "all");
-    const [statusFilter, setStatusFilter] = useState(filters.status || "all");
-    const [employeeStatusFilter, setEmployeeStatusFilter] = useState(filters.employee_status || "all");
-    const [hiredStatusFilter, setHiredStatusFilter] = useState(
-        filters.hired_status === "no_hired_date" ? "no_hired_date" : (filters.hired_from || filters.hired_to) ? "range" : "all"
+    const [userSearchQuery, setUserSearchQuery] = useState('');
+    const [roleFilter, setRoleFilter] = useState(filters.role || 'all');
+    const [statusFilter, setStatusFilter] = useState(filters.status || 'all');
+    const [employeeStatusFilter, setEmployeeStatusFilter] = useState(
+        filters.employee_status || 'all',
     );
-    const [hiredFrom, setHiredFrom] = useState(filters.hired_from || "");
-    const [hiredTo, setHiredTo] = useState(filters.hired_to || "");
-    const [campaignFilter, setCampaignFilter] = useState(filters.campaign_id || "all");
+    const [hiredStatusFilter, setHiredStatusFilter] = useState(
+        filters.hired_status === 'no_hired_date'
+            ? 'no_hired_date'
+            : filters.hired_from || filters.hired_to
+              ? 'range'
+              : 'all',
+    );
+    const [hiredFrom, setHiredFrom] = useState(filters.hired_from || '');
+    const [hiredTo, setHiredTo] = useState(filters.hired_to || '');
+    const [campaignFilter, setCampaignFilter] = useState(
+        filters.campaign_id || 'all',
+    );
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
     const [selectedApproveIds, setSelectedApproveIds] = useState<number[]>([]);
@@ -180,14 +257,18 @@ export default function AccountIndex() {
     // Re-hire dialog state
     const [rehireDialogOpen, setRehireDialogOpen] = useState(false);
     const [userToRehire, setUserToRehire] = useState<User | null>(null);
-    const [rehireDate, setRehireDate] = useState("");
+    const [rehireDate, setRehireDate] = useState('');
     // Schedule assignment dialog (shown after re-hire)
     const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
-    const [scheduleDialogUser, setScheduleDialogUser] = useState<User | null>(null);
-    const [scheduleDialogHiredDate, setScheduleDialogHiredDate] = useState("");
+    const [scheduleDialogUser, setScheduleDialogUser] = useState<User | null>(
+        null,
+    );
+    const [scheduleDialogHiredDate, setScheduleDialogHiredDate] = useState('');
     const [userSchedules, setUserSchedules] = useState<EmployeeSchedule[]>([]);
     const [loadingSchedules, setLoadingSchedules] = useState(false);
-    const [activatingScheduleId, setActivatingScheduleId] = useState<number | null>(null);
+    const [activatingScheduleId, setActivatingScheduleId] = useState<
+        number | null
+    >(null);
 
     // Stale accounts state
     const [staleDialogOpen, setStaleDialogOpen] = useState(false);
@@ -204,38 +285,44 @@ export default function AccountIndex() {
     const currentUserId = auth?.user?.id;
 
     // Get users that can be selected for bulk approve (not approved, not deleted, not current user)
-    const approvableUsers = useMemo(() =>
-        users.data.filter(user =>
-            !user.is_approved &&
-            !user.deleted_at &&
-            user.id !== currentUserId
-        ),
-        [users.data, currentUserId]
+    const approvableUsers = useMemo(
+        () =>
+            users.data.filter(
+                (user) =>
+                    !user.is_approved &&
+                    !user.deleted_at &&
+                    user.id !== currentUserId,
+            ),
+        [users.data, currentUserId],
     );
 
     // Get users that can be selected for bulk revoke (approved, not deleted, not current user)
-    const revokableUsers = useMemo(() =>
-        users.data.filter(user =>
-            user.is_approved &&
-            !user.deleted_at &&
-            user.id !== currentUserId
-        ),
-        [users.data, currentUserId]
+    const revokableUsers = useMemo(
+        () =>
+            users.data.filter(
+                (user) =>
+                    user.is_approved &&
+                    !user.deleted_at &&
+                    user.id !== currentUserId,
+            ),
+        [users.data, currentUserId],
     );
 
-    const allApprovableSelected = approvableUsers.length > 0 &&
-        approvableUsers.every(user => selectedApproveIds.includes(user.id));
+    const allApprovableSelected =
+        approvableUsers.length > 0 &&
+        approvableUsers.every((user) => selectedApproveIds.includes(user.id));
 
-    const allRevokableSelected = revokableUsers.length > 0 &&
-        revokableUsers.every(user => selectedRevokeIds.includes(user.id));
+    const allRevokableSelected =
+        revokableUsers.length > 0 &&
+        revokableUsers.every((user) => selectedRevokeIds.includes(user.id));
 
     const someApproveSelected = selectedApproveIds.length > 0;
     const someRevokeSelected = selectedRevokeIds.length > 0;
 
     // Use new hooks
     const { title, breadcrumbs } = usePageMeta({
-        title: "Account Management",
-        breadcrumbs: [{ title: "Accounts", href: accountsIndex().url }]
+        title: 'Account Management',
+        breadcrumbs: [{ title: 'Accounts', href: accountsIndex().url }],
     });
     useFlashMessage(); // Automatically handles flash messages
     const isPageLoading = usePageLoading();
@@ -244,16 +331,17 @@ export default function AccountIndex() {
     const filteredUsers = useMemo(() => {
         if (!userSearchQuery) return allUsers;
         const query = userSearchQuery.toLowerCase();
-        return allUsers.filter(user =>
-            user.name.toLowerCase().includes(query) ||
-            user.email.toLowerCase().includes(query)
+        return allUsers.filter(
+            (user) =>
+                user.name.toLowerCase().includes(query) ||
+                user.email.toLowerCase().includes(query),
         );
     }, [allUsers, userSearchQuery]);
 
     // Clear user search query when popover closes
     useEffect(() => {
         if (!isUserPopoverOpen) {
-            setUserSearchQuery("");
+            setUserSearchQuery('');
         }
     }, [isUserPopoverOpen]);
 
@@ -269,18 +357,37 @@ export default function AccountIndex() {
                 preserveState: true,
                 preserveScroll: true,
                 replace: true,
-                only: ["users"],
+                only: ['users'],
                 onSuccess: () => setLastRefresh(new Date()),
-                onFinish: () => { isPollingRef.current = false; },
+                onFinish: () => {
+                    isPollingRef.current = false;
+                },
             });
         }, 30000);
 
         return () => clearInterval(interval);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [autoRefreshEnabled, search, selectedUserIds, roleFilter, statusFilter, employeeStatusFilter, hiredStatusFilter, hiredFrom, hiredTo, campaignFilter]);
+    }, [
+        autoRefreshEnabled,
+        search,
+        selectedUserIds,
+        roleFilter,
+        statusFilter,
+        employeeStatusFilter,
+        hiredStatusFilter,
+        hiredFrom,
+        hiredTo,
+        campaignFilter,
+    ]);
 
-    const showClearFilters = roleFilter !== "all" || statusFilter !== "all" || employeeStatusFilter !== "all"
-        || hiredStatusFilter !== "all" || campaignFilter !== "all" || Boolean(search) || selectedUserIds.length > 0;
+    const showClearFilters =
+        roleFilter !== 'all' ||
+        statusFilter !== 'all' ||
+        employeeStatusFilter !== 'all' ||
+        hiredStatusFilter !== 'all' ||
+        campaignFilter !== 'all' ||
+        Boolean(search) ||
+        selectedUserIds.length > 0;
 
     const currentFilters: FilterState = {
         search,
@@ -296,28 +403,31 @@ export default function AccountIndex() {
 
     const buildFilterParams = (
         state: FilterState,
-        options: { resetPage?: boolean } = {}
+        options: { resetPage?: boolean } = {},
     ) => {
         const params: Record<string, string | number | string[]> = {};
         if (state.search) params.search = state.search;
         if (state.userIds.length > 0) params.user_ids = state.userIds;
-        if (state.role && state.role !== "all") params.role = state.role;
-        if (state.status && state.status !== "all") params.status = state.status;
-        if (state.employeeStatus && state.employeeStatus !== "all") params.employee_status = state.employeeStatus;
-        if (state.hiredStatus === "no_hired_date") {
-            params.hired_status = "no_hired_date";
-        } else if (state.hiredStatus === "range") {
+        if (state.role && state.role !== 'all') params.role = state.role;
+        if (state.status && state.status !== 'all')
+            params.status = state.status;
+        if (state.employeeStatus && state.employeeStatus !== 'all')
+            params.employee_status = state.employeeStatus;
+        if (state.hiredStatus === 'no_hired_date') {
+            params.hired_status = 'no_hired_date';
+        } else if (state.hiredStatus === 'range') {
             if (state.hiredFrom) params.hired_from = state.hiredFrom;
             if (state.hiredTo) params.hired_to = state.hiredTo;
         }
-        if (state.campaignId && state.campaignId !== "all") params.campaign_id = state.campaignId;
+        if (state.campaignId && state.campaignId !== 'all')
+            params.campaign_id = state.campaignId;
         if (options.resetPage) params.page = 1;
         return params;
     };
 
     const toggleSelectedUserId = (id: string) => {
-        setSelectedUserIds(prev =>
-            prev.includes(id) ? prev.filter(v => v !== id) : [...prev, id]
+        setSelectedUserIds((prev) =>
+            prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id],
         );
     };
 
@@ -338,19 +448,24 @@ export default function AccountIndex() {
         router.delete(accountsDestroy(userId).url, {
             preserveScroll: true,
             onFinish: () => setLoading(false),
-            onSuccess: () => toast.success("User account deleted successfully"),
-            onError: () => toast.error("Failed to delete user account"),
+            onSuccess: () => toast.success('User account deleted successfully'),
+            onError: () => toast.error('Failed to delete user account'),
         });
     };
 
     const handleApprove = (userId: number) => {
         setLoading(true);
-        router.post(accountsApprove(userId).url, {}, {
-            preserveScroll: true,
-            onFinish: () => setLoading(false),
-            onSuccess: () => toast.success("User account approved successfully"),
-            onError: () => toast.error("Failed to approve user account"),
-        });
+        router.post(
+            accountsApprove(userId).url,
+            {},
+            {
+                preserveScroll: true,
+                onFinish: () => setLoading(false),
+                onSuccess: () =>
+                    toast.success('User account approved successfully'),
+                onError: () => toast.error('Failed to approve user account'),
+            },
+        );
     };
 
     const handleUnapprove = (user: User) => {
@@ -366,18 +481,25 @@ export default function AccountIndex() {
 
     const confirmUnapprove = (userId: number, sendEmail: boolean) => {
         setLoading(true);
-        router.post(accountsUnapprove(userId).url, { send_email: sendEmail }, {
-            preserveScroll: true,
-            onFinish: () => {
-                setLoading(false);
-                setRevokeDialogOpen(false);
-                setUserToRevoke(null);
+        router.post(
+            accountsUnapprove(userId).url,
+            { send_email: sendEmail },
+            {
+                preserveScroll: true,
+                onFinish: () => {
+                    setLoading(false);
+                    setRevokeDialogOpen(false);
+                    setUserToRevoke(null);
+                },
+                onSuccess: () =>
+                    toast.success(
+                        sendEmail
+                            ? 'User account approval revoked and notification sent'
+                            : 'User account approval revoked successfully',
+                    ),
+                onError: () => toast.error('Failed to revoke user approval'),
             },
-            onSuccess: () => toast.success(sendEmail
-                ? "User account approval revoked and notification sent"
-                : "User account approval revoked successfully"),
-            onError: () => toast.error("Failed to revoke user approval"),
-        });
+        );
     };
 
     const handleToggleActive = (user: User) => {
@@ -395,19 +517,28 @@ export default function AccountIndex() {
 
     const confirmToggleActive = (userId: number) => {
         setLoading(true);
-        router.post(accountsToggleActive(userId).url, {}, {
-            preserveScroll: true,
-            onFinish: () => {
-                setLoading(false);
-                setToggleActiveDialogOpen(false);
-                setUserToToggle(null);
+        router.post(
+            accountsToggleActive(userId).url,
+            {},
+            {
+                preserveScroll: true,
+                onFinish: () => {
+                    setLoading(false);
+                    setToggleActiveDialogOpen(false);
+                    setUserToToggle(null);
+                },
             },
-        });
+        );
     };
 
     const fetchUserSchedules = (userId: number) => {
         setLoadingSchedules(true);
-        fetch(getUserSchedules(userId).url, { headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' } })
+        fetch(getUserSchedules(userId).url, {
+            headers: {
+                Accept: 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        })
             .then((res) => res.json())
             .then((data: EmployeeSchedule[]) => setUserSchedules(data))
             .catch(() => setUserSchedules([]))
@@ -416,11 +547,17 @@ export default function AccountIndex() {
 
     const handleActivateSchedule = (schedule: EmployeeSchedule) => {
         setActivatingScheduleId(schedule.id);
-        router.post(employeeScheduleToggleActive(schedule.id).url, {}, {
-            preserveScroll: true,
-            onFinish: () => setActivatingScheduleId(null),
-            onSuccess: () => scheduleDialogUser && fetchUserSchedules(scheduleDialogUser.id),
-        });
+        router.post(
+            employeeScheduleToggleActive(schedule.id).url,
+            {},
+            {
+                preserveScroll: true,
+                onFinish: () => setActivatingScheduleId(null),
+                onSuccess: () =>
+                    scheduleDialogUser &&
+                    fetchUserSchedules(scheduleDialogUser.id),
+            },
+        );
     };
 
     const confirmRehire = () => {
@@ -428,41 +565,55 @@ export default function AccountIndex() {
         const rehiredUser = userToRehire;
         const capturedDate = rehireDate;
         setLoading(true);
-        router.post(accountsToggleActive(rehiredUser.id).url, { hired_date: capturedDate }, {
-            onFinish: () => {
-                setLoading(false);
-                setRehireDialogOpen(false);
-                setUserToRehire(null);
-                setRehireDate("");
+        router.post(
+            accountsToggleActive(rehiredUser.id).url,
+            { hired_date: capturedDate },
+            {
+                onFinish: () => {
+                    setLoading(false);
+                    setRehireDialogOpen(false);
+                    setUserToRehire(null);
+                    setRehireDate('');
+                },
+                onSuccess: () => {
+                    setScheduleDialogUser(rehiredUser);
+                    setScheduleDialogHiredDate(capturedDate);
+                    setUserSchedules([]);
+                    setScheduleDialogOpen(true);
+                    fetchUserSchedules(rehiredUser.id);
+                },
             },
-            onSuccess: () => {
-                setScheduleDialogUser(rehiredUser);
-                setScheduleDialogHiredDate(capturedDate);
-                setUserSchedules([]);
-                setScheduleDialogOpen(true);
-                fetchUserSchedules(rehiredUser.id);
-            },
-        });
+        );
     };
 
     const handleConfirmDelete = (userId: number) => {
         setLoading(true);
-        router.post(accountsConfirmDelete(userId).url, {}, {
-            preserveScroll: true,
-            onFinish: () => setLoading(false),
-            onSuccess: () => toast.success("Account deletion confirmed successfully"),
-            onError: () => toast.error("Failed to confirm account deletion"),
-        });
+        router.post(
+            accountsConfirmDelete(userId).url,
+            {},
+            {
+                preserveScroll: true,
+                onFinish: () => setLoading(false),
+                onSuccess: () =>
+                    toast.success('Account deletion confirmed successfully'),
+                onError: () =>
+                    toast.error('Failed to confirm account deletion'),
+            },
+        );
     };
 
     const handleRestore = (userId: number) => {
         setLoading(true);
-        router.post(accountsRestore(userId).url, {}, {
-            preserveScroll: true,
-            onFinish: () => setLoading(false),
-            onSuccess: () => toast.success("Account restored successfully"),
-            onError: () => toast.error("Failed to restore account"),
-        });
+        router.post(
+            accountsRestore(userId).url,
+            {},
+            {
+                preserveScroll: true,
+                onFinish: () => setLoading(false),
+                onSuccess: () => toast.success('Account restored successfully'),
+                onError: () => toast.error('Failed to restore account'),
+            },
+        );
     };
 
     const handleForceDelete = (userId: number) => {
@@ -470,24 +621,24 @@ export default function AccountIndex() {
         router.delete(accountsForceDelete(userId).url, {
             preserveScroll: true,
             onFinish: () => setLoading(false),
-            onSuccess: () => toast.success("Account permanently deleted"),
-            onError: () => toast.error("Failed to permanently delete account"),
+            onSuccess: () => toast.success('Account permanently deleted'),
+            onError: () => toast.error('Failed to permanently delete account'),
         });
     };
 
     const toggleSelectApprove = (userId: number) => {
-        setSelectedApproveIds(prev =>
+        setSelectedApproveIds((prev) =>
             prev.includes(userId)
-                ? prev.filter(id => id !== userId)
-                : [...prev, userId]
+                ? prev.filter((id) => id !== userId)
+                : [...prev, userId],
         );
     };
 
     const toggleSelectRevoke = (userId: number) => {
-        setSelectedRevokeIds(prev =>
+        setSelectedRevokeIds((prev) =>
             prev.includes(userId)
-                ? prev.filter(id => id !== userId)
-                : [...prev, userId]
+                ? prev.filter((id) => id !== userId)
+                : [...prev, userId],
         );
     };
 
@@ -495,7 +646,7 @@ export default function AccountIndex() {
         if (allApprovableSelected) {
             setSelectedApproveIds([]);
         } else {
-            setSelectedApproveIds(approvableUsers.map(user => user.id));
+            setSelectedApproveIds(approvableUsers.map((user) => user.id));
         }
     };
 
@@ -503,37 +654,45 @@ export default function AccountIndex() {
         if (allRevokableSelected) {
             setSelectedRevokeIds([]);
         } else {
-            setSelectedRevokeIds(revokableUsers.map(user => user.id));
+            setSelectedRevokeIds(revokableUsers.map((user) => user.id));
         }
     };
 
     const handleBulkApprove = () => {
         if (selectedApproveIds.length === 0) {
-            toast.error("Please select at least one account to approve");
+            toast.error('Please select at least one account to approve');
             return;
         }
 
         setLoading(true);
-        router.post(accountsBulkApprove().url, { ids: selectedApproveIds }, {
-            preserveScroll: true,
-            onFinish: () => {
-                setLoading(false);
-                setSelectedApproveIds([]);
+        router.post(
+            accountsBulkApprove().url,
+            { ids: selectedApproveIds },
+            {
+                preserveScroll: true,
+                onFinish: () => {
+                    setLoading(false);
+                    setSelectedApproveIds([]);
+                },
+                onSuccess: () =>
+                    toast.success(
+                        `${selectedApproveIds.length} account(s) approved successfully`,
+                    ),
+                onError: () =>
+                    toast.error('Failed to approve selected accounts'),
             },
-            onSuccess: () => toast.success(`${selectedApproveIds.length} account(s) approved successfully`),
-            onError: () => toast.error("Failed to approve selected accounts"),
-        });
+        );
     };
 
     const handleBulkRevoke = () => {
         if (selectedRevokeIds.length === 0) {
-            toast.error("Please select at least one account to revoke");
+            toast.error('Please select at least one account to revoke');
             return;
         }
 
         // Check if any selected users have hired dates (are employees)
         const selectedUsersWithHiredDates = users.data.filter(
-            user => selectedRevokeIds.includes(user.id) && user.hired_date
+            (user) => selectedRevokeIds.includes(user.id) && user.hired_date,
         );
 
         if (selectedUsersWithHiredDates.length > 0) {
@@ -547,39 +706,53 @@ export default function AccountIndex() {
 
     const confirmBulkRevoke = (sendEmail: boolean) => {
         setLoading(true);
-        router.post(accountsBulkUnapprove().url, { ids: selectedRevokeIds, send_email: sendEmail }, {
-            preserveScroll: true,
-            onFinish: () => {
-                setLoading(false);
-                setSelectedRevokeIds([]);
-                setBulkRevokeDialogOpen(false);
+        router.post(
+            accountsBulkUnapprove().url,
+            { ids: selectedRevokeIds, send_email: sendEmail },
+            {
+                preserveScroll: true,
+                onFinish: () => {
+                    setLoading(false);
+                    setSelectedRevokeIds([]);
+                    setBulkRevokeDialogOpen(false);
+                },
+                onSuccess: () =>
+                    toast.success(
+                        sendEmail
+                            ? `${selectedRevokeIds.length} account(s) approval revoked and notifications sent`
+                            : `${selectedRevokeIds.length} account(s) approval revoked successfully`,
+                    ),
+                onError: () =>
+                    toast.error(
+                        'Failed to revoke approval for selected accounts',
+                    ),
             },
-            onSuccess: () => toast.success(sendEmail
-                ? `${selectedRevokeIds.length} account(s) approval revoked and notifications sent`
-                : `${selectedRevokeIds.length} account(s) approval revoked successfully`),
-            onError: () => toast.error("Failed to revoke approval for selected accounts"),
-        });
+        );
     };
 
     const clearFilters = () => {
-        setSearch("");
+        setSearch('');
         setSelectedUserIds([]);
-        setRoleFilter("all");
-        setStatusFilter("all");
-        setEmployeeStatusFilter("all");
-        setHiredStatusFilter("all");
-        setHiredFrom("");
-        setHiredTo("");
-        setCampaignFilter("all");
+        setRoleFilter('all');
+        setStatusFilter('all');
+        setEmployeeStatusFilter('all');
+        setHiredStatusFilter('all');
+        setHiredFrom('');
+        setHiredTo('');
+        setCampaignFilter('all');
         // Trigger a reload with cleared filters
         setLoading(true);
-        router.get(accountsIndex().url, {}, {
-            preserveState: true,
-            preserveScroll: true,
-            replace: true,
-            onSuccess: () => setLastRefresh(new Date()),
-            onFinish: () => setLoading(false),
-        });
+        router.get(
+            accountsIndex().url,
+            {},
+            {
+                preserveState: true,
+                preserveScroll: true,
+                replace: true,
+                onSuccess: () => setLastRefresh(new Date()),
+                onFinish: () => setLoading(false),
+            },
+        );
     };
 
     const handleManualRefresh = () => {
@@ -588,7 +761,7 @@ export default function AccountIndex() {
             preserveState: true,
             preserveScroll: true,
             replace: true,
-            only: ["users"],
+            only: ['users'],
             onSuccess: () => setLastRefresh(new Date()),
             onFinish: () => setLoading(false),
         });
@@ -600,13 +773,13 @@ export default function AccountIndex() {
         setSelectedStaleIds([]);
         try {
             const res = await fetch(accountsStaleAccounts().url, {
-                headers: { Accept: "application/json" },
+                headers: { Accept: 'application/json' },
             });
-            if (!res.ok) throw new Error("Failed to load stale accounts");
+            if (!res.ok) throw new Error('Failed to load stale accounts');
             const data: StaleAccount[] = await res.json();
             setStaleAccounts(data);
         } catch {
-            toast.error("Failed to load stale accounts");
+            toast.error('Failed to load stale accounts');
             setStaleDialogOpen(false);
         } finally {
             setLoadingStale(false);
@@ -614,8 +787,8 @@ export default function AccountIndex() {
     };
 
     const handleStaleToggle = (id: number) => {
-        setSelectedStaleIds(prev =>
-            prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+        setSelectedStaleIds((prev) =>
+            prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
         );
     };
 
@@ -623,7 +796,7 @@ export default function AccountIndex() {
         setSelectedStaleIds(
             selectedStaleIds.length === staleAccounts.length
                 ? []
-                : staleAccounts.map(a => a.id)
+                : staleAccounts.map((a) => a.id),
         );
     };
 
@@ -638,20 +811,23 @@ export default function AccountIndex() {
                     setSelectedStaleIds([]);
                 },
                 onFinish: () => setDeletingStale(false),
-            }
+            },
         );
     };
 
-
     const handlePageChange = (page: number) => {
         setLoading(true);
-        router.get(accountsIndex().url, { ...buildFilterParams(currentFilters), page }, {
-            preserveState: true,
-            preserveScroll: true,
-            only: ["users"],
-            onSuccess: () => setLastRefresh(new Date()),
-            onFinish: () => setLoading(false),
-        });
+        router.get(
+            accountsIndex().url,
+            { ...buildFilterParams(currentFilters), page },
+            {
+                preserveState: true,
+                preserveScroll: true,
+                only: ['users'],
+                onSuccess: () => setLastRefresh(new Date()),
+                onFinish: () => setLoading(false),
+            },
+        );
     };
 
     const getRoleBadgeColor = (role: string) => {
@@ -673,44 +849,49 @@ export default function AccountIndex() {
         if (user.deleted_at && user.deletion_confirmed_at) {
             return {
                 label: 'Deleted',
-                className: 'bg-red-100 text-red-800 border-red-200'
+                className: 'bg-red-100 text-red-800 border-red-200',
             };
         }
         if (user.deleted_at && !user.deletion_confirmed_at) {
             return {
                 label: 'Pending Deletion',
-                className: 'bg-orange-100 text-orange-800 border-orange-200'
+                className: 'bg-orange-100 text-orange-800 border-orange-200',
             };
         }
         if (user.is_approved) {
             return {
                 label: 'Approved',
-                className: 'bg-green-100 text-green-800 border-green-200'
+                className: 'bg-green-100 text-green-800 border-green-200',
             };
         }
         // User has hired_date but is not approved = Resigned employee
         if (user.hired_date && !user.is_approved) {
             return {
                 label: 'Resigned',
-                className: 'bg-purple-100 text-purple-800 border-purple-200'
+                className: 'bg-purple-100 text-purple-800 border-purple-200',
             };
         }
         // User has no hired_date and is not approved = Pending applicant
         return {
             label: 'Pending',
-            className: 'bg-yellow-100 text-yellow-800 border-yellow-200'
+            className: 'bg-yellow-100 text-yellow-800 border-yellow-200',
         };
     };
 
-    const isPendingDeletion = (user: User) => user.deleted_at && !user.deletion_confirmed_at;
-    const isDeleted = (user: User) => user.deleted_at && user.deletion_confirmed_at;
+    const isPendingDeletion = (user: User) =>
+        user.deleted_at && !user.deletion_confirmed_at;
+    const isDeleted = (user: User) =>
+        user.deleted_at && user.deletion_confirmed_at;
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={title} />
-            <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3 relative">
+            <div className="relative flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3">
                 {/* Loading overlay for page transitions */}
-                <LoadingOverlay isLoading={isPageLoading || loading} message="Loading accounts..." />
+                <LoadingOverlay
+                    isLoading={isPageLoading || loading}
+                    message="Loading accounts..."
+                />
 
                 <PageHeader
                     title="Account Management"
@@ -720,201 +901,300 @@ export default function AccountIndex() {
                 <div className="flex flex-col gap-3">
                     <div className="flex flex-col flex-wrap gap-3 sm:flex-row sm:items-end">
                         <div className="w-full sm:w-56">
-                        <Popover open={isUserPopoverOpen} onOpenChange={setIsUserPopoverOpen}>
-                            <PopoverTrigger asChild>
-                                <Button
-                                    variant="outline"
-                                    role="combobox"
-                                    aria-expanded={isUserPopoverOpen}
-                                    className="w-full justify-between font-normal"
-                                >
-                                    <span className="truncate">
-                                        {selectedUserIds.length === 0
-                                            ? "All Employees"
-                                            : selectedUserIds.length === 1
-                                                ? allUsers.find(u => u.id.toString() === selectedUserIds[0])?.name || "1 employee selected"
-                                                : `${selectedUserIds.length} employees selected`}
-                                    </span>
-                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-80 max-w-[calc(100vw-2rem)] p-0" align="start">
-                                <Command shouldFilter={false}>
-                                    <CommandInput
-                                        placeholder="Search employee..."
-                                        value={userSearchQuery}
-                                        onValueChange={setUserSearchQuery}
-                                    />
-                                    <CommandList>
-                                        <CommandEmpty>No employee found.</CommandEmpty>
-                                        <CommandGroup>
-                                            <CommandItem
-                                                value="all"
-                                                onSelect={() => {
-                                                    setSelectedUserIds([]);
-                                                }}
-                                                className="cursor-pointer"
-                                            >
-                                                <Check
-                                                    className={`mr-2 h-4 w-4 ${selectedUserIds.length === 0 ? "opacity-100" : "opacity-0"}`}
-                                                />
-                                                All Employees
-                                            </CommandItem>
-                                            {filteredUsers.map((user) => {
-                                                const idStr = user.id.toString();
-                                                const isSelected = selectedUserIds.includes(idStr);
-                                                return (
-                                                    <CommandItem
-                                                        key={user.id}
-                                                        value={user.name}
-                                                        onSelect={() => {
-                                                            toggleSelectedUserId(idStr);
-                                                        }}
-                                                        className="cursor-pointer"
-                                                    >
-                                                        <Checkbox
-                                                            checked={isSelected}
-                                                            className="mr-2"
-                                                            onCheckedChange={() => toggleSelectedUserId(idStr)}
-                                                            onClick={(e) => e.stopPropagation()}
-                                                        />
-                                                        <div className="flex min-w-0 flex-col">
-                                                            <span className="break-words">{user.name}</span>
-                                                            <span className="text-xs text-muted-foreground break-all">{user.email}</span>
-                                                        </div>
-                                                    </CommandItem>
-                                                );
-                                            })}
-                                        </CommandGroup>
-                                    </CommandList>
-                                </Command>
-                                {selectedUserIds.length > 0 && (
-                                    <div className="flex items-center justify-between border-t p-2 text-xs">
-                                        <span className="text-muted-foreground">
-                                            {selectedUserIds.length} selected
+                            <Popover
+                                open={isUserPopoverOpen}
+                                onOpenChange={setIsUserPopoverOpen}
+                            >
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        role="combobox"
+                                        aria-expanded={isUserPopoverOpen}
+                                        className="w-full justify-between font-normal"
+                                    >
+                                        <span className="truncate">
+                                            {selectedUserIds.length === 0
+                                                ? 'All Employees'
+                                                : selectedUserIds.length === 1
+                                                  ? allUsers.find(
+                                                        (u) =>
+                                                            u.id.toString() ===
+                                                            selectedUserIds[0],
+                                                    )?.name ||
+                                                    '1 employee selected'
+                                                  : `${selectedUserIds.length} employees selected`}
                                         </span>
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="sm"
-                                            className="h-7 px-2"
-                                            onClick={() => setSelectedUserIds([])}
-                                        >
-                                            Clear
-                                        </Button>
-                                    </div>
-                                )}
-                            </PopoverContent>
-                        </Popover>
+                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent
+                                    className="w-80 max-w-[calc(100vw-2rem)] p-0"
+                                    align="start"
+                                >
+                                    <Command shouldFilter={false}>
+                                        <CommandInput
+                                            placeholder="Search employee..."
+                                            value={userSearchQuery}
+                                            onValueChange={setUserSearchQuery}
+                                        />
+                                        <CommandList>
+                                            <CommandEmpty>
+                                                No employee found.
+                                            </CommandEmpty>
+                                            <CommandGroup>
+                                                <CommandItem
+                                                    value="all"
+                                                    onSelect={() => {
+                                                        setSelectedUserIds([]);
+                                                    }}
+                                                    className="cursor-pointer"
+                                                >
+                                                    <Check
+                                                        className={`mr-2 h-4 w-4 ${selectedUserIds.length === 0 ? 'opacity-100' : 'opacity-0'}`}
+                                                    />
+                                                    All Employees
+                                                </CommandItem>
+                                                {filteredUsers.map((user) => {
+                                                    const idStr =
+                                                        user.id.toString();
+                                                    const isSelected =
+                                                        selectedUserIds.includes(
+                                                            idStr,
+                                                        );
+                                                    return (
+                                                        <CommandItem
+                                                            key={user.id}
+                                                            value={user.name}
+                                                            onSelect={() => {
+                                                                toggleSelectedUserId(
+                                                                    idStr,
+                                                                );
+                                                            }}
+                                                            className="cursor-pointer"
+                                                        >
+                                                            <Checkbox
+                                                                checked={
+                                                                    isSelected
+                                                                }
+                                                                className="mr-2"
+                                                                onCheckedChange={() =>
+                                                                    toggleSelectedUserId(
+                                                                        idStr,
+                                                                    )
+                                                                }
+                                                                onClick={(e) =>
+                                                                    e.stopPropagation()
+                                                                }
+                                                            />
+                                                            <div className="flex min-w-0 flex-col">
+                                                                <span className="break-words">
+                                                                    {user.name}
+                                                                </span>
+                                                                <span className="text-xs break-all text-muted-foreground">
+                                                                    {user.email}
+                                                                </span>
+                                                            </div>
+                                                        </CommandItem>
+                                                    );
+                                                })}
+                                            </CommandGroup>
+                                        </CommandList>
+                                    </Command>
+                                    {selectedUserIds.length > 0 && (
+                                        <div className="flex items-center justify-between border-t p-2 text-xs">
+                                            <span className="text-muted-foreground">
+                                                {selectedUserIds.length}{' '}
+                                                selected
+                                            </span>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-7 px-2"
+                                                onClick={() =>
+                                                    setSelectedUserIds([])
+                                                }
+                                            >
+                                                Clear
+                                            </Button>
+                                        </div>
+                                    )}
+                                </PopoverContent>
+                            </Popover>
                         </div>
 
                         <div className="w-full sm:w-40">
-                        <Select value={roleFilter} onValueChange={setRoleFilter}>
-                            <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Filter by Role" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Roles</SelectItem>
-                                <SelectItem value="Super Admin">Super Admin</SelectItem>
-                                <SelectItem value="Admin">Admin</SelectItem>
-                                <SelectItem value="Team Lead">Team Lead</SelectItem>
-                                <SelectItem value="Agent">Agent</SelectItem>
-                                <SelectItem value="HR">HR</SelectItem>
-                                <SelectItem value="IT">IT</SelectItem>
-                                <SelectItem value="Utility">Utility</SelectItem>
-                            </SelectContent>
-                        </Select>
-                        </div>
-
-                        <div className="w-full sm:w-48">
-                        <Select value={statusFilter} onValueChange={setStatusFilter}>
-                            <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Filter by Account Status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Account Statuses</SelectItem>
-                                <SelectItem value="pending">Pending</SelectItem>
-                                <SelectItem value="resigned">Resigned</SelectItem>
-                                <SelectItem value="approved">Approved</SelectItem>
-                                <SelectItem value="pending_deletion">Pending Deletion</SelectItem>
-                                <SelectItem value="deleted">Deleted</SelectItem>
-                            </SelectContent>
-                        </Select>
-                        </div>
-
-                        <div className="w-full sm:w-48">
-                        <Select value={employeeStatusFilter} onValueChange={setEmployeeStatusFilter}>
-                            <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Filter by Employee Status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Employee Statuses</SelectItem>
-                                <SelectItem value="active">Active Employees</SelectItem>
-                                <SelectItem value="inactive">Inactive Employees</SelectItem>
-                            </SelectContent>
-                        </Select>
-                        </div>
-
-                        <div className="w-full sm:w-44">
-                        <Select value={campaignFilter} onValueChange={setCampaignFilter}>
-                            <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Filter by Campaign" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Campaigns</SelectItem>
-                                <SelectItem value="none">No Campaign</SelectItem>
-                                {campaigns.map((campaign) => (
-                                    <SelectItem key={campaign.id} value={String(campaign.id)}>
-                                        {campaign.name}
+                            <Select
+                                value={roleFilter}
+                                onValueChange={setRoleFilter}
+                            >
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Filter by Role" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">
+                                        All Roles
                                     </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                                    <SelectItem value="Super Admin">
+                                        Super Admin
+                                    </SelectItem>
+                                    <SelectItem value="Admin">Admin</SelectItem>
+                                    <SelectItem value="Team Lead">
+                                        Team Lead
+                                    </SelectItem>
+                                    <SelectItem value="Agent">Agent</SelectItem>
+                                    <SelectItem value="HR">HR</SelectItem>
+                                    <SelectItem value="IT">IT</SelectItem>
+                                    <SelectItem value="Utility">
+                                        Utility
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="w-full sm:w-48">
+                            <Select
+                                value={statusFilter}
+                                onValueChange={setStatusFilter}
+                            >
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Filter by Account Status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">
+                                        All Account Statuses
+                                    </SelectItem>
+                                    <SelectItem value="pending">
+                                        Pending
+                                    </SelectItem>
+                                    <SelectItem value="resigned">
+                                        Resigned
+                                    </SelectItem>
+                                    <SelectItem value="approved">
+                                        Approved
+                                    </SelectItem>
+                                    <SelectItem value="pending_deletion">
+                                        Pending Deletion
+                                    </SelectItem>
+                                    <SelectItem value="deleted">
+                                        Deleted
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="w-full sm:w-48">
+                            <Select
+                                value={employeeStatusFilter}
+                                onValueChange={setEmployeeStatusFilter}
+                            >
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Filter by Employee Status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">
+                                        All Employee Statuses
+                                    </SelectItem>
+                                    <SelectItem value="active">
+                                        Active Employees
+                                    </SelectItem>
+                                    <SelectItem value="inactive">
+                                        Inactive Employees
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
 
                         <div className="w-full sm:w-44">
-                        <Select
-                            value={hiredStatusFilter}
-                            onValueChange={(value) => {
-                                setHiredStatusFilter(value);
-                                if (value !== "range") {
-                                    setHiredFrom("");
-                                    setHiredTo("");
-                                }
-                            }}
-                        >
-                            <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Filter by Hired Date" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Hired Dates</SelectItem>
-                                <SelectItem value="range">Hired Date Range</SelectItem>
-                                <SelectItem value="no_hired_date">No Hired Date</SelectItem>
-                            </SelectContent>
-                        </Select>
+                            <Select
+                                value={campaignFilter}
+                                onValueChange={setCampaignFilter}
+                            >
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Filter by Campaign" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">
+                                        All Campaigns
+                                    </SelectItem>
+                                    <SelectItem value="none">
+                                        No Campaign
+                                    </SelectItem>
+                                    {campaigns.map((campaign) => (
+                                        <SelectItem
+                                            key={campaign.id}
+                                            value={String(campaign.id)}
+                                        >
+                                            {campaign.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                         </div>
 
-                        {hiredStatusFilter === "range" && (
+                        <div className="w-full sm:w-44">
+                            <Select
+                                value={hiredStatusFilter}
+                                onValueChange={(value) => {
+                                    setHiredStatusFilter(value);
+                                    if (value !== 'range') {
+                                        setHiredFrom('');
+                                        setHiredTo('');
+                                    }
+                                }}
+                            >
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Filter by Hired Date" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">
+                                        All Hired Dates
+                                    </SelectItem>
+                                    <SelectItem value="range">
+                                        Hired Date Range
+                                    </SelectItem>
+                                    <SelectItem value="no_hired_date">
+                                        No Hired Date
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {hiredStatusFilter === 'range' && (
                             <>
                                 <div className="flex w-full flex-col gap-1 sm:w-40">
-                                    <Label htmlFor="hired-from" className="text-xs text-muted-foreground">Hired From</Label>
+                                    <Label
+                                        htmlFor="hired-from"
+                                        className="text-xs text-muted-foreground"
+                                    >
+                                        Hired From
+                                    </Label>
                                     <Input
                                         id="hired-from"
                                         type="date"
                                         value={hiredFrom}
                                         max={hiredTo || undefined}
-                                        onChange={e => setHiredFrom(e.target.value)}
+                                        onChange={(e) =>
+                                            setHiredFrom(e.target.value)
+                                        }
                                         className="w-full"
                                     />
                                 </div>
                                 <div className="flex w-full flex-col gap-1 sm:w-40">
-                                    <Label htmlFor="hired-to" className="text-xs text-muted-foreground">Hired To</Label>
+                                    <Label
+                                        htmlFor="hired-to"
+                                        className="text-xs text-muted-foreground"
+                                    >
+                                        Hired To
+                                    </Label>
                                     <Input
                                         id="hired-to"
                                         type="date"
                                         value={hiredTo}
                                         min={hiredFrom || undefined}
-                                        onChange={e => setHiredTo(e.target.value)}
+                                        onChange={(e) =>
+                                            setHiredTo(e.target.value)
+                                        }
                                         className="w-full"
                                     />
                                 </div>
@@ -922,21 +1202,30 @@ export default function AccountIndex() {
                         )}
 
                         <div className="w-full sm:w-64">
-                        <Input
-                            type="search"
-                            placeholder="Search by name or email..."
-                            value={search}
-                            onChange={e => setSearch(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                            className="w-full"
-                        />
+                            <Input
+                                type="search"
+                                placeholder="Search by name or email..."
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                onKeyDown={(e) =>
+                                    e.key === 'Enter' && handleSearch()
+                                }
+                                className="w-full"
+                            />
                         </div>
                     </div>
 
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                             <Can permission="accounts.create">
-                                <Button onClick={() => router.get(withReturnTo(accountsCreate().url))} className="w-full sm:w-auto">
+                                <Button
+                                    onClick={() =>
+                                        router.get(
+                                            withReturnTo(accountsCreate().url),
+                                        )
+                                    }
+                                    className="w-full sm:w-auto"
+                                >
                                     <Plus className="mr-2 h-4 w-4" />
                                     Create Account
                                 </Button>
@@ -947,10 +1236,11 @@ export default function AccountIndex() {
                                     <Button
                                         onClick={handleBulkApprove}
                                         disabled={loading}
-                                        className="w-full sm:w-auto bg-green-600 hover:bg-green-700"
+                                        className="w-full bg-green-600 hover:bg-green-700 sm:w-auto"
                                     >
                                         <CheckSquare className="mr-2 h-4 w-4" />
-                                        Bulk Approve ({selectedApproveIds.length})
+                                        Bulk Approve (
+                                        {selectedApproveIds.length})
                                     </Button>
                                 )}
                             </Can>
@@ -960,7 +1250,7 @@ export default function AccountIndex() {
                                     <Button
                                         onClick={handleBulkRevoke}
                                         disabled={loading}
-                                        className="w-full sm:w-auto bg-yellow-600 hover:bg-yellow-700"
+                                        className="w-full bg-yellow-600 hover:bg-yellow-700 sm:w-auto"
                                     >
                                         <XSquare className="mr-2 h-4 w-4" />
                                         Bulk Revoke ({selectedRevokeIds.length})
@@ -969,7 +1259,8 @@ export default function AccountIndex() {
                             </Can>
 
                             <Can permission="accounts.edit">
-                                {(someApproveSelected || someRevokeSelected) && (
+                                {(someApproveSelected ||
+                                    someRevokeSelected) && (
                                     <Button
                                         variant="outline"
                                         onClick={() => {
@@ -980,47 +1271,88 @@ export default function AccountIndex() {
                                         className="w-full sm:w-auto"
                                     >
                                         <X className="mr-2 h-4 w-4" />
-                                        Clear Selection ({selectedApproveIds.length + selectedRevokeIds.length})
+                                        Clear Selection (
+                                        {selectedApproveIds.length +
+                                            selectedRevokeIds.length}
+                                        )
                                     </Button>
                                 )}
                             </Can>
                         </div>
 
-                        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end sm:flex-1">
-                            <Button variant="default" onClick={handleSearch} className="w-full sm:w-auto">
+                        <div className="flex flex-col gap-3 sm:flex-1 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+                            <Button
+                                variant="default"
+                                onClick={handleSearch}
+                                className="w-full sm:w-auto"
+                            >
                                 <Search className="mr-2 h-4 w-4" />
                                 Apply Filters
                             </Button>
 
                             {showClearFilters && (
-                                <Button variant="outline" onClick={clearFilters} className="w-full sm:w-auto">
+                                <Button
+                                    variant="outline"
+                                    onClick={clearFilters}
+                                    className="w-full sm:w-auto"
+                                >
                                     Clear Filters
                                 </Button>
                             )}
 
                             <div className="flex gap-2">
                                 <Can permission="accounts.delete">
-                                    <Button variant="outline" onClick={openStaleDialog} size="sm" className="text-destructive border-destructive/40 hover:bg-destructive/10 relative" title="View and delete stale resigned accounts">
+                                    <Button
+                                        variant="outline"
+                                        onClick={openStaleDialog}
+                                        size="sm"
+                                        className="relative border-destructive/40 text-destructive hover:bg-destructive/10"
+                                        title="View and delete stale resigned accounts"
+                                    >
                                         <Clock className="mr-2 h-4 w-4" />
                                         Stale Accounts
                                         {staleCount > 0 && (
-                                            <span className="ml-2 inline-flex items-center justify-center rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-semibold text-destructive-foreground leading-none min-w-4.5">
-                                                {staleCount > 99 ? '99+' : staleCount}
+                                            <span className="ml-2 inline-flex min-w-4.5 items-center justify-center rounded-full bg-destructive px-1.5 py-0.5 text-[10px] leading-none font-semibold text-destructive-foreground">
+                                                {staleCount > 99
+                                                    ? '99+'
+                                                    : staleCount}
                                             </span>
                                         )}
                                     </Button>
                                 </Can>
-                                <Button variant="ghost" onClick={handleManualRefresh} disabled={loading} size="icon" title="Refresh">
-                                    <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                                <Button
+                                    variant="ghost"
+                                    onClick={handleManualRefresh}
+                                    disabled={loading}
+                                    size="icon"
+                                    title="Refresh"
+                                >
+                                    <RefreshCw
+                                        className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`}
+                                    />
                                 </Button>
 
                                 <Button
-                                    variant={autoRefreshEnabled ? "default" : "ghost"}
-                                    onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
+                                    variant={
+                                        autoRefreshEnabled ? 'default' : 'ghost'
+                                    }
+                                    onClick={() =>
+                                        setAutoRefreshEnabled(
+                                            !autoRefreshEnabled,
+                                        )
+                                    }
                                     size="icon"
-                                    title={autoRefreshEnabled ? "Disable auto-refresh" : "Enable auto-refresh (30s)"}
+                                    title={
+                                        autoRefreshEnabled
+                                            ? 'Disable auto-refresh'
+                                            : 'Enable auto-refresh (30s)'
+                                    }
                                 >
-                                    {autoRefreshEnabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                                    {autoRefreshEnabled ? (
+                                        <Pause className="h-4 w-4" />
+                                    ) : (
+                                        <Play className="h-4 w-4" />
+                                    )}
                                 </Button>
                             </div>
                         </div>
@@ -1029,7 +1361,8 @@ export default function AccountIndex() {
 
                 <div className="flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        Showing {users.data.length} of {users.meta.total} user account{users.meta.total !== 1 ? 's' : ''}
+                        Showing {users.data.length} of {users.meta.total} user
+                        account{users.meta.total !== 1 ? 's' : ''}
                         {showClearFilters && ' (filtered)'}
                     </div>
                     <div className="text-xs">
@@ -1038,7 +1371,7 @@ export default function AccountIndex() {
                 </div>
 
                 {/* Desktop Table */}
-                <div className="hidden md:block shadow rounded-md overflow-hidden">
+                <div className="hidden overflow-hidden rounded-md shadow md:block">
                     {isPageLoading ? (
                         <TableSkeleton columns={10} rows={8} />
                     ) : (
@@ -1049,18 +1382,28 @@ export default function AccountIndex() {
                                         <Can permission="accounts.edit">
                                             <TableHead className="w-12">
                                                 <div className="flex flex-col gap-1">
-                                                    {approvableUsers.length > 0 && (
+                                                    {approvableUsers.length >
+                                                        0 && (
                                                         <Checkbox
-                                                            checked={allApprovableSelected}
-                                                            onCheckedChange={toggleSelectAllApprove}
+                                                            checked={
+                                                                allApprovableSelected
+                                                            }
+                                                            onCheckedChange={
+                                                                toggleSelectAllApprove
+                                                            }
                                                             aria-label="Select all pending"
                                                             className="border-green-500 data-[state=checked]:bg-green-600"
                                                         />
                                                     )}
-                                                    {revokableUsers.length > 0 && (
+                                                    {revokableUsers.length >
+                                                        0 && (
                                                         <Checkbox
-                                                            checked={allRevokableSelected}
-                                                            onCheckedChange={toggleSelectAllRevoke}
+                                                            checked={
+                                                                allRevokableSelected
+                                                            }
+                                                            onCheckedChange={
+                                                                toggleSelectAllRevoke
+                                                            }
                                                             aria-label="Select all approved"
                                                             className="border-yellow-500 data-[state=checked]:bg-yellow-600"
                                                         />
@@ -1076,109 +1419,204 @@ export default function AccountIndex() {
                                         <TableHead>Campaign</TableHead>
                                         <TableHead>Hired Date</TableHead>
                                         <TableHead>Created At</TableHead>
-                                        <TableHead className="text-right">Actions</TableHead>
+                                        <TableHead className="text-right">
+                                            Actions
+                                        </TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {users.data.map((user) => {
-                                        const statusBadge = getStatusBadge(user);
+                                        const statusBadge =
+                                            getStatusBadge(user);
                                         return (
-                                            <TableRow key={user.id} className={isPendingDeletion(user) ? 'bg-orange-50 dark:bg-orange-950/50' : isDeleted(user) ? 'bg-red-50 dark:bg-red-950/50' : ''}>
+                                            <TableRow
+                                                key={user.id}
+                                                className={
+                                                    isPendingDeletion(user)
+                                                        ? 'bg-orange-50 dark:bg-orange-950/50'
+                                                        : isDeleted(user)
+                                                          ? 'bg-red-50 dark:bg-red-950/50'
+                                                          : ''
+                                                }
+                                            >
                                                 <Can permission="accounts.edit">
                                                     <TableCell>
-                                                        {!user.deleted_at && user.id !== currentUserId && (
-                                                            user.is_approved ? (
+                                                        {!user.deleted_at &&
+                                                            user.id !==
+                                                                currentUserId &&
+                                                            (user.is_approved ? (
                                                                 <Checkbox
-                                                                    checked={selectedRevokeIds.includes(user.id)}
-                                                                    onCheckedChange={() => toggleSelectRevoke(user.id)}
+                                                                    checked={selectedRevokeIds.includes(
+                                                                        user.id,
+                                                                    )}
+                                                                    onCheckedChange={() =>
+                                                                        toggleSelectRevoke(
+                                                                            user.id,
+                                                                        )
+                                                                    }
                                                                     aria-label={`Select ${user.first_name} ${user.last_name} for revoke`}
                                                                     className="border-yellow-500 data-[state=checked]:bg-yellow-600"
                                                                 />
                                                             ) : (
                                                                 <Checkbox
-                                                                    checked={selectedApproveIds.includes(user.id)}
-                                                                    onCheckedChange={() => toggleSelectApprove(user.id)}
+                                                                    checked={selectedApproveIds.includes(
+                                                                        user.id,
+                                                                    )}
+                                                                    onCheckedChange={() =>
+                                                                        toggleSelectApprove(
+                                                                            user.id,
+                                                                        )
+                                                                    }
                                                                     aria-label={`Select ${user.first_name} ${user.last_name} for approve`}
                                                                     className="border-green-500 data-[state=checked]:bg-green-600"
                                                                 />
-                                                            )
-                                                        )}
+                                                            ))}
                                                     </TableCell>
                                                 </Can>
                                                 <TableCell className="font-medium">
                                                     <div className="flex items-center gap-3">
                                                         <Avatar className="h-10 w-10 overflow-hidden rounded-full">
-                                                            <AvatarImage src={user.avatar_url} alt={`${user.first_name} ${user.last_name}`} />
-                                                            <AvatarFallback className="rounded-full bg-neutral-200 text-black dark:bg-neutral-700 dark:text-white text-sm">
-                                                                {getInitials(`${user.first_name} ${user.last_name}`)}
+                                                            <AvatarImage
+                                                                src={
+                                                                    user.avatar_url
+                                                                }
+                                                                alt={`${user.first_name} ${user.last_name}`}
+                                                            />
+                                                            <AvatarFallback className="rounded-full bg-neutral-200 text-sm text-black dark:bg-neutral-700 dark:text-white">
+                                                                {getInitials(
+                                                                    `${user.first_name} ${user.last_name}`,
+                                                                )}
                                                             </AvatarFallback>
                                                         </Avatar>
                                                         <span>
-                                                            {user.first_name} {user.middle_name ? `${user.middle_name}. ` : ''}{user.last_name}
+                                                            {user.first_name}{' '}
+                                                            {user.middle_name
+                                                                ? `${user.middle_name}. `
+                                                                : ''}
+                                                            {user.last_name}
                                                         </span>
                                                     </div>
                                                 </TableCell>
-                                                <TableCell>{user.email}</TableCell>
                                                 <TableCell>
-                                                    <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getRoleBadgeColor(user.role)}`}>
+                                                    {user.email}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <span
+                                                        className={`rounded-full border px-3 py-1 text-xs font-medium ${getRoleBadgeColor(user.role)}`}
+                                                    >
                                                         {user.role}
                                                     </span>
                                                 </TableCell>
                                                 <TableCell>
                                                     <div className="flex items-center gap-2">
                                                         <Can permission="accounts.edit">
-                                                            {!user.deleted_at && user.id !== currentUserId && (
-                                                                <Switch
-                                                                    checked={user.is_active}
-                                                                    onCheckedChange={() => handleToggleActive(user)}
-                                                                    aria-label="Toggle employee active status"
-                                                                />
-                                                            )}
+                                                            {!user.deleted_at &&
+                                                                user.id !==
+                                                                    currentUserId && (
+                                                                    <Switch
+                                                                        checked={
+                                                                            user.is_active
+                                                                        }
+                                                                        onCheckedChange={() =>
+                                                                            handleToggleActive(
+                                                                                user,
+                                                                            )
+                                                                        }
+                                                                        aria-label="Toggle employee active status"
+                                                                    />
+                                                                )}
                                                         </Can>
-                                                        <div className={`flex items-center justify-center px-3 py-1 rounded-full border ${user.is_active
-                                                            ? 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700'
-                                                            : 'bg-gray-100 text-gray-800 border-gray-300 dark:bg-gray-900/30 dark:text-gray-400 dark:border-gray-700'
-                                                            }`}>
-                                                            {user.is_active ? <UserCheck className="h-4 w-4" /> : <UserX className="h-4 w-4" />}
+                                                        <div
+                                                            className={`flex items-center justify-center rounded-full border px-3 py-1 ${
+                                                                user.is_active
+                                                                    ? 'border-green-300 bg-green-100 text-green-800 dark:border-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                                                    : 'border-gray-300 bg-gray-100 text-gray-800 dark:border-gray-700 dark:bg-gray-900/30 dark:text-gray-400'
+                                                            }`}
+                                                        >
+                                                            {user.is_active ? (
+                                                                <UserCheck className="h-4 w-4" />
+                                                            ) : (
+                                                                <UserX className="h-4 w-4" />
+                                                            )}
                                                         </div>
                                                     </div>
                                                 </TableCell>
                                                 <TableCell>
-                                                    <span className={`px-3 py-1 rounded-full text-xs font-medium border ${statusBadge.className}`}>
+                                                    <span
+                                                        className={`rounded-full border px-3 py-1 text-xs font-medium ${statusBadge.className}`}
+                                                    >
                                                         {statusBadge.label}
                                                     </span>
                                                 </TableCell>
                                                 <TableCell>
-                                                    {user.campaign_names && user.campaign_names.length > 0 ? (
+                                                    {user.campaign_names &&
+                                                    user.campaign_names.length >
+                                                        0 ? (
                                                         <span className="inline-flex items-center gap-1.5">
-                                                            <span className={user.campaign_active === false ? 'text-muted-foreground' : ''}>
-                                                                {user.campaign_names.join(', ')}
+                                                            <span
+                                                                className={
+                                                                    user.campaign_active ===
+                                                                    false
+                                                                        ? 'text-muted-foreground'
+                                                                        : ''
+                                                                }
+                                                            >
+                                                                {user.campaign_names.join(
+                                                                    ', ',
+                                                                )}
                                                             </span>
-                                                            {user.campaign_active === false && (
-                                                                <span className="px-2 py-0.5 rounded-full text-[10px] font-medium border bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700">
+                                                            {user.campaign_active ===
+                                                                false && (
+                                                                <span className="rounded-full border border-amber-200 bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
                                                                     Inactive
                                                                 </span>
                                                             )}
                                                         </span>
-                                                    ) : '-'}
+                                                    ) : (
+                                                        '-'
+                                                    )}
                                                 </TableCell>
                                                 <TableCell>
-                                                    {user.hired_date ? new Date(user.hired_date).toLocaleDateString() : '-'}
+                                                    {user.hired_date
+                                                        ? new Date(
+                                                              user.hired_date,
+                                                          ).toLocaleDateString()
+                                                        : '-'}
                                                 </TableCell>
-                                                <TableCell>{new Date(user.created_at).toLocaleDateString()}</TableCell>
+                                                <TableCell>
+                                                    {new Date(
+                                                        user.created_at,
+                                                    ).toLocaleDateString()}
+                                                </TableCell>
                                                 <TableCell>
                                                     <div className="flex items-center gap-2">
                                                         {/* Show different actions based on deletion status */}
-                                                        {isPendingDeletion(user) ? (
+                                                        {isPendingDeletion(
+                                                            user,
+                                                        ) ? (
                                                             <>
                                                                 {/* Confirm Delete Button - Only for Super Admin, Admin, IT */}
-                                                                <HasRole role={['Super Admin', 'Admin', 'IT']}>
+                                                                <HasRole
+                                                                    role={[
+                                                                        'Super Admin',
+                                                                        'Admin',
+                                                                        'IT',
+                                                                    ]}
+                                                                >
                                                                     <Button
                                                                         variant="outline"
                                                                         size="icon"
-                                                                        onClick={() => handleConfirmDelete(user.id)}
-                                                                        disabled={loading || user.id === currentUserId}
-                                                                        className="text-red-600 hover:text-red-700 border-red-300"
+                                                                        onClick={() =>
+                                                                            handleConfirmDelete(
+                                                                                user.id,
+                                                                            )
+                                                                        }
+                                                                        disabled={
+                                                                            loading ||
+                                                                            user.id ===
+                                                                                currentUserId
+                                                                        }
+                                                                        className="border-red-300 text-red-600 hover:text-red-700"
                                                                         title="Confirm Delete"
                                                                     >
                                                                         <CheckCircle className="h-4 w-4" />
@@ -1190,9 +1628,15 @@ export default function AccountIndex() {
                                                                     <Button
                                                                         variant="outline"
                                                                         size="icon"
-                                                                        onClick={() => handleRestore(user.id)}
-                                                                        disabled={loading}
-                                                                        className="text-green-600 hover:text-green-700 border-green-300"
+                                                                        onClick={() =>
+                                                                            handleRestore(
+                                                                                user.id,
+                                                                            )
+                                                                        }
+                                                                        disabled={
+                                                                            loading
+                                                                        }
+                                                                        className="border-green-300 text-green-600 hover:text-green-700"
                                                                         title="Restore Account"
                                                                     >
                                                                         <RotateCcw className="h-4 w-4" />
@@ -1202,13 +1646,26 @@ export default function AccountIndex() {
                                                         ) : isDeleted(user) ? (
                                                             <>
                                                                 {/* Restore Button for deleted accounts */}
-                                                                <HasRole role={['Super Admin', 'Admin', 'HR', 'IT']}>
+                                                                <HasRole
+                                                                    role={[
+                                                                        'Super Admin',
+                                                                        'Admin',
+                                                                        'HR',
+                                                                        'IT',
+                                                                    ]}
+                                                                >
                                                                     <Button
                                                                         variant="outline"
                                                                         size="icon"
-                                                                        onClick={() => handleRestore(user.id)}
-                                                                        disabled={loading}
-                                                                        className="text-green-600 hover:text-green-700 border-green-300"
+                                                                        onClick={() =>
+                                                                            handleRestore(
+                                                                                user.id,
+                                                                            )
+                                                                        }
+                                                                        disabled={
+                                                                            loading
+                                                                        }
+                                                                        className="border-green-300 text-green-600 hover:text-green-700"
                                                                         title="Restore Account"
                                                                     >
                                                                         <RotateCcw className="h-4 w-4" />
@@ -1216,17 +1673,35 @@ export default function AccountIndex() {
                                                                 </HasRole>
 
                                                                 {/* Permanently Delete Button */}
-                                                                <HasRole role={['Super Admin', 'Admin', 'IT']}>
+                                                                <HasRole
+                                                                    role={[
+                                                                        'Super Admin',
+                                                                        'Admin',
+                                                                        'IT',
+                                                                    ]}
+                                                                >
                                                                     <DeleteConfirmDialog
-                                                                        onConfirm={() => handleForceDelete(user.id)}
+                                                                        onConfirm={() =>
+                                                                            handleForceDelete(
+                                                                                user.id,
+                                                                            )
+                                                                        }
                                                                         title="Permanently Delete Account"
                                                                         description={`Are you sure you want to PERMANENTLY delete the account for "${user.first_name} ${user.middle_name ? user.middle_name + '. ' : ''}${user.last_name}"? This action cannot be undone and all data will be lost forever.`}
-                                                                        disabled={loading || user.id === currentUserId}
+                                                                        disabled={
+                                                                            loading ||
+                                                                            user.id ===
+                                                                                currentUserId
+                                                                        }
                                                                         trigger={
                                                                             <Button
                                                                                 variant="destructive"
                                                                                 size="icon"
-                                                                                disabled={loading || user.id === currentUserId}
+                                                                                disabled={
+                                                                                    loading ||
+                                                                                    user.id ===
+                                                                                        currentUserId
+                                                                                }
                                                                                 title="Permanently Delete"
                                                                             >
                                                                                 <XCircle className="h-4 w-4" />
@@ -1238,8 +1713,22 @@ export default function AccountIndex() {
                                                         ) : (
                                                             <>
                                                                 <Can permission="accounts.edit">
-                                                                    <Link href={withReturnTo(accountsEdit(user.id).url)}>
-                                                                        <Button variant="outline" size="icon" disabled={loading} title="Edit Account">
+                                                                    <Link
+                                                                        href={withReturnTo(
+                                                                            accountsEdit(
+                                                                                user.id,
+                                                                            )
+                                                                                .url,
+                                                                        )}
+                                                                    >
+                                                                        <Button
+                                                                            variant="outline"
+                                                                            size="icon"
+                                                                            disabled={
+                                                                                loading
+                                                                            }
+                                                                            title="Edit Account"
+                                                                        >
                                                                             <Pencil className="h-4 w-4" />
                                                                         </Button>
                                                                     </Link>
@@ -1250,9 +1739,17 @@ export default function AccountIndex() {
                                                                         <Button
                                                                             variant="outline"
                                                                             size="icon"
-                                                                            onClick={() => handleUnapprove(user)}
-                                                                            disabled={loading || user.id === currentUserId}
-                                                                            className="text-yellow-600 hover:text-yellow-700 border-yellow-300"
+                                                                            onClick={() =>
+                                                                                handleUnapprove(
+                                                                                    user,
+                                                                                )
+                                                                            }
+                                                                            disabled={
+                                                                                loading ||
+                                                                                user.id ===
+                                                                                    currentUserId
+                                                                            }
+                                                                            className="border-yellow-300 text-yellow-600 hover:text-yellow-700"
                                                                             title="Revoke Access"
                                                                         >
                                                                             <UserMinus className="h-4 w-4" />
@@ -1261,9 +1758,15 @@ export default function AccountIndex() {
                                                                         <Button
                                                                             variant="outline"
                                                                             size="icon"
-                                                                            onClick={() => handleApprove(user.id)}
-                                                                            disabled={loading}
-                                                                            className="text-green-600 hover:text-green-700 border-green-300"
+                                                                            onClick={() =>
+                                                                                handleApprove(
+                                                                                    user.id,
+                                                                                )
+                                                                            }
+                                                                            disabled={
+                                                                                loading
+                                                                            }
+                                                                            className="border-green-300 text-green-600 hover:text-green-700"
                                                                             title="Approve Account"
                                                                         >
                                                                             <UserCheck2 className="h-4 w-4" />
@@ -1273,16 +1776,28 @@ export default function AccountIndex() {
 
                                                                 <Can permission="accounts.delete">
                                                                     <DeleteConfirmDialog
-                                                                        onConfirm={() => handleDelete(user.id)}
+                                                                        onConfirm={() =>
+                                                                            handleDelete(
+                                                                                user.id,
+                                                                            )
+                                                                        }
                                                                         title="Delete User Account"
                                                                         description={`Are you sure you want to delete the account for "${user.first_name} ${user.middle_name ? user.middle_name + '. ' : ''}${user.last_name}"? The account will be marked for deletion and require admin confirmation.`}
-                                                                        disabled={loading || user.id === currentUserId}
+                                                                        disabled={
+                                                                            loading ||
+                                                                            user.id ===
+                                                                                currentUserId
+                                                                        }
                                                                         trigger={
                                                                             <Button
                                                                                 variant="outline"
                                                                                 size="icon"
-                                                                                disabled={loading || user.id === currentUserId}
-                                                                                className="text-red-600 hover:text-red-700 border-red-300"
+                                                                                disabled={
+                                                                                    loading ||
+                                                                                    user.id ===
+                                                                                        currentUserId
+                                                                                }
+                                                                                className="border-red-300 text-red-600 hover:text-red-700"
                                                                                 title="Delete Account"
                                                                             >
                                                                                 <Trash2 className="h-4 w-4" />
@@ -1299,7 +1814,10 @@ export default function AccountIndex() {
                                     })}
                                     {users.data.length === 0 && !loading && (
                                         <TableRow>
-                                            <TableCell colSpan={11} className="py-8 text-center text-gray-500">
+                                            <TableCell
+                                                colSpan={11}
+                                                className="py-8 text-center text-gray-500"
+                                            >
                                                 No user accounts found
                                             </TableCell>
                                         </TableRow>
@@ -1311,96 +1829,165 @@ export default function AccountIndex() {
                 </div>
 
                 {/* Mobile Cards */}
-                <div className="md:hidden space-y-3">
+                <div className="space-y-3 md:hidden">
                     {users.data.map((user) => {
                         const statusBadge = getStatusBadge(user);
                         return (
-                            <div key={user.id} className={`rounded-lg shadow p-4 space-y-3 ${isPendingDeletion(user) ? 'bg-orange-50 dark:bg-orange-950/50 border border-orange-200 dark:border-orange-800' : isDeleted(user) ? 'bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800' : 'bg-card border'}`}>
-                                <div className="flex justify-between items-start">
-                                    <div className="flex items-start gap-3 flex-1">
+                            <div
+                                key={user.id}
+                                className={`space-y-3 rounded-lg p-4 shadow ${isPendingDeletion(user) ? 'border border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950/50' : isDeleted(user) ? 'border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/50' : 'border bg-card'}`}
+                            >
+                                <div className="flex items-start justify-between">
+                                    <div className="flex flex-1 items-start gap-3">
                                         <Can permission="accounts.edit">
-                                            {!user.deleted_at && user.id !== currentUserId && (
-                                                user.is_approved ? (
+                                            {!user.deleted_at &&
+                                                user.id !== currentUserId &&
+                                                (user.is_approved ? (
                                                     <Checkbox
-                                                        checked={selectedRevokeIds.includes(user.id)}
-                                                        onCheckedChange={() => toggleSelectRevoke(user.id)}
+                                                        checked={selectedRevokeIds.includes(
+                                                            user.id,
+                                                        )}
+                                                        onCheckedChange={() =>
+                                                            toggleSelectRevoke(
+                                                                user.id,
+                                                            )
+                                                        }
                                                         aria-label={`Select ${user.first_name} ${user.last_name} for revoke`}
                                                         className="mt-1 border-yellow-500 data-[state=checked]:bg-yellow-600"
                                                     />
                                                 ) : (
                                                     <Checkbox
-                                                        checked={selectedApproveIds.includes(user.id)}
-                                                        onCheckedChange={() => toggleSelectApprove(user.id)}
+                                                        checked={selectedApproveIds.includes(
+                                                            user.id,
+                                                        )}
+                                                        onCheckedChange={() =>
+                                                            toggleSelectApprove(
+                                                                user.id,
+                                                            )
+                                                        }
                                                         aria-label={`Select ${user.first_name} ${user.last_name} for approve`}
                                                         className="mt-1 border-green-500 data-[state=checked]:bg-green-600"
                                                     />
-                                                )
-                                            )}
+                                                ))}
                                         </Can>
                                         <div>
                                             <div className="flex items-center gap-3">
                                                 <Avatar className="h-10 w-10 overflow-hidden rounded-full">
-                                                    <AvatarImage src={user.avatar_url} alt={`${user.first_name} ${user.last_name}`} />
-                                                    <AvatarFallback className="rounded-full bg-neutral-200 text-black dark:bg-neutral-700 dark:text-white text-sm">
-                                                        {getInitials(`${user.first_name} ${user.last_name}`)}
+                                                    <AvatarImage
+                                                        src={user.avatar_url}
+                                                        alt={`${user.first_name} ${user.last_name}`}
+                                                    />
+                                                    <AvatarFallback className="rounded-full bg-neutral-200 text-sm text-black dark:bg-neutral-700 dark:text-white">
+                                                        {getInitials(
+                                                            `${user.first_name} ${user.last_name}`,
+                                                        )}
                                                     </AvatarFallback>
                                                 </Avatar>
                                                 <div>
-                                                    <h3 className="font-semibold text-lg">
-                                                        {user.first_name} {user.middle_name ? `${user.middle_name}. ` : ''}{user.last_name}
+                                                    <h3 className="text-lg font-semibold">
+                                                        {user.first_name}{' '}
+                                                        {user.middle_name
+                                                            ? `${user.middle_name}. `
+                                                            : ''}
+                                                        {user.last_name}
                                                     </h3>
-                                                    <p className="text-sm text-gray-600">{user.email}</p>
+                                                    <p className="text-sm text-gray-600">
+                                                        {user.email}
+                                                    </p>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="flex flex-col gap-2 items-end">
-                                        <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getRoleBadgeColor(user.role)}`}>
+                                    <div className="flex flex-col items-end gap-2">
+                                        <span
+                                            className={`rounded-full border px-2 py-1 text-xs font-medium ${getRoleBadgeColor(user.role)}`}
+                                        >
                                             {user.role}
                                         </span>
                                         <div className="flex items-center gap-2">
                                             <Can permission="accounts.edit">
-                                                {!user.deleted_at && user.id !== currentUserId && (
-                                                    <Switch
-                                                        checked={user.is_active}
-                                                        onCheckedChange={() => handleToggleActive(user)}
-                                                        aria-label="Toggle employee active status"
-                                                    />
-                                                )}
+                                                {!user.deleted_at &&
+                                                    user.id !==
+                                                        currentUserId && (
+                                                        <Switch
+                                                            checked={
+                                                                user.is_active
+                                                            }
+                                                            onCheckedChange={() =>
+                                                                handleToggleActive(
+                                                                    user,
+                                                                )
+                                                            }
+                                                            aria-label="Toggle employee active status"
+                                                        />
+                                                    )}
                                             </Can>
-                                            <div className={`flex items-center justify-center px-2 py-1 rounded-full border ${user.is_active
-                                                ? 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700'
-                                                : 'bg-gray-100 text-gray-800 border-gray-300 dark:bg-gray-900/30 dark:text-gray-400 dark:border-gray-700'
-                                                }`}>
-                                                {user.is_active ? <UserCheck className="h-4 w-4" /> : <UserX className="h-4 w-4" />}
+                                            <div
+                                                className={`flex items-center justify-center rounded-full border px-2 py-1 ${
+                                                    user.is_active
+                                                        ? 'border-green-300 bg-green-100 text-green-800 dark:border-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                                        : 'border-gray-300 bg-gray-100 text-gray-800 dark:border-gray-700 dark:bg-gray-900/30 dark:text-gray-400'
+                                                }`}
+                                            >
+                                                {user.is_active ? (
+                                                    <UserCheck className="h-4 w-4" />
+                                                ) : (
+                                                    <UserX className="h-4 w-4" />
+                                                )}
                                             </div>
                                         </div>
-                                        <span className={`px-2 py-1 rounded-full text-xs font-medium border ${statusBadge.className}`}>
+                                        <span
+                                            className={`rounded-full border px-2 py-1 text-xs font-medium ${statusBadge.className}`}
+                                        >
                                             {statusBadge.label}
                                         </span>
                                     </div>
                                 </div>
                                 <div className="text-xs text-gray-500">
-                                    Campaign: {user.campaign_names && user.campaign_names.length > 0
+                                    Campaign:{' '}
+                                    {user.campaign_names &&
+                                    user.campaign_names.length > 0
                                         ? `${user.campaign_names.join(', ')}${user.campaign_active === false ? ' (Inactive)' : ''}`
                                         : 'None'}
                                 </div>
                                 <div className="text-xs text-gray-500">
-                                    Hired: {user.hired_date ? new Date(user.hired_date).toLocaleDateString() : 'Not set'}
+                                    Hired:{' '}
+                                    {user.hired_date
+                                        ? new Date(
+                                              user.hired_date,
+                                          ).toLocaleDateString()
+                                        : 'Not set'}
                                 </div>
                                 <div className="text-xs text-gray-500">
-                                    Created: {new Date(user.created_at).toLocaleDateString()}
+                                    Created:{' '}
+                                    {new Date(
+                                        user.created_at,
+                                    ).toLocaleDateString()}
                                 </div>
                                 <div className="flex flex-col gap-2 pt-2">
                                     {isPendingDeletion(user) ? (
                                         <>
-                                            <HasRole role={['Super Admin', 'Admin', 'IT']}>
+                                            <HasRole
+                                                role={[
+                                                    'Super Admin',
+                                                    'Admin',
+                                                    'IT',
+                                                ]}
+                                            >
                                                 <Button
                                                     variant="outline"
                                                     size="sm"
-                                                    onClick={() => handleConfirmDelete(user.id)}
-                                                    disabled={loading || user.id === currentUserId}
-                                                    className="w-full text-red-600 hover:text-red-700 border-red-300"
+                                                    onClick={() =>
+                                                        handleConfirmDelete(
+                                                            user.id,
+                                                        )
+                                                    }
+                                                    disabled={
+                                                        loading ||
+                                                        user.id ===
+                                                            currentUserId
+                                                    }
+                                                    className="w-full border-red-300 text-red-600 hover:text-red-700"
                                                 >
                                                     <CheckCircle className="mr-2 h-4 w-4" />
                                                     Confirm Delete
@@ -1410,9 +1997,11 @@ export default function AccountIndex() {
                                                 <Button
                                                     variant="outline"
                                                     size="sm"
-                                                    onClick={() => handleRestore(user.id)}
+                                                    onClick={() =>
+                                                        handleRestore(user.id)
+                                                    }
                                                     disabled={loading}
-                                                    className="w-full text-green-600 hover:text-green-700 border-green-300"
+                                                    className="w-full border-green-300 text-green-600 hover:text-green-700"
                                                 >
                                                     <RotateCcw className="mr-2 h-4 w-4" />
                                                     Restore Account
@@ -1422,13 +2011,22 @@ export default function AccountIndex() {
                                     ) : isDeleted(user) ? (
                                         <>
                                             {/* Restore Button for deleted accounts */}
-                                            <HasRole role={['Super Admin', 'Admin', 'HR', 'IT']}>
+                                            <HasRole
+                                                role={[
+                                                    'Super Admin',
+                                                    'Admin',
+                                                    'HR',
+                                                    'IT',
+                                                ]}
+                                            >
                                                 <Button
                                                     variant="outline"
                                                     size="sm"
-                                                    onClick={() => handleRestore(user.id)}
+                                                    onClick={() =>
+                                                        handleRestore(user.id)
+                                                    }
                                                     disabled={loading}
-                                                    className="w-full text-green-600 hover:text-green-700 border-green-300"
+                                                    className="w-full border-green-300 text-green-600 hover:text-green-700"
                                                 >
                                                     <RotateCcw className="mr-1 h-4 w-4" />
                                                     Restore Account
@@ -1436,18 +2034,36 @@ export default function AccountIndex() {
                                             </HasRole>
 
                                             {/* Permanently Delete Button */}
-                                            <HasRole role={['Super Admin', 'Admin', 'IT']}>
+                                            <HasRole
+                                                role={[
+                                                    'Super Admin',
+                                                    'Admin',
+                                                    'IT',
+                                                ]}
+                                            >
                                                 <DeleteConfirmDialog
-                                                    onConfirm={() => handleForceDelete(user.id)}
+                                                    onConfirm={() =>
+                                                        handleForceDelete(
+                                                            user.id,
+                                                        )
+                                                    }
                                                     title="Permanently Delete Account"
                                                     description={`Are you sure you want to PERMANENTLY delete the account for "${user.first_name} ${user.middle_name ? user.middle_name + '. ' : ''}${user.last_name}"? This action cannot be undone and all data will be lost forever.`}
-                                                    disabled={loading || user.id === currentUserId}
+                                                    disabled={
+                                                        loading ||
+                                                        user.id ===
+                                                            currentUserId
+                                                    }
                                                     trigger={
                                                         <Button
                                                             variant="destructive"
                                                             size="sm"
                                                             className="w-full"
-                                                            disabled={loading || user.id === currentUserId}
+                                                            disabled={
+                                                                loading ||
+                                                                user.id ===
+                                                                    currentUserId
+                                                            }
                                                         >
                                                             <XCircle className="mr-2 h-4 w-4" />
                                                             Permanently Delete
@@ -1460,8 +2076,20 @@ export default function AccountIndex() {
                                         <>
                                             <div className="flex gap-2">
                                                 <Can permission="accounts.edit">
-                                                    <Link href={withReturnTo(accountsEdit(user.id).url)} className="flex-1">
-                                                        <Button variant="outline" size="sm" className="w-full" disabled={loading}>
+                                                    <Link
+                                                        href={withReturnTo(
+                                                            accountsEdit(
+                                                                user.id,
+                                                            ).url,
+                                                        )}
+                                                        className="flex-1"
+                                                    >
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="w-full"
+                                                            disabled={loading}
+                                                        >
                                                             <Pencil className="mr-2 h-4 w-4" />
                                                             Edit
                                                         </Button>
@@ -1471,10 +2099,18 @@ export default function AccountIndex() {
                                                 <Can permission="accounts.delete">
                                                     <div className="flex-1">
                                                         <DeleteConfirmDialog
-                                                            onConfirm={() => handleDelete(user.id)}
+                                                            onConfirm={() =>
+                                                                handleDelete(
+                                                                    user.id,
+                                                                )
+                                                            }
                                                             title="Delete User Account"
                                                             description={`Are you sure you want to delete the account for "${user.first_name} ${user.middle_name ? user.middle_name + '. ' : ''}${user.last_name}"? The account will be marked for deletion and require admin confirmation.`}
-                                                            disabled={loading || user.id === currentUserId}
+                                                            disabled={
+                                                                loading ||
+                                                                user.id ===
+                                                                    currentUserId
+                                                            }
                                                             triggerClassName="w-full"
                                                         />
                                                     </div>
@@ -1485,9 +2121,17 @@ export default function AccountIndex() {
                                                     <Button
                                                         variant="outline"
                                                         size="sm"
-                                                        onClick={() => handleUnapprove(user)}
-                                                        disabled={loading || user.id === currentUserId}
-                                                        className="w-full text-yellow-600 hover:text-yellow-700 border-yellow-300"
+                                                        onClick={() =>
+                                                            handleUnapprove(
+                                                                user,
+                                                            )
+                                                        }
+                                                        disabled={
+                                                            loading ||
+                                                            user.id ===
+                                                                currentUserId
+                                                        }
+                                                        className="w-full border-yellow-300 text-yellow-600 hover:text-yellow-700"
                                                     >
                                                         <UserMinus className="mr-2 h-4 w-4" />
                                                         Revoke Approval
@@ -1496,9 +2140,13 @@ export default function AccountIndex() {
                                                     <Button
                                                         variant="outline"
                                                         size="sm"
-                                                        onClick={() => handleApprove(user.id)}
+                                                        onClick={() =>
+                                                            handleApprove(
+                                                                user.id,
+                                                            )
+                                                        }
                                                         disabled={loading}
-                                                        className="w-full text-green-600 hover:text-green-700 border-green-300"
+                                                        className="w-full border-green-300 text-green-600 hover:text-green-700"
                                                     >
                                                         <UserCheck2 className="mr-2 h-4 w-4" />
                                                         Approve Account
@@ -1512,14 +2160,14 @@ export default function AccountIndex() {
                         );
                     })}
                     {users.data.length === 0 && !loading && (
-                        <div className="text-center py-8 text-gray-500">
+                        <div className="py-8 text-center text-gray-500">
                             No user accounts found
                         </div>
                     )}
                 </div>
 
                 {/* Pagination */}
-                <div className="flex justify-center mt-4">
+                <div className="mt-4 flex justify-center">
                     {users.links && users.links.length > 0 && (
                         <PaginationNav
                             links={users.links}
@@ -1529,7 +2177,10 @@ export default function AccountIndex() {
                 </div>
 
                 {/* Toggle Active Confirmation Dialog */}
-                <AlertDialog open={toggleActiveDialogOpen} onOpenChange={setToggleActiveDialogOpen}>
+                <AlertDialog
+                    open={toggleActiveDialogOpen}
+                    onOpenChange={setToggleActiveDialogOpen}
+                >
                     <AlertDialogContent>
                         <AlertDialogHeader>
                             <AlertDialogTitle className="flex items-center gap-2">
@@ -1539,10 +2190,25 @@ export default function AccountIndex() {
                             <AlertDialogDescription>
                                 {userToToggle && (
                                     <>
-                                        Are you sure you want to mark <strong>{userToToggle.first_name} {userToToggle.last_name}</strong> as resigned?
-                                        <br /><br />
+                                        Are you sure you want to mark{' '}
+                                        <strong>
+                                            {userToToggle.first_name}{' '}
+                                            {userToToggle.last_name}
+                                        </strong>{' '}
+                                        as resigned?
+                                        <br />
+                                        <br />
                                         <span className="text-amber-600 dark:text-amber-400">
-                                            ⚠️ This will <strong>revoke their account access</strong> and <strong>delete all assigned schedules</strong>. You can re-hire them later to restore access.
+                                            ⚠️ This will{' '}
+                                            <strong>
+                                                revoke their account access
+                                            </strong>{' '}
+                                            and{' '}
+                                            <strong>
+                                                delete all assigned schedules
+                                            </strong>
+                                            . You can re-hire them later to
+                                            restore access.
                                         </span>
                                     </>
                                 )}
@@ -1551,7 +2217,10 @@ export default function AccountIndex() {
                         <AlertDialogFooter>
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
                             <AlertDialogAction
-                                onClick={() => userToToggle && confirmToggleActive(userToToggle.id)}
+                                onClick={() =>
+                                    userToToggle &&
+                                    confirmToggleActive(userToToggle.id)
+                                }
                                 className="bg-amber-600 hover:bg-amber-700"
                             >
                                 Mark as Resigned
@@ -1561,10 +2230,16 @@ export default function AccountIndex() {
                 </AlertDialog>
 
                 {/* Re-hire Employee Dialog */}
-                <AlertDialog open={rehireDialogOpen} onOpenChange={(open) => {
-                    setRehireDialogOpen(open);
-                    if (!open) { setUserToRehire(null); setRehireDate(""); }
-                }}>
+                <AlertDialog
+                    open={rehireDialogOpen}
+                    onOpenChange={(open) => {
+                        setRehireDialogOpen(open);
+                        if (!open) {
+                            setUserToRehire(null);
+                            setRehireDate('');
+                        }
+                    }}
+                >
                     <AlertDialogContent className="max-w-md">
                         <AlertDialogHeader>
                             <AlertDialogTitle className="flex items-center gap-2">
@@ -1576,26 +2251,57 @@ export default function AccountIndex() {
                                     {userToRehire && (
                                         <>
                                             <p>
-                                                You are re-hiring <strong>{userToRehire.first_name} {userToRehire.middle_name ? userToRehire.middle_name + '. ' : ''}{userToRehire.last_name}</strong>.
+                                                You are re-hiring{' '}
+                                                <strong>
+                                                    {userToRehire.first_name}{' '}
+                                                    {userToRehire.middle_name
+                                                        ? userToRehire.middle_name +
+                                                          '. '
+                                                        : ''}
+                                                    {userToRehire.last_name}
+                                                </strong>
+                                                .
                                             </p>
                                             <p className="text-sm text-muted-foreground">
-                                                Previous hire date: <strong>{userToRehire.hired_date ? new Date(userToRehire.hired_date).toLocaleDateString() : 'N/A'}</strong>
+                                                Previous hire date:{' '}
+                                                <strong>
+                                                    {userToRehire.hired_date
+                                                        ? new Date(
+                                                              userToRehire.hired_date,
+                                                          ).toLocaleDateString()
+                                                        : 'N/A'}
+                                                </strong>
                                             </p>
                                             <div className="space-y-2">
-                                                <Label htmlFor="rehire-date" className="text-sm font-medium">
-                                                    New Hired Date <span className="text-red-500">*</span>
+                                                <Label
+                                                    htmlFor="rehire-date"
+                                                    className="text-sm font-medium"
+                                                >
+                                                    New Hired Date{' '}
+                                                    <span className="text-red-500">
+                                                        *
+                                                    </span>
                                                 </Label>
                                                 <Input
                                                     id="rehire-date"
                                                     type="date"
                                                     value={rehireDate}
-                                                    onChange={(e) => setRehireDate(e.target.value)}
+                                                    onChange={(e) =>
+                                                        setRehireDate(
+                                                            e.target.value,
+                                                        )
+                                                    }
                                                     className="w-full"
                                                 />
                                             </div>
-                                            <div className="bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                                            <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-950/50">
                                                 <p className="text-sm text-blue-800 dark:text-blue-300">
-                                                    ℹ️ Account access will be restored automatically. A schedule assignment dialog will appear next so you can assign a schedule without leaving this page.
+                                                    ℹ️ Account access will be
+                                                    restored automatically. A
+                                                    schedule assignment dialog
+                                                    will appear next so you can
+                                                    assign a schedule without
+                                                    leaving this page.
                                                 </p>
                                             </div>
                                         </>
@@ -1617,10 +2323,16 @@ export default function AccountIndex() {
                 </AlertDialog>
 
                 {/* Schedule Assignment Dialog (opens after re-hire) */}
-                <AlertDialog open={scheduleDialogOpen} onOpenChange={(open) => {
-                    setScheduleDialogOpen(open);
-                    if (!open) { setScheduleDialogUser(null); setUserSchedules([]); }
-                }}>
+                <AlertDialog
+                    open={scheduleDialogOpen}
+                    onOpenChange={(open) => {
+                        setScheduleDialogOpen(open);
+                        if (!open) {
+                            setScheduleDialogUser(null);
+                            setUserSchedules([]);
+                        }
+                    }}
+                >
                     <AlertDialogContent className="max-w-lg">
                         <AlertDialogHeader>
                             <AlertDialogTitle className="flex items-center gap-2">
@@ -1628,63 +2340,102 @@ export default function AccountIndex() {
                                 Assign Schedule
                                 {scheduleDialogUser && (
                                     <span className="text-sm font-normal text-muted-foreground">
-                                        — {scheduleDialogUser.first_name} {scheduleDialogUser.last_name}
+                                        — {scheduleDialogUser.first_name}{' '}
+                                        {scheduleDialogUser.last_name}
                                     </span>
                                 )}
                             </AlertDialogTitle>
                             <AlertDialogDescription asChild>
                                 <div className="space-y-3">
                                     {loadingSchedules ? (
-                                        <div className="flex items-center justify-center py-6 text-sm text-muted-foreground gap-2">
+                                        <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
                                             <RefreshCw className="h-4 w-4 animate-spin" />
                                             Loading schedules…
                                         </div>
                                     ) : userSchedules.length === 0 ? (
-                                        <div className="rounded-lg border border-dashed p-6 text-center space-y-2">
-                                            <p className="text-sm text-muted-foreground">No existing schedules found for this employee.</p>
-                                            <p className="text-xs text-muted-foreground">Create a new schedule using the button below.</p>
+                                        <div className="space-y-2 rounded-lg border border-dashed p-6 text-center">
+                                            <p className="text-sm text-muted-foreground">
+                                                No existing schedules found for
+                                                this employee.
+                                            </p>
+                                            <p className="text-xs text-muted-foreground">
+                                                Create a new schedule using the
+                                                button below.
+                                            </p>
                                         </div>
                                     ) : (
-                                        <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                                        <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
                                             {userSchedules.map((schedule) => (
                                                 <div
                                                     key={schedule.id}
-                                                    className={`flex items-center justify-between rounded-lg border p-3 text-sm gap-3 ${schedule.is_active ? 'border-green-300 bg-green-50 dark:border-green-700 dark:bg-green-950/30' : 'border-border bg-card'}`}
+                                                    className={`flex items-center justify-between gap-3 rounded-lg border p-3 text-sm ${schedule.is_active ? 'border-green-300 bg-green-50 dark:border-green-700 dark:bg-green-950/30' : 'border-border bg-card'}`}
                                                 >
-                                                    <div className="flex-1 min-w-0 space-y-0.5">
-                                                        <div className="font-medium truncate">
-                                                            {schedule.campaign?.name ?? 'No Campaign'} · {schedule.site?.name ?? 'No Site'}
+                                                    <div className="min-w-0 flex-1 space-y-0.5">
+                                                        <div className="truncate font-medium">
+                                                            {schedule.campaign
+                                                                ?.name ??
+                                                                'No Campaign'}{' '}
+                                                            ·{' '}
+                                                            {schedule.site
+                                                                ?.name ??
+                                                                'No Site'}
                                                         </div>
                                                         <div className="text-xs text-muted-foreground">
-                                                            {schedule.shift_type} · {to12Hour(schedule.scheduled_time_in)} – {to12Hour(schedule.scheduled_time_out)}
+                                                            {
+                                                                schedule.shift_type
+                                                            }{' '}
+                                                            ·{' '}
+                                                            {to12Hour(
+                                                                schedule.scheduled_time_in,
+                                                            )}{' '}
+                                                            –{' '}
+                                                            {to12Hour(
+                                                                schedule.scheduled_time_out,
+                                                            )}
                                                         </div>
                                                         <div className="text-xs text-muted-foreground">
-                                                            {schedule.work_days?.join(', ')}
+                                                            {schedule.work_days?.join(
+                                                                ', ',
+                                                            )}
                                                         </div>
                                                     </div>
-                                                    <div className="shrink-0 flex items-center gap-2">
+                                                    <div className="flex shrink-0 items-center gap-2">
                                                         <Link
-                                                            href={withReturnTo(employeeSchedulesEdit(schedule.id).url)}
-                                                            className="inline-flex items-center gap-1 h-7 px-2 rounded-md border border-border text-xs hover:bg-muted transition-colors"
+                                                            href={withReturnTo(
+                                                                employeeSchedulesEdit(
+                                                                    schedule.id,
+                                                                ).url,
+                                                            )}
+                                                            className="inline-flex h-7 items-center gap-1 rounded-md border border-border px-2 text-xs transition-colors hover:bg-muted"
                                                         >
-                                                            <Pencil className="h-3 w-3" /> Edit
+                                                            <Pencil className="h-3 w-3" />{' '}
+                                                            Edit
                                                         </Link>
                                                         {schedule.is_active ? (
                                                             <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 dark:text-green-400">
-                                                                <Check className="h-3 w-3" /> Active
+                                                                <Check className="h-3 w-3" />{' '}
+                                                                Active
                                                             </span>
                                                         ) : (
                                                             <Button
                                                                 size="sm"
                                                                 variant="outline"
                                                                 className="h-7 text-xs"
-                                                                disabled={activatingScheduleId === schedule.id}
-                                                                onClick={() => handleActivateSchedule(schedule)}
+                                                                disabled={
+                                                                    activatingScheduleId ===
+                                                                    schedule.id
+                                                                }
+                                                                onClick={() =>
+                                                                    handleActivateSchedule(
+                                                                        schedule,
+                                                                    )
+                                                                }
                                                             >
-                                                                {activatingScheduleId === schedule.id ? (
-                                                                    <RefreshCw className="h-3 w-3 animate-spin mr-1" />
+                                                                {activatingScheduleId ===
+                                                                schedule.id ? (
+                                                                    <RefreshCw className="mr-1 h-3 w-3 animate-spin" />
                                                                 ) : (
-                                                                    <Play className="h-3 w-3 mr-1" />
+                                                                    <Play className="mr-1 h-3 w-3" />
                                                                 )}
                                                                 Activate
                                                             </Button>
@@ -1696,11 +2447,27 @@ export default function AccountIndex() {
                                     )}
                                     <div className="pt-1">
                                         <Link
-                                            href={scheduleDialogUser ? withReturnTo(employeeSchedulesCreate({ query: { user_id: scheduleDialogUser.id, effective_date: scheduleDialogHiredDate } }).url) : '#'}
+                                            href={
+                                                scheduleDialogUser
+                                                    ? withReturnTo(
+                                                          employeeSchedulesCreate(
+                                                              {
+                                                                  query: {
+                                                                      user_id:
+                                                                          scheduleDialogUser.id,
+                                                                      effective_date:
+                                                                          scheduleDialogHiredDate,
+                                                                  },
+                                                              },
+                                                          ).url,
+                                                      )
+                                                    : '#'
+                                            }
                                             className="inline-flex items-center gap-1.5 text-sm text-primary underline-offset-4 hover:underline"
                                         >
                                             <Plus className="h-4 w-4" />
-                                            Create new schedule for this employee
+                                            Create new schedule for this
+                                            employee
                                         </Link>
                                     </div>
                                 </div>
@@ -1713,7 +2480,10 @@ export default function AccountIndex() {
                 </AlertDialog>
 
                 {/* Single User Revoke Confirmation Dialog with Email Option */}
-                <AlertDialog open={revokeDialogOpen} onOpenChange={setRevokeDialogOpen}>
+                <AlertDialog
+                    open={revokeDialogOpen}
+                    onOpenChange={setRevokeDialogOpen}
+                >
                     <AlertDialogContent className="max-w-md">
                         <AlertDialogHeader>
                             <AlertDialogTitle className="flex items-center gap-2">
@@ -1725,24 +2495,59 @@ export default function AccountIndex() {
                                     {userToRevoke && (
                                         <>
                                             <p>
-                                                You are about to revoke access for <strong>{userToRevoke.first_name} {userToRevoke.middle_name ? userToRevoke.middle_name + '. ' : ''}{userToRevoke.last_name}</strong>.
+                                                You are about to revoke access
+                                                for{' '}
+                                                <strong>
+                                                    {userToRevoke.first_name}{' '}
+                                                    {userToRevoke.middle_name
+                                                        ? userToRevoke.middle_name +
+                                                          '. '
+                                                        : ''}
+                                                    {userToRevoke.last_name}
+                                                </strong>
+                                                .
                                             </p>
                                             <p className="text-sm">
-                                                This employee has a hire date of <strong>{userToRevoke.hired_date ? new Date(userToRevoke.hired_date).toLocaleDateString() : 'N/A'}</strong>, indicating they may be resigning from the company.
+                                                This employee has a hire date of{' '}
+                                                <strong>
+                                                    {userToRevoke.hired_date
+                                                        ? new Date(
+                                                              userToRevoke.hired_date,
+                                                          ).toLocaleDateString()
+                                                        : 'N/A'}
+                                                </strong>
+                                                , indicating they may be
+                                                resigning from the company.
                                             </p>
-                                            <div className="bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
-                                                <p className="text-sm text-amber-800 dark:text-amber-300 flex items-start gap-2">
-                                                    <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                                            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/50">
+                                                <p className="flex items-start gap-2 text-sm text-amber-800 dark:text-amber-300">
+                                                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                                                     <span>
-                                                        This action will also <strong>deactivate the employee status</strong> and <strong>all active schedules</strong> for this employee.
+                                                        This action will also{' '}
+                                                        <strong>
+                                                            deactivate the
+                                                            employee status
+                                                        </strong>{' '}
+                                                        and{' '}
+                                                        <strong>
+                                                            all active schedules
+                                                        </strong>{' '}
+                                                        for this employee.
                                                     </span>
                                                 </p>
                                             </div>
-                                            <div className="bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
-                                                <p className="text-sm text-blue-800 dark:text-blue-300 flex items-start gap-2">
-                                                    <Mail className="h-4 w-4 mt-0.5 shrink-0" />
+                                            <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-950/50">
+                                                <p className="flex items-start gap-2 text-sm text-blue-800 dark:text-blue-300">
+                                                    <Mail className="mt-0.5 h-4 w-4 shrink-0" />
                                                     <span>
-                                                        Would you like to send an automated notification email to the management team (Super Admin, Admin, Team Leads, HR, IT) about this access revocation?
+                                                        Would you like to send
+                                                        an automated
+                                                        notification email to
+                                                        the management team
+                                                        (Super Admin, Admin,
+                                                        Team Leads, HR, IT)
+                                                        about this access
+                                                        revocation?
                                                     </span>
                                                 </p>
                                             </div>
@@ -1751,20 +2556,28 @@ export default function AccountIndex() {
                                 </div>
                             </AlertDialogDescription>
                         </AlertDialogHeader>
-                        <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-                            <AlertDialogCancel className="mt-0">Cancel</AlertDialogCancel>
+                        <AlertDialogFooter className="flex-col gap-2 sm:flex-row">
+                            <AlertDialogCancel className="mt-0">
+                                Cancel
+                            </AlertDialogCancel>
                             <Button
                                 variant="outline"
-                                onClick={() => userToRevoke && confirmUnapprove(userToRevoke.id, false)}
+                                onClick={() =>
+                                    userToRevoke &&
+                                    confirmUnapprove(userToRevoke.id, false)
+                                }
                                 disabled={loading}
                                 className="border-yellow-300 text-yellow-700 hover:bg-yellow-50 dark:border-yellow-700 dark:text-yellow-400 dark:hover:bg-yellow-950"
                             >
                                 Revoke Only
                             </Button>
                             <Button
-                                onClick={() => userToRevoke && confirmUnapprove(userToRevoke.id, true)}
+                                onClick={() =>
+                                    userToRevoke &&
+                                    confirmUnapprove(userToRevoke.id, true)
+                                }
                                 disabled={loading}
-                                className="bg-yellow-600 hover:bg-yellow-700 text-white"
+                                className="bg-yellow-600 text-white hover:bg-yellow-700"
                             >
                                 <Mail className="mr-2 h-4 w-4" />
                                 Revoke & Send Email
@@ -1774,7 +2587,10 @@ export default function AccountIndex() {
                 </AlertDialog>
 
                 {/* Bulk Revoke Confirmation Dialog with Email Option */}
-                <AlertDialog open={bulkRevokeDialogOpen} onOpenChange={setBulkRevokeDialogOpen}>
+                <AlertDialog
+                    open={bulkRevokeDialogOpen}
+                    onOpenChange={setBulkRevokeDialogOpen}
+                >
                     <AlertDialogContent className="max-w-md">
                         <AlertDialogHeader>
                             <AlertDialogTitle className="flex items-center gap-2">
@@ -1784,30 +2600,60 @@ export default function AccountIndex() {
                             <AlertDialogDescription asChild>
                                 <div className="space-y-3">
                                     <p>
-                                        You are about to revoke access for <strong>{selectedRevokeIds.length} employee(s)</strong>.
+                                        You are about to revoke access for{' '}
+                                        <strong>
+                                            {selectedRevokeIds.length}{' '}
+                                            employee(s)
+                                        </strong>
+                                        .
                                     </p>
-                                    <div className="bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
-                                        <p className="text-sm text-amber-800 dark:text-amber-300 flex items-start gap-2">
-                                            <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/50">
+                                        <p className="flex items-start gap-2 text-sm text-amber-800 dark:text-amber-300">
+                                            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                                             <span>
-                                                This action will also <strong>deactivate employee status</strong> and <strong>all active schedules</strong> for these employees.
+                                                This action will also{' '}
+                                                <strong>
+                                                    deactivate employee status
+                                                </strong>{' '}
+                                                and{' '}
+                                                <strong>
+                                                    all active schedules
+                                                </strong>{' '}
+                                                for these employees.
                                             </span>
                                         </p>
                                     </div>
                                     {(() => {
-                                        const employeesWithHiredDates = users.data.filter(
-                                            user => selectedRevokeIds.includes(user.id) && user.hired_date
-                                        );
-                                        return employeesWithHiredDates.length > 0 ? (
+                                        const employeesWithHiredDates =
+                                            users.data.filter(
+                                                (user) =>
+                                                    selectedRevokeIds.includes(
+                                                        user.id,
+                                                    ) && user.hired_date,
+                                            );
+                                        return employeesWithHiredDates.length >
+                                            0 ? (
                                             <>
                                                 <p className="text-sm">
-                                                    <strong>{employeesWithHiredDates.length}</strong> of these employees have hire dates, indicating they may be resigning.
+                                                    <strong>
+                                                        {
+                                                            employeesWithHiredDates.length
+                                                        }
+                                                    </strong>{' '}
+                                                    of these employees have hire
+                                                    dates, indicating they may
+                                                    be resigning.
                                                 </p>
-                                                <div className="bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
-                                                    <p className="text-sm text-blue-800 dark:text-blue-300 flex items-start gap-2">
-                                                        <Mail className="h-4 w-4 mt-0.5 shrink-0" />
+                                                <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-950/50">
+                                                    <p className="flex items-start gap-2 text-sm text-blue-800 dark:text-blue-300">
+                                                        <Mail className="mt-0.5 h-4 w-4 shrink-0" />
                                                         <span>
-                                                            Would you like to send automated notification emails to the management team for employees with hire dates?
+                                                            Would you like to
+                                                            send automated
+                                                            notification emails
+                                                            to the management
+                                                            team for employees
+                                                            with hire dates?
                                                         </span>
                                                     </p>
                                                 </div>
@@ -1817,8 +2663,10 @@ export default function AccountIndex() {
                                 </div>
                             </AlertDialogDescription>
                         </AlertDialogHeader>
-                        <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-                            <AlertDialogCancel className="mt-0">Cancel</AlertDialogCancel>
+                        <AlertDialogFooter className="flex-col gap-2 sm:flex-row">
+                            <AlertDialogCancel className="mt-0">
+                                Cancel
+                            </AlertDialogCancel>
                             <Button
                                 variant="outline"
                                 onClick={() => confirmBulkRevoke(false)}
@@ -1830,7 +2678,7 @@ export default function AccountIndex() {
                             <Button
                                 onClick={() => confirmBulkRevoke(true)}
                                 disabled={loading}
-                                className="bg-yellow-600 hover:bg-yellow-700 text-white"
+                                className="bg-yellow-600 text-white hover:bg-yellow-700"
                             >
                                 <Mail className="mr-2 h-4 w-4" />
                                 Revoke & Send Emails
@@ -1840,59 +2688,103 @@ export default function AccountIndex() {
                 </AlertDialog>
 
                 {/* Stale Accounts Dialog */}
-                <AlertDialog open={staleDialogOpen} onOpenChange={open => { if (!open) { setStaleDialogOpen(false); setSelectedStaleIds([]); } }}>
-                    <AlertDialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
+                <AlertDialog
+                    open={staleDialogOpen}
+                    onOpenChange={(open) => {
+                        if (!open) {
+                            setStaleDialogOpen(false);
+                            setSelectedStaleIds([]);
+                        }
+                    }}
+                >
+                    <AlertDialogContent className="flex max-h-[80vh] max-w-3xl flex-col">
                         <AlertDialogHeader>
                             <AlertDialogTitle className="flex items-center gap-2">
                                 <Clock className="h-5 w-5 text-destructive" />
                                 Stale Resigned Accounts
                             </AlertDialogTitle>
                             <AlertDialogDescription>
-                                These accounts have been resigned for 2+ years. They can be permanently deleted.
+                                These accounts have been resigned for 2+ years.
+                                They can be permanently deleted.
                             </AlertDialogDescription>
                         </AlertDialogHeader>
 
-                        <div className="flex-1 overflow-y-auto min-h-0">
+                        <div className="min-h-0 flex-1 overflow-y-auto">
                             {loadingStale ? (
                                 <div className="flex items-center justify-center py-12 text-muted-foreground">
-                                    <RefreshCw className="h-5 w-5 animate-spin mr-2" />
+                                    <RefreshCw className="mr-2 h-5 w-5 animate-spin" />
                                     Loading stale accounts...
                                 </div>
                             ) : staleAccounts.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-2">
+                                <div className="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground">
                                     <Clock className="h-8 w-8 opacity-40" />
-                                    <p className="text-sm">No stale accounts found.</p>
+                                    <p className="text-sm">
+                                        No stale accounts found.
+                                    </p>
                                 </div>
                             ) : (
                                 <div className="space-y-2">
-                                    <div className="flex items-center justify-between px-1 mb-1">
-                                        <span className="text-xs text-muted-foreground">{staleAccounts.length} account{staleAccounts.length !== 1 ? 's' : ''} found</span>
-                                        <Button variant="ghost" size="sm" onClick={handleStaleSelectAll} className="text-xs h-7 px-2">
-                                            {selectedStaleIds.length === staleAccounts.length ? "Deselect All" : "Select All"}
+                                    <div className="mb-1 flex items-center justify-between px-1">
+                                        <span className="text-xs text-muted-foreground">
+                                            {staleAccounts.length} account
+                                            {staleAccounts.length !== 1
+                                                ? 's'
+                                                : ''}{' '}
+                                            found
+                                        </span>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={handleStaleSelectAll}
+                                            className="h-7 px-2 text-xs"
+                                        >
+                                            {selectedStaleIds.length ===
+                                            staleAccounts.length
+                                                ? 'Deselect All'
+                                                : 'Select All'}
                                         </Button>
                                     </div>
-                                    {staleAccounts.map(account => (
+                                    {staleAccounts.map((account) => (
                                         <div
                                             key={account.id}
-                                            className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${selectedStaleIds.includes(account.id) ? 'border-destructive/50 bg-destructive/5' : 'border-border hover:bg-muted/40'}`}
-                                            onClick={() => handleStaleToggle(account.id)}
+                                            className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${selectedStaleIds.includes(account.id) ? 'border-destructive/50 bg-destructive/5' : 'border-border hover:bg-muted/40'}`}
+                                            onClick={() =>
+                                                handleStaleToggle(account.id)
+                                            }
                                         >
                                             <input
                                                 type="checkbox"
                                                 aria-label={`Select ${account.name}`}
-                                                checked={selectedStaleIds.includes(account.id)}
-                                                onChange={() => handleStaleToggle(account.id)}
-                                                onClick={e => e.stopPropagation()}
-                                                className="mt-0.5 h-4 w-4 accent-destructive cursor-pointer"
+                                                checked={selectedStaleIds.includes(
+                                                    account.id,
+                                                )}
+                                                onChange={() =>
+                                                    handleStaleToggle(
+                                                        account.id,
+                                                    )
+                                                }
+                                                onClick={(e) =>
+                                                    e.stopPropagation()
+                                                }
+                                                className="mt-0.5 h-4 w-4 cursor-pointer accent-destructive"
                                             />
-                                            <div className="flex-1 min-w-0">
-                                                <div className="font-medium text-sm truncate">{account.name}</div>
-                                                <div className="text-xs text-muted-foreground truncate">{account.email}</div>
+                                            <div className="min-w-0 flex-1">
+                                                <div className="truncate text-sm font-medium">
+                                                    {account.name}
+                                                </div>
+                                                <div className="truncate text-xs text-muted-foreground">
+                                                    {account.email}
+                                                </div>
                                             </div>
-                                            <div className="flex flex-col items-end gap-1 text-xs text-muted-foreground whitespace-nowrap">
-                                                <span className="capitalize">{account.role}</span>
+                                            <div className="flex flex-col items-end gap-1 text-xs whitespace-nowrap text-muted-foreground">
+                                                <span className="capitalize">
+                                                    {account.role}
+                                                </span>
                                                 {account.resigned_at && (
-                                                    <span className="text-destructive/70">Resigned {account.resigned_at}</span>
+                                                    <span className="text-destructive/70">
+                                                        Resigned{' '}
+                                                        {account.resigned_at}
+                                                    </span>
                                                 )}
                                             </div>
                                         </div>
@@ -1901,25 +2793,45 @@ export default function AccountIndex() {
                             )}
                         </div>
 
-                        <AlertDialogFooter className="flex-col sm:flex-row gap-2 pt-2 border-t">
-                            <AlertDialogCancel className="mt-0">Close</AlertDialogCancel>
+                        <AlertDialogFooter className="flex-col gap-2 border-t pt-2 sm:flex-row">
+                            <AlertDialogCancel className="mt-0">
+                                Close
+                            </AlertDialogCancel>
                             {!loadingStale && staleAccounts.length > 0 && (
                                 <>
                                     <Button
                                         variant="destructive"
-                                        disabled={selectedStaleIds.length === 0 || deletingStale}
-                                        onClick={() => handleDeleteStale(selectedStaleIds)}
+                                        disabled={
+                                            selectedStaleIds.length === 0 ||
+                                            deletingStale
+                                        }
+                                        onClick={() =>
+                                            handleDeleteStale(selectedStaleIds)
+                                        }
                                     >
-                                        {deletingStale ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
-                                        Delete Selected ({selectedStaleIds.length})
+                                        {deletingStale ? (
+                                            <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                                        ) : (
+                                            <Trash2 className="mr-2 h-4 w-4" />
+                                        )}
+                                        Delete Selected (
+                                        {selectedStaleIds.length})
                                     </Button>
                                     <Button
                                         variant="destructive"
                                         disabled={deletingStale}
-                                        onClick={() => handleDeleteStale(staleAccounts.map(a => a.id))}
+                                        onClick={() =>
+                                            handleDeleteStale(
+                                                staleAccounts.map((a) => a.id),
+                                            )
+                                        }
                                         className="bg-red-700 hover:bg-red-800"
                                     >
-                                        {deletingStale ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
+                                        {deletingStale ? (
+                                            <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                                        ) : (
+                                            <Trash2 className="mr-2 h-4 w-4" />
+                                        )}
                                         Delete All ({staleAccounts.length})
                                     </Button>
                                 </>

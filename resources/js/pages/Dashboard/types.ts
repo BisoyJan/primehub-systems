@@ -11,36 +11,82 @@ export type TabType =
     | 'coaching';
 
 export const ROLE_TABS: Record<UserRole, TabType[]> = {
-    'Super Admin': ['attendance', 'personal', 'presence-insights', 'coaching', 'infrastructure', 'it-concerns'],
-    'Admin': ['personal', 'attendance', 'presence-insights', 'coaching', 'infrastructure'],
-    'HR': ['attendance', 'presence-insights', 'coaching'],
-    'IT': ['personal', 'infrastructure', 'it-concerns', 'attendance'],
+    'Super Admin': [
+        'attendance',
+        'personal',
+        'presence-insights',
+        'coaching',
+        'infrastructure',
+        'it-concerns',
+    ],
+    Admin: [
+        'personal',
+        'attendance',
+        'presence-insights',
+        'coaching',
+        'infrastructure',
+    ],
+    HR: ['attendance', 'presence-insights', 'coaching'],
+    IT: ['personal', 'infrastructure', 'it-concerns', 'attendance'],
     'Team Lead': ['attendance', 'presence-insights', 'coaching'],
-    'Agent': ['personal', 'attendance', 'presence-insights', 'coaching'],
-    'Utility': ['personal', 'attendance'],
+    Agent: ['personal', 'attendance', 'presence-insights', 'coaching'],
+    Utility: ['personal', 'attendance'],
 };
 
-export const TAB_CONFIG: Record<TabType, { label: string; iconName: string }> = {
-    'infrastructure': { label: 'Infrastructure', iconName: 'Building2' },
-    'attendance': { label: 'Attendance', iconName: 'Users' },
-    'it-concerns': { label: 'IT Concerns', iconName: 'ClipboardList' },
-    'presence-insights': { label: 'Presence Insights', iconName: 'UserCheck' },
-    'personal': { label: 'My Dashboard', iconName: 'User' },
-    'coaching': { label: 'Coaching', iconName: 'ClipboardCheck' },
-};
+export const TAB_CONFIG: Record<TabType, { label: string; iconName: string }> =
+    {
+        infrastructure: { label: 'Infrastructure', iconName: 'Building2' },
+        attendance: { label: 'Attendance', iconName: 'Users' },
+        'it-concerns': { label: 'IT Concerns', iconName: 'ClipboardList' },
+        'presence-insights': {
+            label: 'Presence Insights',
+            iconName: 'UserCheck',
+        },
+        personal: { label: 'My Dashboard', iconName: 'User' },
+        coaching: { label: 'Coaching', iconName: 'ClipboardCheck' },
+    };
 
 // ─── Widget Types ────────────────────────────────────────────────────────────
 
-export type WidgetType = 'notifications' | 'user-accounts' | 'recent-activity' | 'biometric-anomalies' | 'pending-leave-approvals' | 'coaching-follow-ups';
+export type WidgetType =
+    | 'notifications'
+    | 'user-accounts'
+    | 'recent-activity'
+    | 'biometric-anomalies'
+    | 'pending-leave-approvals'
+    | 'coaching-follow-ups';
 
 export const ROLE_WIDGETS: Record<UserRole, WidgetType[]> = {
-    'Super Admin': ['notifications', 'pending-leave-approvals', 'coaching-follow-ups', 'user-accounts', 'recent-activity', 'biometric-anomalies'],
-    'Admin': ['notifications', 'pending-leave-approvals', 'coaching-follow-ups', 'user-accounts', 'recent-activity', 'biometric-anomalies'],
-    'HR': ['notifications', 'pending-leave-approvals', 'coaching-follow-ups', 'biometric-anomalies'],
-    'IT': ['notifications'],
-    'Team Lead': ['notifications', 'pending-leave-approvals', 'coaching-follow-ups'],
-    'Agent': ['notifications', 'coaching-follow-ups'],
-    'Utility': ['notifications'],
+    'Super Admin': [
+        'notifications',
+        'pending-leave-approvals',
+        'coaching-follow-ups',
+        'user-accounts',
+        'recent-activity',
+        'biometric-anomalies',
+    ],
+    Admin: [
+        'notifications',
+        'pending-leave-approvals',
+        'coaching-follow-ups',
+        'user-accounts',
+        'recent-activity',
+        'biometric-anomalies',
+    ],
+    HR: [
+        'notifications',
+        'pending-leave-approvals',
+        'coaching-follow-ups',
+        'biometric-anomalies',
+    ],
+    IT: ['notifications'],
+    'Team Lead': [
+        'notifications',
+        'pending-leave-approvals',
+        'coaching-follow-ups',
+    ],
+    Agent: ['notifications', 'coaching-follow-ups'],
+    Utility: ['notifications'],
 };
 
 // ─── Shared Sub-Types ────────────────────────────────────────────────────────
@@ -299,7 +345,12 @@ export interface DashboardProps {
     };
     maintenanceDue?: {
         total: number;
-        stations: Array<{ station: string; site: string; dueDate: string; daysOverdue: number }>;
+        stations: Array<{
+            station: string;
+            site: string;
+            dueDate: string;
+            daysOverdue: number;
+        }>;
     };
     unassignedPcSpecs?: Array<{
         id: number;
@@ -351,27 +402,33 @@ export interface DashboardProps {
         advised: number;
         needs_verification: number;
     };
-    monthlyAttendanceData: Record<string, {
-        month: string;
-        total: number;
-        on_time: number;
-        time_adjustment: number;
-        tardy: number;
-        half_day: number;
-        ncns: number;
-        advised: number;
-    }>;
-    dailyAttendanceData: Record<string, Array<{
-        month: string;
-        day: number;
-        total: number;
-        on_time: number;
-        time_adjustment: number;
-        tardy: number;
-        half_day: number;
-        ncns: number;
-        advised: number;
-    }>>;
+    monthlyAttendanceData: Record<
+        string,
+        {
+            month: string;
+            total: number;
+            on_time: number;
+            time_adjustment: number;
+            tardy: number;
+            half_day: number;
+            ncns: number;
+            advised: number;
+        }
+    >;
+    dailyAttendanceData: Record<
+        string,
+        Array<{
+            month: string;
+            day: number;
+            total: number;
+            on_time: number;
+            time_adjustment: number;
+            tardy: number;
+            half_day: number;
+            ncns: number;
+            advised: number;
+        }>
+    >;
     campaigns?: Array<{
         id: number;
         name: string;

@@ -1,13 +1,19 @@
 import { send } from '@/routes/verification';
 import { type BreadcrumbItem, type SharedData } from '@/types';
-import { Form, Head, Link, usePage, router } from '@inertiajs/react';
+import { Form, Head, Link, router, usePage } from '@inertiajs/react';
 
+import { AvatarCropDialog } from '@/components/avatar-crop-dialog';
 import InputError from '@/components/input-error';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from '@/components/ui/card';
 import {
     Dialog,
     DialogClose,
@@ -17,21 +23,24 @@ import {
     DialogTitle,
     DialogTrigger,
 } from '@/components/ui/dialog';
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useInitials } from '@/hooks/use-initials';
 import AppLayout from '@/layouts/app-layout';
 import SettingsLayout from '@/layouts/settings/layout';
-import { edit, update, destroy } from '@/routes/account';
-import { update as updateAvatar, destroy as destroyAvatar } from '@/routes/account/avatar';
-import { useInitials } from '@/hooks/use-initials';
+import { destroy, edit, update } from '@/routes/account';
+import {
+    destroy as destroyAvatar,
+    update as updateAvatar,
+} from '@/routes/account/avatar';
+import {
+    AlertTriangle,
+    Camera,
+    CheckCircle2,
+    Trash2,
+    XCircle,
+} from 'lucide-react';
 import { useRef, useState } from 'react';
-import { CheckCircle2, XCircle, AlertTriangle, Camera, Trash2 } from 'lucide-react';
-import { AvatarCropDialog } from '@/components/avatar-crop-dialog';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -40,11 +49,7 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-export default function AccountManagement({
-    status,
-}: {
-    status?: string;
-}) {
+export default function AccountManagement({ status }: { status?: string }) {
     const { auth } = usePage<SharedData>().props;
     const passwordInput = useRef<HTMLInputElement>(null);
     const avatarInput = useRef<HTMLInputElement>(null);
@@ -77,21 +82,25 @@ export default function AccountManagement({
         setAvatarProcessing(true);
         setCropDialogOpen(false);
 
-        router.post(updateAvatar().url, { avatar: croppedBlob }, {
-            forceFormData: true,
-            preserveScroll: true,
-            onFinish: () => {
-                setAvatarProcessing(false);
-                setAvatarPreview(null);
-                setImageToCrop(null);
-                if (avatarInput.current) {
-                    avatarInput.current.value = '';
-                }
-                if (previewUrl) {
-                    URL.revokeObjectURL(previewUrl);
-                }
+        router.post(
+            updateAvatar().url,
+            { avatar: croppedBlob },
+            {
+                forceFormData: true,
+                preserveScroll: true,
+                onFinish: () => {
+                    setAvatarProcessing(false);
+                    setAvatarPreview(null);
+                    setImageToCrop(null);
+                    if (avatarInput.current) {
+                        avatarInput.current.value = '';
+                    }
+                    if (previewUrl) {
+                        URL.revokeObjectURL(previewUrl);
+                    }
+                },
             },
-        });
+        );
     };
 
     const handleCropClose = () => {
@@ -129,7 +138,10 @@ export default function AccountManagement({
                                 <div className="relative">
                                     <Avatar className="size-24 overflow-hidden rounded-full border-2 border-muted">
                                         <AvatarImage
-                                            src={avatarPreview || auth.user.avatar}
+                                            src={
+                                                avatarPreview ||
+                                                auth.user.avatar
+                                            }
                                             alt={fullName}
                                         />
                                         <AvatarFallback className="bg-neutral-200 text-2xl text-black dark:bg-neutral-700 dark:text-white">
@@ -138,8 +150,10 @@ export default function AccountManagement({
                                     </Avatar>
                                     <Button
                                         type="button"
-                                        onClick={() => avatarInput.current?.click()}
-                                        className="absolute bottom-0 right-0 flex size-8 items-center justify-center rounded-full border-2 border-background bg-primary text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+                                        onClick={() =>
+                                            avatarInput.current?.click()
+                                        }
+                                        className="absolute right-0 bottom-0 flex size-8 items-center justify-center rounded-full border-2 border-background bg-primary text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
                                         disabled={avatarProcessing}
                                     >
                                         <Camera className="size-4" />
@@ -151,10 +165,14 @@ export default function AccountManagement({
                                             type="button"
                                             variant="outline"
                                             size="sm"
-                                            onClick={() => avatarInput.current?.click()}
+                                            onClick={() =>
+                                                avatarInput.current?.click()
+                                            }
                                             disabled={avatarProcessing}
                                         >
-                                            {avatarProcessing ? 'Uploading...' : 'Change Photo'}
+                                            {avatarProcessing
+                                                ? 'Uploading...'
+                                                : 'Change Photo'}
                                         </Button>
                                         {auth.user.avatar && (
                                             <Button
@@ -166,7 +184,9 @@ export default function AccountManagement({
                                                 className="text-destructive hover:text-destructive"
                                             >
                                                 <Trash2 className="mr-1 size-4" />
-                                                {removeProcessing ? 'Removing...' : 'Remove'}
+                                                {removeProcessing
+                                                    ? 'Removing...'
+                                                    : 'Remove'}
                                             </Button>
                                         )}
                                     </div>
@@ -202,14 +222,22 @@ export default function AccountManagement({
                                 }}
                                 className="space-y-6"
                             >
-                                {({ processing, recentlySuccessful, errors }) => (
+                                {({
+                                    processing,
+                                    recentlySuccessful,
+                                    errors,
+                                }) => (
                                     <>
                                         <div className="grid gap-2">
-                                            <Label htmlFor="first_name">First Name</Label>
+                                            <Label htmlFor="first_name">
+                                                First Name
+                                            </Label>
                                             <Input
                                                 id="first_name"
                                                 className="mt-1 block w-full"
-                                                defaultValue={auth.user.first_name}
+                                                defaultValue={
+                                                    auth.user.first_name
+                                                }
                                                 name="first_name"
                                                 required
                                                 autoComplete="given-name"
@@ -222,11 +250,15 @@ export default function AccountManagement({
                                         </div>
 
                                         <div className="grid gap-2">
-                                            <Label htmlFor="middle_name">Middle Initial (Optional)</Label>
+                                            <Label htmlFor="middle_name">
+                                                Middle Initial (Optional)
+                                            </Label>
                                             <Input
                                                 id="middle_name"
                                                 className="mt-1 block w-full"
-                                                defaultValue={auth.user.middle_name || ''}
+                                                defaultValue={
+                                                    auth.user.middle_name || ''
+                                                }
                                                 name="middle_name"
                                                 maxLength={1}
                                                 autoComplete="additional-name"
@@ -239,11 +271,15 @@ export default function AccountManagement({
                                         </div>
 
                                         <div className="grid gap-2">
-                                            <Label htmlFor="last_name">Last Name</Label>
+                                            <Label htmlFor="last_name">
+                                                Last Name
+                                            </Label>
                                             <Input
                                                 id="last_name"
                                                 className="mt-1 block w-full"
-                                                defaultValue={auth.user.last_name}
+                                                defaultValue={
+                                                    auth.user.last_name
+                                                }
                                                 name="last_name"
                                                 required
                                                 autoComplete="family-name"
@@ -280,13 +316,18 @@ export default function AccountManagement({
                                                 disabled={processing}
                                                 data-test="update-profile-button"
                                             >
-                                                {processing ? 'Saving...' : 'Save Changes'}
+                                                {processing
+                                                    ? 'Saving...'
+                                                    : 'Save Changes'}
                                             </Button>
 
                                             {recentlySuccessful && (
                                                 <div className="flex items-center gap-2 text-sm text-green-600 transition-opacity duration-300">
                                                     <CheckCircle2 className="h-4 w-4" />
-                                                    <span>Changes saved successfully</span>
+                                                    <span>
+                                                        Changes saved
+                                                        successfully
+                                                    </span>
                                                 </div>
                                             )}
                                         </div>
@@ -316,7 +357,8 @@ export default function AccountManagement({
                                                         Email Verified
                                                     </p>
                                                     <p className="text-sm text-muted-foreground">
-                                                        Your email address is verified
+                                                        Your email address is
+                                                        verified
                                                     </p>
                                                 </div>
                                             </>
@@ -328,7 +370,8 @@ export default function AccountManagement({
                                                         Email Not Verified
                                                     </p>
                                                     <p className="text-sm text-muted-foreground">
-                                                        Please verify your email address
+                                                        Please verify your email
+                                                        address
                                                     </p>
                                                 </div>
                                             </>
@@ -353,7 +396,8 @@ export default function AccountManagement({
                                             <AlertTriangle className="h-5 w-5 flex-shrink-0 text-amber-600 dark:text-amber-100" />
                                             <div className="space-y-2">
                                                 <p className="text-sm text-amber-900 dark:text-amber-100">
-                                                    Your email address is not verified.{' '}
+                                                    Your email address is not
+                                                    verified.{' '}
                                                     <Link
                                                         href={send()}
                                                         method="post"
@@ -365,12 +409,15 @@ export default function AccountManagement({
                                                     </Link>
                                                 </p>
 
-                                                {status === 'verification-link-sent' && (
+                                                {status ===
+                                                    'verification-link-sent' && (
                                                     <div className="flex items-center gap-2 text-sm font-medium text-green-600">
                                                         <CheckCircle2 className="h-4 w-4" />
                                                         <span>
-                                                            A new verification link has been
-                                                            sent to your email address.
+                                                            A new verification
+                                                            link has been sent
+                                                            to your email
+                                                            address.
                                                         </span>
                                                     </div>
                                                 )}
@@ -399,11 +446,18 @@ export default function AccountManagement({
                                         <AlertTriangle className="h-5 w-5 flex-shrink-0 text-amber-600 dark:text-amber-100" />
                                         <div className="space-y-1">
                                             <p className="font-medium text-amber-600 dark:text-amber-100">
-                                                Account deletion requires admin confirmation
+                                                Account deletion requires admin
+                                                confirmation
                                             </p>
                                             <p className="text-sm text-amber-700 dark:text-amber-200">
-                                                When you delete your account, it will be marked for deletion and require confirmation from an administrator (Admin, or IT).
-                                                Until confirmed, you can still reactivate your account by logging in and setting a new password.
+                                                When you delete your account, it
+                                                will be marked for deletion and
+                                                require confirmation from an
+                                                administrator (Admin, or IT).
+                                                Until confirmed, you can still
+                                                reactivate your account by
+                                                logging in and setting a new
+                                                password.
                                             </p>
                                         </div>
                                     </div>
@@ -424,9 +478,13 @@ export default function AccountManagement({
                                             account?
                                         </DialogTitle>
                                         <DialogDescription>
-                                            Your account will be marked for deletion and will require confirmation from an administrator.
-                                            Until confirmed, you can reactivate your account by logging in with a new password.
-                                            Please enter your password to confirm this action.
+                                            Your account will be marked for
+                                            deletion and will require
+                                            confirmation from an administrator.
+                                            Until confirmed, you can reactivate
+                                            your account by logging in with a
+                                            new password. Please enter your
+                                            password to confirm this action.
                                         </DialogDescription>
 
                                         <Form
@@ -465,7 +523,9 @@ export default function AccountManagement({
                                                         />
 
                                                         <InputError
-                                                            message={errors.password}
+                                                            message={
+                                                                errors.password
+                                                            }
                                                         />
                                                     </div>
 
@@ -483,7 +543,9 @@ export default function AccountManagement({
 
                                                         <Button
                                                             variant="destructive"
-                                                            disabled={processing}
+                                                            disabled={
+                                                                processing
+                                                            }
                                                             asChild
                                                         >
                                                             <button

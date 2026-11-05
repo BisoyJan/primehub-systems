@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 export interface AlarmOption {
     id: string;
@@ -23,16 +23,27 @@ const VOLUME_KEY = 'breakTimer_alarmVolume';
 
 function getAudioContext(): AudioContext | null {
     try {
-        return new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+        return new (
+            window.AudioContext ||
+            (window as unknown as { webkitAudioContext: typeof AudioContext })
+                .webkitAudioContext
+        )();
     } catch {
         return null;
     }
 }
 
-function playTone(ctx: AudioContext, freq: number | number[], duration: number, type: OscillatorType = 'sine', gain = 0.3, attack = 0.05) {
+function playTone(
+    ctx: AudioContext,
+    freq: number | number[],
+    duration: number,
+    type: OscillatorType = 'sine',
+    gain = 0.3,
+    attack = 0.05,
+) {
     const freqs = Array.isArray(freq) ? freq : [freq];
 
-    freqs.forEach(f => {
+    freqs.forEach((f) => {
         const osc = ctx.createOscillator();
         const vol = ctx.createGain();
         osc.type = type;
@@ -43,7 +54,10 @@ function playTone(ctx: AudioContext, freq: number | number[], duration: number, 
         vol.gain.linearRampToValueAtTime(gain, ctx.currentTime + attack);
 
         // Decay (fade out smoothly)
-        vol.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+        vol.gain.exponentialRampToValueAtTime(
+            0.001,
+            ctx.currentTime + duration,
+        );
 
         osc.connect(vol);
         vol.connect(ctx.destination);
@@ -68,7 +82,10 @@ function playSoundPattern(alarmId: string, volume: number) {
             // Smooth transit/airport notification chord
             const notes = [330, 440, 554]; // E4, A4, C#5
             notes.forEach((freq, i) => {
-                setTimeout(() => playTone(ctx, freq, 1.2, 'sine', v, 0.05), i * 150);
+                setTimeout(
+                    () => playTone(ctx, freq, 1.2, 'sine', v, 0.05),
+                    i * 150,
+                );
             });
             break;
         }
@@ -76,7 +93,10 @@ function playSoundPattern(alarmId: string, volume: number) {
             // Fast 8-bit retro video game sequence
             const notes = [440, 554, 659, 880, 1109];
             notes.forEach((freq, i) => {
-                setTimeout(() => playTone(ctx, freq, 0.1, 'square', v * 0.3, 0.01), i * 80);
+                setTimeout(
+                    () => playTone(ctx, freq, 0.1, 'square', v * 0.3, 0.01),
+                    i * 80,
+                );
             });
             break;
         }
@@ -90,7 +110,18 @@ function playSoundPattern(alarmId: string, volume: number) {
         case 'urgent': {
             // Less piercing alternating tones
             for (let i = 0; i < 6; i++) {
-                setTimeout(() => playTone(ctx, i % 2 === 0 ? 800 : 600, 0.15, 'square', v * 0.4, 0.02), i * 180);
+                setTimeout(
+                    () =>
+                        playTone(
+                            ctx,
+                            i % 2 === 0 ? 800 : 600,
+                            0.15,
+                            'square',
+                            v * 0.4,
+                            0.02,
+                        ),
+                    i * 180,
+                );
             }
             break;
         }
@@ -100,20 +131,38 @@ function playSoundPattern(alarmId: string, volume: number) {
             notes.forEach((freq, i) => {
                 setTimeout(() => playTone(ctx, freq, 0.4, 'sine', v), i * 200);
             });
-            setTimeout(() => playTone(ctx, [523, 659, 784, 1047], 1.5, 'sine', v * 0.8), 600);
+            setTimeout(
+                () =>
+                    playTone(ctx, [523, 659, 784, 1047], 1.5, 'sine', v * 0.8),
+                600,
+            );
             break;
         }
         case 'alert': {
             // Two-tone siren, lower frequency and longer sweeps
             for (let i = 0; i < 4; i++) {
-                setTimeout(() => playTone(ctx, [i % 2 === 0 ? 500 : 700, i % 2 === 0 ? 505 : 705], 0.25, 'sawtooth', v * 0.3, 0.05), i * 300);
+                setTimeout(
+                    () =>
+                        playTone(
+                            ctx,
+                            [i % 2 === 0 ? 500 : 700, i % 2 === 0 ? 505 : 705],
+                            0.25,
+                            'sawtooth',
+                            v * 0.3,
+                            0.05,
+                        ),
+                    i * 300,
+                );
             }
             break;
         }
         case 'buzzer': {
             // Low, smooth buzzing
             playTone(ctx, 180, 0.8, 'square', v * 0.4, 0.1);
-            setTimeout(() => playTone(ctx, 180, 0.8, 'square', v * 0.4, 0.1), 1000);
+            setTimeout(
+                () => playTone(ctx, 180, 0.8, 'square', v * 0.4, 0.1),
+                1000,
+            );
             break;
         }
     }
@@ -121,10 +170,18 @@ function playSoundPattern(alarmId: string, volume: number) {
 
 export function useAlarmSound() {
     const [alarmId, setAlarmIdState] = useState<string>(() => {
-        try { return localStorage.getItem(STORAGE_KEY) || 'beep'; } catch { return 'beep'; }
+        try {
+            return localStorage.getItem(STORAGE_KEY) || 'beep';
+        } catch {
+            return 'beep';
+        }
     });
     const [volume, setVolumeState] = useState<number>(() => {
-        try { return parseFloat(localStorage.getItem(VOLUME_KEY) || '0.7'); } catch { return 0.7; }
+        try {
+            return parseFloat(localStorage.getItem(VOLUME_KEY) || '0.7');
+        } catch {
+            return 0.7;
+        }
     });
 
     const hasTriggeredRef = useRef(false);
@@ -134,17 +191,28 @@ export function useAlarmSound() {
 
     const setAlarmId = useCallback((id: string) => {
         setAlarmIdState(id);
-        try { localStorage.setItem(STORAGE_KEY, id); } catch { /* noop */ }
+        try {
+            localStorage.setItem(STORAGE_KEY, id);
+        } catch {
+            /* noop */
+        }
     }, []);
 
     const setVolume = useCallback((v: number) => {
         setVolumeState(v);
-        try { localStorage.setItem(VOLUME_KEY, String(v)); } catch { /* noop */ }
+        try {
+            localStorage.setItem(VOLUME_KEY, String(v));
+        } catch {
+            /* noop */
+        }
     }, []);
 
-    const preview = useCallback((id?: string) => {
-        playSoundPattern(id ?? alarmId, volume);
-    }, [alarmId, volume]);
+    const preview = useCallback(
+        (id?: string) => {
+            playSoundPattern(id ?? alarmId, volume);
+        },
+        [alarmId, volume],
+    );
 
     const stopTitleFlash = useCallback(() => {
         if (titleFlashRef.current) {
@@ -156,7 +224,10 @@ export function useAlarmSound() {
 
     const startTitleFlash = useCallback(() => {
         stopTitleFlash();
-        originalTitleRef.current = document.title.replace(/^⚠️ (OVERBREAK!) - /, '');
+        originalTitleRef.current = document.title.replace(
+            /^⚠️ (OVERBREAK!) - /,
+            '',
+        );
         let toggle = false;
         titleFlashRef.current = setInterval(() => {
             toggle = !toggle;
@@ -246,22 +317,33 @@ export function useAlarmSound() {
      * Triggers alarm once when crossing from >=0 to <0, repeats while overage.
      * Stops when session ends or remainingSeconds goes back to >=0.
      */
-    const checkOverage = useCallback((remainingSeconds: number, isActive: boolean) => {
-        if (!isActive || remainingSeconds >= 0) {
-            // Not in overage — reset trigger state and stop repeating
-            if (hasTriggeredRef.current) {
-                hasTriggeredRef.current = false;
-                stopAlarm();
+    const checkOverage = useCallback(
+        (remainingSeconds: number, isActive: boolean) => {
+            if (!isActive || remainingSeconds >= 0) {
+                // Not in overage — reset trigger state and stop repeating
+                if (hasTriggeredRef.current) {
+                    hasTriggeredRef.current = false;
+                    stopAlarm();
+                }
+                return;
             }
-            return;
-        }
 
-        // In overage
-        if (!hasTriggeredRef.current) {
-            hasTriggeredRef.current = true;
-            triggerAlarm();
-        }
-    }, [triggerAlarm, stopAlarm]);
+            // In overage
+            if (!hasTriggeredRef.current) {
+                hasTriggeredRef.current = true;
+                triggerAlarm();
+            }
+        },
+        [triggerAlarm, stopAlarm],
+    );
 
-    return { alarmId, setAlarmId, volume, setVolume, preview, checkOverage, stopAlarm };
+    return {
+        alarmId,
+        setAlarmId,
+        volume,
+        setVolume,
+        preview,
+        checkOverage,
+        stopAlarm,
+    };
 }

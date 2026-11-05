@@ -1,7 +1,7 @@
-import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import React from 'react';
 
 interface SearchBarProps {
     value: string;
@@ -29,11 +29,15 @@ export function SearchBar({
     value,
     onChange,
     onSubmit,
-    placeholder = "Search...",
-    className = ""
+    placeholder = 'Search...',
+    className = '',
 }: SearchBarProps) {
     return (
-        <form onSubmit={onSubmit} className={cn('flex gap-2', className)} role="search">
+        <form
+            onSubmit={onSubmit}
+            className={cn('flex gap-2', className)}
+            role="search"
+        >
             <Input
                 type="text"
                 name="search"
@@ -43,7 +47,9 @@ export function SearchBar({
                 aria-label={placeholder}
                 className="w-full"
             />
-            <Button type="submit" className="shrink-0">Search</Button>
+            <Button type="submit" className="shrink-0">
+                Search
+            </Button>
         </form>
     );
 }

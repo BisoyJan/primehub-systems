@@ -1,11 +1,12 @@
-import React from 'react';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { ArrowLeft } from 'lucide-react';
+import React from 'react';
 
-import AppLayout from '@/layouts/app-layout';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
     Select,
     SelectContent,
@@ -13,13 +14,17 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { PageHeader } from '@/components/PageHeader';
-import { LoadingOverlay } from '@/components/LoadingOverlay';
-import { useFlashMessage, usePageMeta, usePageLoading, useReturnTo } from '@/hooks';
 import {
-    store as processorSpecsStoreRoute,
+    useFlashMessage,
+    usePageLoading,
+    usePageMeta,
+    useReturnTo,
+} from '@/hooks';
+import AppLayout from '@/layouts/app-layout';
+import {
     create as processorSpecsCreateRoute,
     index as processorSpecsIndexRoute,
+    store as processorSpecsStoreRoute,
 } from '@/routes/processorspecs';
 
 export default function Create() {
@@ -28,7 +33,10 @@ export default function Create() {
     const { title, breadcrumbs } = usePageMeta({
         title: 'Create Processor Specification',
         breadcrumbs: [
-            { title: 'Processor Specifications', href: processorSpecsIndexRoute().url },
+            {
+                title: 'Processor Specifications',
+                href: processorSpecsIndexRoute().url,
+            },
             { title: 'Create', href: processorSpecsCreateRoute().url },
         ],
     });
@@ -59,40 +67,56 @@ export default function Create() {
             <div className="relative mx-auto flex w-full max-w-4xl flex-col gap-4 rounded-xl p-3 md:p-6">
                 <LoadingOverlay
                     isLoading={isPageLoading || processing}
-                    message={processing ? 'Saving processor spec...' : undefined}
+                    message={
+                        processing ? 'Saving processor spec...' : undefined
+                    }
                 />
 
                 <PageHeader
                     title="Create Processor Specification"
                     description="Capture CPU details and initial inventory"
-                    actions={(
+                    actions={
                         <Link href={backUrl}>
                             <Button variant="outline">
                                 <ArrowLeft className="mr-2 h-4 w-4" />
                                 Back to list
                             </Button>
                         </Link>
-                    )}
+                    }
                 />
 
-                <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <form
+                    onSubmit={handleSubmit}
+                    className="grid grid-cols-1 gap-4 md:grid-cols-2"
+                >
                     {/* manufacturer */}
                     <div>
                         <Label htmlFor="manufacturer">Manufacturer</Label>
                         <Select
                             value={data.manufacturer}
-                            onValueChange={(val) => setData('manufacturer', val)}
+                            onValueChange={(val) =>
+                                setData('manufacturer', val)
+                            }
                         >
-                            <SelectTrigger id="manufacturer" name="manufacturer">
+                            <SelectTrigger
+                                id="manufacturer"
+                                name="manufacturer"
+                            >
                                 <SelectValue placeholder="Select manufacturer" />
                             </SelectTrigger>
                             <SelectContent>
                                 {['Intel', 'AMD'].map((b) => (
-                                    <SelectItem key={b} value={b}>{b}</SelectItem>
+                                    <SelectItem key={b} value={b}>
+                                        {b}
+                                    </SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
-                        {errors.manufacturer && <p className="mt-1 text-sm text-red-600">{errors.manufacturer}</p>}
+                        {errors.manufacturer && (
+                            <p className="mt-1 text-sm text-red-600">
+                                {errors.manufacturer}
+                            </p>
+                        )}
                     </div>
 
                     {/* model */}
@@ -105,7 +129,11 @@ export default function Create() {
                             value={data.model}
                             onChange={(e) => setData('model', e.target.value)}
                         />
-                        {errors.model && <p className="mt-1 text-sm text-red-600">{errors.model}</p>}
+                        {errors.model && (
+                            <p className="mt-1 text-sm text-red-600">
+                                {errors.model}
+                            </p>
+                        )}
                     </div>
 
                     <div>
@@ -117,9 +145,15 @@ export default function Create() {
                             min={1}
                             placeholder="e.g. 6"
                             value={data.core_count}
-                            onChange={(e) => setData('core_count', Number(e.target.value))}
+                            onChange={(e) =>
+                                setData('core_count', Number(e.target.value))
+                            }
                         />
-                        {errors.core_count && <p className="mt-1 text-sm text-red-600">{errors.core_count}</p>}
+                        {errors.core_count && (
+                            <p className="mt-1 text-sm text-red-600">
+                                {errors.core_count}
+                            </p>
+                        )}
                     </div>
 
                     {/* Row 3 */}
@@ -132,9 +166,15 @@ export default function Create() {
                             min={1}
                             placeholder="e.g. 12"
                             value={data.thread_count}
-                            onChange={(e) => setData('thread_count', Number(e.target.value))}
+                            onChange={(e) =>
+                                setData('thread_count', Number(e.target.value))
+                            }
                         />
-                        {errors.thread_count && <p className="mt-1 text-sm text-red-600">{errors.thread_count}</p>}
+                        {errors.thread_count && (
+                            <p className="mt-1 text-sm text-red-600">
+                                {errors.thread_count}
+                            </p>
+                        )}
                     </div>
                     <div>
                         <Label htmlFor="base_clock_ghz">Base Clock (GHz)</Label>
@@ -146,14 +186,25 @@ export default function Create() {
                             min={1}
                             placeholder="e.g. 2.50"
                             value={data.base_clock_ghz}
-                            onChange={(e) => setData('base_clock_ghz', Number(e.target.value))}
+                            onChange={(e) =>
+                                setData(
+                                    'base_clock_ghz',
+                                    Number(e.target.value),
+                                )
+                            }
                         />
-                        {errors.base_clock_ghz && <p className="mt-1 text-sm text-red-600">{errors.base_clock_ghz}</p>}
+                        {errors.base_clock_ghz && (
+                            <p className="mt-1 text-sm text-red-600">
+                                {errors.base_clock_ghz}
+                            </p>
+                        )}
                     </div>
 
                     {/* Row 4 */}
                     <div>
-                        <Label htmlFor="boost_clock_ghz">Boost Clock (GHz)</Label>
+                        <Label htmlFor="boost_clock_ghz">
+                            Boost Clock (GHz)
+                        </Label>
                         <Input
                             id="boost_clock_ghz"
                             name="boost_clock_ghz"
@@ -162,12 +213,21 @@ export default function Create() {
                             min={1}
                             placeholder="e.g. 4.40"
                             value={data.boost_clock_ghz}
-                            onChange={(e) => setData('boost_clock_ghz', Number(e.target.value))}
+                            onChange={(e) =>
+                                setData(
+                                    'boost_clock_ghz',
+                                    Number(e.target.value),
+                                )
+                            }
                         />
-                        {errors.boost_clock_ghz && <p className="mt-1 text-sm text-red-600">{errors.boost_clock_ghz}</p>}
+                        {errors.boost_clock_ghz && (
+                            <p className="mt-1 text-sm text-red-600">
+                                {errors.boost_clock_ghz}
+                            </p>
+                        )}
                     </div>
 
-                    <div className="md:col-span-2 flex justify-end">
+                    <div className="flex justify-end md:col-span-2">
                         <Button type="submit" disabled={processing}>
                             {processing ? 'Saving...' : 'Add Processor Spec'}
                         </Button>

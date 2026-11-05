@@ -1,29 +1,24 @@
-import React, { useEffect, useState, useMemo, useRef } from "react";
-import { Head, router, usePage } from "@inertiajs/react";
-import AppLayout from "@/layouts/app-layout";
-import { useFlashMessage, usePageLoading, usePageMeta, withReturnTo } from "@/hooks";
-import type { SharedData } from "@/types";
-import { PageHeader } from "@/components/PageHeader";
-import { LoadingOverlay } from "@/components/LoadingOverlay";
-import { Can } from "@/components/authorization";
-import { formatTime, formatDate } from "@/lib/utils";
-
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Users, ChevronRight, ChevronDown, ChevronUp, Clock } from "lucide-react";
-import { MultiSelectFilter, parseMultiSelectParam, multiSelectToParam } from "@/components/multi-select-filter";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
-import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { Plus, Edit, Trash2, CheckCircle, RefreshCw, Search, Play, Pause } from "lucide-react";
+import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { PageHeader } from '@/components/PageHeader';
+import { Can } from '@/components/authorization';
 import {
-    index as employeeSchedulesIndex,
-    create as employeeSchedulesCreate,
-    edit as employeeSchedulesEdit,
-    destroy as employeeSchedulesDestroy,
-    toggleActive as employeeSchedulesToggleActive,
-} from "@/routes/employee-schedules";
+    useFlashMessage,
+    usePageLoading,
+    usePageMeta,
+    withReturnTo,
+} from '@/hooks';
+import AppLayout from '@/layouts/app-layout';
+import { formatDate, formatTime } from '@/lib/utils';
+import type { SharedData } from '@/types';
+import { Head, router, usePage } from '@inertiajs/react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+
+import {
+    MultiSelectFilter,
+    multiSelectToParam,
+    parseMultiSelectParam,
+} from '@/components/multi-select-filter';
+import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -33,7 +28,41 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+} from '@/components/ui/alert-dialog';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table';
+import {
+    create as employeeSchedulesCreate,
+    destroy as employeeSchedulesDestroy,
+    edit as employeeSchedulesEdit,
+    index as employeeSchedulesIndex,
+    toggleActive as employeeSchedulesToggleActive,
+} from '@/routes/employee-schedules';
+import {
+    CheckCircle,
+    ChevronDown,
+    ChevronRight,
+    ChevronUp,
+    Clock,
+    Edit,
+    Pause,
+    Play,
+    Plus,
+    RefreshCw,
+    Search,
+    Trash2,
+    Users,
+} from 'lucide-react';
 
 interface User {
     id: number;
@@ -100,9 +129,22 @@ interface PageProps extends SharedData {
     sites: Array<{ id: number; name: string }>;
     campaigns: Array<{ id: number; name: string }>;
     roles: string[];
-    usersWithoutSchedules: Array<{ id: number; first_name: string; last_name: string }>;
-    usersWithInactiveSchedules: Array<{ id: number; first_name: string; last_name: string }>;
-    usersWithMultipleSchedules: Array<{ id: number; first_name: string; last_name: string; schedule_count: number }>;
+    usersWithoutSchedules: Array<{
+        id: number;
+        first_name: string;
+        last_name: string;
+    }>;
+    usersWithInactiveSchedules: Array<{
+        id: number;
+        first_name: string;
+        last_name: string;
+    }>;
+    usersWithMultipleSchedules: Array<{
+        id: number;
+        first_name: string;
+        last_name: string;
+        schedule_count: number;
+    }>;
     teamLeadCampaignIds?: number[];
     filters?: {
         search?: string;
@@ -122,32 +164,55 @@ interface PageProps extends SharedData {
 
 const getShiftTypeBadge = (shiftType: string) => {
     const config: Record<string, { label: string; className: string }> = {
-        night_shift: { label: "Night Shift", className: "bg-blue-500" },
-        morning_shift: { label: "Morning Shift", className: "bg-yellow-500" },
-        afternoon_shift: { label: "Afternoon Shift", className: "bg-orange-500" },
-        utility_24h: { label: "24H Utility", className: "bg-purple-500" },
+        night_shift: { label: 'Night Shift', className: 'bg-blue-500' },
+        morning_shift: { label: 'Morning Shift', className: 'bg-yellow-500' },
+        afternoon_shift: {
+            label: 'Afternoon Shift',
+            className: 'bg-orange-500',
+        },
+        utility_24h: { label: '24H Utility', className: 'bg-purple-500' },
     };
 
-    const { label, className } = config[shiftType] || { label: shiftType, className: "bg-gray-500" };
+    const { label, className } = config[shiftType] || {
+        label: shiftType,
+        className: 'bg-gray-500',
+    };
     return <Badge className={className}>{label}</Badge>;
 };
 
 // Schedules arrive ordered active-first, newest-first
 const getPrimarySchedule = (schedules: Schedule[]): Schedule | undefined =>
-    schedules.find(s => s.is_active) ?? schedules[0];
+    schedules.find((s) => s.is_active) ?? schedules[0];
 
 const FlexibleBadge = () => (
-    <Badge variant="outline" className="gap-1 border-teal-500 text-teal-700 dark:text-teal-300">
+    <Badge
+        variant="outline"
+        className="gap-1 border-teal-500 text-teal-700 dark:text-teal-300"
+    >
         <Clock className="h-3 w-3" />
         Flexible
     </Badge>
 );
 
 const renderScheduleTime = (schedule: Schedule) =>
-    schedule.is_flexible ? <FlexibleBadge /> : `${formatTime(schedule.scheduled_time_in)} - ${formatTime(schedule.scheduled_time_out)}`;
+    schedule.is_flexible ? (
+        <FlexibleBadge />
+    ) : (
+        `${formatTime(schedule.scheduled_time_in)} - ${formatTime(schedule.scheduled_time_out)}`
+    );
 
 export default function EmployeeSchedulesIndex() {
-    const { employees, users, campaigns = [], roles = [], filters, usersWithoutSchedules = [], usersWithInactiveSchedules = [], usersWithMultipleSchedules = [], teamLeadCampaignIds } = usePage<PageProps>().props;
+    const {
+        employees,
+        users,
+        campaigns = [],
+        roles = [],
+        filters,
+        usersWithoutSchedules = [],
+        usersWithInactiveSchedules = [],
+        usersWithMultipleSchedules = [],
+        teamLeadCampaignIds,
+    } = usePage<PageProps>().props;
     const employeeData = {
         data: employees?.data ?? [],
         links: employees?.links ?? [],
@@ -160,10 +225,12 @@ export default function EmployeeSchedulesIndex() {
     };
     const appliedFilters = filters ?? {};
 
-    const [expandedUserIds, setExpandedUserIds] = useState<Set<number>>(new Set());
+    const [expandedUserIds, setExpandedUserIds] = useState<Set<number>>(
+        new Set(),
+    );
 
     const toggleExpanded = (userId: number) => {
-        setExpandedUserIds(prev => {
+        setExpandedUserIds((prev) => {
             const next = new Set(prev);
             if (next.has(userId)) {
                 next.delete(userId);
@@ -175,60 +242,99 @@ export default function EmployeeSchedulesIndex() {
     };
 
     const { title, breadcrumbs } = usePageMeta({
-        title: "Employee Schedules",
-        breadcrumbs: [{ title: "Employee Schedules", href: employeeSchedulesIndex().url }],
+        title: 'Employee Schedules',
+        breadcrumbs: [
+            { title: 'Employee Schedules', href: employeeSchedulesIndex().url },
+        ],
     });
 
     useFlashMessage();
     const isPageLoading = usePageLoading();
 
     const [loading, setLoading] = useState(false);
-    const [search, setSearch] = useState(appliedFilters.search || "");
-    const [selectedUserIds, setSelectedUserIds] = useState<string[]>(parseMultiSelectParam(appliedFilters.user_id));
-    const [selectedRoles, setSelectedRoles] = useState<string[]>(parseMultiSelectParam(appliedFilters.role));
-    const [selectedCampaignIds, setSelectedCampaignIds] = useState<string[]>(() => {
-        const fromFilter = parseMultiSelectParam(appliedFilters.campaign_id);
-        if (fromFilter.length > 0) return fromFilter;
-        return [];
-    });
-    const [selectedStatuses, setSelectedStatuses] = useState<string[]>(parseMultiSelectParam(appliedFilters.is_active));
-    const [activeOnly, setActiveOnly] = useState(appliedFilters.active_only || false);
-    const [showResigned, setShowResigned] = useState(appliedFilters.show_resigned || false);
+    const [search, setSearch] = useState(appliedFilters.search || '');
+    const [selectedUserIds, setSelectedUserIds] = useState<string[]>(
+        parseMultiSelectParam(appliedFilters.user_id),
+    );
+    const [selectedRoles, setSelectedRoles] = useState<string[]>(
+        parseMultiSelectParam(appliedFilters.role),
+    );
+    const [selectedCampaignIds, setSelectedCampaignIds] = useState<string[]>(
+        () => {
+            const fromFilter = parseMultiSelectParam(
+                appliedFilters.campaign_id,
+            );
+            if (fromFilter.length > 0) return fromFilter;
+            return [];
+        },
+    );
+    const [selectedStatuses, setSelectedStatuses] = useState<string[]>(
+        parseMultiSelectParam(appliedFilters.is_active),
+    );
+    const [activeOnly, setActiveOnly] = useState(
+        appliedFilters.active_only || false,
+    );
+    const [showResigned, setShowResigned] = useState(
+        appliedFilters.show_resigned || false,
+    );
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
 
     // Update local state when filters prop changes (e.g., when navigating back)
     useEffect(() => {
-        setSearch(appliedFilters.search || "");
+        setSearch(appliedFilters.search || '');
         setSelectedUserIds(parseMultiSelectParam(appliedFilters.user_id));
         setSelectedRoles(parseMultiSelectParam(appliedFilters.role));
-        setSelectedCampaignIds(parseMultiSelectParam(appliedFilters.campaign_id));
+        setSelectedCampaignIds(
+            parseMultiSelectParam(appliedFilters.campaign_id),
+        );
         setSelectedStatuses(parseMultiSelectParam(appliedFilters.is_active));
         setActiveOnly(appliedFilters.active_only || false);
         setShowResigned(appliedFilters.show_resigned || false);
-    }, [appliedFilters.search, appliedFilters.user_id, appliedFilters.role, appliedFilters.campaign_id, appliedFilters.is_active, appliedFilters.active_only, appliedFilters.show_resigned]);
+    }, [
+        appliedFilters.search,
+        appliedFilters.user_id,
+        appliedFilters.role,
+        appliedFilters.campaign_id,
+        appliedFilters.is_active,
+        appliedFilters.active_only,
+        appliedFilters.show_resigned,
+    ]);
 
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-    const [scheduleToDelete, setScheduleToDelete] = useState<number | null>(null);
+    const [scheduleToDelete, setScheduleToDelete] = useState<number | null>(
+        null,
+    );
     const [toggleDialogOpen, setToggleDialogOpen] = useState(false);
-    const [scheduleToToggle, setScheduleToToggle] = useState<Schedule | null>(null);
-    const [toggleUserName, setToggleUserName] = useState<string>("");
+    const [scheduleToToggle, setScheduleToToggle] = useState<Schedule | null>(
+        null,
+    );
+    const [toggleUserName, setToggleUserName] = useState<string>('');
     const [noScheduleDialogOpen, setNoScheduleDialogOpen] = useState(false);
-    const [noScheduleSearch, setNoScheduleSearch] = useState("");
-    const [scheduleDialogTab, setScheduleDialogTab] = useState<'no-schedule' | 'inactive' | 'multiple'>('no-schedule');
-    const [scheduleDetailsDialogOpen, setScheduleDetailsDialogOpen] = useState(false);
-    const [selectedUserSchedules, setSelectedUserSchedules] = useState<Schedule[]>([]);
-    const [selectedUserName, setSelectedUserName] = useState<string>("");
+    const [noScheduleSearch, setNoScheduleSearch] = useState('');
+    const [scheduleDialogTab, setScheduleDialogTab] = useState<
+        'no-schedule' | 'inactive' | 'multiple'
+    >('no-schedule');
+    const [scheduleDetailsDialogOpen, setScheduleDetailsDialogOpen] =
+        useState(false);
+    const [selectedUserSchedules, setSelectedUserSchedules] = useState<
+        Schedule[]
+    >([]);
+    const [selectedUserName, setSelectedUserName] = useState<string>('');
 
     const handleSearch = () => {
         const params: Record<string, string> = {};
         if (search) params.search = search;
-        if (selectedUserIds.length > 0) params.user_id = multiSelectToParam(selectedUserIds);
-        if (selectedRoles.length > 0) params.role = multiSelectToParam(selectedRoles);
-        if (selectedCampaignIds.length > 0) params.campaign_id = multiSelectToParam(selectedCampaignIds);
-        if (selectedStatuses.length > 0) params.is_active = multiSelectToParam(selectedStatuses);
-        if (activeOnly) params.active_only = "1";
-        if (showResigned) params.show_resigned = "1";
+        if (selectedUserIds.length > 0)
+            params.user_id = multiSelectToParam(selectedUserIds);
+        if (selectedRoles.length > 0)
+            params.role = multiSelectToParam(selectedRoles);
+        if (selectedCampaignIds.length > 0)
+            params.campaign_id = multiSelectToParam(selectedCampaignIds);
+        if (selectedStatuses.length > 0)
+            params.is_active = multiSelectToParam(selectedStatuses);
+        if (activeOnly) params.active_only = '1';
+        if (showResigned) params.show_resigned = '1';
 
         setLoading(true);
         router.get(employeeSchedulesIndex().url, params, {
@@ -253,12 +359,16 @@ export default function EmployeeSchedulesIndex() {
             isPollingRef.current = true;
             const params: Record<string, string> = {};
             if (search) params.search = search;
-            if (selectedUserIds.length > 0) params.user_id = multiSelectToParam(selectedUserIds);
-            if (selectedRoles.length > 0) params.role = multiSelectToParam(selectedRoles);
-            if (selectedCampaignIds.length > 0) params.campaign_id = multiSelectToParam(selectedCampaignIds);
-            if (selectedStatuses.length > 0) params.is_active = multiSelectToParam(selectedStatuses);
-            if (activeOnly) params.active_only = "1";
-            if (showResigned) params.show_resigned = "1";
+            if (selectedUserIds.length > 0)
+                params.user_id = multiSelectToParam(selectedUserIds);
+            if (selectedRoles.length > 0)
+                params.role = multiSelectToParam(selectedRoles);
+            if (selectedCampaignIds.length > 0)
+                params.campaign_id = multiSelectToParam(selectedCampaignIds);
+            if (selectedStatuses.length > 0)
+                params.is_active = multiSelectToParam(selectedStatuses);
+            if (activeOnly) params.active_only = '1';
+            if (showResigned) params.show_resigned = '1';
 
             router.get(employeeSchedulesIndex().url, params, {
                 preserveState: true,
@@ -266,12 +376,23 @@ export default function EmployeeSchedulesIndex() {
                 replace: true,
                 only: ['employees'],
                 onSuccess: () => setLastRefresh(new Date()),
-                onFinish: () => { isPollingRef.current = false; },
+                onFinish: () => {
+                    isPollingRef.current = false;
+                },
             });
         }, 30000);
 
         return () => clearInterval(interval);
-    }, [autoRefreshEnabled, search, selectedUserIds, selectedRoles, selectedCampaignIds, selectedStatuses, activeOnly, showResigned]);
+    }, [
+        autoRefreshEnabled,
+        search,
+        selectedUserIds,
+        selectedRoles,
+        selectedCampaignIds,
+        selectedStatuses,
+        activeOnly,
+        showResigned,
+    ]);
 
     const showClearFilters =
         selectedUserIds.length > 0 ||
@@ -283,7 +404,7 @@ export default function EmployeeSchedulesIndex() {
         Boolean(search);
 
     const clearFilters = () => {
-        setSearch("");
+        setSearch('');
         setSelectedUserIds([]);
         setSelectedRoles([]);
         setSelectedCampaignIds([]);
@@ -293,20 +414,26 @@ export default function EmployeeSchedulesIndex() {
 
         // Trigger reload with cleared filters
         setLoading(true);
-        router.get(employeeSchedulesIndex().url, {}, {
-            preserveState: true,
-            preserveScroll: true,
-            replace: true,
-            onSuccess: () => setLastRefresh(new Date()),
-            onFinish: () => setLoading(false),
-        });
+        router.get(
+            employeeSchedulesIndex().url,
+            {},
+            {
+                preserveState: true,
+                preserveScroll: true,
+                replace: true,
+                onSuccess: () => setLastRefresh(new Date()),
+                onFinish: () => setLoading(false),
+            },
+        );
     };
 
-    const handleToggleActive = (schedule: Schedule, userName = "") => {
+    const handleToggleActive = (schedule: Schedule, userName = '') => {
         // If activating, show confirmation dialog (will deactivate other schedules)
         if (!schedule.is_active) {
             setScheduleToToggle(schedule);
-            setToggleUserName(userName || schedule.user?.name || "this employee");
+            setToggleUserName(
+                userName || schedule.user?.name || 'this employee',
+            );
             setToggleDialogOpen(true);
         } else {
             // Deactivating - no confirmation needed
@@ -315,13 +442,17 @@ export default function EmployeeSchedulesIndex() {
     };
 
     const confirmToggleActive = (scheduleId: number) => {
-        router.post(employeeSchedulesToggleActive({ employeeSchedule: scheduleId }).url, {}, {
-            preserveScroll: true,
-            onSuccess: () => {
-                setToggleDialogOpen(false);
-                setScheduleToToggle(null);
+        router.post(
+            employeeSchedulesToggleActive({ employeeSchedule: scheduleId }).url,
+            {},
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setToggleDialogOpen(false);
+                    setScheduleToToggle(null);
+                },
             },
-        });
+        );
     };
 
     const handleDelete = (scheduleId: number) => {
@@ -331,29 +462,34 @@ export default function EmployeeSchedulesIndex() {
 
     const confirmDelete = () => {
         if (scheduleToDelete) {
-            router.delete(employeeSchedulesDestroy({ employee_schedule: scheduleToDelete }).url, {
-                preserveScroll: true,
-                onSuccess: () => {
-                    setDeleteDialogOpen(false);
-                    setScheduleToDelete(null);
+            router.delete(
+                employeeSchedulesDestroy({
+                    employee_schedule: scheduleToDelete,
+                }).url,
+                {
+                    preserveScroll: true,
+                    onSuccess: () => {
+                        setDeleteDialogOpen(false);
+                        setScheduleToDelete(null);
+                    },
                 },
-            });
+            );
         }
     };
 
     // Get employees without schedules from backend and format consistently
     const employeesWithoutSchedules = useMemo(() => {
-        return usersWithoutSchedules.map(user => ({
+        return usersWithoutSchedules.map((user) => ({
             id: user.id,
-            name: `${user.first_name} ${user.last_name}`
+            name: `${user.first_name} ${user.last_name}`,
         }));
     }, [usersWithoutSchedules]);
 
     // Get employees with inactive schedules
     const employeesWithInactiveSchedules = useMemo(() => {
-        return usersWithInactiveSchedules.map(user => ({
+        return usersWithInactiveSchedules.map((user) => ({
             id: user.id,
-            name: `${user.first_name} ${user.last_name}`
+            name: `${user.first_name} ${user.last_name}`,
         }));
     }, [usersWithInactiveSchedules]);
 
@@ -361,8 +497,8 @@ export default function EmployeeSchedulesIndex() {
     const filteredEmployeesWithoutSchedules = useMemo(() => {
         if (!noScheduleSearch) return employeesWithoutSchedules;
         const query = noScheduleSearch.toLowerCase();
-        return employeesWithoutSchedules.filter(user =>
-            user.name.toLowerCase().includes(query)
+        return employeesWithoutSchedules.filter((user) =>
+            user.name.toLowerCase().includes(query),
         );
     }, [employeesWithoutSchedules, noScheduleSearch]);
 
@@ -370,17 +506,17 @@ export default function EmployeeSchedulesIndex() {
     const filteredEmployeesWithInactiveSchedules = useMemo(() => {
         if (!noScheduleSearch) return employeesWithInactiveSchedules;
         const query = noScheduleSearch.toLowerCase();
-        return employeesWithInactiveSchedules.filter(user =>
-            user.name.toLowerCase().includes(query)
+        return employeesWithInactiveSchedules.filter((user) =>
+            user.name.toLowerCase().includes(query),
         );
     }, [employeesWithInactiveSchedules, noScheduleSearch]);
 
     // Get employees with multiple schedules
     const employeesWithMultipleSchedules = useMemo(() => {
-        return usersWithMultipleSchedules.map(user => ({
+        return usersWithMultipleSchedules.map((user) => ({
             id: user.id,
             name: `${user.first_name} ${user.last_name}`,
-            schedule_count: user.schedule_count
+            schedule_count: user.schedule_count,
         }));
     }, [usersWithMultipleSchedules]);
 
@@ -388,14 +524,17 @@ export default function EmployeeSchedulesIndex() {
     const filteredEmployeesWithMultipleSchedules = useMemo(() => {
         if (!noScheduleSearch) return employeesWithMultipleSchedules;
         const query = noScheduleSearch.toLowerCase();
-        return employeesWithMultipleSchedules.filter(user =>
-            user.name.toLowerCase().includes(query)
+        return employeesWithMultipleSchedules.filter((user) =>
+            user.name.toLowerCase().includes(query),
         );
     }, [employeesWithMultipleSchedules, noScheduleSearch]);
 
-    const handleViewEmployeeSchedules = async (userId: number, userName = "") => {
+    const handleViewEmployeeSchedules = async (
+        userId: number,
+        userName = '',
+    ) => {
         // Check if user's schedules are already on the current page
-        const employee = employeeData.data.find(e => e.id === userId);
+        const employee = employeeData.data.find((e) => e.id === userId);
 
         if (employee && employee.schedules.length > 0) {
             setSelectedUserSchedules(employee.schedules);
@@ -405,17 +544,22 @@ export default function EmployeeSchedulesIndex() {
             // User schedules not in current page, need to fetch from API
             setLoading(true);
             try {
-                const response = await fetch(`/employee-schedules/user/${userId}/schedules`, {
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
+                const response = await fetch(
+                    `/employee-schedules/user/${userId}/schedules`,
+                    {
+                        headers: {
+                            Accept: 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
                     },
-                });
+                );
 
                 if (response.ok) {
                     const schedules = await response.json();
                     setSelectedUserSchedules(schedules);
-                    setSelectedUserName(userName || schedules[0]?.user?.name || "");
+                    setSelectedUserName(
+                        userName || schedules[0]?.user?.name || '',
+                    );
                     setScheduleDetailsDialogOpen(true);
                 } else {
                     console.error('Failed to fetch user schedules');
@@ -431,7 +575,7 @@ export default function EmployeeSchedulesIndex() {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={title} />
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3 relative">
+            <div className="relative flex h-full flex-1 flex-col gap-4 rounded-xl p-3">
                 <LoadingOverlay isLoading={isPageLoading || loading} />
 
                 <PageHeader
@@ -442,27 +586,42 @@ export default function EmployeeSchedulesIndex() {
                 <div className="flex flex-col gap-3">
                     <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,3fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
                         <MultiSelectFilter
-                            options={users.map(u => ({ label: u.name, value: String(u.id) }))}
+                            options={users.map((u) => ({
+                                label: u.name,
+                                value: String(u.id),
+                            }))}
                             value={selectedUserIds}
                             onChange={setSelectedUserIds}
                             placeholder="All Employees"
                             emptyMessage="No employee found."
-                            className="w-full min-h-9"
-                            multipleSelectionLabel={(n) => `${n} employees selected`}
+                            className="min-h-9 w-full"
+                            multipleSelectionLabel={(n) =>
+                                `${n} employees selected`
+                            }
                         />
 
                         <MultiSelectFilter
-                            options={roles.map(role => ({ label: role, value: role }))}
+                            options={roles.map((role) => ({
+                                label: role,
+                                value: role,
+                            }))}
                             value={selectedRoles}
                             onChange={setSelectedRoles}
                             placeholder="All Roles"
                             emptyMessage="No role found."
-                            className="w-full min-h-9"
-                            multipleSelectionLabel={(n) => `${n} roles selected`}
+                            className="min-h-9 w-full"
+                            multipleSelectionLabel={(n) =>
+                                `${n} roles selected`
+                            }
                         />
 
                         <MultiSelectFilter
-                            options={(teamLeadCampaignIds?.length ? campaigns.filter(c => teamLeadCampaignIds.includes(c.id)) : campaigns).map(campaign => ({
+                            options={(teamLeadCampaignIds?.length
+                                ? campaigns.filter((c) =>
+                                      teamLeadCampaignIds.includes(c.id),
+                                  )
+                                : campaigns
+                            ).map((campaign) => ({
                                 label: campaign.name,
                                 value: String(campaign.id),
                             }))}
@@ -470,24 +629,26 @@ export default function EmployeeSchedulesIndex() {
                             onChange={setSelectedCampaignIds}
                             placeholder="All Campaigns"
                             emptyMessage="No campaign found."
-                            className="w-full min-h-9"
-                            multipleSelectionLabel={(n) => `${n} campaigns selected`}
+                            className="min-h-9 w-full"
+                            multipleSelectionLabel={(n) =>
+                                `${n} campaigns selected`
+                            }
                         />
 
                         <MultiSelectFilter
                             options={[
-                                { label: "Active", value: "1" },
-                                { label: "Inactive", value: "0" },
+                                { label: 'Active', value: '1' },
+                                { label: 'Inactive', value: '0' },
                             ]}
                             value={selectedStatuses}
                             onChange={setSelectedStatuses}
                             placeholder="All Status"
                             emptyMessage="No status found."
-                            className="w-full min-h-9"
+                            className="min-h-9 w-full"
                         />
 
                         <Button
-                            variant={activeOnly ? "default" : "outline"}
+                            variant={activeOnly ? 'default' : 'outline'}
                             onClick={() => setActiveOnly(!activeOnly)}
                             className="w-full"
                         >
@@ -496,7 +657,7 @@ export default function EmployeeSchedulesIndex() {
                         </Button>
 
                         <Button
-                            variant={showResigned ? "default" : "outline"}
+                            variant={showResigned ? 'default' : 'outline'}
                             onClick={() => setShowResigned(!showResigned)}
                             className="w-full"
                         >
@@ -508,7 +669,16 @@ export default function EmployeeSchedulesIndex() {
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex flex-col gap-2 sm:flex-row sm:gap-3">
                             <Can permission="schedules.create">
-                                <Button onClick={() => router.get(withReturnTo(employeeSchedulesCreate().url))} className="w-full sm:w-auto">
+                                <Button
+                                    onClick={() =>
+                                        router.get(
+                                            withReturnTo(
+                                                employeeSchedulesCreate().url,
+                                            ),
+                                        )
+                                    }
+                                    className="w-full sm:w-auto"
+                                >
                                     <Plus className="mr-2 h-4 w-4" />
                                     Add Employee Schedule
                                 </Button>
@@ -528,29 +698,59 @@ export default function EmployeeSchedulesIndex() {
                             </Button>
                         </div>
 
-                        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end sm:flex-1">
-                            <Button variant="default" onClick={handleSearch} className="w-full sm:w-auto">
+                        <div className="flex flex-col gap-3 sm:flex-1 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+                            <Button
+                                variant="default"
+                                onClick={handleSearch}
+                                className="w-full sm:w-auto"
+                            >
                                 <Search className="mr-2 h-4 w-4" />
                                 Apply Filters
                             </Button>
 
                             {showClearFilters && (
-                                <Button variant="outline" onClick={clearFilters} className="w-full sm:w-auto">
+                                <Button
+                                    variant="outline"
+                                    onClick={clearFilters}
+                                    className="w-full sm:w-auto"
+                                >
                                     Clear Filters
                                 </Button>
                             )}
 
                             <div className="flex gap-2">
-                                <Button variant="ghost" size="icon" onClick={handleManualRefresh} disabled={loading} title="Refresh">
-                                    <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={handleManualRefresh}
+                                    disabled={loading}
+                                    title="Refresh"
+                                >
+                                    <RefreshCw
+                                        className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`}
+                                    />
                                 </Button>
                                 <Button
-                                    variant={autoRefreshEnabled ? "default" : "ghost"}
+                                    variant={
+                                        autoRefreshEnabled ? 'default' : 'ghost'
+                                    }
                                     size="icon"
-                                    onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
-                                    title={autoRefreshEnabled ? "Disable auto-refresh" : "Enable auto-refresh (30s)"}
+                                    onClick={() =>
+                                        setAutoRefreshEnabled(
+                                            !autoRefreshEnabled,
+                                        )
+                                    }
+                                    title={
+                                        autoRefreshEnabled
+                                            ? 'Disable auto-refresh'
+                                            : 'Enable auto-refresh (30s)'
+                                    }
                                 >
-                                    {autoRefreshEnabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                                    {autoRefreshEnabled ? (
+                                        <Pause className="h-4 w-4" />
+                                    ) : (
+                                        <Play className="h-4 w-4" />
+                                    )}
                                 </Button>
                             </div>
                         </div>
@@ -559,16 +759,17 @@ export default function EmployeeSchedulesIndex() {
 
                 <div className="flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        Showing {employeeData.data.length} of {employeeData.meta.total} employee
-                        {employeeData.meta.total === 1 ? "" : "s"}
-                        {showClearFilters ? " (filtered)" : ""}
+                        Showing {employeeData.data.length} of{' '}
+                        {employeeData.meta.total} employee
+                        {employeeData.meta.total === 1 ? '' : 's'}
+                        {showClearFilters ? ' (filtered)' : ''}
                     </div>
                     <div className="text-xs">
                         Last updated: {lastRefresh.toLocaleTimeString()}
                     </div>
                 </div>
 
-                <div className="hidden md:block shadow rounded-md overflow-hidden">
+                <div className="hidden overflow-hidden rounded-md shadow md:block">
                     <div className="overflow-x-auto">
                         <Table>
                             <TableHeader>
@@ -585,18 +786,39 @@ export default function EmployeeSchedulesIndex() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {employeeData.data.map(employee => {
-                                    const scheduleCount = employee.schedules.length;
-                                    const hasMultipleSchedules = scheduleCount > 1;
-                                    const primary = getPrimarySchedule(employee.schedules);
-                                    const isExpanded = expandedUserIds.has(employee.id);
+                                {employeeData.data.map((employee) => {
+                                    const scheduleCount =
+                                        employee.schedules.length;
+                                    const hasMultipleSchedules =
+                                        scheduleCount > 1;
+                                    const primary = getPrimarySchedule(
+                                        employee.schedules,
+                                    );
+                                    const isExpanded = expandedUserIds.has(
+                                        employee.id,
+                                    );
 
                                     return (
                                         <React.Fragment key={employee.id}>
                                             <TableRow
-                                                className={hasMultipleSchedules ? "cursor-pointer" : ""}
-                                                onClick={hasMultipleSchedules ? () => toggleExpanded(employee.id) : undefined}
-                                                aria-expanded={hasMultipleSchedules ? isExpanded : undefined}
+                                                className={
+                                                    hasMultipleSchedules
+                                                        ? 'cursor-pointer'
+                                                        : ''
+                                                }
+                                                onClick={
+                                                    hasMultipleSchedules
+                                                        ? () =>
+                                                              toggleExpanded(
+                                                                  employee.id,
+                                                              )
+                                                        : undefined
+                                                }
+                                                aria-expanded={
+                                                    hasMultipleSchedules
+                                                        ? isExpanded
+                                                        : undefined
+                                                }
                                             >
                                                 <TableCell className="w-10 p-0 text-center">
                                                     {hasMultipleSchedules && (
@@ -606,11 +828,21 @@ export default function EmployeeSchedulesIndex() {
                                                             className="h-8 w-8"
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                toggleExpanded(employee.id);
+                                                                toggleExpanded(
+                                                                    employee.id,
+                                                                );
                                                             }}
-                                                            title={isExpanded ? "Hide schedules" : "Show all schedules"}
+                                                            title={
+                                                                isExpanded
+                                                                    ? 'Hide schedules'
+                                                                    : 'Show all schedules'
+                                                            }
                                                         >
-                                                            {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                                            {isExpanded ? (
+                                                                <ChevronDown className="h-4 w-4" />
+                                                            ) : (
+                                                                <ChevronRight className="h-4 w-4" />
+                                                            )}
                                                         </Button>
                                                     )}
                                                 </TableCell>
@@ -618,34 +850,77 @@ export default function EmployeeSchedulesIndex() {
                                                     <div className="flex items-center gap-2">
                                                         {employee.name}
                                                         {hasMultipleSchedules && (
-                                                            <Badge variant="outline" className="text-xs px-1.5 py-0 h-5 gap-1">
+                                                            <Badge
+                                                                variant="outline"
+                                                                className="h-5 gap-1 px-1.5 py-0 text-xs"
+                                                            >
                                                                 <Users className="h-3 w-3" />
                                                                 {scheduleCount}
                                                             </Badge>
                                                         )}
                                                     </div>
                                                 </TableCell>
-                                                <TableCell>{primary?.campaign?.name || "-"}</TableCell>
-                                                <TableCell>{primary?.site?.name || "-"}</TableCell>
-                                                <TableCell>{primary ? getShiftTypeBadge(primary.shift_type) : "-"}</TableCell>
+                                                <TableCell>
+                                                    {primary?.campaign?.name ||
+                                                        '-'}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {primary?.site?.name || '-'}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {primary
+                                                        ? getShiftTypeBadge(
+                                                              primary.shift_type,
+                                                          )
+                                                        : '-'}
+                                                </TableCell>
                                                 <TableCell className="whitespace-nowrap">
-                                                    {primary ? renderScheduleTime(primary) : "-"}
+                                                    {primary
+                                                        ? renderScheduleTime(
+                                                              primary,
+                                                          )
+                                                        : '-'}
                                                 </TableCell>
                                                 <TableCell className="text-xs">
-                                                    {primary && !primary.is_flexible && (
-                                                        <>
-                                                            {primary.work_days.slice(0, 3).map(day => day.substring(0, 3)).join(", ")}
-                                                            {primary.work_days.length > 3 && ` +${primary.work_days.length - 3}`}
-                                                        </>
-                                                    )}
+                                                    {primary &&
+                                                        !primary.is_flexible && (
+                                                            <>
+                                                                {primary.work_days
+                                                                    .slice(0, 3)
+                                                                    .map(
+                                                                        (day) =>
+                                                                            day.substring(
+                                                                                0,
+                                                                                3,
+                                                                            ),
+                                                                    )
+                                                                    .join(', ')}
+                                                                {primary
+                                                                    .work_days
+                                                                    .length >
+                                                                    3 &&
+                                                                    ` +${primary.work_days.length - 3}`}
+                                                            </>
+                                                        )}
                                                 </TableCell>
-                                                <TableCell onClick={(e) => e.stopPropagation()}>
+                                                <TableCell
+                                                    onClick={(e) =>
+                                                        e.stopPropagation()
+                                                    }
+                                                >
                                                     {primary && (
                                                         <div className="flex items-center gap-2">
                                                             <Can permission="schedules.toggle">
                                                                 <Switch
-                                                                    checked={primary.is_active}
-                                                                    onCheckedChange={() => handleToggleActive(primary, employee.name)}
+                                                                    checked={
+                                                                        primary.is_active
+                                                                    }
+                                                                    onCheckedChange={() =>
+                                                                        handleToggleActive(
+                                                                            primary,
+                                                                            employee.name,
+                                                                        )
+                                                                    }
                                                                     aria-label="Toggle schedule active status"
                                                                 />
                                                             </Can>
@@ -661,110 +936,205 @@ export default function EmployeeSchedulesIndex() {
                                                         </div>
                                                     )}
                                                 </TableCell>
-                                                <TableCell onClick={(e) => e.stopPropagation()}>
-                                                    {primary && !hasMultipleSchedules && (
-                                                        <div className="flex gap-2">
-                                                            <Can permission="schedules.edit">
-                                                                <Button
-                                                                    variant="outline"
-                                                                    size="icon"
-                                                                    onClick={() => router.get(withReturnTo(employeeSchedulesEdit({ employee_schedule: primary.id }).url))}
-                                                                    title="Edit Schedule"
-                                                                >
-                                                                    <Edit className="h-4 w-4" />
-                                                                </Button>
-                                                            </Can>
-                                                            <Can permission="schedules.delete">
-                                                                <Button
-                                                                    variant="outline"
-                                                                    size="icon"
-                                                                    onClick={() => handleDelete(primary.id)}
-                                                                    title="Delete Schedule"
-                                                                    className="text-red-600 hover:text-red-700 border-red-300"
-                                                                >
-                                                                    <Trash2 className="h-4 w-4" />
-                                                                </Button>
-                                                            </Can>
-                                                        </div>
-                                                    )}
+                                                <TableCell
+                                                    onClick={(e) =>
+                                                        e.stopPropagation()
+                                                    }
+                                                >
+                                                    {primary &&
+                                                        !hasMultipleSchedules && (
+                                                            <div className="flex gap-2">
+                                                                <Can permission="schedules.edit">
+                                                                    <Button
+                                                                        variant="outline"
+                                                                        size="icon"
+                                                                        onClick={() =>
+                                                                            router.get(
+                                                                                withReturnTo(
+                                                                                    employeeSchedulesEdit(
+                                                                                        {
+                                                                                            employee_schedule:
+                                                                                                primary.id,
+                                                                                        },
+                                                                                    )
+                                                                                        .url,
+                                                                                ),
+                                                                            )
+                                                                        }
+                                                                        title="Edit Schedule"
+                                                                    >
+                                                                        <Edit className="h-4 w-4" />
+                                                                    </Button>
+                                                                </Can>
+                                                                <Can permission="schedules.delete">
+                                                                    <Button
+                                                                        variant="outline"
+                                                                        size="icon"
+                                                                        onClick={() =>
+                                                                            handleDelete(
+                                                                                primary.id,
+                                                                            )
+                                                                        }
+                                                                        title="Delete Schedule"
+                                                                        className="border-red-300 text-red-600 hover:text-red-700"
+                                                                    >
+                                                                        <Trash2 className="h-4 w-4" />
+                                                                    </Button>
+                                                                </Can>
+                                                            </div>
+                                                        )}
                                                     {hasMultipleSchedules && (
-                                                        <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                                        <span className="text-xs whitespace-nowrap text-muted-foreground">
                                                             Expand to manage
                                                         </span>
                                                     )}
                                                 </TableCell>
                                             </TableRow>
 
-                                            {hasMultipleSchedules && isExpanded && (
-                                                <TableRow className="hover:bg-transparent">
-                                                    <TableCell colSpan={9} className="bg-muted/30 p-0">
-                                                        <div className="divide-y">
-                                                            {employee.schedules.map(schedule => (
-                                                                <div
-                                                                    key={schedule.id}
-                                                                    className={`flex flex-wrap items-center gap-3 py-2.5 pr-4 pl-10 border-l-4 ${schedule.is_active ? "border-l-green-500" : "border-l-transparent"}`}
-                                                                >
-                                                                    {schedule.is_active ? (
-                                                                        <Badge className="bg-green-500">Active</Badge>
-                                                                    ) : (
-                                                                        <Badge variant="secondary">Inactive</Badge>
-                                                                    )}
-                                                                    {getShiftTypeBadge(schedule.shift_type)}
-                                                                    <span className="text-sm whitespace-nowrap">
-                                                                        {renderScheduleTime(schedule)}
-                                                                    </span>
-                                                                    <span className="text-sm text-muted-foreground">
-                                                                        {schedule.campaign?.name || "No Campaign"} / {schedule.site?.name || "No Site"}
-                                                                    </span>
-                                                                    <span className="text-xs text-muted-foreground">
-                                                                        {schedule.is_flexible ? "No fixed work days" : schedule.work_days.map(day => day.substring(0, 3)).join(", ")}
-                                                                    </span>
-                                                                    <span className="text-xs text-muted-foreground whitespace-nowrap">
-                                                                        {formatDate(schedule.effective_date)} &rarr; {schedule.end_date ? formatDate(schedule.end_date) : "Ongoing"}
-                                                                    </span>
-                                                                    <div className="ml-auto flex items-center gap-2">
-                                                                        <Can permission="schedules.toggle">
-                                                                            <Switch
-                                                                                checked={schedule.is_active}
-                                                                                onCheckedChange={() => handleToggleActive(schedule, employee.name)}
-                                                                                aria-label="Toggle schedule active status"
-                                                                            />
-                                                                        </Can>
-                                                                        <Can permission="schedules.edit">
-                                                                            <Button
-                                                                                variant="outline"
-                                                                                size="icon"
-                                                                                className="h-8 w-8"
-                                                                                onClick={() => router.get(withReturnTo(employeeSchedulesEdit({ employee_schedule: schedule.id }).url))}
-                                                                                title="Edit Schedule"
-                                                                            >
-                                                                                <Edit className="h-4 w-4" />
-                                                                            </Button>
-                                                                        </Can>
-                                                                        <Can permission="schedules.delete">
-                                                                            <Button
-                                                                                variant="outline"
-                                                                                size="icon"
-                                                                                className="h-8 w-8 text-red-600 hover:text-red-700 border-red-300"
-                                                                                onClick={() => handleDelete(schedule.id)}
-                                                                                title="Delete Schedule"
-                                                                            >
-                                                                                <Trash2 className="h-4 w-4" />
-                                                                            </Button>
-                                                                        </Can>
-                                                                    </div>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    </TableCell>
-                                                </TableRow>
-                                            )}
+                                            {hasMultipleSchedules &&
+                                                isExpanded && (
+                                                    <TableRow className="hover:bg-transparent">
+                                                        <TableCell
+                                                            colSpan={9}
+                                                            className="bg-muted/30 p-0"
+                                                        >
+                                                            <div className="divide-y">
+                                                                {employee.schedules.map(
+                                                                    (
+                                                                        schedule,
+                                                                    ) => (
+                                                                        <div
+                                                                            key={
+                                                                                schedule.id
+                                                                            }
+                                                                            className={`flex flex-wrap items-center gap-3 border-l-4 py-2.5 pr-4 pl-10 ${schedule.is_active ? 'border-l-green-500' : 'border-l-transparent'}`}
+                                                                        >
+                                                                            {schedule.is_active ? (
+                                                                                <Badge className="bg-green-500">
+                                                                                    Active
+                                                                                </Badge>
+                                                                            ) : (
+                                                                                <Badge variant="secondary">
+                                                                                    Inactive
+                                                                                </Badge>
+                                                                            )}
+                                                                            {getShiftTypeBadge(
+                                                                                schedule.shift_type,
+                                                                            )}
+                                                                            <span className="text-sm whitespace-nowrap">
+                                                                                {renderScheduleTime(
+                                                                                    schedule,
+                                                                                )}
+                                                                            </span>
+                                                                            <span className="text-sm text-muted-foreground">
+                                                                                {schedule
+                                                                                    .campaign
+                                                                                    ?.name ||
+                                                                                    'No Campaign'}{' '}
+                                                                                /{' '}
+                                                                                {schedule
+                                                                                    .site
+                                                                                    ?.name ||
+                                                                                    'No Site'}
+                                                                            </span>
+                                                                            <span className="text-xs text-muted-foreground">
+                                                                                {schedule.is_flexible
+                                                                                    ? 'No fixed work days'
+                                                                                    : schedule.work_days
+                                                                                          .map(
+                                                                                              (
+                                                                                                  day,
+                                                                                              ) =>
+                                                                                                  day.substring(
+                                                                                                      0,
+                                                                                                      3,
+                                                                                                  ),
+                                                                                          )
+                                                                                          .join(
+                                                                                              ', ',
+                                                                                          )}
+                                                                            </span>
+                                                                            <span className="text-xs whitespace-nowrap text-muted-foreground">
+                                                                                {formatDate(
+                                                                                    schedule.effective_date,
+                                                                                )}{' '}
+                                                                                &rarr;{' '}
+                                                                                {schedule.end_date
+                                                                                    ? formatDate(
+                                                                                          schedule.end_date,
+                                                                                      )
+                                                                                    : 'Ongoing'}
+                                                                            </span>
+                                                                            <div className="ml-auto flex items-center gap-2">
+                                                                                <Can permission="schedules.toggle">
+                                                                                    <Switch
+                                                                                        checked={
+                                                                                            schedule.is_active
+                                                                                        }
+                                                                                        onCheckedChange={() =>
+                                                                                            handleToggleActive(
+                                                                                                schedule,
+                                                                                                employee.name,
+                                                                                            )
+                                                                                        }
+                                                                                        aria-label="Toggle schedule active status"
+                                                                                    />
+                                                                                </Can>
+                                                                                <Can permission="schedules.edit">
+                                                                                    <Button
+                                                                                        variant="outline"
+                                                                                        size="icon"
+                                                                                        className="h-8 w-8"
+                                                                                        onClick={() =>
+                                                                                            router.get(
+                                                                                                withReturnTo(
+                                                                                                    employeeSchedulesEdit(
+                                                                                                        {
+                                                                                                            employee_schedule:
+                                                                                                                schedule.id,
+                                                                                                        },
+                                                                                                    )
+                                                                                                        .url,
+                                                                                                ),
+                                                                                            )
+                                                                                        }
+                                                                                        title="Edit Schedule"
+                                                                                    >
+                                                                                        <Edit className="h-4 w-4" />
+                                                                                    </Button>
+                                                                                </Can>
+                                                                                <Can permission="schedules.delete">
+                                                                                    <Button
+                                                                                        variant="outline"
+                                                                                        size="icon"
+                                                                                        className="h-8 w-8 border-red-300 text-red-600 hover:text-red-700"
+                                                                                        onClick={() =>
+                                                                                            handleDelete(
+                                                                                                schedule.id,
+                                                                                            )
+                                                                                        }
+                                                                                        title="Delete Schedule"
+                                                                                    >
+                                                                                        <Trash2 className="h-4 w-4" />
+                                                                                    </Button>
+                                                                                </Can>
+                                                                            </div>
+                                                                        </div>
+                                                                    ),
+                                                                )}
+                                                            </div>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                )}
                                         </React.Fragment>
                                     );
                                 })}
                                 {employeeData.data.length === 0 && !loading && (
                                     <TableRow>
-                                        <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
+                                        <TableCell
+                                            colSpan={9}
+                                            className="h-24 text-center text-muted-foreground"
+                                        >
                                             No employee schedules found
                                         </TableCell>
                                     </TableRow>
@@ -774,28 +1144,37 @@ export default function EmployeeSchedulesIndex() {
                     </div>
                 </div>
 
-                <div className="md:hidden space-y-4">
-                    {employeeData.data.map(employee => {
+                <div className="space-y-4 md:hidden">
+                    {employeeData.data.map((employee) => {
                         const scheduleCount = employee.schedules.length;
                         const hasMultipleSchedules = scheduleCount > 1;
                         const primary = getPrimarySchedule(employee.schedules);
                         const isExpanded = expandedUserIds.has(employee.id);
 
                         return (
-                            <div key={employee.id} className="border rounded-lg p-4 shadow-sm space-y-3 bg-card">
-                                <div className="flex justify-between items-start">
+                            <div
+                                key={employee.id}
+                                className="space-y-3 rounded-lg border bg-card p-4 shadow-sm"
+                            >
+                                <div className="flex items-start justify-between">
                                     <div>
                                         <div className="flex items-center gap-2">
-                                            <span className="text-lg font-semibold">{employee.name}</span>
+                                            <span className="text-lg font-semibold">
+                                                {employee.name}
+                                            </span>
                                             {hasMultipleSchedules && (
-                                                <Badge variant="outline" className="text-xs px-1.5 py-0 h-5 gap-1">
+                                                <Badge
+                                                    variant="outline"
+                                                    className="h-5 gap-1 px-1.5 py-0 text-xs"
+                                                >
                                                     <Users className="h-3 w-3" />
                                                     {scheduleCount}
                                                 </Badge>
                                             )}
                                         </div>
                                         <div className="text-sm text-muted-foreground">
-                                            {primary?.campaign?.name || "No Campaign"}
+                                            {primary?.campaign?.name ||
+                                                'No Campaign'}
                                         </div>
                                     </div>
                                     {primary && (
@@ -803,14 +1182,23 @@ export default function EmployeeSchedulesIndex() {
                                             <Can permission="schedules.toggle">
                                                 <Switch
                                                     checked={primary.is_active}
-                                                    onCheckedChange={() => handleToggleActive(primary, employee.name)}
+                                                    onCheckedChange={() =>
+                                                        handleToggleActive(
+                                                            primary,
+                                                            employee.name,
+                                                        )
+                                                    }
                                                     aria-label="Toggle schedule active status"
                                                 />
                                             </Can>
                                             {primary.is_active ? (
-                                                <Badge className="bg-green-500">Active</Badge>
+                                                <Badge className="bg-green-500">
+                                                    Active
+                                                </Badge>
                                             ) : (
-                                                <Badge variant="secondary">Inactive</Badge>
+                                                <Badge variant="secondary">
+                                                    Inactive
+                                                </Badge>
                                             )}
                                         </div>
                                     )}
@@ -819,31 +1207,59 @@ export default function EmployeeSchedulesIndex() {
                                 {primary && (
                                     <div className="space-y-2 text-sm">
                                         <div className="flex items-center gap-2">
-                                            <span className="font-medium">Shift:</span>
-                                            {getShiftTypeBadge(primary.shift_type)}
+                                            <span className="font-medium">
+                                                Shift:
+                                            </span>
+                                            {getShiftTypeBadge(
+                                                primary.shift_type,
+                                            )}
                                         </div>
                                         <div>
-                                            <span className="font-medium">Time:</span>{" "}
+                                            <span className="font-medium">
+                                                Time:
+                                            </span>{' '}
                                             {renderScheduleTime(primary)}
                                         </div>
                                         <div>
-                                            <span className="font-medium">Work Days:</span>{" "}
-                                            {primary.is_flexible ? "No fixed work days" : primary.work_days.map(day => day.substring(0, 3)).join(", ")}
+                                            <span className="font-medium">
+                                                Work Days:
+                                            </span>{' '}
+                                            {primary.is_flexible
+                                                ? 'No fixed work days'
+                                                : primary.work_days
+                                                      .map((day) =>
+                                                          day.substring(0, 3),
+                                                      )
+                                                      .join(', ')}
                                         </div>
                                         <div>
-                                            <span className="font-medium">Site:</span> {primary.site?.name || "-"}
+                                            <span className="font-medium">
+                                                Site:
+                                            </span>{' '}
+                                            {primary.site?.name || '-'}
                                         </div>
                                     </div>
                                 )}
 
                                 {primary && !hasMultipleSchedules && (
-                                    <div className="flex gap-2 pt-2 border-t">
+                                    <div className="flex gap-2 border-t pt-2">
                                         <Can permission="schedules.edit">
                                             <Button
                                                 variant="outline"
                                                 size="sm"
                                                 className="flex-1"
-                                                onClick={() => router.get(withReturnTo(employeeSchedulesEdit({ employee_schedule: primary.id }).url))}
+                                                onClick={() =>
+                                                    router.get(
+                                                        withReturnTo(
+                                                            employeeSchedulesEdit(
+                                                                {
+                                                                    employee_schedule:
+                                                                        primary.id,
+                                                                },
+                                                            ).url,
+                                                        ),
+                                                    )
+                                                }
                                             >
                                                 <Edit className="mr-2 h-4 w-4" />
                                                 Edit
@@ -853,8 +1269,10 @@ export default function EmployeeSchedulesIndex() {
                                             <Button
                                                 variant="outline"
                                                 size="sm"
-                                                onClick={() => handleDelete(primary.id)}
-                                                className="text-red-600 hover:text-red-700 border-red-300"
+                                                onClick={() =>
+                                                    handleDelete(primary.id)
+                                                }
+                                                className="border-red-300 text-red-600 hover:text-red-700"
                                             >
                                                 <Trash2 className="mr-2 h-4 w-4" />
                                                 Delete
@@ -869,72 +1287,142 @@ export default function EmployeeSchedulesIndex() {
                                             variant="ghost"
                                             size="sm"
                                             className="w-full"
-                                            onClick={() => toggleExpanded(employee.id)}
+                                            onClick={() =>
+                                                toggleExpanded(employee.id)
+                                            }
                                             aria-expanded={isExpanded}
                                         >
-                                            {isExpanded ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />}
-                                            {isExpanded ? "Hide schedules" : `Show all ${scheduleCount} schedules`}
+                                            {isExpanded ? (
+                                                <ChevronUp className="mr-2 h-4 w-4" />
+                                            ) : (
+                                                <ChevronDown className="mr-2 h-4 w-4" />
+                                            )}
+                                            {isExpanded
+                                                ? 'Hide schedules'
+                                                : `Show all ${scheduleCount} schedules`}
                                         </Button>
 
                                         {isExpanded && (
                                             <div className="space-y-3">
-                                                {employee.schedules.map(schedule => (
-                                                    <div
-                                                        key={schedule.id}
-                                                        className={`rounded-md border p-3 space-y-2 text-sm ${schedule.is_active ? "border-green-500 bg-green-50 dark:bg-green-950/20" : "bg-muted/30"}`}
-                                                    >
-                                                        <div className="flex flex-wrap items-center gap-2">
-                                                            {schedule.is_active ? (
-                                                                <Badge className="bg-green-500">Active</Badge>
-                                                            ) : (
-                                                                <Badge variant="secondary">Inactive</Badge>
-                                                            )}
-                                                            {getShiftTypeBadge(schedule.shift_type)}
+                                                {employee.schedules.map(
+                                                    (schedule) => (
+                                                        <div
+                                                            key={schedule.id}
+                                                            className={`space-y-2 rounded-md border p-3 text-sm ${schedule.is_active ? 'border-green-500 bg-green-50 dark:bg-green-950/20' : 'bg-muted/30'}`}
+                                                        >
+                                                            <div className="flex flex-wrap items-center gap-2">
+                                                                {schedule.is_active ? (
+                                                                    <Badge className="bg-green-500">
+                                                                        Active
+                                                                    </Badge>
+                                                                ) : (
+                                                                    <Badge variant="secondary">
+                                                                        Inactive
+                                                                    </Badge>
+                                                                )}
+                                                                {getShiftTypeBadge(
+                                                                    schedule.shift_type,
+                                                                )}
+                                                            </div>
+                                                            <div>
+                                                                {renderScheduleTime(
+                                                                    schedule,
+                                                                )}
+                                                            </div>
+                                                            <div className="text-muted-foreground">
+                                                                {schedule
+                                                                    .campaign
+                                                                    ?.name ||
+                                                                    'No Campaign'}{' '}
+                                                                /{' '}
+                                                                {schedule.site
+                                                                    ?.name ||
+                                                                    'No Site'}
+                                                            </div>
+                                                            <div className="text-xs text-muted-foreground">
+                                                                {schedule.is_flexible
+                                                                    ? 'No fixed work days'
+                                                                    : schedule.work_days
+                                                                          .map(
+                                                                              (
+                                                                                  day,
+                                                                              ) =>
+                                                                                  day.substring(
+                                                                                      0,
+                                                                                      3,
+                                                                                  ),
+                                                                          )
+                                                                          .join(
+                                                                              ', ',
+                                                                          )}
+                                                            </div>
+                                                            <div className="text-xs text-muted-foreground">
+                                                                {formatDate(
+                                                                    schedule.effective_date,
+                                                                )}{' '}
+                                                                &rarr;{' '}
+                                                                {schedule.end_date
+                                                                    ? formatDate(
+                                                                          schedule.end_date,
+                                                                      )
+                                                                    : 'Ongoing'}
+                                                            </div>
+                                                            <div className="flex items-center gap-2 border-t pt-2">
+                                                                <Can permission="schedules.toggle">
+                                                                    <Switch
+                                                                        checked={
+                                                                            schedule.is_active
+                                                                        }
+                                                                        onCheckedChange={() =>
+                                                                            handleToggleActive(
+                                                                                schedule,
+                                                                                employee.name,
+                                                                            )
+                                                                        }
+                                                                        aria-label="Toggle schedule active status"
+                                                                    />
+                                                                </Can>
+                                                                <Can permission="schedules.edit">
+                                                                    <Button
+                                                                        variant="outline"
+                                                                        size="sm"
+                                                                        className="flex-1"
+                                                                        onClick={() =>
+                                                                            router.get(
+                                                                                withReturnTo(
+                                                                                    employeeSchedulesEdit(
+                                                                                        {
+                                                                                            employee_schedule:
+                                                                                                schedule.id,
+                                                                                        },
+                                                                                    )
+                                                                                        .url,
+                                                                                ),
+                                                                            )
+                                                                        }
+                                                                    >
+                                                                        <Edit className="mr-2 h-4 w-4" />
+                                                                        Edit
+                                                                    </Button>
+                                                                </Can>
+                                                                <Can permission="schedules.delete">
+                                                                    <Button
+                                                                        variant="outline"
+                                                                        size="sm"
+                                                                        onClick={() =>
+                                                                            handleDelete(
+                                                                                schedule.id,
+                                                                            )
+                                                                        }
+                                                                        className="border-red-300 text-red-600 hover:text-red-700"
+                                                                    >
+                                                                        <Trash2 className="h-4 w-4" />
+                                                                    </Button>
+                                                                </Can>
+                                                            </div>
                                                         </div>
-                                                        <div>
-                                                            {renderScheduleTime(schedule)}
-                                                        </div>
-                                                        <div className="text-muted-foreground">
-                                                            {schedule.campaign?.name || "No Campaign"} / {schedule.site?.name || "No Site"}
-                                                        </div>
-                                                        <div className="text-xs text-muted-foreground">
-                                                            {schedule.is_flexible ? "No fixed work days" : schedule.work_days.map(day => day.substring(0, 3)).join(", ")}
-                                                        </div>
-                                                        <div className="text-xs text-muted-foreground">
-                                                            {formatDate(schedule.effective_date)} &rarr; {schedule.end_date ? formatDate(schedule.end_date) : "Ongoing"}
-                                                        </div>
-                                                        <div className="flex items-center gap-2 pt-2 border-t">
-                                                            <Can permission="schedules.toggle">
-                                                                <Switch
-                                                                    checked={schedule.is_active}
-                                                                    onCheckedChange={() => handleToggleActive(schedule, employee.name)}
-                                                                    aria-label="Toggle schedule active status"
-                                                                />
-                                                            </Can>
-                                                            <Can permission="schedules.edit">
-                                                                <Button
-                                                                    variant="outline"
-                                                                    size="sm"
-                                                                    className="flex-1"
-                                                                    onClick={() => router.get(withReturnTo(employeeSchedulesEdit({ employee_schedule: schedule.id }).url))}
-                                                                >
-                                                                    <Edit className="mr-2 h-4 w-4" />
-                                                                    Edit
-                                                                </Button>
-                                                            </Can>
-                                                            <Can permission="schedules.delete">
-                                                                <Button
-                                                                    variant="outline"
-                                                                    size="sm"
-                                                                    onClick={() => handleDelete(schedule.id)}
-                                                                    className="text-red-600 hover:text-red-700 border-red-300"
-                                                                >
-                                                                    <Trash2 className="h-4 w-4" />
-                                                                </Button>
-                                                            </Can>
-                                                        </div>
-                                                    </div>
-                                                ))}
+                                                    ),
+                                                )}
                                             </div>
                                         )}
                                     </>
@@ -944,29 +1432,42 @@ export default function EmployeeSchedulesIndex() {
                     })}
 
                     {employeeData.data.length === 0 && !loading && (
-                        <div className="py-12 text-center text-gray-500 border rounded-lg bg-card">
+                        <div className="rounded-lg border bg-card py-12 text-center text-gray-500">
                             No employee schedules found
                         </div>
                     )}
                 </div>
 
-                <div className="flex justify-center mt-4">
+                <div className="mt-4 flex justify-center">
                     {employeeData.links && employeeData.links.length > 0 && (
-                        <PaginationNav links={employeeData.links} only={["employees"]} />
+                        <PaginationNav
+                            links={employeeData.links}
+                            only={['employees']}
+                        />
                     )}
                 </div>
 
-                <AlertDialog open={toggleDialogOpen} onOpenChange={setToggleDialogOpen}>
+                <AlertDialog
+                    open={toggleDialogOpen}
+                    onOpenChange={setToggleDialogOpen}
+                >
                     <AlertDialogContent>
                         <AlertDialogHeader>
-                            <AlertDialogTitle>Activate Schedule?</AlertDialogTitle>
+                            <AlertDialogTitle>
+                                Activate Schedule?
+                            </AlertDialogTitle>
                             <AlertDialogDescription>
                                 {scheduleToToggle && (
                                     <>
-                                        Are you sure you want to activate this schedule for <strong>{toggleUserName}</strong>?
-                                        <br /><br />
+                                        Are you sure you want to activate this
+                                        schedule for{' '}
+                                        <strong>{toggleUserName}</strong>?
+                                        <br />
+                                        <br />
                                         <span className="text-amber-600 dark:text-amber-400">
-                                            Note: This will automatically deactivate any other active schedules for this employee.
+                                            Note: This will automatically
+                                            deactivate any other active
+                                            schedules for this employee.
                                         </span>
                                     </>
                                 )}
@@ -974,44 +1475,59 @@ export default function EmployeeSchedulesIndex() {
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => scheduleToToggle && confirmToggleActive(scheduleToToggle.id)}>
+                            <AlertDialogAction
+                                onClick={() =>
+                                    scheduleToToggle &&
+                                    confirmToggleActive(scheduleToToggle.id)
+                                }
+                            >
                                 Activate
                             </AlertDialogAction>
                         </AlertDialogFooter>
                     </AlertDialogContent>
                 </AlertDialog>
 
-                <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                <AlertDialog
+                    open={deleteDialogOpen}
+                    onOpenChange={setDeleteDialogOpen}
+                >
                     <AlertDialogContent>
                         <AlertDialogHeader>
                             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                             <AlertDialogDescription>
-                                This action cannot be undone. This will permanently delete the employee schedule.
+                                This action cannot be undone. This will
+                                permanently delete the employee schedule.
                             </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={confirmDelete}>Delete</AlertDialogAction>
+                            <AlertDialogAction onClick={confirmDelete}>
+                                Delete
+                            </AlertDialogAction>
                         </AlertDialogFooter>
                     </AlertDialogContent>
                 </AlertDialog>
 
                 {/* Employees Without Schedules Dialog */}
-                <AlertDialog open={noScheduleDialogOpen} onOpenChange={(open) => {
-                    setNoScheduleDialogOpen(open);
-                    if (!open) {
-                        setScheduleDialogTab('no-schedule');
-                        setNoScheduleSearch("");
-                    }
-                }}>
-                    <AlertDialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[85vh] sm:max-h-[80vh] overflow-hidden flex flex-col">
+                <AlertDialog
+                    open={noScheduleDialogOpen}
+                    onOpenChange={(open) => {
+                        setNoScheduleDialogOpen(open);
+                        if (!open) {
+                            setScheduleDialogTab('no-schedule');
+                            setNoScheduleSearch('');
+                        }
+                    }}
+                >
+                    <AlertDialogContent className="flex max-h-[85vh] max-w-[95vw] flex-col overflow-hidden sm:max-h-[80vh] sm:max-w-2xl">
                         <AlertDialogHeader>
                             <AlertDialogTitle className="flex flex-wrap items-center gap-2 text-base sm:text-lg">
                                 <Users className="h-4 w-4 sm:h-5 sm:w-5" />
                                 <span>Employee Schedule Status</span>
                             </AlertDialogTitle>
                             <AlertDialogDescription>
-                                View employees without schedules, with only inactive schedules, or with multiple schedules.
+                                View employees without schedules, with only
+                                inactive schedules, or with multiple schedules.
                             </AlertDialogDescription>
                         </AlertDialogHeader>
 
@@ -1021,402 +1537,625 @@ export default function EmployeeSchedulesIndex() {
                             <button
                                 onClick={() => {
                                     setScheduleDialogTab('no-schedule');
-                                    setNoScheduleSearch("");
+                                    setNoScheduleSearch('');
                                 }}
-                                className={`flex items-center justify-center gap-1.5 px-2 py-2.5 text-xs sm:text-sm font-medium border-b-2 transition-colors ${scheduleDialogTab === 'no-schedule'
-                                    ? 'border-primary text-primary bg-primary/5'
-                                    : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                                    }`}
+                                className={`flex items-center justify-center gap-1.5 border-b-2 px-2 py-2.5 text-xs font-medium transition-colors sm:text-sm ${
+                                    scheduleDialogTab === 'no-schedule'
+                                        ? 'border-primary bg-primary/5 text-primary'
+                                        : 'border-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                                }`}
                             >
                                 <span>No Schedule</span>
-                                <Badge variant={scheduleDialogTab === 'no-schedule' ? 'default' : 'secondary'} className="h-5 min-w-5 px-1.5 text-xs">
+                                <Badge
+                                    variant={
+                                        scheduleDialogTab === 'no-schedule'
+                                            ? 'default'
+                                            : 'secondary'
+                                    }
+                                    className="h-5 min-w-5 px-1.5 text-xs"
+                                >
                                     {employeesWithoutSchedules.length}
                                 </Badge>
                             </button>
                             <button
                                 onClick={() => {
                                     setScheduleDialogTab('inactive');
-                                    setNoScheduleSearch("");
+                                    setNoScheduleSearch('');
                                 }}
-                                className={`flex items-center justify-center gap-1.5 px-2 py-2.5 text-xs sm:text-sm font-medium border-b-2 transition-colors ${scheduleDialogTab === 'inactive'
-                                    ? 'border-primary text-primary bg-primary/5'
-                                    : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                                    }`}
+                                className={`flex items-center justify-center gap-1.5 border-b-2 px-2 py-2.5 text-xs font-medium transition-colors sm:text-sm ${
+                                    scheduleDialogTab === 'inactive'
+                                        ? 'border-primary bg-primary/5 text-primary'
+                                        : 'border-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                                }`}
                             >
                                 <span>Inactive</span>
-                                <Badge variant={scheduleDialogTab === 'inactive' ? 'default' : 'secondary'} className="h-5 min-w-5 px-1.5 text-xs">
+                                <Badge
+                                    variant={
+                                        scheduleDialogTab === 'inactive'
+                                            ? 'default'
+                                            : 'secondary'
+                                    }
+                                    className="h-5 min-w-5 px-1.5 text-xs"
+                                >
                                     {employeesWithInactiveSchedules.length}
                                 </Badge>
                             </button>
                             <button
                                 onClick={() => {
                                     setScheduleDialogTab('multiple');
-                                    setNoScheduleSearch("");
+                                    setNoScheduleSearch('');
                                 }}
-                                className={`flex items-center justify-center gap-1.5 px-2 py-2.5 text-xs sm:text-sm font-medium border-b-2 transition-colors ${scheduleDialogTab === 'multiple'
-                                    ? 'border-primary text-primary bg-primary/5'
-                                    : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                                    }`}
+                                className={`flex items-center justify-center gap-1.5 border-b-2 px-2 py-2.5 text-xs font-medium transition-colors sm:text-sm ${
+                                    scheduleDialogTab === 'multiple'
+                                        ? 'border-primary bg-primary/5 text-primary'
+                                        : 'border-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                                }`}
                             >
                                 <span>Multiple</span>
-                                <Badge variant={scheduleDialogTab === 'multiple' ? 'default' : 'secondary'} className="h-5 min-w-5 px-1.5 text-xs">
+                                <Badge
+                                    variant={
+                                        scheduleDialogTab === 'multiple'
+                                            ? 'default'
+                                            : 'secondary'
+                                    }
+                                    className="h-5 min-w-5 px-1.5 text-xs"
+                                >
                                     {employeesWithMultipleSchedules.length}
                                 </Badge>
                             </button>
                         </div>
 
-                        {scheduleDialogTab === 'no-schedule' && employeesWithoutSchedules.length > 0 && (
-                            <>
-                                {employeesWithoutSchedules.length > 15 && (
-                                    <div className="px-3 sm:px-6 mt-3">
-                                        <div className="relative">
-                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                            <Input
-                                                type="text"
-                                                placeholder="Search employees..."
-                                                value={noScheduleSearch}
-                                                onChange={(e) => setNoScheduleSearch(e.target.value)}
-                                                className="pl-9"
-                                            />
+                        {scheduleDialogTab === 'no-schedule' &&
+                            employeesWithoutSchedules.length > 0 && (
+                                <>
+                                    {employeesWithoutSchedules.length > 15 && (
+                                        <div className="mt-3 px-3 sm:px-6">
+                                            <div className="relative">
+                                                <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                                <Input
+                                                    type="text"
+                                                    placeholder="Search employees..."
+                                                    value={noScheduleSearch}
+                                                    onChange={(e) =>
+                                                        setNoScheduleSearch(
+                                                            e.target.value,
+                                                        )
+                                                    }
+                                                    className="pl-9"
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="mt-3 flex-1 overflow-y-auto px-3 pb-4 sm:px-6">
+                                        <div className="space-y-2">
+                                            {filteredEmployeesWithoutSchedules.length >
+                                            0 ? (
+                                                filteredEmployeesWithoutSchedules.map(
+                                                    (user, index) => (
+                                                        <div
+                                                            key={user.id}
+                                                            className="flex flex-col gap-2 rounded-lg border p-3 transition-colors hover:bg-muted/50 sm:flex-row sm:items-center sm:justify-between sm:gap-0"
+                                                        >
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-medium">
+                                                                    {index + 1}
+                                                                </div>
+                                                                <span className="truncate text-sm font-medium sm:text-base">
+                                                                    {user.name}
+                                                                </span>
+                                                            </div>
+                                                            <Can permission="schedules.create">
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="ghost"
+                                                                    className="w-full sm:w-auto"
+                                                                    onClick={() => {
+                                                                        setNoScheduleDialogOpen(
+                                                                            false,
+                                                                        );
+                                                                        router.get(
+                                                                            withReturnTo(
+                                                                                employeeSchedulesCreate()
+                                                                                    .url +
+                                                                                    `?user_id=${user.id}`,
+                                                                            ),
+                                                                        );
+                                                                    }}
+                                                                >
+                                                                    <Plus className="mr-1 h-4 w-4" />
+                                                                    Add Schedule
+                                                                </Button>
+                                                            </Can>
+                                                        </div>
+                                                    ),
+                                                )
+                                            ) : (
+                                                <div className="py-8 text-center text-muted-foreground">
+                                                    No employees found matching
+                                                    "{noScheduleSearch}"
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
-                                )}
+                                </>
+                            )}
 
-                                <div className="px-3 sm:px-6 pb-4 overflow-y-auto flex-1 mt-3">
-                                    <div className="space-y-2">
-                                        {filteredEmployeesWithoutSchedules.length > 0 ? (
-                                            filteredEmployeesWithoutSchedules.map((user, index) => (
-                                                <div
-                                                    key={user.id}
-                                                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 p-3 border rounded-lg hover:bg-muted/50 transition-colors"
-                                                >
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-medium">
-                                                            {index + 1}
-                                                        </div>
-                                                        <span className="font-medium text-sm sm:text-base truncate">{user.name}</span>
-                                                    </div>
-                                                    <Can permission="schedules.create">
-                                                        <Button
-                                                            size="sm"
-                                                            variant="ghost"
-                                                            className="w-full sm:w-auto"
-                                                            onClick={() => {
-                                                                setNoScheduleDialogOpen(false);
-                                                                router.get(withReturnTo(employeeSchedulesCreate().url + `?user_id=${user.id}`));
-                                                            }}
-                                                        >
-                                                            <Plus className="h-4 w-4 mr-1" />
-                                                            Add Schedule
-                                                        </Button>
-                                                    </Can>
-                                                </div>
-                                            ))
-                                        ) : (
-                                            <div className="text-center py-8 text-muted-foreground">
-                                                No employees found matching "{noScheduleSearch}"
-                                            </div>
-                                        )}
-                                    </div>
+                        {scheduleDialogTab === 'no-schedule' &&
+                            employeesWithoutSchedules.length === 0 && (
+                                <div className="px-3 py-8 pb-4 text-center text-muted-foreground sm:px-6">
+                                    All employees have at least one schedule
+                                    assigned.
                                 </div>
-                            </>
-                        )}
+                            )}
 
-                        {scheduleDialogTab === 'no-schedule' && employeesWithoutSchedules.length === 0 && (
-                            <div className="px-3 sm:px-6 pb-4 text-center py-8 text-muted-foreground">
-                                All employees have at least one schedule assigned.
-                            </div>
-                        )}
+                        {scheduleDialogTab === 'inactive' &&
+                            employeesWithInactiveSchedules.length > 0 && (
+                                <>
+                                    {employeesWithInactiveSchedules.length >
+                                        15 && (
+                                        <div className="mt-3 px-3 sm:px-6">
+                                            <div className="relative">
+                                                <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                                <Input
+                                                    type="text"
+                                                    placeholder="Search employees..."
+                                                    value={noScheduleSearch}
+                                                    onChange={(e) =>
+                                                        setNoScheduleSearch(
+                                                            e.target.value,
+                                                        )
+                                                    }
+                                                    className="pl-9"
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
 
-                        {scheduleDialogTab === 'inactive' && employeesWithInactiveSchedules.length > 0 && (
-                            <>
-                                {employeesWithInactiveSchedules.length > 15 && (
-                                    <div className="px-3 sm:px-6 mt-3">
-                                        <div className="relative">
-                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                            <Input
-                                                type="text"
-                                                placeholder="Search employees..."
-                                                value={noScheduleSearch}
-                                                onChange={(e) => setNoScheduleSearch(e.target.value)}
-                                                className="pl-9"
-                                            />
+                                    <div className="mt-3 flex-1 overflow-y-auto px-3 pb-4 sm:px-6">
+                                        <div className="space-y-2">
+                                            {filteredEmployeesWithInactiveSchedules.length >
+                                            0 ? (
+                                                filteredEmployeesWithInactiveSchedules.map(
+                                                    (user, index) => (
+                                                        <div
+                                                            key={user.id}
+                                                            className="flex flex-col gap-2 rounded-lg border p-3 transition-colors hover:bg-muted/50 sm:flex-row sm:items-center sm:justify-between sm:gap-0"
+                                                        >
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-500/10 text-sm font-medium text-amber-700 dark:text-amber-300">
+                                                                    {index + 1}
+                                                                </div>
+                                                                <div className="flex-1">
+                                                                    <span className="text-sm font-medium sm:text-base">
+                                                                        {
+                                                                            user.name
+                                                                        }
+                                                                    </span>
+                                                                    <p className="mt-0.5 text-xs text-muted-foreground">
+                                                                        All
+                                                                        schedules
+                                                                        are
+                                                                        inactive
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex w-full gap-2 sm:w-auto">
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    className="flex-1 sm:flex-none"
+                                                                    onClick={() => {
+                                                                        setNoScheduleDialogOpen(
+                                                                            false,
+                                                                        );
+                                                                        handleViewEmployeeSchedules(
+                                                                            user.id,
+                                                                            user.name,
+                                                                        );
+                                                                    }}
+                                                                >
+                                                                    View
+                                                                    Schedules
+                                                                </Button>
+                                                                <Can permission="schedules.create">
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="ghost"
+                                                                        className="flex-1 sm:flex-none"
+                                                                        onClick={() => {
+                                                                            setNoScheduleDialogOpen(
+                                                                                false,
+                                                                            );
+                                                                            router.get(
+                                                                                withReturnTo(
+                                                                                    employeeSchedulesCreate()
+                                                                                        .url +
+                                                                                        `?user_id=${user.id}`,
+                                                                                ),
+                                                                            );
+                                                                        }}
+                                                                    >
+                                                                        <Plus className="mr-1 h-4 w-4" />
+                                                                        Add New
+                                                                    </Button>
+                                                                </Can>
+                                                            </div>
+                                                        </div>
+                                                    ),
+                                                )
+                                            ) : (
+                                                <div className="py-8 text-center text-muted-foreground">
+                                                    No employees found matching
+                                                    "{noScheduleSearch}"
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
-                                )}
+                                </>
+                            )}
 
-                                <div className="px-3 sm:px-6 pb-4 overflow-y-auto flex-1 mt-3">
-                                    <div className="space-y-2">
-                                        {filteredEmployeesWithInactiveSchedules.length > 0 ? (
-                                            filteredEmployeesWithInactiveSchedules.map((user, index) => (
-                                                <div
-                                                    key={user.id}
-                                                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 p-3 border rounded-lg hover:bg-muted/50 transition-colors"
-                                                >
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-500/10 text-sm font-medium text-amber-700 dark:text-amber-300">
-                                                            {index + 1}
-                                                        </div>
-                                                        <div className="flex-1">
-                                                            <span className="font-medium text-sm sm:text-base">{user.name}</span>
-                                                            <p className="text-xs text-muted-foreground mt-0.5">All schedules are inactive</p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex gap-2 w-full sm:w-auto">
-                                                        <Button
-                                                            size="sm"
-                                                            variant="outline"
-                                                            className="flex-1 sm:flex-none"
-                                                            onClick={() => {
-                                                                setNoScheduleDialogOpen(false);
-                                                                handleViewEmployeeSchedules(user.id, user.name);
-                                                            }}
-                                                        >
-                                                            View Schedules
-                                                        </Button>
-                                                        <Can permission="schedules.create">
-                                                            <Button
-                                                                size="sm"
-                                                                variant="ghost"
-                                                                className="flex-1 sm:flex-none"
-                                                                onClick={() => {
-                                                                    setNoScheduleDialogOpen(false);
-                                                                    router.get(withReturnTo(employeeSchedulesCreate().url + `?user_id=${user.id}`));
-                                                                }}
-                                                            >
-                                                                <Plus className="h-4 w-4 mr-1" />
-                                                                Add New
-                                                            </Button>
-                                                        </Can>
-                                                    </div>
-                                                </div>
-                                            ))
-                                        ) : (
-                                            <div className="text-center py-8 text-muted-foreground">
-                                                No employees found matching "{noScheduleSearch}"
-                                            </div>
-                                        )}
-                                    </div>
+                        {scheduleDialogTab === 'inactive' &&
+                            employeesWithInactiveSchedules.length === 0 && (
+                                <div className="px-3 py-8 pb-4 text-center text-muted-foreground sm:px-6">
+                                    All employees with schedules have at least
+                                    one active schedule.
                                 </div>
-                            </>
-                        )}
+                            )}
 
-                        {scheduleDialogTab === 'inactive' && employeesWithInactiveSchedules.length === 0 && (
-                            <div className="px-3 sm:px-6 pb-4 text-center py-8 text-muted-foreground">
-                                All employees with schedules have at least one active schedule.
-                            </div>
-                        )}
+                        {scheduleDialogTab === 'multiple' &&
+                            employeesWithMultipleSchedules.length > 0 && (
+                                <>
+                                    {employeesWithMultipleSchedules.length >
+                                        15 && (
+                                        <div className="mt-3 px-3 sm:px-6">
+                                            <div className="relative">
+                                                <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                                <Input
+                                                    type="text"
+                                                    placeholder="Search employees..."
+                                                    value={noScheduleSearch}
+                                                    onChange={(e) =>
+                                                        setNoScheduleSearch(
+                                                            e.target.value,
+                                                        )
+                                                    }
+                                                    className="pl-9"
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
 
-                        {scheduleDialogTab === 'multiple' && employeesWithMultipleSchedules.length > 0 && (
-                            <>
-                                {employeesWithMultipleSchedules.length > 15 && (
-                                    <div className="px-3 sm:px-6 mt-3">
-                                        <div className="relative">
-                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                            <Input
-                                                type="text"
-                                                placeholder="Search employees..."
-                                                value={noScheduleSearch}
-                                                onChange={(e) => setNoScheduleSearch(e.target.value)}
-                                                className="pl-9"
-                                            />
+                                    <div className="mt-3 flex-1 overflow-y-auto px-3 pb-4 sm:px-6">
+                                        <div className="space-y-2">
+                                            {filteredEmployeesWithMultipleSchedules.length >
+                                            0 ? (
+                                                filteredEmployeesWithMultipleSchedules.map(
+                                                    (user, index) => (
+                                                        <div
+                                                            key={user.id}
+                                                            className="flex flex-col gap-2 rounded-lg border p-3 transition-colors hover:bg-muted/50 sm:flex-row sm:items-center sm:justify-between sm:gap-0"
+                                                        >
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-500/10 text-sm font-medium text-blue-700 dark:text-blue-300">
+                                                                    {index + 1}
+                                                                </div>
+                                                                <div className="flex-1">
+                                                                    <span className="text-sm font-medium sm:text-base">
+                                                                        {
+                                                                            user.name
+                                                                        }
+                                                                    </span>
+                                                                    <p className="mt-0.5 text-xs text-muted-foreground">
+                                                                        {
+                                                                            user.schedule_count
+                                                                        }{' '}
+                                                                        schedules
+                                                                        assigned
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex w-full gap-2 sm:w-auto">
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    className="flex-1 sm:flex-none"
+                                                                    onClick={() => {
+                                                                        setNoScheduleDialogOpen(
+                                                                            false,
+                                                                        );
+                                                                        handleViewEmployeeSchedules(
+                                                                            user.id,
+                                                                            user.name,
+                                                                        );
+                                                                    }}
+                                                                >
+                                                                    <Users className="mr-1 h-4 w-4" />
+                                                                    View All
+                                                                </Button>
+                                                                <Can permission="schedules.create">
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="ghost"
+                                                                        className="flex-1 sm:flex-none"
+                                                                        onClick={() => {
+                                                                            setNoScheduleDialogOpen(
+                                                                                false,
+                                                                            );
+                                                                            router.get(
+                                                                                withReturnTo(
+                                                                                    employeeSchedulesCreate()
+                                                                                        .url +
+                                                                                        `?user_id=${user.id}`,
+                                                                                ),
+                                                                            );
+                                                                        }}
+                                                                    >
+                                                                        <Plus className="mr-1 h-4 w-4" />
+                                                                        Add New
+                                                                    </Button>
+                                                                </Can>
+                                                            </div>
+                                                        </div>
+                                                    ),
+                                                )
+                                            ) : (
+                                                <div className="py-8 text-center text-muted-foreground">
+                                                    No employees found matching
+                                                    "{noScheduleSearch}"
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
-                                )}
+                                </>
+                            )}
 
-                                <div className="px-3 sm:px-6 pb-4 overflow-y-auto flex-1 mt-3">
-                                    <div className="space-y-2">
-                                        {filteredEmployeesWithMultipleSchedules.length > 0 ? (
-                                            filteredEmployeesWithMultipleSchedules.map((user, index) => (
-                                                <div
-                                                    key={user.id}
-                                                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 p-3 border rounded-lg hover:bg-muted/50 transition-colors"
-                                                >
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-500/10 text-sm font-medium text-blue-700 dark:text-blue-300">
-                                                            {index + 1}
-                                                        </div>
-                                                        <div className="flex-1">
-                                                            <span className="font-medium text-sm sm:text-base">{user.name}</span>
-                                                            <p className="text-xs text-muted-foreground mt-0.5">
-                                                                {user.schedule_count} schedules assigned
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex gap-2 w-full sm:w-auto">
-                                                        <Button
-                                                            size="sm"
-                                                            variant="outline"
-                                                            className="flex-1 sm:flex-none"
-                                                            onClick={() => {
-                                                                setNoScheduleDialogOpen(false);
-                                                                handleViewEmployeeSchedules(user.id, user.name);
-                                                            }}
-                                                        >
-                                                            <Users className="h-4 w-4 mr-1" />
-                                                            View All
-                                                        </Button>
-                                                        <Can permission="schedules.create">
-                                                            <Button
-                                                                size="sm"
-                                                                variant="ghost"
-                                                                className="flex-1 sm:flex-none"
-                                                                onClick={() => {
-                                                                    setNoScheduleDialogOpen(false);
-                                                                    router.get(withReturnTo(employeeSchedulesCreate().url + `?user_id=${user.id}`));
-                                                                }}
-                                                            >
-                                                                <Plus className="h-4 w-4 mr-1" />
-                                                                Add New
-                                                            </Button>
-                                                        </Can>
-                                                    </div>
-                                                </div>
-                                            ))
-                                        ) : (
-                                            <div className="text-center py-8 text-muted-foreground">
-                                                No employees found matching "{noScheduleSearch}"
-                                            </div>
-                                        )}
-                                    </div>
+                        {scheduleDialogTab === 'multiple' &&
+                            employeesWithMultipleSchedules.length === 0 && (
+                                <div className="px-3 py-8 pb-4 text-center text-muted-foreground sm:px-6">
+                                    No employees have multiple schedules
+                                    assigned.
                                 </div>
-                            </>
-                        )}
-
-                        {scheduleDialogTab === 'multiple' && employeesWithMultipleSchedules.length === 0 && (
-                            <div className="px-3 sm:px-6 pb-4 text-center py-8 text-muted-foreground">
-                                No employees have multiple schedules assigned.
-                            </div>
-                        )}
+                            )}
 
                         <AlertDialogFooter>
-                            <AlertDialogCancel onClick={() => {
-                                setNoScheduleSearch("");
-                                setScheduleDialogTab('no-schedule');
-                            }}>Close</AlertDialogCancel>
+                            <AlertDialogCancel
+                                onClick={() => {
+                                    setNoScheduleSearch('');
+                                    setScheduleDialogTab('no-schedule');
+                                }}
+                            >
+                                Close
+                            </AlertDialogCancel>
                         </AlertDialogFooter>
                     </AlertDialogContent>
                 </AlertDialog>
 
                 {/* Schedule Details Dialog */}
-                <AlertDialog open={scheduleDetailsDialogOpen} onOpenChange={setScheduleDetailsDialogOpen}>
-                    <AlertDialogContent className="max-w-[95vw] sm:max-w-4xl max-h-[85vh] sm:max-h-[80vh] overflow-hidden flex flex-col">
+                <AlertDialog
+                    open={scheduleDetailsDialogOpen}
+                    onOpenChange={setScheduleDetailsDialogOpen}
+                >
+                    <AlertDialogContent className="flex max-h-[85vh] max-w-[95vw] flex-col overflow-hidden sm:max-h-[80vh] sm:max-w-4xl">
                         <AlertDialogHeader>
                             <AlertDialogTitle className="flex flex-wrap items-center gap-2 text-base sm:text-lg">
                                 <Users className="h-4 w-4 sm:h-5 sm:w-5" />
-                                <span className="truncate">{selectedUserName} - All Schedules</span>
-                                <Badge className="ml-0 sm:ml-2">{selectedUserSchedules.length}</Badge>
+                                <span className="truncate">
+                                    {selectedUserName} - All Schedules
+                                </span>
+                                <Badge className="ml-0 sm:ml-2">
+                                    {selectedUserSchedules.length}
+                                </Badge>
                             </AlertDialogTitle>
                             <AlertDialogDescription>
-                                View all schedules for this employee. Active schedules are highlighted.
+                                View all schedules for this employee. Active
+                                schedules are highlighted.
                             </AlertDialogDescription>
                         </AlertDialogHeader>
 
-                        <div className="px-3 sm:px-6 pb-4 overflow-y-auto flex-1">
+                        <div className="flex-1 overflow-y-auto px-3 pb-4 sm:px-6">
                             <div className="space-y-3 sm:space-y-4">
-                                {selectedUserSchedules.map((schedule, index) => (
-                                    <div
-                                        key={schedule.id}
-                                        className={`border rounded-lg p-3 sm:p-4 space-y-3 ${schedule.is_active
-                                            ? "border-green-500 bg-green-50 dark:bg-green-950/20"
-                                            : "border-border"
+                                {selectedUserSchedules.map(
+                                    (schedule, index) => (
+                                        <div
+                                            key={schedule.id}
+                                            className={`space-y-3 rounded-lg border p-3 sm:p-4 ${
+                                                schedule.is_active
+                                                    ? 'border-green-500 bg-green-50 dark:bg-green-950/20'
+                                                    : 'border-border'
                                             }`}
-                                    >
-                                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-medium">
-                                                    {index + 1}
-                                                </div>
+                                        >
+                                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                                 <div className="flex flex-wrap items-center gap-2">
-                                                    {getShiftTypeBadge(schedule.shift_type)}
-                                                    {schedule.is_flexible && <FlexibleBadge />}
-                                                    <div className="flex items-center gap-2">
-                                                        <Can permission="schedules.toggle">
-                                                            <Switch
-                                                                checked={schedule.is_active}
-                                                                onCheckedChange={() => {
-                                                                    // Close dialog and trigger toggle
-                                                                    setScheduleDetailsDialogOpen(false);
-                                                                    handleToggleActive(schedule, selectedUserName);
-                                                                }}
-                                                                aria-label="Toggle schedule active status"
-                                                            />
-                                                        </Can>
-                                                        {schedule.is_active ? (
-                                                            <Badge className="bg-green-500">Active</Badge>
-                                                        ) : (
-                                                            <Badge variant="secondary">Inactive</Badge>
+                                                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-medium">
+                                                        {index + 1}
+                                                    </div>
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        {getShiftTypeBadge(
+                                                            schedule.shift_type,
                                                         )}
+                                                        {schedule.is_flexible && (
+                                                            <FlexibleBadge />
+                                                        )}
+                                                        <div className="flex items-center gap-2">
+                                                            <Can permission="schedules.toggle">
+                                                                <Switch
+                                                                    checked={
+                                                                        schedule.is_active
+                                                                    }
+                                                                    onCheckedChange={() => {
+                                                                        // Close dialog and trigger toggle
+                                                                        setScheduleDetailsDialogOpen(
+                                                                            false,
+                                                                        );
+                                                                        handleToggleActive(
+                                                                            schedule,
+                                                                            selectedUserName,
+                                                                        );
+                                                                    }}
+                                                                    aria-label="Toggle schedule active status"
+                                                                />
+                                                            </Can>
+                                                            {schedule.is_active ? (
+                                                                <Badge className="bg-green-500">
+                                                                    Active
+                                                                </Badge>
+                                                            ) : (
+                                                                <Badge variant="secondary">
+                                                                    Inactive
+                                                                </Badge>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </div>
+                                                <div className="flex justify-end gap-2">
+                                                    <Can permission="schedules.edit">
+                                                        <Button
+                                                            size="icon"
+                                                            variant="outline"
+                                                            onClick={() => {
+                                                                setScheduleDetailsDialogOpen(
+                                                                    false,
+                                                                );
+                                                                router.get(
+                                                                    withReturnTo(
+                                                                        employeeSchedulesEdit(
+                                                                            {
+                                                                                employee_schedule:
+                                                                                    schedule.id,
+                                                                            },
+                                                                        ).url,
+                                                                    ),
+                                                                );
+                                                            }}
+                                                            title="Edit Schedule"
+                                                        >
+                                                            <Edit className="h-4 w-4" />
+                                                        </Button>
+                                                    </Can>
+                                                    <Can permission="schedules.delete">
+                                                        <Button
+                                                            size="icon"
+                                                            variant="outline"
+                                                            onClick={() => {
+                                                                setScheduleDetailsDialogOpen(
+                                                                    false,
+                                                                );
+                                                                handleDelete(
+                                                                    schedule.id,
+                                                                );
+                                                            }}
+                                                            title="Delete Schedule"
+                                                            className="border-red-300 text-red-600 hover:text-red-700"
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    </Can>
+                                                </div>
                                             </div>
-                                            <div className="flex gap-2 justify-end">
-                                                <Can permission="schedules.edit">
-                                                    <Button
-                                                        size="icon"
-                                                        variant="outline"
-                                                        onClick={() => {
-                                                            setScheduleDetailsDialogOpen(false);
-                                                            router.get(withReturnTo(employeeSchedulesEdit({ employee_schedule: schedule.id }).url));
-                                                        }}
-                                                        title="Edit Schedule"
-                                                    >
-                                                        <Edit className="h-4 w-4" />
-                                                    </Button>
-                                                </Can>
-                                                <Can permission="schedules.delete">
-                                                    <Button
-                                                        size="icon"
-                                                        variant="outline"
-                                                        onClick={() => {
-                                                            setScheduleDetailsDialogOpen(false);
-                                                            handleDelete(schedule.id);
-                                                        }}
-                                                        title="Delete Schedule"
-                                                        className="text-red-600 hover:text-red-700 border-red-300"
-                                                    >
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
-                                                </Can>
-                                            </div>
-                                        </div>
 
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                                            <div>
-                                                <span className="font-medium text-muted-foreground">Campaign:</span>
-                                                <p className="mt-1">{schedule.campaign?.name || "-"}</p>
-                                            </div>
-                                            <div>
-                                                <span className="font-medium text-muted-foreground">Site:</span>
-                                                <p className="mt-1">{schedule.site?.name || "-"}</p>
-                                            </div>
-                                            <div>
-                                                <span className="font-medium text-muted-foreground">Time In:</span>
-                                                <p className="mt-1">{schedule.is_flexible ? "Flexible" : formatTime(schedule.scheduled_time_in)}</p>
-                                            </div>
-                                            <div>
-                                                <span className="font-medium text-muted-foreground">Time Out:</span>
-                                                <p className="mt-1">{schedule.is_flexible ? "Flexible" : formatTime(schedule.scheduled_time_out)}</p>
-                                            </div>
-                                            <div>
-                                                <span className="font-medium text-muted-foreground">Work Days:</span>
-                                                <p className="mt-1">{schedule.is_flexible ? "No fixed work days" : schedule.work_days.map(day => day.charAt(0).toUpperCase() + day.slice(1)).join(", ")}</p>
-                                            </div>
-                                            <div>
-                                                <span className="font-medium text-muted-foreground">Grace Period:</span>
-                                                <p className="mt-1">{schedule.grace_period_minutes} minutes</p>
-                                            </div>
-                                            <div>
-                                                <span className="font-medium text-muted-foreground">Effective Date:</span>
-                                                <p className="mt-1">{formatDate(schedule.effective_date)}</p>
-                                            </div>
-                                            <div>
-                                                <span className="font-medium text-muted-foreground">End Date:</span>
-                                                <p className="mt-1">{schedule.end_date ? formatDate(schedule.end_date) : "Indefinite"}</p>
+                                            <div className="grid grid-cols-1 gap-3 text-sm md:grid-cols-2">
+                                                <div>
+                                                    <span className="font-medium text-muted-foreground">
+                                                        Campaign:
+                                                    </span>
+                                                    <p className="mt-1">
+                                                        {schedule.campaign
+                                                            ?.name || '-'}
+                                                    </p>
+                                                </div>
+                                                <div>
+                                                    <span className="font-medium text-muted-foreground">
+                                                        Site:
+                                                    </span>
+                                                    <p className="mt-1">
+                                                        {schedule.site?.name ||
+                                                            '-'}
+                                                    </p>
+                                                </div>
+                                                <div>
+                                                    <span className="font-medium text-muted-foreground">
+                                                        Time In:
+                                                    </span>
+                                                    <p className="mt-1">
+                                                        {schedule.is_flexible
+                                                            ? 'Flexible'
+                                                            : formatTime(
+                                                                  schedule.scheduled_time_in,
+                                                              )}
+                                                    </p>
+                                                </div>
+                                                <div>
+                                                    <span className="font-medium text-muted-foreground">
+                                                        Time Out:
+                                                    </span>
+                                                    <p className="mt-1">
+                                                        {schedule.is_flexible
+                                                            ? 'Flexible'
+                                                            : formatTime(
+                                                                  schedule.scheduled_time_out,
+                                                              )}
+                                                    </p>
+                                                </div>
+                                                <div>
+                                                    <span className="font-medium text-muted-foreground">
+                                                        Work Days:
+                                                    </span>
+                                                    <p className="mt-1">
+                                                        {schedule.is_flexible
+                                                            ? 'No fixed work days'
+                                                            : schedule.work_days
+                                                                  .map(
+                                                                      (day) =>
+                                                                          day
+                                                                              .charAt(
+                                                                                  0,
+                                                                              )
+                                                                              .toUpperCase() +
+                                                                          day.slice(
+                                                                              1,
+                                                                          ),
+                                                                  )
+                                                                  .join(', ')}
+                                                    </p>
+                                                </div>
+                                                <div>
+                                                    <span className="font-medium text-muted-foreground">
+                                                        Grace Period:
+                                                    </span>
+                                                    <p className="mt-1">
+                                                        {
+                                                            schedule.grace_period_minutes
+                                                        }{' '}
+                                                        minutes
+                                                    </p>
+                                                </div>
+                                                <div>
+                                                    <span className="font-medium text-muted-foreground">
+                                                        Effective Date:
+                                                    </span>
+                                                    <p className="mt-1">
+                                                        {formatDate(
+                                                            schedule.effective_date,
+                                                        )}
+                                                    </p>
+                                                </div>
+                                                <div>
+                                                    <span className="font-medium text-muted-foreground">
+                                                        End Date:
+                                                    </span>
+                                                    <p className="mt-1">
+                                                        {schedule.end_date
+                                                            ? formatDate(
+                                                                  schedule.end_date,
+                                                              )
+                                                            : 'Indefinite'}
+                                                    </p>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    ),
+                                )}
                             </div>
                         </div>
 

@@ -1,11 +1,13 @@
-import { useState, useMemo } from 'react';
-import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
+import { useMemo, useState } from 'react';
 
-import AppLayout from '@/layouts/app-layout';
+import PaginationNav, {
+    type PaginationLink,
+} from '@/components/pagination-nav';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
     Command,
     CommandEmpty,
@@ -14,17 +16,6 @@ import {
     CommandItem,
     CommandList,
 } from '@/components/ui/command';
-import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
 import {
     Dialog,
     DialogContent,
@@ -33,6 +24,20 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import {
     Table,
     TableBody,
@@ -41,12 +46,20 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
-import PaginationNav, { type PaginationLink } from '@/components/pagination-nav';
-import { Check, ChevronsUpDown, Filter, History, ShieldOff, ShieldCheck } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import AppLayout from '@/layouts/app-layout';
+import {
+    Check,
+    ChevronsUpDown,
+    Filter,
+    History,
+    ShieldCheck,
+    ShieldOff,
+} from 'lucide-react';
 
-import { usePageMeta, useFlashMessage, usePageLoading } from '@/hooks';
-import { PageHeader } from '@/components/PageHeader';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { PageHeader } from '@/components/PageHeader';
+import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
 
 interface ExclusionRow {
     id: number;
@@ -97,7 +110,10 @@ interface Props extends InertiaPageProps {
     reasons: string[];
 }
 
-type PeriodPreset = { label: string; getRange: () => { start: string; end: string } };
+type PeriodPreset = {
+    label: string;
+    getRange: () => { start: string; end: string };
+};
 
 const PERIOD_PRESETS: PeriodPreset[] = [
     {
@@ -105,7 +121,9 @@ const PERIOD_PRESETS: PeriodPreset[] = [
         getRange: () => {
             const today = new Date().toISOString().split('T')[0];
             const d = new Date();
-            const end = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0];
+            const end = new Date(d.getFullYear(), d.getMonth() + 1, 0)
+                .toISOString()
+                .split('T')[0];
             return { start: today, end };
         },
     },
@@ -113,8 +131,12 @@ const PERIOD_PRESETS: PeriodPreset[] = [
         label: 'Next month',
         getRange: () => {
             const d = new Date();
-            const start = new Date(d.getFullYear(), d.getMonth() + 1, 1).toISOString().split('T')[0];
-            const end = new Date(d.getFullYear(), d.getMonth() + 2, 0).toISOString().split('T')[0];
+            const start = new Date(d.getFullYear(), d.getMonth() + 1, 1)
+                .toISOString()
+                .split('T')[0];
+            const end = new Date(d.getFullYear(), d.getMonth() + 2, 0)
+                .toISOString()
+                .split('T')[0];
             return { start, end };
         },
     },
@@ -140,12 +162,16 @@ const PERIOD_PRESETS: PeriodPreset[] = [
     },
     {
         label: 'Forever',
-        getRange: () => ({ start: new Date().toISOString().split('T')[0], end: '' }),
+        getRange: () => ({
+            start: new Date().toISOString().split('T')[0],
+            end: '',
+        }),
     },
 ];
 
 export default function CoachingExclusionsIndex() {
-    const { users, allUsers, filters, campaigns, reasons } = usePage<Props>().props;
+    const { users, allUsers, filters, campaigns, reasons } =
+        usePage<Props>().props;
 
     const { title, breadcrumbs } = usePageMeta({
         title: 'Coaching Exclusions',
@@ -171,7 +197,8 @@ export default function CoachingExclusionsIndex() {
     const [restoreUser, setRestoreUser] = useState<ExclusionRow | null>(null);
 
     const includableSelected = useMemo(
-        () => users.data.filter((u) => selected.includes(u.id) && !u.is_excluded),
+        () =>
+            users.data.filter((u) => selected.includes(u.id) && !u.is_excluded),
         [selected, users.data],
     );
 
@@ -193,11 +220,14 @@ export default function CoachingExclusionsIndex() {
             '/coaching/exclusions',
             {
                 search: overrides.search ?? search,
-                role: (overrides.role ?? role) === 'all' ? null : overrides.role ?? role,
+                role:
+                    (overrides.role ?? role) === 'all'
+                        ? null
+                        : (overrides.role ?? role),
                 campaign_id:
                     (overrides.campaign_id ?? campaignId) === 'all'
                         ? null
-                        : overrides.campaign_id ?? campaignId,
+                        : (overrides.campaign_id ?? campaignId),
                 status: overrides.status ?? status,
             },
             { preserveScroll: true, preserveState: true, replace: true },
@@ -211,7 +241,9 @@ export default function CoachingExclusionsIndex() {
     };
 
     const toggleSelectAll = () => {
-        const includable = users.data.filter((u) => !u.is_excluded).map((u) => u.id);
+        const includable = users.data
+            .filter((u) => !u.is_excluded)
+            .map((u) => u.id);
         const allSelected = includable.every((id) => selected.includes(id));
         setSelected(allSelected ? [] : includable);
     };
@@ -258,7 +290,10 @@ export default function CoachingExclusionsIndex() {
     });
 
     const openBulk = () => {
-        bulkForm.setData('user_ids', includableSelected.map((u) => u.id));
+        bulkForm.setData(
+            'user_ids',
+            includableSelected.map((u) => u.id),
+        );
         setBulkOpen(true);
     };
 
@@ -299,10 +334,13 @@ export default function CoachingExclusionsIndex() {
                 />
 
                 {/* Filters */}
-                <div className="bg-card rounded-lg border p-4 space-y-3">
-                    <div className="flex flex-col sm:flex-row gap-2">
+                <div className="space-y-3 rounded-lg border bg-card p-4">
+                    <div className="flex flex-col gap-2 sm:flex-row">
                         <div className="flex-1">
-                            <Popover open={userSearchOpen} onOpenChange={setUserSearchOpen}>
+                            <Popover
+                                open={userSearchOpen}
+                                onOpenChange={setUserSearchOpen}
+                            >
                                 <PopoverTrigger asChild>
                                     <Button
                                         variant="outline"
@@ -311,12 +349,16 @@ export default function CoachingExclusionsIndex() {
                                         className="w-full justify-between font-normal"
                                     >
                                         <span className="truncate text-muted-foreground">
-                                            {search || 'Search by name or email...'}
+                                            {search ||
+                                                'Search by name or email...'}
                                         </span>
                                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                     </Button>
                                 </PopoverTrigger>
-                                <PopoverContent className="w-[320px] p-0" align="start">
+                                <PopoverContent
+                                    className="w-[320px] p-0"
+                                    align="start"
+                                >
                                     <Command shouldFilter={false}>
                                         <CommandInput
                                             placeholder="Search name or email..."
@@ -324,15 +366,21 @@ export default function CoachingExclusionsIndex() {
                                             onValueChange={setUserSearchQuery}
                                         />
                                         <CommandList>
-                                            <CommandEmpty>No user found.</CommandEmpty>
+                                            <CommandEmpty>
+                                                No user found.
+                                            </CommandEmpty>
                                             <CommandGroup>
                                                 <CommandItem
                                                     value="all"
                                                     onSelect={() => {
                                                         setSearch('');
-                                                        setUserSearchOpen(false);
+                                                        setUserSearchOpen(
+                                                            false,
+                                                        );
                                                         setUserSearchQuery('');
-                                                        applyFilters({ search: '' });
+                                                        applyFilters({
+                                                            search: '',
+                                                        });
                                                     }}
                                                     className="cursor-pointer"
                                                 >
@@ -347,9 +395,15 @@ export default function CoachingExclusionsIndex() {
                                                         value={String(u.id)}
                                                         onSelect={() => {
                                                             setSearch(u.name);
-                                                            setUserSearchOpen(false);
-                                                            setUserSearchQuery('');
-                                                            applyFilters({ search: u.name });
+                                                            setUserSearchOpen(
+                                                                false,
+                                                            );
+                                                            setUserSearchQuery(
+                                                                '',
+                                                            );
+                                                            applyFilters({
+                                                                search: u.name,
+                                                            });
                                                         }}
                                                         className="cursor-pointer"
                                                     >
@@ -357,9 +411,14 @@ export default function CoachingExclusionsIndex() {
                                                             className={`mr-2 h-4 w-4 ${search === u.name ? 'opacity-100' : 'opacity-0'}`}
                                                         />
                                                         <div className="flex flex-col">
-                                                            <span>{u.name}</span>
+                                                            <span>
+                                                                {u.name}
+                                                            </span>
                                                             <span className="text-xs text-muted-foreground">
-                                                                {u.role}{u.campaign ? ` · ${u.campaign}` : ''}
+                                                                {u.role}
+                                                                {u.campaign
+                                                                    ? ` · ${u.campaign}`
+                                                                    : ''}
                                                             </span>
                                                         </div>
                                                     </CommandItem>
@@ -370,32 +429,63 @@ export default function CoachingExclusionsIndex() {
                                 </PopoverContent>
                             </Popover>
                         </div>
-                        <Select value={role} onValueChange={(v) => { setRole(v); applyFilters({ role: v }); }}>
-                            <SelectTrigger className="sm:w-40"><SelectValue placeholder="Role" /></SelectTrigger>
+                        <Select
+                            value={role}
+                            onValueChange={(v) => {
+                                setRole(v);
+                                applyFilters({ role: v });
+                            }}
+                        >
+                            <SelectTrigger className="sm:w-40">
+                                <SelectValue placeholder="Role" />
+                            </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All Roles</SelectItem>
                                 <SelectItem value="Agent">Agent</SelectItem>
-                                <SelectItem value="Team Lead">Team Lead</SelectItem>
+                                <SelectItem value="Team Lead">
+                                    Team Lead
+                                </SelectItem>
                             </SelectContent>
                         </Select>
                         <Select
                             value={campaignId}
-                            onValueChange={(v) => { setCampaignId(v); applyFilters({ campaign_id: v }); }}
+                            onValueChange={(v) => {
+                                setCampaignId(v);
+                                applyFilters({ campaign_id: v });
+                            }}
                         >
-                            <SelectTrigger className="sm:w-48"><SelectValue placeholder="Campaign" /></SelectTrigger>
+                            <SelectTrigger className="sm:w-48">
+                                <SelectValue placeholder="Campaign" />
+                            </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="all">All Campaigns</SelectItem>
+                                <SelectItem value="all">
+                                    All Campaigns
+                                </SelectItem>
                                 {campaigns.map((c) => (
-                                    <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                                    <SelectItem key={c.id} value={String(c.id)}>
+                                        {c.name}
+                                    </SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
-                        <Select value={status} onValueChange={(v) => { setStatus(v); applyFilters({ status: v }); }}>
-                            <SelectTrigger className="sm:w-44"><SelectValue placeholder="Status" /></SelectTrigger>
+                        <Select
+                            value={status}
+                            onValueChange={(v) => {
+                                setStatus(v);
+                                applyFilters({ status: v });
+                            }}
+                        >
+                            <SelectTrigger className="sm:w-44">
+                                <SelectValue placeholder="Status" />
+                            </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All</SelectItem>
-                                <SelectItem value="excluded">Excluded only</SelectItem>
-                                <SelectItem value="included">Included only</SelectItem>
+                                <SelectItem value="excluded">
+                                    Excluded only
+                                </SelectItem>
+                                <SelectItem value="included">
+                                    Included only
+                                </SelectItem>
                             </SelectContent>
                         </Select>
                         <Button
@@ -406,7 +496,12 @@ export default function CoachingExclusionsIndex() {
                                 setRole('all');
                                 setCampaignId('all');
                                 setStatus('all');
-                                applyFilters({ search: '', role: 'all', campaign_id: 'all', status: 'all' });
+                                applyFilters({
+                                    search: '',
+                                    role: 'all',
+                                    campaign_id: 'all',
+                                    status: 'all',
+                                });
                             }}
                         >
                             <Filter className="mr-2 h-4 w-4" /> Reset
@@ -416,17 +511,19 @@ export default function CoachingExclusionsIndex() {
                     {includableSelected.length > 0 && (
                         <div className="flex items-center justify-between rounded-md bg-muted/40 px-3 py-2">
                             <span className="text-sm">
-                                {includableSelected.length} included user(s) selected
+                                {includableSelected.length} included user(s)
+                                selected
                             </span>
                             <Button size="sm" onClick={openBulk}>
-                                <ShieldOff className="mr-2 h-4 w-4" /> Bulk Exclude
+                                <ShieldOff className="mr-2 h-4 w-4" /> Bulk
+                                Exclude
                             </Button>
                         </div>
                     )}
                 </div>
 
                 {/* Desktop table */}
-                <div className="hidden md:block bg-card rounded-lg border">
+                <div className="hidden rounded-lg border bg-card md:block">
                     <Table>
                         <TableHeader>
                             <TableRow>
@@ -436,7 +533,9 @@ export default function CoachingExclusionsIndex() {
                                             users.data.length > 0 &&
                                             users.data
                                                 .filter((u) => !u.is_excluded)
-                                                .every((u) => selected.includes(u.id))
+                                                .every((u) =>
+                                                    selected.includes(u.id),
+                                                )
                                         }
                                         onCheckedChange={toggleSelectAll}
                                     />
@@ -448,7 +547,9 @@ export default function CoachingExclusionsIndex() {
                                 <TableHead>Reason</TableHead>
                                 <TableHead>Excluded At</TableHead>
                                 <TableHead>Expires</TableHead>
-                                <TableHead className="text-right">Actions</TableHead>
+                                <TableHead className="text-right">
+                                    Actions
+                                </TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -457,54 +558,89 @@ export default function CoachingExclusionsIndex() {
                                     <TableCell>
                                         {!u.is_excluded && (
                                             <Checkbox
-                                                checked={selected.includes(u.id)}
-                                                onCheckedChange={() => toggleSelect(u.id)}
+                                                checked={selected.includes(
+                                                    u.id,
+                                                )}
+                                                onCheckedChange={() =>
+                                                    toggleSelect(u.id)
+                                                }
                                             />
                                         )}
                                     </TableCell>
                                     <TableCell>
-                                        <div className="font-medium">{u.name}</div>
-                                        <div className="text-xs text-muted-foreground">{u.email}</div>
+                                        <div className="font-medium">
+                                            {u.name}
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                            {u.email}
+                                        </div>
                                     </TableCell>
                                     <TableCell>{u.role}</TableCell>
-                                    <TableCell>{u.campaign ?? <span className="text-muted-foreground">—</span>}</TableCell>
                                     <TableCell>
-                                        {u.is_excluded ? (
-                                            <Badge variant="destructive">Excluded</Badge>
-                                        ) : (
-                                            <Badge variant="secondary">Active</Badge>
+                                        {u.campaign ?? (
+                                            <span className="text-muted-foreground">
+                                                —
+                                            </span>
                                         )}
                                     </TableCell>
-                                    <TableCell>{u.exclusion?.reason ?? '—'}</TableCell>
+                                    <TableCell>
+                                        {u.is_excluded ? (
+                                            <Badge variant="destructive">
+                                                Excluded
+                                            </Badge>
+                                        ) : (
+                                            <Badge variant="secondary">
+                                                Active
+                                            </Badge>
+                                        )}
+                                    </TableCell>
+                                    <TableCell>
+                                        {u.exclusion?.reason ?? '—'}
+                                    </TableCell>
                                     <TableCell>
                                         {u.exclusion?.excluded_at
-                                            ? new Date(u.exclusion.excluded_at).toLocaleDateString()
+                                            ? new Date(
+                                                  u.exclusion.excluded_at,
+                                              ).toLocaleDateString()
                                             : '—'}
                                     </TableCell>
                                     <TableCell>
-                                        {u.exclusion?.expires_at
-                                            ? new Date(u.exclusion.expires_at).toLocaleDateString()
-                                            : <span className="text-muted-foreground">No expiry</span>}
+                                        {u.exclusion?.expires_at ? (
+                                            new Date(
+                                                u.exclusion.expires_at,
+                                            ).toLocaleDateString()
+                                        ) : (
+                                            <span className="text-muted-foreground">
+                                                No expiry
+                                            </span>
+                                        )}
                                     </TableCell>
-                                    <TableCell className="text-right space-x-1">
+                                    <TableCell className="space-x-1 text-right">
                                         {u.is_excluded ? (
                                             <Button
                                                 size="sm"
                                                 variant="outline"
-                                                onClick={() => setRestoreUser(u)}
+                                                onClick={() =>
+                                                    setRestoreUser(u)
+                                                }
                                             >
-                                                <ShieldCheck className="mr-1 h-4 w-4" /> Restore
+                                                <ShieldCheck className="mr-1 h-4 w-4" />{' '}
+                                                Restore
                                             </Button>
                                         ) : (
                                             <Button
                                                 size="sm"
                                                 variant="outline"
                                                 onClick={() => {
-                                                    excludeForm.setData('user_id', u.id);
+                                                    excludeForm.setData(
+                                                        'user_id',
+                                                        u.id,
+                                                    );
                                                     setExcludeOpen(true);
                                                 }}
                                             >
-                                                <ShieldOff className="mr-1 h-4 w-4" /> Exclude
+                                                <ShieldOff className="mr-1 h-4 w-4" />{' '}
+                                                Exclude
                                             </Button>
                                         )}
                                         <Link
@@ -520,7 +656,10 @@ export default function CoachingExclusionsIndex() {
                             ))}
                             {users.data.length === 0 && (
                                 <TableRow>
-                                    <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
+                                    <TableCell
+                                        colSpan={9}
+                                        className="py-8 text-center text-muted-foreground"
+                                    >
                                         No users match your filters.
                                     </TableCell>
                                 </TableRow>
@@ -530,16 +669,23 @@ export default function CoachingExclusionsIndex() {
                 </div>
 
                 {/* Mobile cards */}
-                <div className="md:hidden space-y-3">
+                <div className="space-y-3 md:hidden">
                     {users.data.map((u) => (
-                        <div key={u.id} className="bg-card border rounded-lg p-4 space-y-2">
+                        <div
+                            key={u.id}
+                            className="space-y-2 rounded-lg border bg-card p-4"
+                        >
                             <div className="flex justify-between">
                                 <div>
                                     <div className="font-medium">{u.name}</div>
-                                    <div className="text-xs text-muted-foreground">{u.email}</div>
+                                    <div className="text-xs text-muted-foreground">
+                                        {u.email}
+                                    </div>
                                 </div>
                                 {u.is_excluded ? (
-                                    <Badge variant="destructive">Excluded</Badge>
+                                    <Badge variant="destructive">
+                                        Excluded
+                                    </Badge>
                                 ) : (
                                     <Badge variant="secondary">Active</Badge>
                                 )}
@@ -549,16 +695,30 @@ export default function CoachingExclusionsIndex() {
                             </div>
                             {u.exclusion && (
                                 <div className="text-xs">
-                                    <span className="font-medium">{u.exclusion.reason}</span>
+                                    <span className="font-medium">
+                                        {u.exclusion.reason}
+                                    </span>
                                     {u.exclusion.expires_at && (
-                                        <span> · expires {new Date(u.exclusion.expires_at).toLocaleDateString()}</span>
+                                        <span>
+                                            {' '}
+                                            · expires{' '}
+                                            {new Date(
+                                                u.exclusion.expires_at,
+                                            ).toLocaleDateString()}
+                                        </span>
                                     )}
                                 </div>
                             )}
                             <div className="flex gap-2">
                                 {u.is_excluded ? (
-                                    <Button size="sm" variant="outline" className="flex-1" onClick={() => setRestoreUser(u)}>
-                                        <ShieldCheck className="mr-1 h-4 w-4" /> Restore
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="flex-1"
+                                        onClick={() => setRestoreUser(u)}
+                                    >
+                                        <ShieldCheck className="mr-1 h-4 w-4" />{' '}
+                                        Restore
                                     </Button>
                                 ) : (
                                     <Button
@@ -566,15 +726,23 @@ export default function CoachingExclusionsIndex() {
                                         variant="outline"
                                         className="flex-1"
                                         onClick={() => {
-                                            excludeForm.setData('user_id', u.id);
+                                            excludeForm.setData(
+                                                'user_id',
+                                                u.id,
+                                            );
                                             setExcludeOpen(true);
                                         }}
                                     >
-                                        <ShieldOff className="mr-1 h-4 w-4" /> Exclude
+                                        <ShieldOff className="mr-1 h-4 w-4" />{' '}
+                                        Exclude
                                     </Button>
                                 )}
-                                <Link href={`/coaching/exclusions/users/${u.id}/history`}>
-                                    <Button size="sm" variant="ghost"><History className="h-4 w-4" /></Button>
+                                <Link
+                                    href={`/coaching/exclusions/users/${u.id}/history`}
+                                >
+                                    <Button size="sm" variant="ghost">
+                                        <History className="h-4 w-4" />
+                                    </Button>
                                 </Link>
                             </div>
                         </div>
@@ -590,7 +758,8 @@ export default function CoachingExclusionsIndex() {
                     <DialogHeader>
                         <DialogTitle>Exclude from Coaching</DialogTitle>
                         <DialogDescription>
-                            This user will be hidden from coaching dashboards and dropdowns until restored.
+                            This user will be hidden from coaching dashboards
+                            and dropdowns until restored.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-3">
@@ -598,77 +767,116 @@ export default function CoachingExclusionsIndex() {
                             <Label>Reason</Label>
                             <Select
                                 value={excludeForm.data.reason}
-                                onValueChange={(v) => excludeForm.setData('reason', v)}
+                                onValueChange={(v) =>
+                                    excludeForm.setData('reason', v)
+                                }
                             >
-                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
                                 <SelectContent>
                                     {reasons.map((r) => (
-                                        <SelectItem key={r} value={r}>{r}</SelectItem>
+                                        <SelectItem key={r} value={r}>
+                                            {r}
+                                        </SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
                             {excludeForm.errors.reason && (
-                                <p className="text-xs text-destructive mt-1">{excludeForm.errors.reason}</p>
+                                <p className="mt-1 text-xs text-destructive">
+                                    {excludeForm.errors.reason}
+                                </p>
                             )}
                         </div>
                         <div>
                             <Label>Exclusion Period</Label>
-                            <div className="grid grid-cols-2 gap-2 mt-1">
+                            <div className="mt-1 grid grid-cols-2 gap-2">
                                 <div>
-                                    <p className="text-xs text-muted-foreground mb-1">Start date</p>
+                                    <p className="mb-1 text-xs text-muted-foreground">
+                                        Start date
+                                    </p>
                                     <Input
                                         type="date"
                                         value={excludeForm.data.excluded_at}
-                                        onChange={(e) => excludeForm.setData('excluded_at', e.target.value)}
+                                        onChange={(e) =>
+                                            excludeForm.setData(
+                                                'excluded_at',
+                                                e.target.value,
+                                            )
+                                        }
                                         placeholder="Today"
                                     />
                                 </div>
                                 <div>
-                                    <p className="text-xs text-muted-foreground mb-1">End date (optional)</p>
+                                    <p className="mb-1 text-xs text-muted-foreground">
+                                        End date (optional)
+                                    </p>
                                     <Input
                                         type="date"
                                         value={excludeForm.data.expires_at}
-                                        onChange={(e) => excludeForm.setData('expires_at', e.target.value)}
+                                        onChange={(e) =>
+                                            excludeForm.setData(
+                                                'expires_at',
+                                                e.target.value,
+                                            )
+                                        }
                                     />
                                 </div>
                             </div>
-                            <div className="flex flex-wrap gap-1 mt-1.5">
+                            <div className="mt-1.5 flex flex-wrap gap-1">
                                 {PERIOD_PRESETS.map(({ label, getRange }) => {
                                     const isForever = label === 'Forever';
                                     const active = isForever
-                                        ? !!excludeForm.data.excluded_at && !excludeForm.data.expires_at
+                                        ? !!excludeForm.data.excluded_at &&
+                                          !excludeForm.data.expires_at
                                         : false;
                                     return (
                                         <button
                                             key={label}
                                             type="button"
                                             onClick={() => {
-                                                const { start, end } = getRange();
-                                                excludeForm.setData((prev) => ({ ...prev, excluded_at: start, expires_at: end }));
+                                                const { start, end } =
+                                                    getRange();
+                                                excludeForm.setData((prev) => ({
+                                                    ...prev,
+                                                    excluded_at: start,
+                                                    expires_at: end,
+                                                }));
                                             }}
-                                            className={`rounded border px-2 py-0.5 text-xs transition-colors ${isForever
-                                                ? active
-                                                    ? 'border-amber-500 bg-amber-100 text-amber-900'
-                                                    : 'border-amber-400/50 text-amber-700 hover:bg-amber-50'
-                                                : 'hover:bg-muted'
-                                                }`}
+                                            className={`rounded border px-2 py-0.5 text-xs transition-colors ${
+                                                isForever
+                                                    ? active
+                                                        ? 'border-amber-500 bg-amber-100 text-amber-900'
+                                                        : 'border-amber-400/50 text-amber-700 hover:bg-amber-50'
+                                                    : 'hover:bg-muted'
+                                            }`}
                                         >
                                             {label}
                                         </button>
                                     );
                                 })}
-                                {(excludeForm.data.excluded_at || excludeForm.data.expires_at) && (
+                                {(excludeForm.data.excluded_at ||
+                                    excludeForm.data.expires_at) && (
                                     <button
                                         type="button"
-                                        onClick={() => excludeForm.setData((prev) => ({ ...prev, excluded_at: '', expires_at: '' }))}
-                                        className="rounded border border-destructive/40 px-2 py-0.5 text-xs text-destructive hover:bg-destructive/10 transition-colors"
+                                        onClick={() =>
+                                            excludeForm.setData((prev) => ({
+                                                ...prev,
+                                                excluded_at: '',
+                                                expires_at: '',
+                                            }))
+                                        }
+                                        className="rounded border border-destructive/40 px-2 py-0.5 text-xs text-destructive transition-colors hover:bg-destructive/10"
                                     >
                                         Clear
                                     </button>
                                 )}
                             </div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                                Start defaults to today. Leave end blank or click <span className="font-medium">Forever</span> for indefinite exclusion.
+                            <p className="mt-1 text-xs text-muted-foreground">
+                                Start defaults to today. Leave end blank or
+                                click{' '}
+                                <span className="font-medium">Forever</span> for
+                                indefinite exclusion.
                             </p>
                         </div>
                         <div>
@@ -676,13 +884,23 @@ export default function CoachingExclusionsIndex() {
                             <Textarea
                                 rows={3}
                                 value={excludeForm.data.notes}
-                                onChange={(e) => excludeForm.setData('notes', e.target.value)}
+                                onChange={(e) =>
+                                    excludeForm.setData('notes', e.target.value)
+                                }
                             />
                         </div>
                     </div>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setExcludeOpen(false)}>Cancel</Button>
-                        <Button onClick={submitExclude} disabled={excludeForm.processing}>
+                        <Button
+                            variant="outline"
+                            onClick={() => setExcludeOpen(false)}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={submitExclude}
+                            disabled={excludeForm.processing}
+                        >
                             Exclude
                         </Button>
                     </DialogFooter>
@@ -693,82 +911,123 @@ export default function CoachingExclusionsIndex() {
             <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
                 <DialogContent className="max-w-[90vw] sm:max-w-md">
                     <DialogHeader>
-                        <DialogTitle>Bulk Exclude {bulkForm.data.user_ids.length} user(s)</DialogTitle>
-                        <DialogDescription>All selected users will receive the same reason.</DialogDescription>
+                        <DialogTitle>
+                            Bulk Exclude {bulkForm.data.user_ids.length} user(s)
+                        </DialogTitle>
+                        <DialogDescription>
+                            All selected users will receive the same reason.
+                        </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-3">
                         <div>
                             <Label>Reason</Label>
                             <Select
                                 value={bulkForm.data.reason}
-                                onValueChange={(v) => bulkForm.setData('reason', v)}
+                                onValueChange={(v) =>
+                                    bulkForm.setData('reason', v)
+                                }
                             >
-                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
                                 <SelectContent>
                                     {reasons.map((r) => (
-                                        <SelectItem key={r} value={r}>{r}</SelectItem>
+                                        <SelectItem key={r} value={r}>
+                                            {r}
+                                        </SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
                         </div>
                         <div>
                             <Label>Exclusion Period</Label>
-                            <div className="grid grid-cols-2 gap-2 mt-1">
+                            <div className="mt-1 grid grid-cols-2 gap-2">
                                 <div>
-                                    <p className="text-xs text-muted-foreground mb-1">Start date</p>
+                                    <p className="mb-1 text-xs text-muted-foreground">
+                                        Start date
+                                    </p>
                                     <Input
                                         type="date"
                                         value={bulkForm.data.excluded_at}
-                                        onChange={(e) => bulkForm.setData('excluded_at', e.target.value)}
+                                        onChange={(e) =>
+                                            bulkForm.setData(
+                                                'excluded_at',
+                                                e.target.value,
+                                            )
+                                        }
                                         placeholder="Today"
                                     />
                                 </div>
                                 <div>
-                                    <p className="text-xs text-muted-foreground mb-1">End date (optional)</p>
+                                    <p className="mb-1 text-xs text-muted-foreground">
+                                        End date (optional)
+                                    </p>
                                     <Input
                                         type="date"
                                         value={bulkForm.data.expires_at}
-                                        onChange={(e) => bulkForm.setData('expires_at', e.target.value)}
+                                        onChange={(e) =>
+                                            bulkForm.setData(
+                                                'expires_at',
+                                                e.target.value,
+                                            )
+                                        }
                                     />
                                 </div>
                             </div>
-                            <div className="flex flex-wrap gap-1 mt-1.5">
+                            <div className="mt-1.5 flex flex-wrap gap-1">
                                 {PERIOD_PRESETS.map(({ label, getRange }) => {
                                     const isForever = label === 'Forever';
                                     const active = isForever
-                                        ? !!bulkForm.data.excluded_at && !bulkForm.data.expires_at
+                                        ? !!bulkForm.data.excluded_at &&
+                                          !bulkForm.data.expires_at
                                         : false;
                                     return (
                                         <button
                                             key={label}
                                             type="button"
                                             onClick={() => {
-                                                const { start, end } = getRange();
-                                                bulkForm.setData((prev) => ({ ...prev, excluded_at: start, expires_at: end }));
+                                                const { start, end } =
+                                                    getRange();
+                                                bulkForm.setData((prev) => ({
+                                                    ...prev,
+                                                    excluded_at: start,
+                                                    expires_at: end,
+                                                }));
                                             }}
-                                            className={`rounded border px-2 py-0.5 text-xs transition-colors ${isForever
-                                                ? active
-                                                    ? 'border-amber-500 bg-amber-100 text-amber-900'
-                                                    : 'border-amber-400/50 text-amber-700 hover:bg-amber-50'
-                                                : 'hover:bg-muted'
-                                                }`}
+                                            className={`rounded border px-2 py-0.5 text-xs transition-colors ${
+                                                isForever
+                                                    ? active
+                                                        ? 'border-amber-500 bg-amber-100 text-amber-900'
+                                                        : 'border-amber-400/50 text-amber-700 hover:bg-amber-50'
+                                                    : 'hover:bg-muted'
+                                            }`}
                                         >
                                             {label}
                                         </button>
                                     );
                                 })}
-                                {(bulkForm.data.excluded_at || bulkForm.data.expires_at) && (
+                                {(bulkForm.data.excluded_at ||
+                                    bulkForm.data.expires_at) && (
                                     <button
                                         type="button"
-                                        onClick={() => bulkForm.setData((prev) => ({ ...prev, excluded_at: '', expires_at: '' }))}
-                                        className="rounded border border-destructive/40 px-2 py-0.5 text-xs text-destructive hover:bg-destructive/10 transition-colors"
+                                        onClick={() =>
+                                            bulkForm.setData((prev) => ({
+                                                ...prev,
+                                                excluded_at: '',
+                                                expires_at: '',
+                                            }))
+                                        }
+                                        className="rounded border border-destructive/40 px-2 py-0.5 text-xs text-destructive transition-colors hover:bg-destructive/10"
                                     >
                                         Clear
                                     </button>
                                 )}
                             </div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                                Start defaults to today. Leave end blank or click <span className="font-medium">Forever</span> for indefinite exclusion.
+                            <p className="mt-1 text-xs text-muted-foreground">
+                                Start defaults to today. Leave end blank or
+                                click{' '}
+                                <span className="font-medium">Forever</span> for
+                                indefinite exclusion.
                             </p>
                         </div>
                         <div>
@@ -776,13 +1035,23 @@ export default function CoachingExclusionsIndex() {
                             <Textarea
                                 rows={3}
                                 value={bulkForm.data.notes}
-                                onChange={(e) => bulkForm.setData('notes', e.target.value)}
+                                onChange={(e) =>
+                                    bulkForm.setData('notes', e.target.value)
+                                }
                             />
                         </div>
                     </div>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setBulkOpen(false)}>Cancel</Button>
-                        <Button onClick={submitBulk} disabled={bulkForm.processing}>
+                        <Button
+                            variant="outline"
+                            onClick={() => setBulkOpen(false)}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={submitBulk}
+                            disabled={bulkForm.processing}
+                        >
                             Exclude All
                         </Button>
                     </DialogFooter>
@@ -790,7 +1059,10 @@ export default function CoachingExclusionsIndex() {
             </Dialog>
 
             {/* Restore confirm */}
-            <Dialog open={!!restoreUser} onOpenChange={(o) => !o && setRestoreUser(null)}>
+            <Dialog
+                open={!!restoreUser}
+                onOpenChange={(o) => !o && setRestoreUser(null)}
+            >
                 <DialogContent className="max-w-[90vw] sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle>Restore to Coaching?</DialogTitle>
@@ -805,12 +1077,25 @@ export default function CoachingExclusionsIndex() {
                         <Textarea
                             rows={3}
                             value={restoreForm.data.revoke_notes}
-                            onChange={(e) => restoreForm.setData('revoke_notes', e.target.value)}
+                            onChange={(e) =>
+                                restoreForm.setData(
+                                    'revoke_notes',
+                                    e.target.value,
+                                )
+                            }
                         />
                     </div>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setRestoreUser(null)}>Cancel</Button>
-                        <Button onClick={submitRestore} disabled={restoreForm.processing}>
+                        <Button
+                            variant="outline"
+                            onClick={() => setRestoreUser(null)}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={submitRestore}
+                            disabled={restoreForm.processing}
+                        >
                             Restore
                         </Button>
                     </DialogFooter>

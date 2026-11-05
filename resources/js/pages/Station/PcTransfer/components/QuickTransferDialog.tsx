@@ -1,25 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
 import { router } from '@inertiajs/react';
+import { AlertCircle, ArrowRight, Check, ChevronsUpDown } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { ArrowRight, Check, ChevronsUpDown, AlertCircle } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
     Command,
     CommandEmpty,
@@ -28,8 +14,32 @@ import {
     CommandItem,
     CommandList,
 } from '@/components/ui/command';
-import { transfer as pcTransfersTransferRoute } from '@/routes/pc-transfers';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
+import { transfer as pcTransfersTransferRoute } from '@/routes/pc-transfers';
 
 export type PcSpecOption = {
     id: number;
@@ -84,7 +94,8 @@ interface QuickTransferDialogProps {
     onSuccess?: () => void;
 }
 
-const pcLabel = (pc: PcSpecOption | undefined | null) => pc?.pc_number || pc?.label || 'PC';
+const pcLabel = (pc: PcSpecOption | undefined | null) =>
+    pc?.pc_number || pc?.label || 'PC';
 
 type StationRef = { station_number: string; site: string | null } | null;
 
@@ -113,7 +124,9 @@ export function QuickTransferDialog({
     const hasPc = Boolean(station?.pc_spec_id);
     const [mode, setMode] = useState<Mode>('assign');
     const [selectedPcId, setSelectedPcId] = useState<number | null>(null);
-    const [selectedStationId, setSelectedStationId] = useState<number | null>(null);
+    const [selectedStationId, setSelectedStationId] = useState<number | null>(
+        null,
+    );
     const [stationSiteFilter, setStationSiteFilter] = useState('all');
     const [pcSiteFilter, setPcSiteFilter] = useState('all');
     const [transferType, setTransferType] = useState<TransferType>('assign');
@@ -130,7 +143,9 @@ export function QuickTransferDialog({
         setSelectedPcId(null);
         setSelectedStationId(null);
         // Same-site moves are the common case; cross-site is one dropdown change away.
-        setStationSiteFilter(station?.site_id ? String(station.site_id) : 'all');
+        setStationSiteFilter(
+            station?.site_id ? String(station.site_id) : 'all',
+        );
         setPcSiteFilter('all');
         setTransferType('assign');
         setNotes('');
@@ -142,7 +157,10 @@ export function QuickTransferDialog({
     const stationChoices = useMemo(
         () =>
             stationOptions.filter(
-                (st) => st.id !== station?.id && (stationSiteFilter === 'all' || String(st.site_id) === stationSiteFilter),
+                (st) =>
+                    st.id !== station?.id &&
+                    (stationSiteFilter === 'all' ||
+                        String(st.site_id) === stationSiteFilter),
             ),
         [stationOptions, station?.id, stationSiteFilter],
     );
@@ -152,14 +170,19 @@ export function QuickTransferDialog({
             pcSpecs.filter(
                 (pc) =>
                     pc.id !== station?.pc_spec_id &&
-                    (pcSiteFilter === 'all' || !pc.station || String(pc.station.site_id) === pcSiteFilter),
+                    (pcSiteFilter === 'all' ||
+                        !pc.station ||
+                        String(pc.station.site_id) === pcSiteFilter),
             ),
         [pcSpecs, station?.pc_spec_id, pcSiteFilter],
     );
 
     // Drop a selection that the site filter no longer shows.
     useEffect(() => {
-        if (selectedStationId && !stationChoices.some((st) => st.id === selectedStationId)) {
+        if (
+            selectedStationId &&
+            !stationChoices.some((st) => st.id === selectedStationId)
+        ) {
             setSelectedStationId(null);
         }
     }, [stationChoices, selectedStationId]);
@@ -170,19 +193,33 @@ export function QuickTransferDialog({
     }, [pcChoices, selectedPcId]);
 
     const currentPc = useMemo(
-        () => (station?.pc_spec_id ? pcSpecs.find((pc) => pc.id === station.pc_spec_id) ?? null : null),
+        () =>
+            station?.pc_spec_id
+                ? (pcSpecs.find((pc) => pc.id === station.pc_spec_id) ?? null)
+                : null,
         [pcSpecs, station?.pc_spec_id],
     );
     const selectedPc = useMemo(
-        () => (selectedPcId ? pcSpecs.find((pc) => pc.id === selectedPcId) ?? null : null),
+        () =>
+            selectedPcId
+                ? (pcSpecs.find((pc) => pc.id === selectedPcId) ?? null)
+                : null,
         [pcSpecs, selectedPcId],
     );
     const selectedStation = useMemo(
-        () => (selectedStationId ? stationOptions.find((st) => st.id === selectedStationId) ?? null : null),
+        () =>
+            selectedStationId
+                ? (stationOptions.find((st) => st.id === selectedStationId) ??
+                  null)
+                : null,
         [stationOptions, selectedStationId],
     );
     const destinationPc = useMemo(
-        () => (selectedStation?.pc_spec_id ? pcSpecs.find((pc) => pc.id === selectedStation.pc_spec_id) ?? null : null),
+        () =>
+            selectedStation?.pc_spec_id
+                ? (pcSpecs.find((pc) => pc.id === selectedStation.pc_spec_id) ??
+                  null)
+                : null,
         [pcSpecs, selectedStation?.pc_spec_id],
     );
 
@@ -198,16 +235,31 @@ export function QuickTransferDialog({
         }
     }, [swapAvailable, transferType]);
 
-    const isReady = mode === 'assign' ? Boolean(selectedPcId) : Boolean(selectedStationId);
+    const isReady =
+        mode === 'assign' ? Boolean(selectedPcId) : Boolean(selectedStationId);
 
     // Site the PC ends up at vs. where it comes from; non-null only for cross-site moves.
     const crossSite = (() => {
         if (!station) return null;
-        if (mode === 'move' && selectedStation && selectedStation.site_id !== station.site_id) {
-            return { from: station.site ?? '—', to: selectedStation.site ?? '—' };
+        if (
+            mode === 'move' &&
+            selectedStation &&
+            selectedStation.site_id !== station.site_id
+        ) {
+            return {
+                from: station.site ?? '—',
+                to: selectedStation.site ?? '—',
+            };
         }
-        if (mode === 'assign' && selectedPc?.station && selectedPc.station.site_id !== station.site_id) {
-            return { from: selectedPc.station.site ?? '—', to: station.site ?? '—' };
+        if (
+            mode === 'assign' &&
+            selectedPc?.station &&
+            selectedPc.station.site_id !== station.site_id
+        ) {
+            return {
+                from: selectedPc.station.site ?? '—',
+                to: station.site ?? '—',
+            };
         }
         return null;
     })();
@@ -239,31 +291,59 @@ export function QuickTransferDialog({
         if (!station || !isReady) {
             return [];
         }
-        const here: StationRef = { station_number: station.station_number, site: station.site };
+        const here: StationRef = {
+            station_number: station.station_number,
+            site: station.site,
+        };
 
         if (mode === 'assign') {
             const list: Movement[] = [
-                { pc: selectedPc, from: selectedPc?.station ?? null, to: here, kind: 'move' },
+                {
+                    pc: selectedPc,
+                    from: selectedPc?.station ?? null,
+                    to: here,
+                    kind: 'move',
+                },
             ];
             if (hasPc) {
                 list.push(
                     transferType === 'swap' && selectedPc?.station
-                        ? { pc: currentPc, from: here, to: selectedPc.station, kind: 'swap' }
-                        : { pc: currentPc, from: here, to: null, kind: 'float' },
+                        ? {
+                              pc: currentPc,
+                              from: here,
+                              to: selectedPc.station,
+                              kind: 'swap',
+                          }
+                        : {
+                              pc: currentPc,
+                              from: here,
+                              to: null,
+                              kind: 'float',
+                          },
                 );
             }
             return list;
         }
 
         const dest: StationRef = selectedStation
-            ? { station_number: selectedStation.station_number, site: selectedStation.site }
+            ? {
+                  station_number: selectedStation.station_number,
+                  site: selectedStation.site,
+              }
             : null;
-        const list: Movement[] = [{ pc: currentPc, from: here, to: dest, kind: 'move' }];
+        const list: Movement[] = [
+            { pc: currentPc, from: here, to: dest, kind: 'move' },
+        ];
         if (selectedStation?.pc_spec_id) {
             list.push(
                 transferType === 'swap'
                     ? { pc: destinationPc, from: dest, to: here, kind: 'swap' }
-                    : { pc: destinationPc, from: dest, to: null, kind: 'float' },
+                    : {
+                          pc: destinationPc,
+                          from: dest,
+                          to: null,
+                          kind: 'float',
+                      },
             );
         }
         return list;
@@ -275,8 +355,18 @@ export function QuickTransferDialog({
         }
         const data =
             mode === 'assign'
-                ? { to_station_id: station.id, pc_spec_id: selectedPcId, transfer_type: transferType, notes: notes.trim() || null }
-                : { to_station_id: selectedStationId, pc_spec_id: station.pc_spec_id, transfer_type: transferType, notes: notes.trim() || null };
+                ? {
+                      to_station_id: station.id,
+                      pc_spec_id: selectedPcId,
+                      transfer_type: transferType,
+                      notes: notes.trim() || null,
+                  }
+                : {
+                      to_station_id: selectedStationId,
+                      pc_spec_id: station.pc_spec_id,
+                      transfer_type: transferType,
+                      notes: notes.trim() || null,
+                  };
         const summary = summaryText();
 
         setProcessing(true);
@@ -305,19 +395,34 @@ export function QuickTransferDialog({
     }
 
     const showReplaceChoice =
-        (mode === 'assign' && hasPc && Boolean(selectedPc)) || (mode === 'move' && Boolean(selectedStation?.pc_spec_id));
+        (mode === 'assign' && hasPc && Boolean(selectedPc)) ||
+        (mode === 'move' && Boolean(selectedStation?.pc_spec_id));
 
     return (
-        <Dialog open={open} onOpenChange={(next) => !processing && onOpenChange(next)}>
+        <Dialog
+            open={open}
+            onOpenChange={(next) => !processing && onOpenChange(next)}
+        >
             <DialogContent className="max-w-[95vw] sm:max-w-lg">
                 <DialogHeader>
                     <DialogTitle>
                         Station {station.station_number}
-                        {station.site && <span className="font-normal text-muted-foreground"> · {station.site}</span>}
+                        {station.site && (
+                            <span className="font-normal text-muted-foreground">
+                                {' '}
+                                · {station.site}
+                            </span>
+                        )}
                     </DialogTitle>
                     <DialogDescription>
                         {hasPc ? (
-                            <>Currently has <span className="font-medium text-foreground">{pcLabel(currentPc)}</span>.</>
+                            <>
+                                Currently has{' '}
+                                <span className="font-medium text-foreground">
+                                    {pcLabel(currentPc)}
+                                </span>
+                                .
+                            </>
                         ) : (
                             'This station has no PC assigned.'
                         )}
@@ -325,10 +430,15 @@ export function QuickTransferDialog({
                 </DialogHeader>
 
                 {hasPc && (
-                    <Tabs value={mode} onValueChange={(value) => setMode(value as Mode)}>
+                    <Tabs
+                        value={mode}
+                        onValueChange={(value) => setMode(value as Mode)}
+                    >
                         <TabsList className="w-full">
                             <TabsTrigger value="move">Move this PC</TabsTrigger>
-                            <TabsTrigger value="assign">Put another PC here</TabsTrigger>
+                            <TabsTrigger value="assign">
+                                Put another PC here
+                            </TabsTrigger>
                         </TabsList>
                     </Tabs>
                 )}
@@ -338,7 +448,12 @@ export function QuickTransferDialog({
                         <div className="space-y-1.5">
                             <div className="flex items-center justify-between gap-2">
                                 <Label>PC to assign</Label>
-                                <SiteFilterSelect value={pcSiteFilter} onChange={setPcSiteFilter} sites={sites} allLabel="Any site / unassigned" />
+                                <SiteFilterSelect
+                                    value={pcSiteFilter}
+                                    onChange={setPcSiteFilter}
+                                    sites={sites}
+                                    allLabel="Any site / unassigned"
+                                />
                             </div>
                             <PcPicker
                                 pcSpecs={pcChoices}
@@ -348,8 +463,12 @@ export function QuickTransferDialog({
                             />
                             {selectedPc?.station && (
                                 <p className="text-xs text-muted-foreground">
-                                    {pcLabel(selectedPc)} will leave station {selectedPc.station.station_number}
-                                    {selectedPc.station.site ? ` (${selectedPc.station.site})` : ''}.
+                                    {pcLabel(selectedPc)} will leave station{' '}
+                                    {selectedPc.station.station_number}
+                                    {selectedPc.station.site
+                                        ? ` (${selectedPc.station.site})`
+                                        : ''}
+                                    .
                                 </p>
                             )}
                         </div>
@@ -357,7 +476,12 @@ export function QuickTransferDialog({
                         <div className="space-y-1.5">
                             <div className="flex items-center justify-between gap-2">
                                 <Label>Destination station</Label>
-                                <SiteFilterSelect value={stationSiteFilter} onChange={setStationSiteFilter} sites={sites} allLabel="All sites" />
+                                <SiteFilterSelect
+                                    value={stationSiteFilter}
+                                    onChange={setStationSiteFilter}
+                                    sites={sites}
+                                    allLabel="All sites"
+                                />
                             </div>
                             <StationPicker
                                 stations={stationChoices}
@@ -366,7 +490,10 @@ export function QuickTransferDialog({
                                 preferredSiteId={station.site_id}
                             />
                             {stationChoices.length === 0 && (
-                                <p className="text-xs text-muted-foreground">No other stations at this site — pick another site above.</p>
+                                <p className="text-xs text-muted-foreground">
+                                    No other stations at this site — pick
+                                    another site above.
+                                </p>
                             )}
                         </div>
                     )}
@@ -375,7 +502,14 @@ export function QuickTransferDialog({
                         <div className="flex items-center gap-2 rounded-md border border-amber-400/60 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
                             <AlertCircle className="h-3.5 w-3.5 shrink-0" />
                             <span>
-                                Cross-site move: <span className="font-semibold">{crossSite.from}</span> → <span className="font-semibold">{crossSite.to}</span>
+                                Cross-site move:{' '}
+                                <span className="font-semibold">
+                                    {crossSite.from}
+                                </span>{' '}
+                                →{' '}
+                                <span className="font-semibold">
+                                    {crossSite.to}
+                                </span>
                             </span>
                         </div>
                     )}
@@ -387,18 +521,39 @@ export function QuickTransferDialog({
                                     ? `${pcLabel(currentPc)} is already here. What should happen to it?`
                                     : `${selectedStation?.station_number} already has ${pcLabel(destinationPc)}. What should happen to it?`}
                             </Label>
-                            <RadioGroup value={transferType} onValueChange={(value) => setTransferType(value as TransferType)}>
+                            <RadioGroup
+                                value={transferType}
+                                onValueChange={(value) =>
+                                    setTransferType(value as TransferType)
+                                }
+                            >
                                 <label className="flex cursor-pointer items-start gap-2 text-sm">
-                                    <RadioGroupItem value="assign" className="mt-0.5" />
+                                    <RadioGroupItem
+                                        value="assign"
+                                        className="mt-0.5"
+                                    />
                                     <span>
-                                        <span className="font-medium">Replace</span>
-                                        <span className="text-muted-foreground"> — it becomes unassigned (floating)</span>
+                                        <span className="font-medium">
+                                            Replace
+                                        </span>
+                                        <span className="text-muted-foreground">
+                                            {' '}
+                                            — it becomes unassigned (floating)
+                                        </span>
                                     </span>
                                 </label>
-                                <label className={`flex items-start gap-2 text-sm ${swapAvailable ? 'cursor-pointer' : 'opacity-50'}`}>
-                                    <RadioGroupItem value="swap" className="mt-0.5" disabled={!swapAvailable} />
+                                <label
+                                    className={`flex items-start gap-2 text-sm ${swapAvailable ? 'cursor-pointer' : 'opacity-50'}`}
+                                >
+                                    <RadioGroupItem
+                                        value="swap"
+                                        className="mt-0.5"
+                                        disabled={!swapAvailable}
+                                    />
                                     <span>
-                                        <span className="font-medium">Swap</span>
+                                        <span className="font-medium">
+                                            Swap
+                                        </span>
                                         <span className="text-muted-foreground">
                                             {' — '}
                                             {mode === 'assign'
@@ -415,7 +570,10 @@ export function QuickTransferDialog({
 
                     <div className="space-y-1.5">
                         <Label htmlFor="quick-transfer-notes">
-                            Notes <span className="text-muted-foreground">(optional)</span>
+                            Notes{' '}
+                            <span className="text-muted-foreground">
+                                (optional)
+                            </span>
                         </Label>
                         <Textarea
                             id="quick-transfer-notes"
@@ -449,10 +607,17 @@ export function QuickTransferDialog({
                 </div>
 
                 <DialogFooter className="gap-2">
-                    <Button variant="outline" onClick={() => onOpenChange(false)} disabled={processing}>
+                    <Button
+                        variant="outline"
+                        onClick={() => onOpenChange(false)}
+                        disabled={processing}
+                    >
                         Cancel
                     </Button>
-                    <Button onClick={() => setReviewOpen(true)} disabled={!isReady || processing}>
+                    <Button
+                        onClick={() => setReviewOpen(true)}
+                        disabled={!isReady || processing}
+                    >
                         Review transfer
                         <ArrowRight className="ml-2 h-4 w-4" />
                     </Button>
@@ -483,41 +648,67 @@ interface ReviewDialogProps {
 }
 
 /** Final confirmation: every PC that moves, with its full specs and route. */
-function ReviewDialog({ open, onOpenChange, movements, crossSite, notes, processing, onConfirm }: ReviewDialogProps) {
+function ReviewDialog({
+    open,
+    onOpenChange,
+    movements,
+    crossSite,
+    notes,
+    processing,
+    onConfirm,
+}: ReviewDialogProps) {
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-[95vw] sm:max-w-xl">
                 <DialogHeader>
                     <DialogTitle>Confirm transfer</DialogTitle>
                     <DialogDescription>
-                        Review the details below. This updates station assignments immediately and is recorded in the transfer history.
+                        Review the details below. This updates station
+                        assignments immediately and is recorded in the transfer
+                        history.
                     </DialogDescription>
                 </DialogHeader>
 
                 <div className="space-y-3">
                     {movements.map((movement, index) => (
-                        <MovementCard key={`${movement.pc?.id ?? 'pc'}-${index}`} movement={movement} />
+                        <MovementCard
+                            key={`${movement.pc?.id ?? 'pc'}-${index}`}
+                            movement={movement}
+                        />
                     ))}
 
                     {crossSite && (
                         <div className="flex items-center gap-2 rounded-md border border-amber-400/60 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
                             <AlertCircle className="h-3.5 w-3.5 shrink-0" />
                             <span>
-                                Cross-site move: <span className="font-semibold">{crossSite.from}</span> → <span className="font-semibold">{crossSite.to}</span>
+                                Cross-site move:{' '}
+                                <span className="font-semibold">
+                                    {crossSite.from}
+                                </span>{' '}
+                                →{' '}
+                                <span className="font-semibold">
+                                    {crossSite.to}
+                                </span>
                             </span>
                         </div>
                     )}
 
                     {notes && (
                         <div className="rounded-md border px-3 py-2 text-sm">
-                            <div className="text-xs font-medium text-muted-foreground">Notes</div>
+                            <div className="text-xs font-medium text-muted-foreground">
+                                Notes
+                            </div>
                             <div className="whitespace-pre-wrap">{notes}</div>
                         </div>
                     )}
                 </div>
 
                 <DialogFooter className="gap-2">
-                    <Button variant="outline" onClick={() => onOpenChange(false)} disabled={processing}>
+                    <Button
+                        variant="outline"
+                        onClick={() => onOpenChange(false)}
+                        disabled={processing}
+                    >
                         Back
                     </Button>
                     <Button onClick={onConfirm} disabled={processing}>
@@ -530,7 +721,10 @@ function ReviewDialog({ open, onOpenChange, movements, crossSite, notes, process
     );
 }
 
-const stationText = (ref: StationRef) => (ref ? `${ref.station_number}${ref.site ? ` · ${ref.site}` : ''}` : 'Unassigned');
+const stationText = (ref: StationRef) =>
+    ref
+        ? `${ref.station_number}${ref.site ? ` · ${ref.site}` : ''}`
+        : 'Unassigned';
 
 function MovementCard({ movement }: { movement: Movement }) {
     const { pc, from, to, kind } = movement;
@@ -538,32 +732,74 @@ function MovementCard({ movement }: { movement: Movement }) {
     const specs: Array<[string, string | null | undefined]> = [
         ['Manufacturer', d.manufacturer],
         ['Processor', d.processor],
-        ['RAM', d.ram_gb ? `${d.ram_gb} GB${d.memory_type ? ` ${d.memory_type}` : ''}` : null],
+        [
+            'RAM',
+            d.ram_gb
+                ? `${d.ram_gb} GB${d.memory_type ? ` ${d.memory_type}` : ''}`
+                : null,
+        ],
         ['Storage', d.disk_gb ? `${d.disk_gb} GB` : null],
         ['Ports', d.available_ports],
     ];
     const shown = specs.filter(([, value]) => Boolean(value));
 
     return (
-        <div className={cn('rounded-lg border p-3', kind === 'float' && 'border-orange-400/60 bg-orange-50/60 dark:bg-orange-950/20')}>
+        <div
+            className={cn(
+                'rounded-lg border p-3',
+                kind === 'float' &&
+                    'border-orange-400/60 bg-orange-50/60 dark:bg-orange-950/20',
+            )}
+        >
             <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                    <span className="text-base font-semibold text-blue-600 dark:text-blue-400">{pcLabel(pc)}</span>
+                    <span className="text-base font-semibold text-blue-600 dark:text-blue-400">
+                        {pcLabel(pc)}
+                    </span>
                     {d.issue && (
-                        <Badge variant="outline" className="h-5 border-amber-500 px-1.5 text-[10px] text-amber-600" title={d.issue}>
+                        <Badge
+                            variant="outline"
+                            className="h-5 border-amber-500 px-1.5 text-[10px] text-amber-600"
+                            title={d.issue}
+                        >
                             Issue
                         </Badge>
                     )}
                 </div>
-                <Badge variant={kind === 'float' ? 'outline' : 'secondary'} className={cn('text-[10px] uppercase tracking-wide', kind === 'float' && 'border-orange-400 text-orange-700 dark:text-orange-300')}>
-                    {kind === 'float' ? 'Becomes unassigned' : kind === 'swap' ? 'Swap' : 'Move'}
+                <Badge
+                    variant={kind === 'float' ? 'outline' : 'secondary'}
+                    className={cn(
+                        'text-[10px] tracking-wide uppercase',
+                        kind === 'float' &&
+                            'border-orange-400 text-orange-700 dark:text-orange-300',
+                    )}
+                >
+                    {kind === 'float'
+                        ? 'Becomes unassigned'
+                        : kind === 'swap'
+                          ? 'Swap'
+                          : 'Move'}
                 </Badge>
             </div>
 
             <div className="mt-2 flex items-center gap-2 text-sm">
-                <span className={cn('rounded bg-muted px-2 py-0.5', !from && 'text-muted-foreground')}>{stationText(from)}</span>
+                <span
+                    className={cn(
+                        'rounded bg-muted px-2 py-0.5',
+                        !from && 'text-muted-foreground',
+                    )}
+                >
+                    {stationText(from)}
+                </span>
                 <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <span className={cn('rounded px-2 py-0.5 font-medium', to ? 'bg-green-500/15 text-green-700 dark:text-green-300' : 'bg-orange-500/15 text-orange-700 dark:text-orange-300')}>
+                <span
+                    className={cn(
+                        'rounded px-2 py-0.5 font-medium',
+                        to
+                            ? 'bg-green-500/15 text-green-700 dark:text-green-300'
+                            : 'bg-orange-500/15 text-orange-700 dark:text-orange-300',
+                    )}
+                >
                     {stationText(to)}
                 </span>
             </div>
@@ -573,12 +809,19 @@ function MovementCard({ movement }: { movement: Movement }) {
                     {shown.map(([label, value]) => (
                         <div key={label} className="min-w-0">
                             <dt className="text-muted-foreground">{label}</dt>
-                            <dd className="truncate font-medium" title={String(value)}>{value}</dd>
+                            <dd
+                                className="truncate font-medium"
+                                title={String(value)}
+                            >
+                                {value}
+                            </dd>
                         </div>
                     ))}
                 </dl>
             ) : (
-                <p className="mt-3 text-xs text-muted-foreground">No spec details recorded for this PC.</p>
+                <p className="mt-3 text-xs text-muted-foreground">
+                    No spec details recorded for this PC.
+                </p>
             )}
 
             {d.notes && (
@@ -597,10 +840,18 @@ interface SiteFilterSelectProps {
     allLabel: string;
 }
 
-function SiteFilterSelect({ value, onChange, sites, allLabel }: SiteFilterSelectProps) {
+function SiteFilterSelect({
+    value,
+    onChange,
+    sites,
+    allLabel,
+}: SiteFilterSelectProps) {
     return (
         <Select value={value} onValueChange={onChange}>
-            <SelectTrigger className="h-7 w-auto min-w-28 gap-1 px-2 text-xs" aria-label="Filter by site">
+            <SelectTrigger
+                className="h-7 w-auto min-w-28 gap-1 px-2 text-xs"
+                aria-label="Filter by site"
+            >
                 <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -622,7 +873,12 @@ interface PcPickerProps {
     preferredSiteId?: number;
 }
 
-function PcPicker({ pcSpecs, value, onChange, preferredSiteId }: PcPickerProps) {
+function PcPicker({
+    pcSpecs,
+    value,
+    onChange,
+    preferredSiteId,
+}: PcPickerProps) {
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState('');
 
@@ -630,10 +886,13 @@ function PcPicker({ pcSpecs, value, onChange, preferredSiteId }: PcPickerProps) 
     const sorted = useMemo(() => {
         const rank = (pc: PcSpecOption) => {
             if (!pc.station) return 0;
-            if (preferredSiteId && pc.station.site_id === preferredSiteId) return 1;
+            if (preferredSiteId && pc.station.site_id === preferredSiteId)
+                return 1;
             return 2;
         };
-        return [...pcSpecs].sort((a, b) => rank(a) - rank(b) || pcLabel(a).localeCompare(pcLabel(b)));
+        return [...pcSpecs].sort(
+            (a, b) => rank(a) - rank(b) || pcLabel(a).localeCompare(pcLabel(b)),
+        );
     }, [pcSpecs, preferredSiteId]);
 
     const filtered = useMemo(() => {
@@ -641,7 +900,14 @@ function PcPicker({ pcSpecs, value, onChange, preferredSiteId }: PcPickerProps) 
         if (!q) return sorted.slice(0, 100);
         return sorted
             .filter((pc) =>
-                [pc.pc_number, pc.label, pc.details.manufacturer, pc.details.processor, pc.station?.station_number, pc.station?.site]
+                [
+                    pc.pc_number,
+                    pc.label,
+                    pc.details.manufacturer,
+                    pc.details.processor,
+                    pc.station?.station_number,
+                    pc.station?.site,
+                ]
                     .filter(Boolean)
                     .some((field) => String(field).toLowerCase().includes(q)),
             )
@@ -653,7 +919,12 @@ function PcPicker({ pcSpecs, value, onChange, preferredSiteId }: PcPickerProps) 
     return (
         <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
-                <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between font-normal">
+                <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={open}
+                    className="w-full justify-between font-normal"
+                >
                     <span className="truncate">
                         {selected ? (
                             <>
@@ -672,9 +943,16 @@ function PcPicker({ pcSpecs, value, onChange, preferredSiteId }: PcPickerProps) 
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-(--radix-popover-trigger-width) min-w-72 p-0" align="start">
+            <PopoverContent
+                className="w-(--radix-popover-trigger-width) min-w-72 p-0"
+                align="start"
+            >
                 <Command shouldFilter={false}>
-                    <CommandInput placeholder="Search PCs…" value={query} onValueChange={setQuery} />
+                    <CommandInput
+                        placeholder="Search PCs…"
+                        value={query}
+                        onValueChange={setQuery}
+                    />
                     <CommandList>
                         <CommandEmpty>No PC found.</CommandEmpty>
                         <CommandGroup>
@@ -689,23 +967,45 @@ function PcPicker({ pcSpecs, value, onChange, preferredSiteId }: PcPickerProps) 
                                     }}
                                     className="cursor-pointer"
                                 >
-                                    <Check className={`mr-2 h-4 w-4 shrink-0 ${value === pc.id ? 'opacity-100' : 'opacity-0'}`} />
+                                    <Check
+                                        className={`mr-2 h-4 w-4 shrink-0 ${value === pc.id ? 'opacity-100' : 'opacity-0'}`}
+                                    />
                                     <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
                                         <div className="min-w-0">
-                                            <div className="truncate font-medium">{pcLabel(pc)}</div>
+                                            <div className="truncate font-medium">
+                                                {pcLabel(pc)}
+                                            </div>
                                             <div className="truncate text-xs text-muted-foreground">
-                                                {[pc.details.manufacturer, pc.details.processor, pc.details.ram_gb ? `${pc.details.ram_gb}GB` : null]
+                                                {[
+                                                    pc.details.manufacturer,
+                                                    pc.details.processor,
+                                                    pc.details.ram_gb
+                                                        ? `${pc.details.ram_gb}GB`
+                                                        : null,
+                                                ]
                                                     .filter(Boolean)
                                                     .join(' · ') || '—'}
                                             </div>
                                         </div>
                                         {pc.station ? (
-                                            <Badge variant="secondary" className="shrink-0 text-xs">
+                                            <Badge
+                                                variant="secondary"
+                                                className="shrink-0 text-xs"
+                                            >
                                                 At {pc.station.station_number}
-                                                {pc.station.site && <span className="ml-1 font-normal opacity-75">· {pc.station.site}</span>}
+                                                {pc.station.site && (
+                                                    <span className="ml-1 font-normal opacity-75">
+                                                        · {pc.station.site}
+                                                    </span>
+                                                )}
                                             </Badge>
                                         ) : (
-                                            <Badge variant="outline" className="shrink-0 border-green-500 text-xs text-green-600">Available</Badge>
+                                            <Badge
+                                                variant="outline"
+                                                className="shrink-0 border-green-500 text-xs text-green-600"
+                                            >
+                                                Available
+                                            </Badge>
                                         )}
                                     </div>
                                 </CommandItem>
@@ -725,14 +1025,21 @@ interface StationPickerProps {
     preferredSiteId?: number;
 }
 
-function StationPicker({ stations, value, onChange, preferredSiteId }: StationPickerProps) {
+function StationPicker({
+    stations,
+    value,
+    onChange,
+    preferredSiteId,
+}: StationPickerProps) {
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState('');
 
     // Same-site empty stations first so the likeliest destination is one click away.
     const sorted = useMemo(() => {
         const rank = (st: StationOption) => {
-            const sameSite = preferredSiteId ? st.site_id === preferredSiteId : true;
+            const sameSite = preferredSiteId
+                ? st.site_id === preferredSiteId
+                : true;
             if (sameSite && !st.pc_spec_id) return 0;
             if (sameSite) return 1;
             if (!st.pc_spec_id) return 2;
@@ -746,7 +1053,9 @@ function StationPicker({ stations, value, onChange, preferredSiteId }: StationPi
         if (!q) return sorted.slice(0, 100);
         return sorted
             .filter((st) =>
-                [st.station_number, st.site, st.pc_number].filter(Boolean).some((field) => String(field).toLowerCase().includes(q)),
+                [st.station_number, st.site, st.pc_number]
+                    .filter(Boolean)
+                    .some((field) => String(field).toLowerCase().includes(q)),
             )
             .slice(0, 100);
     }, [sorted, query]);
@@ -756,14 +1065,20 @@ function StationPicker({ stations, value, onChange, preferredSiteId }: StationPi
     return (
         <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
-                <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between font-normal">
+                <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={open}
+                    className="w-full justify-between font-normal"
+                >
                     <span className="truncate">
                         {selected ? (
                             <>
                                 {selected.station_number}
                                 <span className="text-muted-foreground">
                                     {' · '}
-                                    {selected.site ?? '—'} · {selected.pc_number ?? 'Empty'}
+                                    {selected.site ?? '—'} ·{' '}
+                                    {selected.pc_number ?? 'Empty'}
                                 </span>
                             </>
                         ) : (
@@ -773,9 +1088,16 @@ function StationPicker({ stations, value, onChange, preferredSiteId }: StationPi
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-(--radix-popover-trigger-width) min-w-72 p-0" align="start">
+            <PopoverContent
+                className="w-(--radix-popover-trigger-width) min-w-72 p-0"
+                align="start"
+            >
                 <Command shouldFilter={false}>
-                    <CommandInput placeholder="Search stations…" value={query} onValueChange={setQuery} />
+                    <CommandInput
+                        placeholder="Search stations…"
+                        value={query}
+                        onValueChange={setQuery}
+                    />
                     <CommandList>
                         <CommandEmpty>No station found.</CommandEmpty>
                         <CommandGroup>
@@ -790,16 +1112,32 @@ function StationPicker({ stations, value, onChange, preferredSiteId }: StationPi
                                     }}
                                     className="cursor-pointer"
                                 >
-                                    <Check className={`mr-2 h-4 w-4 shrink-0 ${value === st.id ? 'opacity-100' : 'opacity-0'}`} />
+                                    <Check
+                                        className={`mr-2 h-4 w-4 shrink-0 ${value === st.id ? 'opacity-100' : 'opacity-0'}`}
+                                    />
                                     <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
                                         <div className="min-w-0">
-                                            <div className="truncate font-medium">{st.station_number}</div>
-                                            <div className="truncate text-xs text-muted-foreground">{st.site ?? '—'}</div>
+                                            <div className="truncate font-medium">
+                                                {st.station_number}
+                                            </div>
+                                            <div className="truncate text-xs text-muted-foreground">
+                                                {st.site ?? '—'}
+                                            </div>
                                         </div>
                                         {st.pc_spec_id ? (
-                                            <Badge variant="secondary" className="shrink-0 text-xs">{st.pc_number ?? 'Has PC'}</Badge>
+                                            <Badge
+                                                variant="secondary"
+                                                className="shrink-0 text-xs"
+                                            >
+                                                {st.pc_number ?? 'Has PC'}
+                                            </Badge>
                                         ) : (
-                                            <Badge variant="outline" className="shrink-0 border-green-500 text-xs text-green-600">Empty</Badge>
+                                            <Badge
+                                                variant="outline"
+                                                className="shrink-0 border-green-500 text-xs text-green-600"
+                                            >
+                                                Empty
+                                            </Badge>
                                         )}
                                     </div>
                                 </CommandItem>

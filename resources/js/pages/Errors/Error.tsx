@@ -1,5 +1,13 @@
 import { Head } from '@inertiajs/react';
-import { ArrowLeft, Home, RefreshCw, ServerCrash, ShieldX, Lock, AlertTriangle } from 'lucide-react';
+import {
+    AlertTriangle,
+    ArrowLeft,
+    Home,
+    Lock,
+    RefreshCw,
+    ServerCrash,
+    ShieldX,
+} from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -9,28 +17,40 @@ interface ErrorPageProps {
     message?: string;
 }
 
-const errorConfig: Record<number, { title: string; description: string; icon: React.ElementType; pill: string }> = {
+const errorConfig: Record<
+    number,
+    {
+        title: string;
+        description: string;
+        icon: React.ElementType;
+        pill: string;
+    }
+> = {
     403: {
         title: 'Access Denied',
-        description: "You don't have permission to access this page. Please contact your administrator if you believe this is a mistake.",
+        description:
+            "You don't have permission to access this page. Please contact your administrator if you believe this is a mistake.",
         icon: ShieldX,
         pill: 'Forbidden',
     },
     404: {
         title: 'Lost in Space',
-        description: "Oops! The page you're looking for doesn't exist or has been moved to another dimension.",
+        description:
+            "Oops! The page you're looking for doesn't exist or has been moved to another dimension.",
         icon: AlertTriangle,
         pill: 'Page Not Found',
     },
     500: {
         title: 'Server Error',
-        description: "Something went wrong on our end. Our team has been notified and we're working to fix it.",
+        description:
+            "Something went wrong on our end. Our team has been notified and we're working to fix it.",
         icon: ServerCrash,
         pill: 'Internal Error',
     },
     503: {
         title: 'Under Maintenance',
-        description: "We're performing scheduled maintenance. Please check back shortly.",
+        description:
+            "We're performing scheduled maintenance. Please check back shortly.",
         icon: Lock,
         pill: 'Service Unavailable',
     },
@@ -40,22 +60,22 @@ const quotesByStatus: Record<number, string[]> = {
     403: [
         'Not all doors are meant to be opened.',
         'Power is nothing without permission.',
-        'Some rooms require a key — you don\'t have this one.',
+        "Some rooms require a key — you don't have this one.",
         'Access is a privilege, not a right.',
         'Even curiosity has its limits.',
         'The lock exists for a reason.',
         'Not every path is meant for every traveler.',
         'Boundaries are the architecture of trust.',
-        'You knocked — but this door doesn\'t answer.',
+        "You knocked — but this door doesn't answer.",
         'Some knowledge is guarded for good reason.',
-        'If there is birth death is certain, if there is death birth is certain.'
+        'If there is birth death is certain, if there is death birth is certain.',
     ],
     404: [
         'Not all who wander are lost, but this page definitely is.',
         'The best journeys sometimes take unexpected detours.',
         'Every wrong turn is a chance to discover something new.',
         'Lost pages are just adventures waiting to be found.',
-        'Sometimes the path less traveled doesn\'t exist at all.',
+        "Sometimes the path less traveled doesn't exist at all.",
         'Even the best explorers occasionally lose their map.',
         'Getting lost is the first step to being found.',
         'The page you seek may be gone, but the journey continues.',
@@ -63,7 +83,7 @@ const quotesByStatus: Record<number, string[]> = {
         'In the land of 404s, imagination is your compass.',
         'Some pages are like shooting stars — brief, brilliant, and gone.',
         'The road to knowledge is paved with broken links.',
-        'If there is birth death is certain, if there is death birth is certain.'
+        'If there is birth death is certain, if there is death birth is certain.',
     ],
     500: [
         'Even the best machines stumble sometimes.',
@@ -73,23 +93,23 @@ const quotesByStatus: Record<number, string[]> = {
         'Every crash is a lesson the system needed to learn.',
         'Great software is built on the ruins of its failures.',
         'Chaos is just order waiting to be understood.',
-        'Errors are the universe\'s way of saying: try again, differently.',
+        "Errors are the universe's way of saying: try again, differently.",
         'Even systems need a moment to breathe and reflect.',
         'The server stumbled — but it will rise again.',
-        'If there is birth death is certain, if there is death birth is certain.'
+        'If there is birth death is certain, if there is death birth is certain.',
     ],
     503: [
         'Good things come to those who wait.',
         'Even the best performers need intermission.',
         'Maintenance today means reliability tomorrow.',
-        'Pause, breathe — we\'ll be back stronger.',
+        "Pause, breathe — we'll be back stronger.",
         'The best systems know when to rest.',
         'A moment of downtime is a promise of uptime.',
-        'We\'re polishing the gears — back soon.',
+        "We're polishing the gears — back soon.",
         'Scheduled silence is better than unexpected noise.',
         'Even champions take a timeout.',
         'The stage is being set for your return.',
-        'If there is birth death is certain, if there is death birth is certain.'
+        'If there is birth death is certain, if there is death birth is certain.',
     ],
 };
 
@@ -139,7 +159,10 @@ export default function Error({ status, message }: ErrorPageProps) {
                 this.vx = (Math.random() - 0.5) * 1;
                 this.vy = (Math.random() - 0.5) * 1;
                 this.size = Math.random() * 8 + 4;
-                this.color = Math.random() > 0.5 ? 'rgba(139, 92, 246, 0.4)' : 'rgba(91, 33, 182, 0.4)';
+                this.color =
+                    Math.random() > 0.5
+                        ? 'rgba(139, 92, 246, 0.4)'
+                        : 'rgba(91, 33, 182, 0.4)';
                 this.angle = 0;
                 this.spinSpeed = (Math.random() - 0.5) * 0.05;
             }
@@ -160,7 +183,8 @@ export default function Error({ status, message }: ErrorPageProps) {
                     if (distance < mouseDistance) {
                         const forceDirectionX = dx / distance;
                         const forceDirectionY = dy / distance;
-                        const force = (mouseDistance - distance) / mouseDistance;
+                        const force =
+                            (mouseDistance - distance) / mouseDistance;
                         this.x -= forceDirectionX * force * 2;
                         this.y -= forceDirectionY * force * 2;
                     }
@@ -172,7 +196,12 @@ export default function Error({ status, message }: ErrorPageProps) {
                 ctx!.translate(this.x, this.y);
                 ctx!.rotate(this.angle);
                 ctx!.fillStyle = this.color;
-                ctx!.fillRect(-this.size / 2, -this.size / 2, this.size, this.size);
+                ctx!.fillRect(
+                    -this.size / 2,
+                    -this.size / 2,
+                    this.size,
+                    this.size,
+                );
                 ctx!.restore();
             }
         }
@@ -291,7 +320,9 @@ export default function Error({ status, message }: ErrorPageProps) {
                     {/* Brand Logo */}
                     <div className="mb-4 animate-[logoFloat_3s_ease-in-out_infinite] text-5xl font-bold tracking-tight uppercase">
                         <span className="text-white">PRIME</span>
-                        <span className="text-violet-500 drop-shadow-[0_0_20px_rgba(139,92,246,0.5)]">HUB</span>
+                        <span className="text-violet-500 drop-shadow-[0_0_20px_rgba(139,92,246,0.5)]">
+                            HUB
+                        </span>
                     </div>
 
                     {/* Status Pill */}
@@ -300,12 +331,14 @@ export default function Error({ status, message }: ErrorPageProps) {
                     </div>
 
                     {/* Error Code */}
-                    <div className="m-0 text-[8rem] font-bold leading-none text-violet-500 drop-shadow-[0_0_40px_rgba(139,92,246,0.3)]">
+                    <div className="m-0 text-[8rem] leading-none font-bold text-violet-500 drop-shadow-[0_0_40px_rgba(139,92,246,0.3)]">
                         {status}
                     </div>
 
                     {/* Title */}
-                    <h2 className="mt-2 mb-4 text-4xl font-semibold">{config.title}</h2>
+                    <h2 className="mt-2 mb-4 text-4xl font-semibold">
+                        {config.title}
+                    </h2>
 
                     {/* Description */}
                     <p className="mx-auto mb-8 max-w-lg leading-relaxed text-slate-400">
@@ -345,10 +378,16 @@ export default function Error({ status, message }: ErrorPageProps) {
 
                     {/* Quote */}
                     <div className="mt-12 max-w-xl animate-[fadeInUp_1s_ease-out_0.5s_both] border-l-4 border-violet-500 pl-6 text-left">
-                        <p className={`text-lg italic text-slate-400 transition-opacity duration-500 ${fadeOut ? 'opacity-0' : 'opacity-80'}`}>
-                            <span className="mr-1 text-2xl font-bold text-slate-400">"</span>
+                        <p
+                            className={`text-lg text-slate-400 italic transition-opacity duration-500 ${fadeOut ? 'opacity-0' : 'opacity-80'}`}
+                        >
+                            <span className="mr-1 text-2xl font-bold text-slate-400">
+                                "
+                            </span>
                             {currentQuote}
-                            <span className="ml-1 text-2xl font-bold text-slate-400">"</span>
+                            <span className="ml-1 text-2xl font-bold text-slate-400">
+                                "
+                            </span>
                         </p>
                     </div>
 

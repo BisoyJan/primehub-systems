@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
 import { usePage } from '@inertiajs/react';
+import { useEffect, useState } from 'react';
 
 export function HeaderDateTime() {
     const { url } = usePage();
@@ -35,7 +35,7 @@ export function HeaderDateTime() {
     const timeString = date.toLocaleTimeString('en-US', timeOptions);
 
     return (
-        <div className="hidden md:flex flex-col items-end mr-4 text-xs text-muted-foreground">
+        <div className="mr-4 hidden flex-col items-end text-xs text-muted-foreground md:flex">
             <span className="font-medium">{dateString}</span>
             <span>{timeString}</span>
         </div>

@@ -1,49 +1,67 @@
-import { Head, Link } from "@inertiajs/react";
-import AppLayout from "@/layouts/app-layout";
-import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
-import { PageHeader } from "@/components/PageHeader";
-import { LoadingOverlay } from "@/components/LoadingOverlay";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Can } from "@/components/authorization";
-import { index as attendanceToolsIndex } from "@/routes/attendance-tools";
-import { index as biometricReprocessingIndex } from "@/routes/biometric-reprocessing";
-import { index as biometricAnomaliesIndex } from "@/routes/biometric-anomalies";
-import { index as biometricExportIndex } from "@/routes/biometric-export";
-import { index as attendanceUploadsIndex } from "@/routes/attendance-uploads";
-import { index as biometricRetentionPoliciesIndex } from "@/routes/biometric-retention-policies";
+import { Can } from '@/components/authorization';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { PageHeader } from '@/components/PageHeader';
 import {
-    RefreshCw,
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from '@/components/ui/card';
+import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
+import AppLayout from '@/layouts/app-layout';
+import { index as attendanceToolsIndex } from '@/routes/attendance-tools';
+import { index as attendanceUploadsIndex } from '@/routes/attendance-uploads';
+import { index as biometricAnomaliesIndex } from '@/routes/biometric-anomalies';
+import { index as biometricExportIndex } from '@/routes/biometric-export';
+import { index as biometricReprocessingIndex } from '@/routes/biometric-reprocessing';
+import { index as biometricRetentionPoliciesIndex } from '@/routes/biometric-retention-policies';
+import { Head, Link } from '@inertiajs/react';
+import {
     AlertTriangle,
     Download,
     FileText,
+    RefreshCw,
     Shield,
     type LucideIcon,
-} from "lucide-react";
+} from 'lucide-react';
 
 interface ActionCardProps {
     title: string;
     description: string;
     icon: LucideIcon;
     href: string;
-    variant?: "default" | "primary" | "warning";
+    variant?: 'default' | 'primary' | 'warning';
 }
 
-function ActionCard({ title, description, icon: Icon, href, variant = "default" }: ActionCardProps) {
+function ActionCard({
+    title,
+    description,
+    icon: Icon,
+    href,
+    variant = 'default',
+}: ActionCardProps) {
     const variantStyles = {
-        default: "hover:border-primary/50",
-        primary: "border-primary/30 hover:border-primary/50",
-        warning: "border-orange-500/30 hover:border-orange-500/50",
+        default: 'hover:border-primary/50',
+        primary: 'border-primary/30 hover:border-primary/50',
+        warning: 'border-orange-500/30 hover:border-orange-500/50',
     };
 
     return (
         <Link href={href} className="block">
-            <Card className={`h-full cursor-pointer transition-all hover:shadow-lg ${variantStyles[variant]}`}>
+            <Card
+                className={`h-full cursor-pointer transition-all hover:shadow-lg ${variantStyles[variant]}`}
+            >
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">{title}</CardTitle>
+                    <CardTitle className="text-sm font-medium">
+                        {title}
+                    </CardTitle>
                     <Icon className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                    <CardDescription className="text-sm">{description}</CardDescription>
+                    <CardDescription className="text-sm">
+                        {description}
+                    </CardDescription>
                 </CardContent>
             </Card>
         </Link>
@@ -52,8 +70,10 @@ function ActionCard({ title, description, icon: Icon, href, variant = "default" 
 
 export default function AttendanceToolsIndex() {
     const { title, breadcrumbs } = usePageMeta({
-        title: "Attendance Tools",
-        breadcrumbs: [{ title: "Attendance Tools", href: attendanceToolsIndex().url }],
+        title: 'Attendance Tools',
+        breadcrumbs: [
+            { title: 'Attendance Tools', href: attendanceToolsIndex().url },
+        ],
     });
 
     useFlashMessage();
@@ -70,7 +90,7 @@ export default function AttendanceToolsIndex() {
                     description="Biometric data management, exports, and maintenance tools"
                 />
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     <Can permission="biometric.view">
                         <ActionCard
                             title="Recent Uploads"

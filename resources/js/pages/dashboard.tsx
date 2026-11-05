@@ -1,30 +1,61 @@
-import React, { useState, useMemo, useEffect, Suspense, lazy } from 'react';
-import { motion } from 'framer-motion';
-import { Head, usePage } from '@inertiajs/react';
-import AppLayout from '@/layouts/app-layout';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calendar, Building2, Users, ClipboardList, UserCheck, User, ClipboardCheck } from 'lucide-react';
 import CalendarWithHolidays from '@/components/CalendarWithHolidays';
-import type { SharedData, UserRole } from '@/types';
-import type { BreadcrumbItem } from '@/types';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import AppLayout from '@/layouts/app-layout';
+import type { BreadcrumbItem, SharedData, UserRole } from '@/types';
+import { Head, usePage } from '@inertiajs/react';
+import { motion } from 'framer-motion';
+import {
+    Building2,
+    Calendar,
+    ClipboardCheck,
+    ClipboardList,
+    User,
+    UserCheck,
+    Users,
+} from 'lucide-react';
+import React, { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { DetailDialog } from './Dashboard/components/DetailDialog';
 // Lazy-load tab components — only the active tab's JS is loaded (code splitting)
-const InfrastructureTab = lazy(() => import('./Dashboard/tabs/InfrastructureTab').then(m => ({ default: m.InfrastructureTab })));
-const ItConcernsTab = lazy(() => import('./Dashboard/tabs/ItConcernsTab').then(m => ({ default: m.ItConcernsTab })));
-const PresenceInsightsTab = lazy(() => import('./Dashboard/tabs/PresenceInsightsTab').then(m => ({ default: m.PresenceInsightsTab })));
-const AttendanceTab = lazy(() => import('./Dashboard/tabs/AttendanceTab').then(m => ({ default: m.AttendanceTab })));
-const PersonalDashboardTab = lazy(() => import('./Dashboard/tabs/PersonalDashboardTab').then(m => ({ default: m.PersonalDashboardTab })));
-const CoachingTab = lazy(() => import('./Dashboard/tabs/CoachingTab').then(m => ({ default: m.CoachingTab })));
+const InfrastructureTab = lazy(() =>
+    import('./Dashboard/tabs/InfrastructureTab').then((m) => ({
+        default: m.InfrastructureTab,
+    })),
+);
+const ItConcernsTab = lazy(() =>
+    import('./Dashboard/tabs/ItConcernsTab').then((m) => ({
+        default: m.ItConcernsTab,
+    })),
+);
+const PresenceInsightsTab = lazy(() =>
+    import('./Dashboard/tabs/PresenceInsightsTab').then((m) => ({
+        default: m.PresenceInsightsTab,
+    })),
+);
+const AttendanceTab = lazy(() =>
+    import('./Dashboard/tabs/AttendanceTab').then((m) => ({
+        default: m.AttendanceTab,
+    })),
+);
+const PersonalDashboardTab = lazy(() =>
+    import('./Dashboard/tabs/PersonalDashboardTab').then((m) => ({
+        default: m.PersonalDashboardTab,
+    })),
+);
+const CoachingTab = lazy(() =>
+    import('./Dashboard/tabs/CoachingTab').then((m) => ({
+        default: m.CoachingTab,
+    })),
+);
 // Widgets are small and always visible — no lazy loading needed
-import { NotificationSummaryWidget } from './Dashboard/widgets/NotificationSummaryWidget';
-import { UserAccountStatsWidget } from './Dashboard/widgets/UserAccountStatsWidget';
-import { RecentActivityWidget } from './Dashboard/widgets/RecentActivityWidget';
-import { BiometricAnomalyWidget } from './Dashboard/widgets/BiometricAnomalyWidget';
-import { PendingLeaveApprovalsWidget } from './Dashboard/widgets/PendingLeaveApprovalsWidget';
-import { CoachingFollowUpsWidget } from './Dashboard/widgets/CoachingFollowUpsWidget';
 import { LoginDigestDialog } from '@/components/LoginDigestDialog';
 import type { DashboardProps, TabType } from './Dashboard/types';
-import { ROLE_TABS, TAB_CONFIG, ROLE_WIDGETS } from './Dashboard/types';
+import { ROLE_TABS, ROLE_WIDGETS, TAB_CONFIG } from './Dashboard/types';
+import { BiometricAnomalyWidget } from './Dashboard/widgets/BiometricAnomalyWidget';
+import { CoachingFollowUpsWidget } from './Dashboard/widgets/CoachingFollowUpsWidget';
+import { NotificationSummaryWidget } from './Dashboard/widgets/NotificationSummaryWidget';
+import { PendingLeaveApprovalsWidget } from './Dashboard/widgets/PendingLeaveApprovalsWidget';
+import { RecentActivityWidget } from './Dashboard/widgets/RecentActivityWidget';
+import { UserAccountStatsWidget } from './Dashboard/widgets/UserAccountStatsWidget';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -34,23 +65,26 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 // Icon mapping for tab config (can't store React components in const objects in types.ts)
-const TAB_ICONS: Record<TabType, React.ComponentType<{ className?: string }>> = {
-    'infrastructure': Building2,
-    'attendance': Users,
+const TAB_ICONS: Record<
+    TabType,
+    React.ComponentType<{ className?: string }>
+> = {
+    infrastructure: Building2,
+    attendance: Users,
     'it-concerns': ClipboardList,
     'presence-insights': UserCheck,
-    'personal': User,
-    'coaching': ClipboardCheck,
+    personal: User,
+    coaching: ClipboardCheck,
 };
 
 // Skeleton fallback for lazy-loaded tabs
 function TabSkeleton() {
     return (
-        <div className="space-y-4 animate-pulse">
-            <div className="h-6 w-48 bg-muted rounded" />
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="animate-pulse space-y-4">
+            <div className="h-6 w-48 rounded bg-muted" />
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {[...Array(6)].map((_, i) => (
-                    <div key={i} className="h-32 bg-muted rounded-lg" />
+                    <div key={i} className="h-32 rounded-lg bg-muted" />
                 ))}
             </div>
         </div>
@@ -104,8 +138,14 @@ export default function Dashboard({
     const userRole: UserRole = auth?.user?.role || 'Agent';
 
     // Get available tabs and widgets based on user role
-    const availableTabs = useMemo(() => ROLE_TABS[userRole] || ['attendance'], [userRole]);
-    const availableWidgets = useMemo(() => ROLE_WIDGETS[userRole] || ['notifications'], [userRole]);
+    const availableTabs = useMemo(
+        () => ROLE_TABS[userRole] || ['attendance'],
+        [userRole],
+    );
+    const availableWidgets = useMemo(
+        () => ROLE_WIDGETS[userRole] || ['notifications'],
+        [userRole],
+    );
     const hasWidgets = availableWidgets.length > 0;
     const defaultTab = availableTabs[0];
 
@@ -113,20 +153,23 @@ export default function Dashboard({
     const [activeDialog, setActiveDialog] = useState<string | null>(null);
 
     // Date/time display
-    const [currentDateTime, setCurrentDateTime] = useState<{ date: string; time: string }>({ date: '', time: '' });
+    const [currentDateTime, setCurrentDateTime] = useState<{
+        date: string;
+        time: string;
+    }>({ date: '', time: '' });
 
     useEffect(() => {
         const updateDateTime = () => {
             const now = new Date();
-            const date = now.toLocaleDateString("en-US", {
-                weekday: "long",
-                year: "numeric",
-                month: "long",
-                day: "numeric",
+            const date = now.toLocaleDateString('en-US', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
             });
-            const time = now.toLocaleTimeString("en-US", {
-                hour: "2-digit",
-                minute: "2-digit",
+            const time = now.toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
                 hour12: true,
             });
             setCurrentDateTime({ date, time });
@@ -142,7 +185,7 @@ export default function Dashboard({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Dashboard" />
             <motion.div
-                className="p-4 md:p-6 space-y-6"
+                className="space-y-6 p-4 md:p-6"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.5 }}
@@ -155,44 +198,72 @@ export default function Dashboard({
                     transition={{ duration: 0.5, delay: 0.1 }}
                 >
                     <div>
-                        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+                        <h1 className="text-3xl font-bold tracking-tight">
+                            Dashboard
+                        </h1>
                         <p className="text-muted-foreground">
                             {isRestrictedRole
-                                ? "Your personal overview"
-                                : "System overview and analytics"
-                            }
+                                ? 'Your personal overview'
+                                : 'System overview and analytics'}
                         </p>
                     </div>
                     <button
                         onClick={() => setActiveDialog('dateTime')}
-                        className="group flex items-center gap-3 px-4 py-3 rounded-lg border bg-card hover:bg-accent hover:border-primary/50 transition-all cursor-pointer"
+                        className="group flex cursor-pointer items-center gap-3 rounded-lg border bg-card px-4 py-3 transition-all hover:border-primary/50 hover:bg-accent"
                     >
-                        <Calendar className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                        <Calendar className="h-5 w-5 text-muted-foreground transition-colors group-hover:text-primary" />
                         <div className="text-left">
-                            <div className="text-sm font-medium">{currentDateTime.date}</div>
-                            <div className="text-lg font-bold text-primary">{currentDateTime.time}</div>
+                            <div className="text-sm font-medium">
+                                {currentDateTime.date}
+                            </div>
+                            <div className="text-lg font-bold text-primary">
+                                {currentDateTime.time}
+                            </div>
                         </div>
                     </button>
                 </motion.div>
 
                 {/* Main Content: Tabs + Sidebar Widgets */}
-                <div className={`flex flex-col ${hasWidgets ? 'xl:flex-row' : ''} gap-6`}>
+                <div
+                    className={`flex flex-col ${hasWidgets ? 'xl:flex-row' : ''} gap-6`}
+                >
                     {/* Tabs — Main Area */}
-                    <div className={hasWidgets ? 'xl:flex-1 xl:min-w-0' : 'w-full'}>
-                        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as TabType)} className="space-y-6">
+                    <div
+                        className={
+                            hasWidgets ? 'xl:min-w-0 xl:flex-1' : 'w-full'
+                        }
+                    >
+                        <Tabs
+                            value={activeTab}
+                            onValueChange={(value) =>
+                                setActiveTab(value as TabType)
+                            }
+                            className="space-y-6"
+                        >
                             <motion.div
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ duration: 0.3, delay: 0.2 }}
                             >
-                                <TabsList className="grid w-full" style={{ gridTemplateColumns: `repeat(${availableTabs.length}, 1fr)` }}>
+                                <TabsList
+                                    className="grid w-full"
+                                    style={{
+                                        gridTemplateColumns: `repeat(${availableTabs.length}, 1fr)`,
+                                    }}
+                                >
                                     {availableTabs.map((tab) => {
                                         const config = TAB_CONFIG[tab];
                                         const Icon = TAB_ICONS[tab];
                                         return (
-                                            <TabsTrigger key={tab} value={tab} className="flex items-center gap-2">
+                                            <TabsTrigger
+                                                key={tab}
+                                                value={tab}
+                                                className="flex items-center gap-2"
+                                            >
                                                 <Icon className="h-4 w-4" />
-                                                <span className="hidden sm:inline">{config.label}</span>
+                                                <span className="hidden sm:inline">
+                                                    {config.label}
+                                                </span>
                                             </TabsTrigger>
                                         );
                                     })}
@@ -201,7 +272,10 @@ export default function Dashboard({
 
                             {/* Infrastructure Tab */}
                             {availableTabs.includes('infrastructure') && (
-                                <TabsContent value="infrastructure" className="space-y-6">
+                                <TabsContent
+                                    value="infrastructure"
+                                    className="space-y-6"
+                                >
                                     <Suspense fallback={<TabSkeleton />}>
                                         <InfrastructureTab
                                             totalStations={totalStations}
@@ -210,7 +284,9 @@ export default function Dashboard({
 
                                             dualMonitor={dualMonitor}
                                             maintenanceDue={maintenanceDue}
-                                            unassignedPcSpecs={unassignedPcSpecs}
+                                            unassignedPcSpecs={
+                                                unassignedPcSpecs
+                                            }
                                         />
                                     </Suspense>
                                 </TabsContent>
@@ -218,7 +294,10 @@ export default function Dashboard({
 
                             {/* IT Concerns Tab */}
                             {availableTabs.includes('it-concerns') && (
-                                <TabsContent value="it-concerns" className="space-y-6">
+                                <TabsContent
+                                    value="it-concerns"
+                                    className="space-y-6"
+                                >
                                     <Suspense fallback={<TabSkeleton />}>
                                         <ItConcernsTab
                                             itConcernStats={itConcernStats}
@@ -230,12 +309,17 @@ export default function Dashboard({
 
                             {/* Presence Insights Tab */}
                             {availableTabs.includes('presence-insights') && (
-                                <TabsContent value="presence-insights" className="space-y-6">
+                                <TabsContent
+                                    value="presence-insights"
+                                    className="space-y-6"
+                                >
                                     <Suspense fallback={<TabSkeleton />}>
                                         <PresenceInsightsTab
                                             presenceInsights={presenceInsights}
                                             isRestrictedRole={isRestrictedRole}
-                                            leaveCalendarMonth={leaveCalendarMonth}
+                                            leaveCalendarMonth={
+                                                leaveCalendarMonth
+                                            }
                                             campaignPresence={campaignPresence}
                                             pointsByCampaign={pointsByCampaign}
                                         />
@@ -245,17 +329,28 @@ export default function Dashboard({
 
                             {/* Attendance Tab */}
                             {availableTabs.includes('attendance') && (
-                                <TabsContent value="attendance" className="space-y-6">
+                                <TabsContent
+                                    value="attendance"
+                                    className="space-y-6"
+                                >
                                     <Suspense fallback={<TabSkeleton />}>
                                         <AttendanceTab
-                                            attendanceStatistics={attendanceStatistics}
-                                            monthlyAttendanceData={monthlyAttendanceData}
-                                            dailyAttendanceData={dailyAttendanceData}
+                                            attendanceStatistics={
+                                                attendanceStatistics
+                                            }
+                                            monthlyAttendanceData={
+                                                monthlyAttendanceData
+                                            }
+                                            dailyAttendanceData={
+                                                dailyAttendanceData
+                                            }
                                             campaigns={campaigns}
                                             startDate={startDate}
                                             endDate={endDate}
                                             campaignId={campaignId}
-                                            verificationFilter={verificationFilter}
+                                            verificationFilter={
+                                                verificationFilter
+                                            }
                                             isRestrictedRole={isRestrictedRole}
                                             leaveCredits={leaveCredits}
                                             leaveConflicts={leaveConflicts}
@@ -269,12 +364,17 @@ export default function Dashboard({
 
                             {/* Personal Dashboard Tab */}
                             {availableTabs.includes('personal') && (
-                                <TabsContent value="personal" className="space-y-6">
+                                <TabsContent
+                                    value="personal"
+                                    className="space-y-6"
+                                >
                                     <Suspense fallback={<TabSkeleton />}>
                                         <PersonalDashboardTab
                                             personalSchedule={personalSchedule}
                                             personalRequests={personalRequests}
-                                            personalAttendanceSummary={personalAttendanceSummary}
+                                            personalAttendanceSummary={
+                                                personalAttendanceSummary
+                                            }
                                             leaveCredits={leaveCredits}
                                             userRole={userRole}
                                         />
@@ -284,14 +384,24 @@ export default function Dashboard({
 
                             {/* Coaching Tab */}
                             {availableTabs.includes('coaching') && (
-                                <TabsContent value="coaching" className="space-y-6">
+                                <TabsContent
+                                    value="coaching"
+                                    className="space-y-6"
+                                >
                                     <Suspense fallback={<TabSkeleton />}>
                                         <CoachingTab
                                             coachingSummary={coachingSummary}
-                                            coachingFollowUps={coachingFollowUps}
+                                            coachingFollowUps={
+                                                coachingFollowUps
+                                            }
                                             isAgent={userRole === 'Agent'}
-                                            isTeamLead={userRole === 'Team Lead'}
-                                            isAdmin={userRole === 'Super Admin' || userRole === 'Admin'}
+                                            isTeamLead={
+                                                userRole === 'Team Lead'
+                                            }
+                                            isAdmin={
+                                                userRole === 'Super Admin' ||
+                                                userRole === 'Admin'
+                                            }
                                         />
                                     </Suspense>
                                 </TabsContent>
@@ -302,28 +412,48 @@ export default function Dashboard({
                     {/* Sidebar Widgets — Right side on xl, stacked below on mobile */}
                     {hasWidgets && (
                         <motion.aside
-                            className="w-full xl:w-80 shrink-0 space-y-4"
+                            className="w-full shrink-0 space-y-4 xl:w-80"
                             initial={{ opacity: 0, x: 20 }}
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ duration: 0.4, delay: 0.3 }}
                         >
                             {availableWidgets.includes('notifications') && (
-                                <NotificationSummaryWidget notificationSummary={notificationSummary} />
+                                <NotificationSummaryWidget
+                                    notificationSummary={notificationSummary}
+                                />
                             )}
-                            {availableWidgets.includes('pending-leave-approvals') && (
-                                <PendingLeaveApprovalsWidget pendingLeaveApprovals={pendingLeaveApprovals} />
+                            {availableWidgets.includes(
+                                'pending-leave-approvals',
+                            ) && (
+                                <PendingLeaveApprovalsWidget
+                                    pendingLeaveApprovals={
+                                        pendingLeaveApprovals
+                                    }
+                                />
                             )}
-                            {availableWidgets.includes('coaching-follow-ups') && (
-                                <CoachingFollowUpsWidget coachingFollowUps={coachingFollowUps} />
+                            {availableWidgets.includes(
+                                'coaching-follow-ups',
+                            ) && (
+                                <CoachingFollowUpsWidget
+                                    coachingFollowUps={coachingFollowUps}
+                                />
                             )}
                             {availableWidgets.includes('user-accounts') && (
-                                <UserAccountStatsWidget userAccountStats={userAccountStats} />
+                                <UserAccountStatsWidget
+                                    userAccountStats={userAccountStats}
+                                />
                             )}
                             {availableWidgets.includes('recent-activity') && (
-                                <RecentActivityWidget recentActivityLogs={recentActivityLogs} />
+                                <RecentActivityWidget
+                                    recentActivityLogs={recentActivityLogs}
+                                />
                             )}
-                            {availableWidgets.includes('biometric-anomalies') && (
-                                <BiometricAnomalyWidget biometricAnomalies={biometricAnomalies} />
+                            {availableWidgets.includes(
+                                'biometric-anomalies',
+                            ) && (
+                                <BiometricAnomalyWidget
+                                    biometricAnomalies={biometricAnomalies}
+                                />
                             )}
                         </motion.aside>
                     )}
@@ -336,8 +466,11 @@ export default function Dashboard({
                     title="Calendar"
                     description="View the current month and date. Holidays are highlighted."
                 >
-                    <div className="flex flex-col items-center py-4 w-full">
-                        <CalendarWithHolidays countryCode={['PH', 'US']} width={420} />
+                    <div className="flex w-full flex-col items-center py-4">
+                        <CalendarWithHolidays
+                            countryCode={['PH', 'US']}
+                            width={420}
+                        />
                     </div>
                 </DetailDialog>
 

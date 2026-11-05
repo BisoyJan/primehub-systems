@@ -1,14 +1,4 @@
-import React, { useState } from 'react';
-import { Head, usePage } from '@inertiajs/react';
-import AppLayout from '@/layouts/app-layout';
-import { usePageMeta } from '@/hooks';
-import { usePermission } from '@/hooks/useAuthorization';
 import { PageHeader } from '@/components/PageHeader';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { router } from '@inertiajs/react';
-import { ArrowLeft, Clock, CheckCircle, XCircle, AlertCircle, User, MapPin, Monitor, Calendar, Edit, Settings } from 'lucide-react';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -19,6 +9,10 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
 import {
     Select,
     SelectContent,
@@ -27,8 +21,25 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
+import { usePageMeta } from '@/hooks';
+import { usePermission } from '@/hooks/useAuthorization';
+import AppLayout from '@/layouts/app-layout';
 import type { SharedData } from '@/types';
+import { Head, router, usePage } from '@inertiajs/react';
+import {
+    AlertCircle,
+    ArrowLeft,
+    Calendar,
+    CheckCircle,
+    Clock,
+    Edit,
+    MapPin,
+    Monitor,
+    Settings,
+    User,
+    XCircle,
+} from 'lucide-react';
+import React, { useState } from 'react';
 
 interface UserType {
     id: number;
@@ -64,7 +75,10 @@ interface PageProps extends SharedData {
 }
 
 const getStatusBadge = (status: string) => {
-    const config: Record<string, { label: string; className: string; icon: React.ReactNode }> = {
+    const config: Record<
+        string,
+        { label: string; className: string; icon: React.ReactNode }
+    > = {
         pending: {
             label: 'Pending',
             className: 'bg-yellow-500',
@@ -109,7 +123,10 @@ const getPriorityBadge = (priority: string) => {
         urgent: { label: 'Urgent', className: 'bg-red-500 animate-pulse' },
     };
 
-    const { label, className } = config[priority] || { label: priority, className: 'bg-gray-500' };
+    const { label, className } = config[priority] || {
+        label: priority,
+        className: 'bg-gray-500',
+    };
     return <Badge className={className}>{label}</Badge>;
 };
 
@@ -117,11 +134,17 @@ const getCategoryBadge = (category: string) => {
     const config: Record<string, { label: string; className: string }> = {
         Hardware: { label: 'Hardware', className: 'bg-blue-500' },
         Software: { label: 'Software', className: 'bg-purple-500' },
-        'Network/Connectivity': { label: 'Network/Connectivity', className: 'bg-orange-500' },
+        'Network/Connectivity': {
+            label: 'Network/Connectivity',
+            className: 'bg-orange-500',
+        },
         Other: { label: 'Other', className: 'bg-gray-500' },
     };
 
-    const { label, className } = config[category] || { label: category, className: 'bg-gray-500' };
+    const { label, className } = config[category] || {
+        label: category,
+        className: 'bg-gray-500',
+    };
     return <Badge className={className}>{label}</Badge>;
 };
 
@@ -142,13 +165,18 @@ export default function Show() {
     const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
     const [status, setStatus] = useState(concern.status);
     const [priority, setPriority] = useState(concern.priority);
-    const [resolutionNotes, setResolutionNotes] = useState(concern.resolution_notes || '');
+    const [resolutionNotes, setResolutionNotes] = useState(
+        concern.resolution_notes || '',
+    );
 
     const { title, breadcrumbs } = usePageMeta({
         title: `IT Concern #${concern.id}`,
         breadcrumbs: [
             { title: 'IT Concerns', href: '/form-requests/it-concerns' },
-            { title: `#${concern.id}`, href: `/form-requests/it-concerns/${concern.id}` },
+            {
+                title: `#${concern.id}`,
+                href: `/form-requests/it-concerns/${concern.id}`,
+            },
         ],
     });
 
@@ -157,21 +185,27 @@ export default function Show() {
     };
 
     const confirmUpdate = () => {
-        router.post(`/form-requests/it-concerns/${concern.id}/resolve`, {
-            resolution_notes: resolutionNotes,
-            status: status,
-            priority: priority,
-        }, {
-            preserveScroll: true,
-            onSuccess: () => {
-                setUpdateDialogOpen(false);
+        router.post(
+            `/form-requests/it-concerns/${concern.id}/resolve`,
+            {
+                resolution_notes: resolutionNotes,
+                status: status,
+                priority: priority,
             },
-        });
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setUpdateDialogOpen(false);
+                },
+            },
+        );
     };
 
     // Check if user can edit (global permission OR owner with pending/in_progress status)
-    const canEdit = can('it_concerns.edit') ||
-        (concern.user?.id === auth.user.id && ['pending', 'in_progress'].includes(concern.status));
+    const canEdit =
+        can('it_concerns.edit') ||
+        (concern.user?.id === auth.user.id &&
+            ['pending', 'in_progress'].includes(concern.status));
 
     // Check if user can resolve/update status
     const canResolve = can('it_concerns.resolve');
@@ -195,17 +229,18 @@ export default function Show() {
                             <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => router.get(`/form-requests/it-concerns/${concern.id}/edit`)}
+                                onClick={() =>
+                                    router.get(
+                                        `/form-requests/it-concerns/${concern.id}/edit`,
+                                    )
+                                }
                             >
                                 <Edit className="mr-2 h-4 w-4" />
                                 Edit
                             </Button>
                         )}
                         {canResolve && concern.status !== 'resolved' && (
-                            <Button
-                                size="sm"
-                                onClick={handleUpdateStatus}
-                            >
+                            <Button size="sm" onClick={handleUpdateStatus}>
                                 <Settings className="mr-2 h-4 w-4" />
                                 Update Status
                             </Button>
@@ -221,12 +256,16 @@ export default function Show() {
                 <div className="grid gap-4 md:grid-cols-2">
                     <Card>
                         <CardHeader>
-                            <CardTitle className="text-lg">Concern Information</CardTitle>
+                            <CardTitle className="text-lg">
+                                Concern Information
+                            </CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <div className="flex items-center gap-2">
                                 <User className="h-4 w-4 text-muted-foreground" />
-                                <span className="font-medium">Submitted By:</span>
+                                <span className="font-medium">
+                                    Submitted By:
+                                </span>
                                 <span>{concern.user?.name || 'N/A'}</span>
                             </div>
                             <div className="flex items-center gap-2">
@@ -261,10 +300,12 @@ export default function Show() {
 
                     <Card>
                         <CardHeader>
-                            <CardTitle className="text-lg">Description</CardTitle>
+                            <CardTitle className="text-lg">
+                                Description
+                            </CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                            <p className="text-sm whitespace-pre-wrap text-muted-foreground">
                                 {concern.description}
                             </p>
                         </CardContent>
@@ -273,26 +314,36 @@ export default function Show() {
                     {concern.resolution_notes && (
                         <Card className="md:col-span-2">
                             <CardHeader>
-                                <CardTitle className="text-lg">Resolution</CardTitle>
+                                <CardTitle className="text-lg">
+                                    Resolution
+                                </CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-4">
                                 {concern.resolved_by && (
                                     <div className="flex items-center gap-2">
                                         <User className="h-4 w-4 text-muted-foreground" />
-                                        <span className="font-medium">Resolved By:</span>
+                                        <span className="font-medium">
+                                            Resolved By:
+                                        </span>
                                         <span>{concern.resolved_by.name}</span>
                                     </div>
                                 )}
                                 {concern.resolved_at && (
                                     <div className="flex items-center gap-2">
                                         <Calendar className="h-4 w-4 text-muted-foreground" />
-                                        <span className="font-medium">Resolved At:</span>
-                                        <span>{formatDate(concern.resolved_at)}</span>
+                                        <span className="font-medium">
+                                            Resolved At:
+                                        </span>
+                                        <span>
+                                            {formatDate(concern.resolved_at)}
+                                        </span>
                                     </div>
                                 )}
                                 <div>
-                                    <span className="font-medium">Resolution Notes:</span>
-                                    <p className="mt-2 text-sm text-muted-foreground whitespace-pre-wrap">
+                                    <span className="font-medium">
+                                        Resolution Notes:
+                                    </span>
+                                    <p className="mt-2 text-sm whitespace-pre-wrap text-muted-foreground">
                                         {concern.resolution_notes}
                                     </p>
                                 </div>
@@ -302,64 +353,128 @@ export default function Show() {
                 </div>
 
                 {/* Update Status Dialog */}
-                <AlertDialog open={updateDialogOpen} onOpenChange={setUpdateDialogOpen}>
+                <AlertDialog
+                    open={updateDialogOpen}
+                    onOpenChange={setUpdateDialogOpen}
+                >
                     <AlertDialogContent>
                         <AlertDialogHeader>
-                            <AlertDialogTitle>Update IT Concern Status</AlertDialogTitle>
+                            <AlertDialogTitle>
+                                Update IT Concern Status
+                            </AlertDialogTitle>
                             <AlertDialogDescription asChild>
-                                <div className="space-y-3 mt-4">
+                                <div className="mt-4 space-y-3">
                                     <div>
-                                        <span className="font-medium text-foreground">Station:</span> {concern.station_number}
+                                        <span className="font-medium text-foreground">
+                                            Station:
+                                        </span>{' '}
+                                        {concern.station_number}
                                     </div>
                                     <div>
-                                        <span className="font-medium text-foreground">Category:</span> {concern.category}
+                                        <span className="font-medium text-foreground">
+                                            Category:
+                                        </span>{' '}
+                                        {concern.category}
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-3 mt-4">
+                                    <div className="mt-4 grid grid-cols-2 gap-3">
                                         <div className="space-y-2">
-                                            <Label htmlFor="update_status" className="text-foreground">
-                                                Status <span className="text-red-500">*</span>
+                                            <Label
+                                                htmlFor="update_status"
+                                                className="text-foreground"
+                                            >
+                                                Status{' '}
+                                                <span className="text-red-500">
+                                                    *
+                                                </span>
                                             </Label>
-                                            <Select value={status} onValueChange={(value: 'pending' | 'in_progress' | 'resolved' | 'cancelled') => setStatus(value)}>
+                                            <Select
+                                                value={status}
+                                                onValueChange={(
+                                                    value:
+                                                        | 'pending'
+                                                        | 'in_progress'
+                                                        | 'resolved'
+                                                        | 'cancelled',
+                                                ) => setStatus(value)}
+                                            >
                                                 <SelectTrigger id="update_status">
                                                     <SelectValue placeholder="Select status" />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    <SelectItem value="pending">Pending</SelectItem>
-                                                    <SelectItem value="in_progress">In Progress</SelectItem>
-                                                    <SelectItem value="resolved">Resolved</SelectItem>
-                                                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                                                    <SelectItem value="pending">
+                                                        Pending
+                                                    </SelectItem>
+                                                    <SelectItem value="in_progress">
+                                                        In Progress
+                                                    </SelectItem>
+                                                    <SelectItem value="resolved">
+                                                        Resolved
+                                                    </SelectItem>
+                                                    <SelectItem value="cancelled">
+                                                        Cancelled
+                                                    </SelectItem>
                                                 </SelectContent>
                                             </Select>
                                         </div>
 
                                         <div className="space-y-2">
-                                            <Label htmlFor="update_priority" className="text-foreground">
-                                                Priority <span className="text-red-500">*</span>
+                                            <Label
+                                                htmlFor="update_priority"
+                                                className="text-foreground"
+                                            >
+                                                Priority{' '}
+                                                <span className="text-red-500">
+                                                    *
+                                                </span>
                                             </Label>
-                                            <Select value={priority} onValueChange={(value: 'low' | 'medium' | 'high' | 'urgent') => setPriority(value)}>
+                                            <Select
+                                                value={priority}
+                                                onValueChange={(
+                                                    value:
+                                                        | 'low'
+                                                        | 'medium'
+                                                        | 'high'
+                                                        | 'urgent',
+                                                ) => setPriority(value)}
+                                            >
                                                 <SelectTrigger id="update_priority">
                                                     <SelectValue placeholder="Select priority" />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    <SelectItem value="low">Low</SelectItem>
-                                                    <SelectItem value="medium">Medium</SelectItem>
-                                                    <SelectItem value="high">High</SelectItem>
-                                                    <SelectItem value="urgent">Urgent</SelectItem>
+                                                    <SelectItem value="low">
+                                                        Low
+                                                    </SelectItem>
+                                                    <SelectItem value="medium">
+                                                        Medium
+                                                    </SelectItem>
+                                                    <SelectItem value="high">
+                                                        High
+                                                    </SelectItem>
+                                                    <SelectItem value="urgent">
+                                                        Urgent
+                                                    </SelectItem>
                                                 </SelectContent>
                                             </Select>
                                         </div>
                                     </div>
 
                                     <div className="mt-4">
-                                        <Label htmlFor="resolution_notes" className="text-foreground">
+                                        <Label
+                                            htmlFor="resolution_notes"
+                                            className="text-foreground"
+                                        >
                                             Resolution Notes
                                         </Label>
                                         <Textarea
                                             id="resolution_notes"
                                             placeholder="Describe how this issue was resolved or any updates..."
                                             value={resolutionNotes}
-                                            onChange={(e) => setResolutionNotes(e.target.value)}
+                                            onChange={(e) =>
+                                                setResolutionNotes(
+                                                    e.target.value,
+                                                )
+                                            }
                                             rows={4}
                                             className="mt-2"
                                         />
@@ -369,9 +484,7 @@ export default function Show() {
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                                onClick={confirmUpdate}
-                            >
+                            <AlertDialogAction onClick={confirmUpdate}>
                                 Update
                             </AlertDialogAction>
                         </AlertDialogFooter>

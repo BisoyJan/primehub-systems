@@ -1,13 +1,20 @@
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { RotateCcw, AlertTriangle } from 'lucide-react';
-import { router } from '@inertiajs/react';
-import { useEffect, useState } from 'react';
 import { timeline } from '@/routes/break-timer';
 import timelineActions from '@/routes/break-timer/timeline';
+import { router } from '@inertiajs/react';
+import { AlertTriangle, RotateCcw } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 interface TimelineEvent {
     id: number;
@@ -36,7 +43,10 @@ interface Props {
     sessionId: number | null;
 }
 
-const ACTION_VARIANT: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
+const ACTION_VARIANT: Record<
+    string,
+    'default' | 'secondary' | 'destructive' | 'outline'
+> = {
     start: 'default',
     pause: 'secondary',
     resume: 'default',
@@ -59,13 +69,19 @@ function formatActionLabel(action: string): string {
     return action.replace(/_/g, ' ');
 }
 
-export function SessionTimelineDialog({ open, onOpenChange, sessionId }: Props) {
+export function SessionTimelineDialog({
+    open,
+    onOpenChange,
+    sessionId,
+}: Props) {
     const [data, setData] = useState<TimelinePayload | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [reloadTick, setReloadTick] = useState(0);
 
-    const [rewindTarget, setRewindTarget] = useState<TimelineEvent | null>(null);
+    const [rewindTarget, setRewindTarget] = useState<TimelineEvent | null>(
+        null,
+    );
     const [rewindReason, setRewindReason] = useState('');
     const [isSubmittingRewind, setIsSubmittingRewind] = useState(false);
 
@@ -78,7 +94,9 @@ export function SessionTimelineDialog({ open, onOpenChange, sessionId }: Props) 
         let cancelled = false;
         setLoading(true);
         setError(null);
-        fetch(timeline(sessionId).url, { headers: { Accept: 'application/json' } })
+        fetch(timeline(sessionId).url, {
+            headers: { Accept: 'application/json' },
+        })
             .then((r) => {
                 if (!r.ok) throw new Error(`HTTP ${r.status}`);
                 return r.json();
@@ -115,7 +133,10 @@ export function SessionTimelineDialog({ open, onOpenChange, sessionId }: Props) 
 
         setIsSubmittingRewind(true);
         router.post(
-            timelineActions.rewind({ breakSession: sessionId, breakEvent: rewindTarget.id }).url,
+            timelineActions.rewind({
+                breakSession: sessionId,
+                breakEvent: rewindTarget.id,
+            }).url,
             { reason },
             {
                 preserveScroll: true,
@@ -132,17 +153,25 @@ export function SessionTimelineDialog({ open, onOpenChange, sessionId }: Props) 
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+            <DialogContent className="max-h-[85vh] max-w-[95vw] overflow-y-auto sm:max-w-2xl">
                 <DialogHeader>
                     <DialogTitle>Session Timeline</DialogTitle>
                     <DialogDescription>
                         {data ? (
                             <span className="flex flex-wrap items-center gap-2">
-                                <span className="font-mono text-xs">{data.session.session_id}</span>
-                                <Badge variant="outline">{data.session.type}</Badge>
-                                <Badge variant="secondary">{data.session.status}</Badge>
+                                <span className="font-mono text-xs">
+                                    {data.session.session_id}
+                                </span>
+                                <Badge variant="outline">
+                                    {data.session.type}
+                                </Badge>
+                                <Badge variant="secondary">
+                                    {data.session.status}
+                                </Badge>
                                 {data.session.ended_by && (
-                                    <Badge variant="outline">ended by {data.session.ended_by}</Badge>
+                                    <Badge variant="outline">
+                                        ended by {data.session.ended_by}
+                                    </Badge>
                                 )}
                             </span>
                         ) : (
@@ -151,21 +180,43 @@ export function SessionTimelineDialog({ open, onOpenChange, sessionId }: Props) 
                     </DialogDescription>
                 </DialogHeader>
 
-                {loading && <p className="text-muted-foreground text-sm">Loading timeline…</p>}
-                {error && <p className="text-destructive text-sm">Failed to load: {error}</p>}
+                {loading && (
+                    <p className="text-sm text-muted-foreground">
+                        Loading timeline…
+                    </p>
+                )}
+                {error && (
+                    <p className="text-sm text-destructive">
+                        Failed to load: {error}
+                    </p>
+                )}
 
                 {data && data.events.length === 0 && (
-                    <p className="text-muted-foreground text-sm">No events recorded for this session.</p>
+                    <p className="text-sm text-muted-foreground">
+                        No events recorded for this session.
+                    </p>
                 )}
 
                 {data && data.events.length > 0 && (
                     <ol className="space-y-3">
                         {data.events.map((e) => (
-                            <li key={e.id} className="border-l-2 border-muted pl-4 relative">
-                                <div className="absolute -left-[5px] top-1 size-2 rounded-full bg-primary" />
+                            <li
+                                key={e.id}
+                                className="relative border-l-2 border-muted pl-4"
+                            >
+                                <div className="absolute top-1 -left-[5px] size-2 rounded-full bg-primary" />
                                 <div className="flex flex-wrap items-center gap-2">
-                                    <Badge variant={ACTION_VARIANT[e.action] ?? 'outline'}>{formatActionLabel(e.action)}</Badge>
-                                    <span className="text-xs text-muted-foreground">{e.occurred_at}</span>
+                                    <Badge
+                                        variant={
+                                            ACTION_VARIANT[e.action] ??
+                                            'outline'
+                                        }
+                                    >
+                                        {formatActionLabel(e.action)}
+                                    </Badge>
+                                    <span className="text-xs text-muted-foreground">
+                                        {e.occurred_at}
+                                    </span>
                                     {e.can_rewind && (
                                         <Button
                                             type="button"
@@ -181,10 +232,13 @@ export function SessionTimelineDialog({ open, onOpenChange, sessionId }: Props) 
                                     )}
                                 </div>
                                 <div className="mt-1 text-xs text-muted-foreground">
-                                    Remaining: {fmtSecs(e.remaining_seconds)} · Overage: {fmtSecs(e.overage_seconds)}
+                                    Remaining: {fmtSecs(e.remaining_seconds)} ·
+                                    Overage: {fmtSecs(e.overage_seconds)}
                                 </div>
                                 {e.reason && (
-                                    <p className="mt-1 text-sm whitespace-pre-wrap break-words">{e.reason}</p>
+                                    <p className="mt-1 text-sm break-words whitespace-pre-wrap">
+                                        {e.reason}
+                                    </p>
                                 )}
                             </li>
                         ))}
@@ -192,65 +246,99 @@ export function SessionTimelineDialog({ open, onOpenChange, sessionId }: Props) 
                 )}
             </DialogContent>
 
-            <Dialog open={!!rewindTarget} onOpenChange={(o) => { if (!o) closeRewind(); }}>
+            <Dialog
+                open={!!rewindTarget}
+                onOpenChange={(o) => {
+                    if (!o) closeRewind();
+                }}
+            >
                 <DialogContent className="max-w-[90vw] sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle>Undo timeline event</DialogTitle>
                         <DialogDescription>
-                            Rewind the session to the state it had right before this event. The selected event and every event after it will be removed.
+                            Rewind the session to the state it had right before
+                            this event. The selected event and every event after
+                            it will be removed.
                         </DialogDescription>
                     </DialogHeader>
 
                     {rewindTarget && (
                         <div className="space-y-3 text-sm">
-                            <div className="rounded-md bg-muted p-3 space-y-1">
+                            <div className="space-y-1 rounded-md bg-muted p-3">
                                 <div className="flex items-center gap-2">
-                                    <Badge variant={ACTION_VARIANT[rewindTarget.action] ?? 'outline'}>
+                                    <Badge
+                                        variant={
+                                            ACTION_VARIANT[
+                                                rewindTarget.action
+                                            ] ?? 'outline'
+                                        }
+                                    >
                                         {formatActionLabel(rewindTarget.action)}
                                     </Badge>
-                                    <span className="text-xs text-muted-foreground">{rewindTarget.occurred_at}</span>
+                                    <span className="text-xs text-muted-foreground">
+                                        {rewindTarget.occurred_at}
+                                    </span>
                                 </div>
                                 {rewindTarget.reason && (
-                                    <p className="text-xs text-muted-foreground wrap-break-word">{rewindTarget.reason}</p>
+                                    <p className="text-xs wrap-break-word text-muted-foreground">
+                                        {rewindTarget.reason}
+                                    </p>
                                 )}
                             </div>
 
                             <div className="flex items-start gap-2 rounded-md border border-orange-300 bg-orange-50 px-3 py-2 text-xs text-orange-700 dark:border-orange-700 dark:bg-orange-950/40 dark:text-orange-400">
                                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                                 <span>
-                                    This is destructive — the event and every event after it will be deleted from the timeline.
-                                    {rewindTarget.action === 'reimburse' && ' Any minutes added by removed reimburse events will be subtracted back.'}
+                                    This is destructive — the event and every
+                                    event after it will be deleted from the
+                                    timeline.
+                                    {rewindTarget.action === 'reimburse' &&
+                                        ' Any minutes added by removed reimburse events will be subtracted back.'}
                                 </span>
                             </div>
 
                             <div className="space-y-1.5">
                                 <Label htmlFor="rewind-reason">
-                                    Reason <span className="text-red-500">*</span>
+                                    Reason{' '}
+                                    <span className="text-red-500">*</span>
                                 </Label>
                                 <Textarea
                                     id="rewind-reason"
                                     value={rewindReason}
-                                    onChange={(e) => setRewindReason(e.target.value)}
+                                    onChange={(e) =>
+                                        setRewindReason(e.target.value)
+                                    }
                                     placeholder="e.g., Reimburses were entered with typo reasons; rolling back to the original end."
                                     maxLength={500}
                                     rows={3}
                                     disabled={isSubmittingRewind}
                                 />
-                                <p className="text-xs text-muted-foreground">{rewindReason.length}/500</p>
+                                <p className="text-xs text-muted-foreground">
+                                    {rewindReason.length}/500
+                                </p>
                             </div>
                         </div>
                     )}
 
                     <DialogFooter className="gap-2">
-                        <Button variant="outline" onClick={closeRewind} disabled={isSubmittingRewind}>
+                        <Button
+                            variant="outline"
+                            onClick={closeRewind}
+                            disabled={isSubmittingRewind}
+                        >
                             Cancel
                         </Button>
                         <Button
                             variant="destructive"
                             onClick={submitRewind}
-                            disabled={isSubmittingRewind || rewindReason.trim().length < 3}
+                            disabled={
+                                isSubmittingRewind ||
+                                rewindReason.trim().length < 3
+                            }
                         >
-                            {isSubmittingRewind ? 'Rewinding…' : 'Rewind timeline'}
+                            {isSubmittingRewind
+                                ? 'Rewinding…'
+                                : 'Rewind timeline'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

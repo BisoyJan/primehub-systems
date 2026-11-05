@@ -1,11 +1,53 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
-import { Head, Link, useForm, usePage, router } from '@inertiajs/react';
-import type { PageProps as InertiaPageProps } from "@inertiajs/core";
+import type { PageProps as InertiaPageProps } from '@inertiajs/core';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
-import AppLayout from '@/layouts/app-layout';
+import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from '@/components/ui/command';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import {
     Table,
     TableBody,
@@ -15,61 +57,37 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
-import {
-    Dialog,
-    DialogTrigger,
-    DialogContent,
-    DialogTitle,
-    DialogClose,
-    DialogHeader,
-    DialogDescription,
-} from '@/components/ui/dialog';
-import {
-    AlertDialog,
-    AlertDialogTrigger,
-    AlertDialogContent,
-    AlertDialogHeader,
-    AlertDialogTitle,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogCancel,
-    AlertDialogAction,
-} from '@/components/ui/alert-dialog';
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from '@/components/ui/popover';
-import {
-    Command,
-    CommandEmpty,
-    CommandGroup,
-    CommandInput,
-    CommandItem,
-    CommandList,
-} from '@/components/ui/command';
-import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
-import { RefreshCw, Filter, Plus, Play, Pause, ChevronsUpDown, X } from 'lucide-react';
+import AppLayout from '@/layouts/app-layout';
+import {
+    ChevronsUpDown,
+    Filter,
+    Pause,
+    Play,
+    Plus,
+    RefreshCw,
+    X,
+} from 'lucide-react';
 
 // New reusable components and hooks
-import { usePageMeta, useFlashMessage, usePageLoading, withReturnTo } from "@/hooks";
-import { PageHeader } from "@/components/PageHeader";
-import { LoadingOverlay } from "@/components/LoadingOverlay";
+import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { PageHeader } from '@/components/PageHeader';
 import { TableSkeleton } from '@/components/TableSkeleton';
 import { Can } from '@/components/authorization';
+import {
+    useFlashMessage,
+    usePageLoading,
+    usePageMeta,
+    withReturnTo,
+} from '@/hooks';
 
 import {
-    index as pcSpecIndex,
-    create as pcSpecCreate,
-    edit as pcSpecEdit,
-    destroy as pcSpecDestroy,
     bulkDelete as pcSpecBulkDeleteRoute,
+    create as pcSpecCreate,
+    destroy as pcSpecDestroy,
+    edit as pcSpecEdit,
+    index as pcSpecIndex,
 } from '@/routes/pcspecs';
-
 
 interface ProcessorSpec {
     id: number;
@@ -128,8 +146,6 @@ interface Props extends InertiaPageProps {
     };
 }
 
-
-
 export default function Index() {
     const {
         pcspecs = { data: [], links: [] },
@@ -149,26 +165,36 @@ export default function Index() {
     const [pcSearchQuery, setPcSearchQuery] = useState('');
     const [isPcPopoverOpen, setIsPcPopoverOpen] = useState(false);
     const [selectedFilterPcIds, setSelectedFilterPcIds] = useState<number[]>(
-        Array.isArray(filters.pc_ids) ? filters.pc_ids.map(Number) : []
+        Array.isArray(filters.pc_ids) ? filters.pc_ids.map(Number) : [],
     );
 
     // Sort state
-    const [sortDir, setSortDir] = useState<'asc' | 'desc'>(filters.sort_dir ?? 'asc');
+    const [sortDir, setSortDir] = useState<'asc' | 'desc'>(
+        filters.sort_dir ?? 'asc',
+    );
 
     // PC number range filter state
-    const [pcNumberFrom, setPcNumberFrom] = useState<string>(filters.pc_number_from != null ? String(filters.pc_number_from) : '');
-    const [pcNumberTo, setPcNumberTo] = useState<string>(filters.pc_number_to != null ? String(filters.pc_number_to) : '');
+    const [pcNumberFrom, setPcNumberFrom] = useState<string>(
+        filters.pc_number_from != null ? String(filters.pc_number_from) : '',
+    );
+    const [pcNumberTo, setPcNumberTo] = useState<string>(
+        filters.pc_number_to != null ? String(filters.pc_number_to) : '',
+    );
 
     // Processor filter state (multi-select)
     const [processorSearchQuery, setProcessorSearchQuery] = useState('');
     const [isProcessorPopoverOpen, setIsProcessorPopoverOpen] = useState(false);
     const [selectedProcessorIds, setSelectedProcessorIds] = useState<number[]>(
-        Array.isArray(filters.processor_ids) ? filters.processor_ids.map(Number) : []
+        Array.isArray(filters.processor_ids)
+            ? filters.processor_ids.map(Number)
+            : [],
     );
 
     const handleToggleProcessorSelect = (procId: number) => {
-        setSelectedProcessorIds(prev =>
-            prev.includes(procId) ? prev.filter(id => id !== procId) : [...prev, procId]
+        setSelectedProcessorIds((prev) =>
+            prev.includes(procId)
+                ? prev.filter((id) => id !== procId)
+                : [...prev, procId],
         );
     };
 
@@ -176,26 +202,30 @@ export default function Index() {
     const filteredPcOptions = useMemo(() => {
         if (!pcSearchQuery) return allPcSpecs;
         const lower = pcSearchQuery.toLowerCase();
-        return allPcSpecs.filter(pc => pc.label.toLowerCase().includes(lower));
+        return allPcSpecs.filter((pc) =>
+            pc.label.toLowerCase().includes(lower),
+        );
     }, [allPcSpecs, pcSearchQuery]);
 
     // Filter processor options by search query
     const filteredProcessorOptions = useMemo(() => {
         if (!processorSearchQuery) return allProcessors;
         const lower = processorSearchQuery.toLowerCase();
-        return allProcessors.filter(p => p.label.toLowerCase().includes(lower));
+        return allProcessors.filter((p) =>
+            p.label.toLowerCase().includes(lower),
+        );
     }, [allProcessors, processorSearchQuery]);
 
     const handleTogglePcSelect = (pcId: number) => {
-        setSelectedFilterPcIds(prev =>
+        setSelectedFilterPcIds((prev) =>
             prev.includes(pcId)
-                ? prev.filter(id => id !== pcId)
-                : [...prev, pcId]
+                ? prev.filter((id) => id !== pcId)
+                : [...prev, pcId],
         );
     };
 
     const handleRemovePcFilter = (pcId: number) => {
-        setSelectedFilterPcIds(prev => prev.filter(id => id !== pcId));
+        setSelectedFilterPcIds((prev) => prev.filter((id) => id !== pcId));
     };
 
     const [lastRefresh, setLastRefresh] = useState(new Date());
@@ -216,7 +246,9 @@ export default function Index() {
             router.reload({
                 only: ['pcspecs'],
                 onSuccess: () => setLastRefresh(new Date()),
-                onFinish: () => { isPollingRef.current = false; },
+                onFinish: () => {
+                    isPollingRef.current = false;
+                },
             });
         }, 30000);
 
@@ -238,14 +270,10 @@ export default function Index() {
         const to = parseInt(pcNumberTo, 10);
         if (!isNaN(from) && from > 0) params.pc_number_from = from;
         if (!isNaN(to) && to > 0) params.pc_number_to = to;
-        router.get(
-            pcSpecIndex().url,
-            params,
-            {
-                preserveState: true,
-                preserveScroll: true,
-            }
-        );
+        router.get(pcSpecIndex().url, params, {
+            preserveState: true,
+            preserveScroll: true,
+        });
     };
 
     const handleReset = () => {
@@ -301,8 +329,14 @@ export default function Index() {
     useEffect(() => {
         try {
             if (selectedPcIds.length > 0) {
-                localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(selectedPcIds));
-                localStorage.setItem(LOCAL_STORAGE_TIMESTAMP_KEY, Date.now().toString());
+                localStorage.setItem(
+                    LOCAL_STORAGE_KEY,
+                    JSON.stringify(selectedPcIds),
+                );
+                localStorage.setItem(
+                    LOCAL_STORAGE_TIMESTAMP_KEY,
+                    Date.now().toString(),
+                );
             } else {
                 localStorage.removeItem(LOCAL_STORAGE_KEY);
                 localStorage.removeItem(LOCAL_STORAGE_TIMESTAMP_KEY);
@@ -314,8 +348,8 @@ export default function Index() {
 
     // Use new hooks for cleaner code
     const { title, breadcrumbs } = usePageMeta({
-        title: "PC Specifications",
-        breadcrumbs: [{ title: "PC Specifications", href: pcSpecIndex().url }]
+        title: 'PC Specifications',
+        breadcrumbs: [{ title: 'PC Specifications', href: pcSpecIndex().url }],
     });
 
     useFlashMessage(); // Automatically handles flash messages
@@ -359,17 +393,21 @@ export default function Index() {
     function handleSaveIssue() {
         if (!selectedPcSpec) return;
 
-        router.patch(`/pcspecs/${selectedPcSpec.id}/issue`, {
-            issue: issueText || null,
-        }, {
-            preserveScroll: true,
-            onSuccess: () => {
-                setIssueDialogOpen(false);
+        router.patch(
+            `/pcspecs/${selectedPcSpec.id}/issue`,
+            {
+                issue: issueText || null,
             },
-            onError: () => {
-                toast.error('Failed to update issue');
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setIssueDialogOpen(false);
+                },
+                onError: () => {
+                    toast.error('Failed to update issue');
+                },
             },
-        });
+        );
     }
 
     function handleOpenNotesDialog(pcSpec: PcSpec) {
@@ -381,23 +419,27 @@ export default function Index() {
     function handleSaveNotes() {
         if (!selectedPcSpec) return;
 
-        router.patch(`/pcspecs/${selectedPcSpec.id}/notes`, {
-            notes: notesText || null,
-        }, {
-            preserveScroll: true,
-            onSuccess: () => {
-                setNotesDialogOpen(false);
+        router.patch(
+            `/pcspecs/${selectedPcSpec.id}/notes`,
+            {
+                notes: notesText || null,
             },
-            onError: () => {
-                toast.error('Failed to update notes');
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setNotesDialogOpen(false);
+                },
+                onError: () => {
+                    toast.error('Failed to update notes');
+                },
             },
-        });
+        );
     }
 
     // QR Code handlers
     const handleSelectAll = (checked: boolean) => {
         if (checked) {
-            setSelectedPcIds(pcspecs.data.map(pc => pc.id));
+            setSelectedPcIds(pcspecs.data.map((pc) => pc.id));
         } else {
             setSelectedPcIds([]);
         }
@@ -405,14 +447,16 @@ export default function Index() {
 
     const handleSelectPc = (id: number, checked: boolean) => {
         if (checked) {
-            setSelectedPcIds(prev => [...prev, id]);
+            setSelectedPcIds((prev) => [...prev, id]);
         } else {
-            setSelectedPcIds(prev => prev.filter(pcId => pcId !== id));
+            setSelectedPcIds((prev) => prev.filter((pcId) => pcId !== id));
         }
     };
 
     const handleBulkDownloadAllQRCodes = () => {
-        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        const csrfToken = document
+            .querySelector('meta[name="csrf-token"]')
+            ?.getAttribute('content');
         if (!csrfToken) {
             toast.error('CSRF token not found. Please refresh the page.');
             return;
@@ -433,10 +477,14 @@ export default function Index() {
                 metadata: 0,
             }),
         })
-            .then(res => {
+            .then((res) => {
                 if (!res.ok) throw new Error('Failed to generate QR codes');
-                const filename = res.headers.get('Content-Disposition')?.match(/filename="?(.+?)"?$/)?.[1] || 'pc-qrcodes-all.zip';
-                return res.blob().then(blob => ({ blob, filename }));
+                const filename =
+                    res.headers
+                        .get('Content-Disposition')
+                        ?.match(/filename="?(.+?)"?$/)?.[1] ||
+                    'pc-qrcodes-all.zip';
+                return res.blob().then((blob) => ({ blob, filename }));
             })
             .then(({ blob, filename }) => {
                 const url = URL.createObjectURL(blob);
@@ -448,7 +496,11 @@ export default function Index() {
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
                 toast.success('Download started');
-                setBulkProgress({ running: false, percent: 100, status: 'Done' });
+                setBulkProgress({
+                    running: false,
+                    percent: 100,
+                    status: 'Done',
+                });
             })
             .catch(() => {
                 toast.error('Failed to download QR codes');
@@ -462,13 +514,19 @@ export default function Index() {
             return;
         }
 
-        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        const csrfToken = document
+            .querySelector('meta[name="csrf-token"]')
+            ?.getAttribute('content');
         if (!csrfToken) {
             toast.error('CSRF token not found. Please refresh the page.');
             return;
         }
 
-        setSelectedZipProgress({ running: true, percent: 0, status: 'Generating...' });
+        setSelectedZipProgress({
+            running: true,
+            percent: 0,
+            status: 'Generating...',
+        });
         toast.info('Generating selected QR codes...');
 
         fetch('/pcspecs/qrcode/zip-selected-stream', {
@@ -484,10 +542,14 @@ export default function Index() {
                 metadata: 0,
             }),
         })
-            .then(res => {
+            .then((res) => {
                 if (!res.ok) throw new Error('Failed to generate QR codes');
-                const filename = res.headers.get('Content-Disposition')?.match(/filename="?(.+?)"?$/)?.[1] || 'pc-qrcodes-selected.zip';
-                return res.blob().then(blob => ({ blob, filename }));
+                const filename =
+                    res.headers
+                        .get('Content-Disposition')
+                        ?.match(/filename="?(.+?)"?$/)?.[1] ||
+                    'pc-qrcodes-selected.zip';
+                return res.blob().then((blob) => ({ blob, filename }));
             })
             .then(({ blob, filename }) => {
                 const url = URL.createObjectURL(blob);
@@ -499,12 +561,20 @@ export default function Index() {
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
                 toast.success('Download started');
-                setSelectedZipProgress({ running: false, percent: 100, status: 'Done' });
+                setSelectedZipProgress({
+                    running: false,
+                    percent: 100,
+                    status: 'Done',
+                });
                 setSelectedPcIds([]);
             })
             .catch(() => {
                 toast.error('Failed to download QR codes');
-                setSelectedZipProgress({ running: false, percent: 0, status: '' });
+                setSelectedZipProgress({
+                    running: false,
+                    percent: 0,
+                    status: '',
+                });
             });
     };
 
@@ -512,13 +582,13 @@ export default function Index() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={title} />
 
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3 relative">
+            <div className="relative flex h-full flex-1 flex-col gap-4 rounded-xl p-3">
                 {/* Loading overlay for page transitions */}
                 <LoadingOverlay isLoading={isLoading} />
 
                 {/* Floating progress indicator for ALL */}
                 {bulkProgress.running && (
-                    <div className="fixed bottom-6 right-6 z-50 bg-white dark:bg-gray-900 border border-blue-400 shadow-lg rounded-lg px-6 py-4 flex flex-col gap-2 items-center">
+                    <div className="fixed right-6 bottom-6 z-50 flex flex-col items-center gap-2 rounded-lg border border-blue-400 bg-white px-6 py-4 shadow-lg dark:bg-gray-900">
                         <div className="font-semibold text-blue-700 dark:text-blue-200">
                             Generating QR Codes...
                         </div>
@@ -530,7 +600,7 @@ export default function Index() {
 
                 {/* Floating progress indicator for SELECTED */}
                 {selectedZipProgress.running && (
-                    <div className="fixed bottom-24 right-6 z-50 bg-white dark:bg-gray-900 border border-green-400 shadow-lg rounded-lg px-6 py-4 flex flex-col gap-2 items-center">
+                    <div className="fixed right-6 bottom-24 z-50 flex flex-col items-center gap-2 rounded-lg border border-green-400 bg-white px-6 py-4 shadow-lg dark:bg-gray-900">
                         <div className="font-semibold text-green-700 dark:text-green-200">
                             Generating Selected QR Codes...
                         </div>
@@ -547,10 +617,13 @@ export default function Index() {
                 />
 
                 <div className="flex flex-col gap-4">
-                    <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
-                        <div className="w-full sm:w-auto flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+                        <div className="grid w-full flex-1 grid-cols-1 gap-3 sm:w-auto sm:grid-cols-2 lg:grid-cols-4">
                             {/* Multi-select PC Search */}
-                            <Popover open={isPcPopoverOpen} onOpenChange={setIsPcPopoverOpen}>
+                            <Popover
+                                open={isPcPopoverOpen}
+                                onOpenChange={setIsPcPopoverOpen}
+                            >
                                 <PopoverTrigger asChild>
                                     <Button
                                         variant="outline"
@@ -561,14 +634,22 @@ export default function Index() {
                                         <span className="truncate">
                                             {selectedFilterPcIds.length === 0
                                                 ? 'All PCs'
-                                                : selectedFilterPcIds.length === 1
-                                                    ? (allPcSpecs.find(p => p.id === selectedFilterPcIds[0])?.label ?? '1 PC selected')
-                                                    : `${selectedFilterPcIds.length} PCs selected`}
+                                                : selectedFilterPcIds.length ===
+                                                    1
+                                                  ? (allPcSpecs.find(
+                                                        (p) =>
+                                                            p.id ===
+                                                            selectedFilterPcIds[0],
+                                                    )?.label ?? '1 PC selected')
+                                                  : `${selectedFilterPcIds.length} PCs selected`}
                                         </span>
                                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                     </Button>
                                 </PopoverTrigger>
-                                <PopoverContent className="w-full min-w-75 p-0" align="start">
+                                <PopoverContent
+                                    className="w-full min-w-75 p-0"
+                                    align="start"
+                                >
                                     <Command shouldFilter={false}>
                                         <CommandInput
                                             placeholder="Search PC specs..."
@@ -576,22 +657,39 @@ export default function Index() {
                                             onValueChange={setPcSearchQuery}
                                         />
                                         <CommandList>
-                                            <CommandEmpty>No PC specs found.</CommandEmpty>
+                                            <CommandEmpty>
+                                                No PC specs found.
+                                            </CommandEmpty>
                                             <CommandGroup>
                                                 {filteredPcOptions.map((pc) => {
-                                                    const isSelected = selectedFilterPcIds.includes(pc.id);
+                                                    const isSelected =
+                                                        selectedFilterPcIds.includes(
+                                                            pc.id,
+                                                        );
                                                     return (
                                                         <CommandItem
                                                             key={pc.id}
                                                             value={pc.label}
-                                                            onSelect={() => handleTogglePcSelect(pc.id)}
+                                                            onSelect={() =>
+                                                                handleTogglePcSelect(
+                                                                    pc.id,
+                                                                )
+                                                            }
                                                             className="cursor-pointer"
                                                         >
                                                             <Checkbox
-                                                                checked={isSelected}
+                                                                checked={
+                                                                    isSelected
+                                                                }
                                                                 className="mr-2"
-                                                                onCheckedChange={() => handleTogglePcSelect(pc.id)}
-                                                                onClick={(e) => e.stopPropagation()}
+                                                                onCheckedChange={() =>
+                                                                    handleTogglePcSelect(
+                                                                        pc.id,
+                                                                    )
+                                                                }
+                                                                onClick={(e) =>
+                                                                    e.stopPropagation()
+                                                                }
                                                             />
                                                             {pc.label}
                                                         </CommandItem>
@@ -602,13 +700,18 @@ export default function Index() {
                                     </Command>
                                     {selectedFilterPcIds.length > 0 && (
                                         <div className="flex items-center justify-between border-t p-2 text-xs">
-                                            <span className="text-muted-foreground">{selectedFilterPcIds.length} selected</span>
+                                            <span className="text-muted-foreground">
+                                                {selectedFilterPcIds.length}{' '}
+                                                selected
+                                            </span>
                                             <Button
                                                 type="button"
                                                 variant="ghost"
                                                 size="sm"
                                                 className="h-7 px-2"
-                                                onClick={() => setSelectedFilterPcIds([])}
+                                                onClick={() =>
+                                                    setSelectedFilterPcIds([])
+                                                }
                                             >
                                                 Clear
                                             </Button>
@@ -618,7 +721,10 @@ export default function Index() {
                             </Popover>
 
                             {/* Processor Filter (multi-select) */}
-                            <Popover open={isProcessorPopoverOpen} onOpenChange={setIsProcessorPopoverOpen}>
+                            <Popover
+                                open={isProcessorPopoverOpen}
+                                onOpenChange={setIsProcessorPopoverOpen}
+                            >
                                 <PopoverTrigger asChild>
                                     <Button
                                         variant="outline"
@@ -629,57 +735,107 @@ export default function Index() {
                                         <span className="truncate">
                                             {selectedProcessorIds.length === 0
                                                 ? 'All Processors'
-                                                : selectedProcessorIds.length === 1
-                                                    ? (allProcessors.find(p => p.id === selectedProcessorIds[0])?.label ?? '1 processor selected')
-                                                    : `${selectedProcessorIds.length} processors selected`}
+                                                : selectedProcessorIds.length ===
+                                                    1
+                                                  ? (allProcessors.find(
+                                                        (p) =>
+                                                            p.id ===
+                                                            selectedProcessorIds[0],
+                                                    )?.label ??
+                                                    '1 processor selected')
+                                                  : `${selectedProcessorIds.length} processors selected`}
                                         </span>
                                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                     </Button>
                                 </PopoverTrigger>
-                                <PopoverContent className="w-full min-w-75 p-0" align="start">
+                                <PopoverContent
+                                    className="w-full min-w-75 p-0"
+                                    align="start"
+                                >
                                     <Command shouldFilter={false}>
                                         <CommandInput
                                             placeholder="Search processor..."
                                             value={processorSearchQuery}
-                                            onValueChange={setProcessorSearchQuery}
+                                            onValueChange={
+                                                setProcessorSearchQuery
+                                            }
                                         />
                                         <CommandList>
-                                            <CommandEmpty>No processor found.</CommandEmpty>
+                                            <CommandEmpty>
+                                                No processor found.
+                                            </CommandEmpty>
                                             <CommandGroup>
-                                                {filteredProcessorOptions.map((proc) => {
-                                                    const isSelected = selectedProcessorIds.includes(proc.id);
-                                                    return (
-                                                        <CommandItem
-                                                            key={proc.id}
-                                                            value={proc.label}
-                                                            onSelect={() => handleToggleProcessorSelect(proc.id)}
-                                                            className="cursor-pointer"
-                                                        >
-                                                            <Checkbox
-                                                                checked={isSelected}
-                                                                className="mr-2"
-                                                                onCheckedChange={() => handleToggleProcessorSelect(proc.id)}
-                                                                onClick={(e) => e.stopPropagation()}
-                                                            />
-                                                            {proc.label}
-                                                            {proc.core_count != null && (
-                                                                <span className="ml-auto text-xs text-muted-foreground">{proc.core_count != null ? `${proc.core_count}C` : ''}/{proc.thread_count != null ? `${proc.thread_count}T` : ''}</span>
-                                                            )}
-                                                        </CommandItem>
-                                                    );
-                                                })}
+                                                {filteredProcessorOptions.map(
+                                                    (proc) => {
+                                                        const isSelected =
+                                                            selectedProcessorIds.includes(
+                                                                proc.id,
+                                                            );
+                                                        return (
+                                                            <CommandItem
+                                                                key={proc.id}
+                                                                value={
+                                                                    proc.label
+                                                                }
+                                                                onSelect={() =>
+                                                                    handleToggleProcessorSelect(
+                                                                        proc.id,
+                                                                    )
+                                                                }
+                                                                className="cursor-pointer"
+                                                            >
+                                                                <Checkbox
+                                                                    checked={
+                                                                        isSelected
+                                                                    }
+                                                                    className="mr-2"
+                                                                    onCheckedChange={() =>
+                                                                        handleToggleProcessorSelect(
+                                                                            proc.id,
+                                                                        )
+                                                                    }
+                                                                    onClick={(
+                                                                        e,
+                                                                    ) =>
+                                                                        e.stopPropagation()
+                                                                    }
+                                                                />
+                                                                {proc.label}
+                                                                {proc.core_count !=
+                                                                    null && (
+                                                                    <span className="ml-auto text-xs text-muted-foreground">
+                                                                        {proc.core_count !=
+                                                                        null
+                                                                            ? `${proc.core_count}C`
+                                                                            : ''}
+                                                                        /
+                                                                        {proc.thread_count !=
+                                                                        null
+                                                                            ? `${proc.thread_count}T`
+                                                                            : ''}
+                                                                    </span>
+                                                                )}
+                                                            </CommandItem>
+                                                        );
+                                                    },
+                                                )}
                                             </CommandGroup>
                                         </CommandList>
                                     </Command>
                                     {selectedProcessorIds.length > 0 && (
                                         <div className="flex items-center justify-between border-t p-2 text-xs">
-                                            <span className="text-muted-foreground">{selectedProcessorIds.length} selected</span>
+                                            <span className="text-muted-foreground">
+                                                {selectedProcessorIds.length}{' '}
+                                                selected
+                                            </span>
                                             <Button
                                                 type="button"
                                                 variant="ghost"
                                                 size="sm"
                                                 className="h-7 px-2"
-                                                onClick={() => setSelectedProcessorIds([])}
+                                                onClick={() =>
+                                                    setSelectedProcessorIds([])
+                                                }
                                             >
                                                 Clear
                                             </Button>
@@ -691,60 +847,105 @@ export default function Index() {
                             {/* PC Number Range Filter */}
                             <div className="flex items-center gap-1.5">
                                 <div className="relative flex-1">
-                                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">PC</span>
+                                    <span className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-xs text-muted-foreground">
+                                        PC
+                                    </span>
                                     <input
                                         type="number"
                                         min={1}
                                         placeholder="From"
                                         value={pcNumberFrom}
-                                        onChange={e => setPcNumberFrom(e.target.value)}
-                                        className="w-full pl-8 pr-2 h-9 rounded-md border border-input bg-background text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                        onChange={(e) =>
+                                            setPcNumberFrom(e.target.value)
+                                        }
+                                        className="h-9 w-full rounded-md border border-input bg-background pr-2 pl-8 text-sm ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                                     />
                                 </div>
-                                <span className="text-muted-foreground text-sm shrink-0">–</span>
+                                <span className="shrink-0 text-sm text-muted-foreground">
+                                    –
+                                </span>
                                 <div className="relative flex-1">
-                                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">PC</span>
+                                    <span className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-xs text-muted-foreground">
+                                        PC
+                                    </span>
                                     <input
                                         type="number"
                                         min={1}
                                         placeholder="To"
                                         value={pcNumberTo}
-                                        onChange={e => setPcNumberTo(e.target.value)}
-                                        className="w-full pl-8 pr-2 h-9 rounded-md border border-input bg-background text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                        onChange={(e) =>
+                                            setPcNumberTo(e.target.value)
+                                        }
+                                        className="h-9 w-full rounded-md border border-input bg-background pr-2 pl-8 text-sm ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                                     />
                                 </div>
                             </div>
 
-                            <Select value={sortDir} onValueChange={(value: 'asc' | 'desc') => setSortDir(value)}>
+                            <Select
+                                value={sortDir}
+                                onValueChange={(value: 'asc' | 'desc') =>
+                                    setSortDir(value)
+                                }
+                            >
                                 <SelectTrigger className="w-full font-normal">
                                     <SelectValue placeholder="QR Number Order" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="asc">QR Number: Ascending (A-Z)</SelectItem>
-                                    <SelectItem value="desc">QR Number: Descending (Z-A)</SelectItem>
+                                    <SelectItem value="asc">
+                                        QR Number: Ascending (A-Z)
+                                    </SelectItem>
+                                    <SelectItem value="desc">
+                                        QR Number: Descending (Z-A)
+                                    </SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
 
-                        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-                            <Button onClick={handleFilter} className="flex-1 sm:flex-none">
+                        <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+                            <Button
+                                onClick={handleFilter}
+                                className="flex-1 sm:flex-none"
+                            >
                                 <Filter className="mr-2 h-4 w-4" />
                                 Filter
                             </Button>
-                            <Button variant="outline" onClick={handleReset} className="flex-1 sm:flex-none">
+                            <Button
+                                variant="outline"
+                                onClick={handleReset}
+                                className="flex-1 sm:flex-none"
+                            >
                                 Reset
                             </Button>
                             <div className="flex gap-2">
-                                <Button variant="ghost" size="icon" onClick={handleManualRefresh} title="Refresh">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={handleManualRefresh}
+                                    title="Refresh"
+                                >
                                     <RefreshCw className="h-4 w-4" />
                                 </Button>
                                 <Button
-                                    variant={autoRefreshEnabled ? "default" : "ghost"}
+                                    variant={
+                                        autoRefreshEnabled ? 'default' : 'ghost'
+                                    }
                                     size="icon"
-                                    onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
-                                    title={autoRefreshEnabled ? "Disable auto-refresh" : "Enable auto-refresh (30s)"}
+                                    onClick={() =>
+                                        setAutoRefreshEnabled(
+                                            !autoRefreshEnabled,
+                                        )
+                                    }
+                                    title={
+                                        autoRefreshEnabled
+                                            ? 'Disable auto-refresh'
+                                            : 'Enable auto-refresh (30s)'
+                                    }
                                 >
-                                    {autoRefreshEnabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                                    {autoRefreshEnabled ? (
+                                        <Pause className="h-4 w-4" />
+                                    ) : (
+                                        <Play className="h-4 w-4" />
+                                    )}
                                 </Button>
                             </div>
                             <Link href={withReturnTo(pcSpecCreate.url())}>
@@ -760,14 +961,24 @@ export default function Index() {
                     {selectedFilterPcIds.length > 0 && (
                         <div className="flex flex-wrap gap-2">
                             {selectedFilterPcIds.map((pcId) => {
-                                const pc = allPcSpecs.find(p => p.id === pcId);
+                                const pc = allPcSpecs.find(
+                                    (p) => p.id === pcId,
+                                );
                                 return (
-                                    <Badge key={pcId} variant="secondary" className="flex items-center gap-1 py-1 px-2">
-                                        <span className="truncate max-w-50">{pc?.label || `PC #${pcId}`}</span>
+                                    <Badge
+                                        key={pcId}
+                                        variant="secondary"
+                                        className="flex items-center gap-1 px-2 py-1"
+                                    >
+                                        <span className="max-w-50 truncate">
+                                            {pc?.label || `PC #${pcId}`}
+                                        </span>
                                         <button
                                             type="button"
-                                            onClick={() => handleRemovePcFilter(pcId)}
-                                            className="ml-1 rounded-full hover:bg-muted p-0.5"
+                                            onClick={() =>
+                                                handleRemovePcFilter(pcId)
+                                            }
+                                            className="ml-1 rounded-full p-0.5 hover:bg-muted"
                                             title="Remove filter"
                                         >
                                             <X className="h-3 w-3" />
@@ -786,7 +997,7 @@ export default function Index() {
                         </div>
                     )}
 
-                    <div className="flex justify-between items-center text-sm">
+                    <div className="flex items-center justify-between text-sm">
                         <div className="text-muted-foreground">
                             Showing {pcspecs.data.length} records
                         </div>
@@ -798,10 +1009,11 @@ export default function Index() {
 
                 {/* QR Code Selection Actions */}
                 {selectedPcIds.length > 0 && (
-                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-0 sm:justify-between">
-                        <div className="flex items-center gap-4 flex-wrap">
-                            <span className="font-medium text-blue-900 dark:text-blue-100 whitespace-nowrap">
-                                {selectedPcIds.length} PC{selectedPcIds.length !== 1 ? 's' : ''} selected
+                    <div className="flex flex-col items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-0 dark:border-blue-800 dark:bg-blue-900/20">
+                        <div className="flex flex-wrap items-center gap-4">
+                            <span className="font-medium whitespace-nowrap text-blue-900 dark:text-blue-100">
+                                {selectedPcIds.length} PC
+                                {selectedPcIds.length !== 1 ? 's' : ''} selected
                             </span>
                             <Button
                                 variant="outline"
@@ -811,7 +1023,7 @@ export default function Index() {
                                 Clear Selection
                             </Button>
                         </div>
-                        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
                             <Button
                                 onClick={handleDownloadSelectedQRCodes}
                                 variant="outline"
@@ -822,14 +1034,16 @@ export default function Index() {
                             </Button>
                             <Button
                                 onClick={handleBulkDownloadAllQRCodes}
-                                className="bg-blue-700 hover:bg-blue-800 text-white"
+                                className="bg-blue-700 text-white hover:bg-blue-800"
                                 disabled={bulkProgress.running}
                             >
                                 Download All QR Codes as ZIP
                             </Button>
                             <Can permission="pcspecs.delete">
                                 <Button
-                                    onClick={() => setBulkDeleteConfirmOpen(true)}
+                                    onClick={() =>
+                                        setBulkDeleteConfirmOpen(true)
+                                    }
                                     variant="destructive"
                                 >
                                     Delete Selected ({selectedPcIds.length})
@@ -840,7 +1054,7 @@ export default function Index() {
                 )}
 
                 {/* Desktop Table */}
-                <div className="hidden md:block shadow rounded-md overflow-hidden">
+                <div className="hidden overflow-hidden rounded-md shadow md:block">
                     {isLoading ? (
                         <TableSkeleton columns={10} rows={8} />
                     ) : (
@@ -850,106 +1064,192 @@ export default function Index() {
                                     <TableRow className="bg-muted/50">
                                         <TableHead className="w-12">
                                             <Checkbox
-                                                checked={selectedPcIds.length === pcspecs.data.length && pcspecs.data.length > 0}
-                                                onCheckedChange={(checked) => handleSelectAll(checked === true)}
+                                                checked={
+                                                    selectedPcIds.length ===
+                                                        pcspecs.data.length &&
+                                                    pcspecs.data.length > 0
+                                                }
+                                                onCheckedChange={(checked) =>
+                                                    handleSelectAll(
+                                                        checked === true,
+                                                    )
+                                                }
                                                 aria-label="Select all PC specs"
                                             />
                                         </TableHead>
                                         <TableHead>Stock Number</TableHead>
                                         <TableHead>Station</TableHead>
                                         <TableHead>Manufacturer</TableHead>
-                                        <TableHead className="hidden xl:table-cell">Processor</TableHead>
-                                        <TableHead className="hidden xl:table-cell">Cores</TableHead>
+                                        <TableHead className="hidden xl:table-cell">
+                                            Processor
+                                        </TableHead>
+                                        <TableHead className="hidden xl:table-cell">
+                                            Cores
+                                        </TableHead>
                                         <TableHead>RAM (GB)</TableHead>
                                         <TableHead>Disk (GB)</TableHead>
-                                        <TableHead className="hidden xl:table-cell">Ports</TableHead>
-                                        <TableHead className="hidden xl:table-cell">Notes</TableHead>
+                                        <TableHead className="hidden xl:table-cell">
+                                            Ports
+                                        </TableHead>
+                                        <TableHead className="hidden xl:table-cell">
+                                            Notes
+                                        </TableHead>
                                         <TableHead>Issue</TableHead>
-                                        <TableHead className="text-center">Actions</TableHead>
+                                        <TableHead className="text-center">
+                                            Actions
+                                        </TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {pcspecs.data.map((pc) => {
                                         // Get first processor
                                         const proc = pc.processorSpecs?.[0];
-                                        const procLabel = proc ? `${proc.manufacturer} ${proc.model}` : '—';
+                                        const procLabel = proc
+                                            ? `${proc.manufacturer} ${proc.model}`
+                                            : '—';
 
                                         return (
                                             <TableRow key={pc.id}>
                                                 <TableCell>
                                                     <Checkbox
-                                                        checked={selectedPcIds.includes(pc.id)}
-                                                        onCheckedChange={(checked) => handleSelectPc(pc.id, checked === true)}
+                                                        checked={selectedPcIds.includes(
+                                                            pc.id,
+                                                        )}
+                                                        onCheckedChange={(
+                                                            checked,
+                                                        ) =>
+                                                            handleSelectPc(
+                                                                pc.id,
+                                                                checked ===
+                                                                    true,
+                                                            )
+                                                        }
                                                         aria-label={`Select PC ${pc.pc_number || pc.id}`}
                                                     />
                                                 </TableCell>
                                                 <TableCell className="font-medium">
-                                                    {pc.pc_number || <span className="text-gray-400">—</span>}
-                                                </TableCell>
-                                                <TableCell>
-                                                    {pc.station_numbers.length > 0 ? (
-                                                        <div className="flex flex-wrap gap-1">
-                                                            {pc.station_numbers.map((sn) => (
-                                                                <Badge key={sn} variant="secondary" className="text-xs">{sn}</Badge>
-                                                            ))}
-                                                        </div>
-                                                    ) : (
-                                                        <span className="text-xs text-gray-400">—</span>
+                                                    {pc.pc_number || (
+                                                        <span className="text-gray-400">
+                                                            —
+                                                        </span>
                                                     )}
                                                 </TableCell>
-                                                <TableCell>{pc.manufacturer}</TableCell>
-                                                <TableCell className="hidden xl:table-cell">{procLabel}</TableCell>
+                                                <TableCell>
+                                                    {pc.station_numbers.length >
+                                                    0 ? (
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {pc.station_numbers.map(
+                                                                (sn) => (
+                                                                    <Badge
+                                                                        key={sn}
+                                                                        variant="secondary"
+                                                                        className="text-xs"
+                                                                    >
+                                                                        {sn}
+                                                                    </Badge>
+                                                                ),
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-xs text-gray-400">
+                                                            —
+                                                        </span>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {pc.manufacturer}
+                                                </TableCell>
                                                 <TableCell className="hidden xl:table-cell">
-                                                    {proc?.core_count != null || proc?.thread_count != null
+                                                    {procLabel}
+                                                </TableCell>
+                                                <TableCell className="hidden xl:table-cell">
+                                                    {proc?.core_count != null ||
+                                                    proc?.thread_count != null
                                                         ? `${proc?.core_count ?? '?'}C/${proc?.thread_count ?? '?'}T`
                                                         : '—'}
                                                 </TableCell>
-                                                <TableCell>{pc.ram_gb}</TableCell>
-                                                <TableCell>{pc.disk_gb}</TableCell>
-                                                <TableCell className="hidden xl:table-cell">{pc.available_ports || '—'}</TableCell>
+                                                <TableCell>
+                                                    {pc.ram_gb}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {pc.disk_gb}
+                                                </TableCell>
+                                                <TableCell className="hidden xl:table-cell">
+                                                    {pc.available_ports || '—'}
+                                                </TableCell>
                                                 <TableCell className="hidden xl:table-cell">
                                                     <div className="flex items-center gap-2">
                                                         {pc.notes ? (
-                                                            <span className="text-xs truncate max-w-40 block" title={pc.notes}>{pc.notes}</span>
+                                                            <span
+                                                                className="block max-w-40 truncate text-xs"
+                                                                title={pc.notes}
+                                                            >
+                                                                {pc.notes}
+                                                            </span>
                                                         ) : (
-                                                            <span className="text-xs text-gray-400">No notes</span>
+                                                            <span className="text-xs text-gray-400">
+                                                                No notes
+                                                            </span>
                                                         )}
                                                         <Button
                                                             variant="ghost"
                                                             size="sm"
-                                                            onClick={() => handleOpenNotesDialog(pc)}
+                                                            onClick={() =>
+                                                                handleOpenNotesDialog(
+                                                                    pc,
+                                                                )
+                                                            }
                                                             className="h-7 px-2 text-xs"
                                                         >
-                                                            {pc.notes ? 'Edit' : 'Add'}
+                                                            {pc.notes
+                                                                ? 'Edit'
+                                                                : 'Add'}
                                                         </Button>
                                                     </div>
                                                 </TableCell>
                                                 <TableCell>
                                                     <div className="flex items-center gap-2">
                                                         {pc.issue ? (
-                                                            <span className="text-xs text-red-600 font-medium truncate max-w-50" title={pc.issue}>
+                                                            <span
+                                                                className="max-w-50 truncate text-xs font-medium text-red-600"
+                                                                title={pc.issue}
+                                                            >
                                                                 ⚠️ {pc.issue}
                                                             </span>
                                                         ) : (
-                                                            <span className="text-xs text-gray-400">No issue</span>
+                                                            <span className="text-xs text-gray-400">
+                                                                No issue
+                                                            </span>
                                                         )}
                                                         <Button
                                                             variant="ghost"
                                                             size="sm"
-                                                            onClick={() => handleOpenIssueDialog(pc)}
+                                                            onClick={() =>
+                                                                handleOpenIssueDialog(
+                                                                    pc,
+                                                                )
+                                                            }
                                                             className="h-7 px-2 text-xs"
                                                         >
-                                                            {pc.issue ? 'Edit' : 'Add'}
+                                                            {pc.issue
+                                                                ? 'Edit'
+                                                                : 'Add'}
                                                         </Button>
                                                     </div>
                                                 </TableCell>
                                                 <TableCell className="flex justify-center gap-2">
                                                     {/* Edit */}
-                                                    <Link href={withReturnTo(pcSpecEdit.url(pc.id))}>
+                                                    <Link
+                                                        href={withReturnTo(
+                                                            pcSpecEdit.url(
+                                                                pc.id,
+                                                            ),
+                                                        )}
+                                                    >
                                                         <Button
                                                             variant="outline"
                                                             size="sm"
-                                                            className="bg-green-600 hover:bg-green-700 text-white"
+                                                            className="bg-green-600 text-white hover:bg-green-700"
                                                         >
                                                             Edit
                                                         </Button>
@@ -958,104 +1258,228 @@ export default function Index() {
                                                     {/* Details Dialog */}
                                                     <Dialog>
                                                         <DialogTrigger asChild>
-                                                            <Button variant="outline" size="sm">
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                            >
                                                                 Details
                                                             </Button>
                                                         </DialogTrigger>
-                                                        <DialogContent className="max-w-[95vw] sm:max-w-lg w-full">
+                                                        <DialogContent className="w-full max-w-[95vw] sm:max-w-lg">
                                                             <DialogHeader>
                                                                 <DialogTitle className="text-lg font-semibold">
-                                                                    {pc.pc_number || `PC #${pc.id}`}
+                                                                    {pc.pc_number ||
+                                                                        `PC #${pc.id}`}
                                                                 </DialogTitle>
                                                                 <DialogDescription>
-                                                                    {pc.manufacturer}
+                                                                    {
+                                                                        pc.manufacturer
+                                                                    }
                                                                 </DialogDescription>
                                                             </DialogHeader>
 
                                                             <div className="space-y-4 text-sm">
                                                                 <div className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-lg border p-4">
                                                                     <div>
-                                                                        <span className="text-xs text-muted-foreground">Memory Type</span>
-                                                                        <p className="font-medium">{pc.memory_type}</p>
+                                                                        <span className="text-xs text-muted-foreground">
+                                                                            Memory
+                                                                            Type
+                                                                        </span>
+                                                                        <p className="font-medium">
+                                                                            {
+                                                                                pc.memory_type
+                                                                            }
+                                                                        </p>
                                                                     </div>
                                                                     <div>
-                                                                        <span className="text-xs text-muted-foreground">RAM</span>
-                                                                        <p className="font-medium">{pc.ram_gb} GB</p>
+                                                                        <span className="text-xs text-muted-foreground">
+                                                                            RAM
+                                                                        </span>
+                                                                        <p className="font-medium">
+                                                                            {
+                                                                                pc.ram_gb
+                                                                            }{' '}
+                                                                            GB
+                                                                        </p>
                                                                     </div>
                                                                     <div>
-                                                                        <span className="text-xs text-muted-foreground">Disk</span>
-                                                                        <p className="font-medium">{pc.disk_gb} GB</p>
+                                                                        <span className="text-xs text-muted-foreground">
+                                                                            Disk
+                                                                        </span>
+                                                                        <p className="font-medium">
+                                                                            {
+                                                                                pc.disk_gb
+                                                                            }{' '}
+                                                                            GB
+                                                                        </p>
                                                                     </div>
                                                                     <div>
-                                                                        <span className="text-xs text-muted-foreground">Ports</span>
-                                                                        <p className="font-medium">{pc.available_ports || 'N/A'}</p>
+                                                                        <span className="text-xs text-muted-foreground">
+                                                                            Ports
+                                                                        </span>
+                                                                        <p className="font-medium">
+                                                                            {pc.available_ports ||
+                                                                                'N/A'}
+                                                                        </p>
                                                                     </div>
                                                                     <div>
-                                                                        <span className="text-xs text-muted-foreground">Bios Release Date</span>
-                                                                        <p className="font-medium">{pc.bios_release_date || 'N/A'}</p>
+                                                                        <span className="text-xs text-muted-foreground">
+                                                                            Bios
+                                                                            Release
+                                                                            Date
+                                                                        </span>
+                                                                        <p className="font-medium">
+                                                                            {pc.bios_release_date ||
+                                                                                'N/A'}
+                                                                        </p>
                                                                     </div>
                                                                 </div>
 
-                                                                {pc.processorSpecs?.length ? (
+                                                                {pc
+                                                                    .processorSpecs
+                                                                    ?.length ? (
                                                                     <div className="space-y-2">
-                                                                        <h4 className="text-sm font-semibold">Processor</h4>
-                                                                        {pc.processorSpecs.map((p) => (
-                                                                            <div key={p.id} className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-lg border p-4">
-                                                                                <div className="col-span-2">
-                                                                                    <span className="text-xs text-muted-foreground">Processor</span>
-                                                                                    <p className="font-medium">{p.manufacturer} {p.model}</p>
+                                                                        <h4 className="text-sm font-semibold">
+                                                                            Processor
+                                                                        </h4>
+                                                                        {pc.processorSpecs.map(
+                                                                            (
+                                                                                p,
+                                                                            ) => (
+                                                                                <div
+                                                                                    key={
+                                                                                        p.id
+                                                                                    }
+                                                                                    className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-lg border p-4"
+                                                                                >
+                                                                                    <div className="col-span-2">
+                                                                                        <span className="text-xs text-muted-foreground">
+                                                                                            Processor
+                                                                                        </span>
+                                                                                        <p className="font-medium">
+                                                                                            {
+                                                                                                p.manufacturer
+                                                                                            }{' '}
+                                                                                            {
+                                                                                                p.model
+                                                                                            }
+                                                                                        </p>
+                                                                                    </div>
+                                                                                    <div>
+                                                                                        <span className="text-xs text-muted-foreground">
+                                                                                            Cores
+                                                                                            /
+                                                                                            Threads
+                                                                                        </span>
+                                                                                        <p className="font-medium">
+                                                                                            {
+                                                                                                p.core_count
+                                                                                            }{' '}
+                                                                                            /{' '}
+                                                                                            {
+                                                                                                p.thread_count
+                                                                                            }
+                                                                                        </p>
+                                                                                    </div>
+                                                                                    <div>
+                                                                                        <span className="text-xs text-muted-foreground">
+                                                                                            Clock
+                                                                                            (Base
+                                                                                            /
+                                                                                            Boost)
+                                                                                        </span>
+                                                                                        <p className="font-medium">
+                                                                                            {
+                                                                                                p.base_clock_ghz
+                                                                                            }{' '}
+                                                                                            /{' '}
+                                                                                            {
+                                                                                                p.boost_clock_ghz
+                                                                                            }{' '}
+                                                                                            GHz
+                                                                                        </p>
+                                                                                    </div>
                                                                                 </div>
-                                                                                <div>
-                                                                                    <span className="text-xs text-muted-foreground">Cores / Threads</span>
-                                                                                    <p className="font-medium">{p.core_count} / {p.thread_count}</p>
-                                                                                </div>
-                                                                                <div>
-                                                                                    <span className="text-xs text-muted-foreground">Clock (Base / Boost)</span>
-                                                                                    <p className="font-medium">{p.base_clock_ghz} / {p.boost_clock_ghz} GHz</p>
-                                                                                </div>
-                                                                            </div>
-                                                                        ))}
+                                                                            ),
+                                                                        )}
                                                                     </div>
                                                                 ) : (
-                                                                    <p className="text-muted-foreground text-sm">No processor specs available.</p>
+                                                                    <p className="text-sm text-muted-foreground">
+                                                                        No
+                                                                        processor
+                                                                        specs
+                                                                        available.
+                                                                    </p>
                                                                 )}
 
                                                                 {pc.issue && (
-                                                                    <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-4">
-                                                                        <span className="text-xs text-muted-foreground">Issue</span>
-                                                                        <p className="font-medium text-red-600 dark:text-red-400">{pc.issue}</p>
+                                                                    <div className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
+                                                                        <span className="text-xs text-muted-foreground">
+                                                                            Issue
+                                                                        </span>
+                                                                        <p className="font-medium text-red-600 dark:text-red-400">
+                                                                            {
+                                                                                pc.issue
+                                                                            }
+                                                                        </p>
                                                                     </div>
                                                                 )}
                                                             </div>
 
-                                                            <DialogClose asChild>
-                                                                <Button variant="outline" className="mt-2 w-full">Close</Button>
+                                                            <DialogClose
+                                                                asChild
+                                                            >
+                                                                <Button
+                                                                    variant="outline"
+                                                                    className="mt-2 w-full"
+                                                                >
+                                                                    Close
+                                                                </Button>
                                                             </DialogClose>
                                                         </DialogContent>
                                                     </Dialog>
 
                                                     {/* Delete */}
                                                     <AlertDialog>
-                                                        <AlertDialogTrigger asChild>
+                                                        <AlertDialogTrigger
+                                                            asChild
+                                                        >
                                                             <Button
                                                                 variant="destructive"
-                                                                className="bg-red-600 hover:bg-red-700 text-white"
+                                                                className="bg-red-600 text-white hover:bg-red-700"
                                                             >
                                                                 Delete
                                                             </Button>
                                                         </AlertDialogTrigger>
                                                         <AlertDialogContent>
                                                             <AlertDialogHeader>
-                                                                <AlertDialogTitle>Confirm Delete</AlertDialogTitle>
+                                                                <AlertDialogTitle>
+                                                                    Confirm
+                                                                    Delete
+                                                                </AlertDialogTitle>
                                                                 <AlertDialogDescription>
-                                                                    Are you sure you want to delete {pc.pc_number || pc.manufacturer}? This action cannot be undone.
+                                                                    Are you sure
+                                                                    you want to
+                                                                    delete{' '}
+                                                                    {pc.pc_number ||
+                                                                        pc.manufacturer}
+                                                                    ? This
+                                                                    action
+                                                                    cannot be
+                                                                    undone.
                                                                 </AlertDialogDescription>
                                                             </AlertDialogHeader>
-                                                            <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-                                                                <AlertDialogCancel className="w-full sm:w-auto">Cancel</AlertDialogCancel>
+                                                            <AlertDialogFooter className="flex-col gap-2 sm:flex-row">
+                                                                <AlertDialogCancel className="w-full sm:w-auto">
+                                                                    Cancel
+                                                                </AlertDialogCancel>
                                                                 <AlertDialogAction
-                                                                    className="bg-red-600 hover:bg-red-700 w-full sm:w-auto"
-                                                                    onClick={() => handleDelete(pc.id)}
+                                                                    className="w-full bg-red-600 hover:bg-red-700 sm:w-auto"
+                                                                    onClick={() =>
+                                                                        handleDelete(
+                                                                            pc.id,
+                                                                        )
+                                                                    }
                                                                 >
                                                                     Yes, Delete
                                                                 </AlertDialogAction>
@@ -1070,7 +1494,10 @@ export default function Index() {
 
                                 <TableFooter>
                                     <TableRow>
-                                        <TableCell colSpan={12} className="text-center font-medium">
+                                        <TableCell
+                                            colSpan={12}
+                                            className="text-center font-medium"
+                                        >
                                             PC Specs List
                                         </TableCell>
                                     </TableRow>
@@ -1081,91 +1508,155 @@ export default function Index() {
                 </div>
 
                 {/* Mobile Card View */}
-                <div className="md:hidden space-y-4">
+                <div className="space-y-4 md:hidden">
                     {pcspecs.data.map((pc) => {
                         const proc = pc.processorSpecs?.[0];
-                        const procLabel = proc ? `${proc.manufacturer} ${proc.model}` : '—';
+                        const procLabel = proc
+                            ? `${proc.manufacturer} ${proc.model}`
+                            : '—';
 
                         return (
-                            <div key={pc.id} className="bg-card border rounded-lg p-4 shadow-sm space-y-3">
-                                <div className="flex justify-between items-start">
-                                    <div className="flex items-start gap-3 flex-1">
+                            <div
+                                key={pc.id}
+                                className="space-y-3 rounded-lg border bg-card p-4 shadow-sm"
+                            >
+                                <div className="flex items-start justify-between">
+                                    <div className="flex flex-1 items-start gap-3">
                                         <Checkbox
-                                            checked={selectedPcIds.includes(pc.id)}
-                                            onCheckedChange={(checked) => handleSelectPc(pc.id, checked === true)}
+                                            checked={selectedPcIds.includes(
+                                                pc.id,
+                                            )}
+                                            onCheckedChange={(checked) =>
+                                                handleSelectPc(
+                                                    pc.id,
+                                                    checked === true,
+                                                )
+                                            }
                                             className="mt-1"
                                             aria-label={`Select PC ${pc.pc_number || pc.id}`}
                                         />
                                         <div>
-                                            <div className="text-xs text-muted-foreground">QR Number</div>
+                                            <div className="text-xs text-muted-foreground">
+                                                QR Number
+                                            </div>
                                             <div className="font-bold text-blue-600">
-                                                {pc.pc_number || <span className="text-gray-400">Not assigned</span>}
+                                                {pc.pc_number || (
+                                                    <span className="text-gray-400">
+                                                        Not assigned
+                                                    </span>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div className="flex justify-between items-start">
+                                <div className="flex items-start justify-between">
                                     <div>
-                                        <div className="text-xs text-muted-foreground">Manufacturer</div>
-                                        <div className="font-semibold text-lg">{pc.manufacturer}</div>
+                                        <div className="text-xs text-muted-foreground">
+                                            Manufacturer
+                                        </div>
+                                        <div className="text-lg font-semibold">
+                                            {pc.manufacturer}
+                                        </div>
                                     </div>
                                 </div>
 
                                 <div className="space-y-2 text-sm">
                                     <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Processor:</span>
-                                        <span className="font-medium text-right wrap-break-word max-w-[60%]">{procLabel}</span>
+                                        <span className="text-muted-foreground">
+                                            Processor:
+                                        </span>
+                                        <span className="max-w-[60%] text-right font-medium wrap-break-word">
+                                            {procLabel}
+                                        </span>
                                     </div>
                                     <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Cores / Threads:</span>
+                                        <span className="text-muted-foreground">
+                                            Cores / Threads:
+                                        </span>
                                         <span className="font-medium">
-                                            {proc?.core_count != null || proc?.thread_count != null
+                                            {proc?.core_count != null ||
+                                            proc?.thread_count != null
                                                 ? `${proc?.core_count ?? '?'}C/${proc?.thread_count ?? '?'}T`
                                                 : '—'}
                                         </span>
                                     </div>
                                     <div className="flex justify-between">
-                                        <span className="text-muted-foreground">RAM:</span>
-                                        <span className="font-medium">{pc.ram_gb} GB</span>
+                                        <span className="text-muted-foreground">
+                                            RAM:
+                                        </span>
+                                        <span className="font-medium">
+                                            {pc.ram_gb} GB
+                                        </span>
                                     </div>
                                     <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Disk:</span>
-                                        <span className="font-medium">{pc.disk_gb} GB</span>
+                                        <span className="text-muted-foreground">
+                                            Disk:
+                                        </span>
+                                        <span className="font-medium">
+                                            {pc.disk_gb} GB
+                                        </span>
                                     </div>
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-muted-foreground">Station:</span>
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-muted-foreground">
+                                            Station:
+                                        </span>
                                         {pc.station_numbers.length > 0 ? (
-                                            <div className="flex flex-wrap gap-1 justify-end">
-                                                {pc.station_numbers.map((sn) => (
-                                                    <Badge key={sn} variant="secondary" className="text-xs">{sn}</Badge>
-                                                ))}
+                                            <div className="flex flex-wrap justify-end gap-1">
+                                                {pc.station_numbers.map(
+                                                    (sn) => (
+                                                        <Badge
+                                                            key={sn}
+                                                            variant="secondary"
+                                                            className="text-xs"
+                                                        >
+                                                            {sn}
+                                                        </Badge>
+                                                    ),
+                                                )}
                                             </div>
                                         ) : (
-                                            <span className="text-xs text-gray-400">—</span>
+                                            <span className="text-xs text-gray-400">
+                                                —
+                                            </span>
                                         )}
                                     </div>
                                     {pc.available_ports && (
                                         <div className="flex justify-between">
-                                            <span className="text-muted-foreground">Ports:</span>
-                                            <span className="font-medium text-right max-w-[60%]">{pc.available_ports}</span>
+                                            <span className="text-muted-foreground">
+                                                Ports:
+                                            </span>
+                                            <span className="max-w-[60%] text-right font-medium">
+                                                {pc.available_ports}
+                                            </span>
                                         </div>
                                     )}
-                                    <div className="pt-2 border-t">
-                                        <div className="flex justify-between items-start gap-2">
-                                            <span className="text-muted-foreground">Issue:</span>
-                                            <div className="flex items-center gap-2 flex-1 justify-end">
+                                    <div className="border-t pt-2">
+                                        <div className="flex items-start justify-between gap-2">
+                                            <span className="text-muted-foreground">
+                                                Issue:
+                                            </span>
+                                            <div className="flex flex-1 items-center justify-end gap-2">
                                                 {pc.issue ? (
-                                                    <span className="text-xs text-red-600 font-medium truncate max-w-30" title={pc.issue}>
+                                                    <span
+                                                        className="max-w-30 truncate text-xs font-medium text-red-600"
+                                                        title={pc.issue}
+                                                    >
                                                         ⚠️ {pc.issue}
                                                     </span>
                                                 ) : (
-                                                    <span className="text-xs text-gray-400">No issue</span>
+                                                    <span className="text-xs text-gray-400">
+                                                        No issue
+                                                    </span>
                                                 )}
                                                 <Button
                                                     variant="ghost"
                                                     size="sm"
-                                                    onClick={() => handleOpenIssueDialog(pc)}
+                                                    onClick={() =>
+                                                        handleOpenIssueDialog(
+                                                            pc,
+                                                        )
+                                                    }
                                                     className="h-7 px-2 text-xs"
                                                 >
                                                     {pc.issue ? 'Edit' : 'Add'}
@@ -1174,20 +1665,31 @@ export default function Index() {
                                         </div>
                                     </div>
                                     <div className="pt-1">
-                                        <div className="flex justify-between items-start gap-2">
-                                            <span className="text-muted-foreground">Notes:</span>
-                                            <div className="flex items-center gap-2 flex-1 justify-end">
+                                        <div className="flex items-start justify-between gap-2">
+                                            <span className="text-muted-foreground">
+                                                Notes:
+                                            </span>
+                                            <div className="flex flex-1 items-center justify-end gap-2">
                                                 {pc.notes ? (
-                                                    <span className="text-xs text-muted-foreground truncate max-w-30" title={pc.notes}>
+                                                    <span
+                                                        className="max-w-30 truncate text-xs text-muted-foreground"
+                                                        title={pc.notes}
+                                                    >
                                                         {pc.notes}
                                                     </span>
                                                 ) : (
-                                                    <span className="text-xs text-gray-400">No notes</span>
+                                                    <span className="text-xs text-gray-400">
+                                                        No notes
+                                                    </span>
                                                 )}
                                                 <Button
                                                     variant="ghost"
                                                     size="sm"
-                                                    onClick={() => handleOpenNotesDialog(pc)}
+                                                    onClick={() =>
+                                                        handleOpenNotesDialog(
+                                                            pc,
+                                                        )
+                                                    }
                                                     className="h-7 px-2 text-xs"
                                                 >
                                                     {pc.notes ? 'Edit' : 'Add'}
@@ -1197,27 +1699,37 @@ export default function Index() {
                                     </div>
                                 </div>
 
-                                <div className="flex flex-col gap-2 pt-2 border-t">
+                                <div className="flex flex-col gap-2 border-t pt-2">
                                     <div className="flex gap-2">
-                                        <Link href={withReturnTo(pcSpecEdit.url(pc.id))} className="flex-1">
+                                        <Link
+                                            href={withReturnTo(
+                                                pcSpecEdit.url(pc.id),
+                                            )}
+                                            className="flex-1"
+                                        >
                                             <Button
                                                 variant="outline"
                                                 size="sm"
-                                                className="bg-green-600 hover:bg-green-700 text-white w-full"
+                                                className="w-full bg-green-600 text-white hover:bg-green-700"
                                             >
                                                 Edit
                                             </Button>
                                         </Link>
                                         <Dialog>
                                             <DialogTrigger asChild>
-                                                <Button variant="outline" size="sm" className="flex-1">
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="flex-1"
+                                                >
                                                     Details
                                                 </Button>
                                             </DialogTrigger>
-                                            <DialogContent className="max-w-[95vw] sm:max-w-lg w-full">
+                                            <DialogContent className="w-full max-w-[95vw] sm:max-w-lg">
                                                 <DialogHeader>
                                                     <DialogTitle className="text-lg font-semibold">
-                                                        {pc.pc_number || `PC #${pc.id}`}
+                                                        {pc.pc_number ||
+                                                            `PC #${pc.id}`}
                                                     </DialogTitle>
                                                     <DialogDescription>
                                                         {pc.manufacturer}
@@ -1227,61 +1739,141 @@ export default function Index() {
                                                 <div className="space-y-4 text-sm">
                                                     <div className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-lg border p-4">
                                                         <div>
-                                                            <span className="text-xs text-muted-foreground">Memory Type</span>
-                                                            <p className="font-medium">{pc.memory_type}</p>
+                                                            <span className="text-xs text-muted-foreground">
+                                                                Memory Type
+                                                            </span>
+                                                            <p className="font-medium">
+                                                                {pc.memory_type}
+                                                            </p>
                                                         </div>
                                                         <div>
-                                                            <span className="text-xs text-muted-foreground">RAM</span>
-                                                            <p className="font-medium">{pc.ram_gb} GB</p>
+                                                            <span className="text-xs text-muted-foreground">
+                                                                RAM
+                                                            </span>
+                                                            <p className="font-medium">
+                                                                {pc.ram_gb} GB
+                                                            </p>
                                                         </div>
                                                         <div>
-                                                            <span className="text-xs text-muted-foreground">Disk</span>
-                                                            <p className="font-medium">{pc.disk_gb} GB</p>
+                                                            <span className="text-xs text-muted-foreground">
+                                                                Disk
+                                                            </span>
+                                                            <p className="font-medium">
+                                                                {pc.disk_gb} GB
+                                                            </p>
                                                         </div>
                                                         <div>
-                                                            <span className="text-xs text-muted-foreground">Ports</span>
-                                                            <p className="font-medium">{pc.available_ports || 'N/A'}</p>
+                                                            <span className="text-xs text-muted-foreground">
+                                                                Ports
+                                                            </span>
+                                                            <p className="font-medium">
+                                                                {pc.available_ports ||
+                                                                    'N/A'}
+                                                            </p>
                                                         </div>
                                                         <div>
-                                                            <span className="text-xs text-muted-foreground">Bios Release Date</span>
-                                                            <p className="font-medium">{pc.bios_release_date || 'N/A'}</p>
+                                                            <span className="text-xs text-muted-foreground">
+                                                                Bios Release
+                                                                Date
+                                                            </span>
+                                                            <p className="font-medium">
+                                                                {pc.bios_release_date ||
+                                                                    'N/A'}
+                                                            </p>
                                                         </div>
                                                     </div>
 
-                                                    {pc.processorSpecs?.length ? (
+                                                    {pc.processorSpecs
+                                                        ?.length ? (
                                                         <div className="space-y-2">
-                                                            <h4 className="text-sm font-semibold">Processor</h4>
-                                                            {pc.processorSpecs.map((p) => (
-                                                                <div key={p.id} className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-lg border p-4">
-                                                                    <div className="col-span-2">
-                                                                        <span className="text-xs text-muted-foreground">Processor</span>
-                                                                        <p className="font-medium">{p.manufacturer} {p.model}</p>
+                                                            <h4 className="text-sm font-semibold">
+                                                                Processor
+                                                            </h4>
+                                                            {pc.processorSpecs.map(
+                                                                (p) => (
+                                                                    <div
+                                                                        key={
+                                                                            p.id
+                                                                        }
+                                                                        className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-lg border p-4"
+                                                                    >
+                                                                        <div className="col-span-2">
+                                                                            <span className="text-xs text-muted-foreground">
+                                                                                Processor
+                                                                            </span>
+                                                                            <p className="font-medium">
+                                                                                {
+                                                                                    p.manufacturer
+                                                                                }{' '}
+                                                                                {
+                                                                                    p.model
+                                                                                }
+                                                                            </p>
+                                                                        </div>
+                                                                        <div>
+                                                                            <span className="text-xs text-muted-foreground">
+                                                                                Cores
+                                                                                /
+                                                                                Threads
+                                                                            </span>
+                                                                            <p className="font-medium">
+                                                                                {
+                                                                                    p.core_count
+                                                                                }{' '}
+                                                                                /{' '}
+                                                                                {
+                                                                                    p.thread_count
+                                                                                }
+                                                                            </p>
+                                                                        </div>
+                                                                        <div>
+                                                                            <span className="text-xs text-muted-foreground">
+                                                                                Clock
+                                                                                (Base
+                                                                                /
+                                                                                Boost)
+                                                                            </span>
+                                                                            <p className="font-medium">
+                                                                                {
+                                                                                    p.base_clock_ghz
+                                                                                }{' '}
+                                                                                /{' '}
+                                                                                {
+                                                                                    p.boost_clock_ghz
+                                                                                }{' '}
+                                                                                GHz
+                                                                            </p>
+                                                                        </div>
                                                                     </div>
-                                                                    <div>
-                                                                        <span className="text-xs text-muted-foreground">Cores / Threads</span>
-                                                                        <p className="font-medium">{p.core_count} / {p.thread_count}</p>
-                                                                    </div>
-                                                                    <div>
-                                                                        <span className="text-xs text-muted-foreground">Clock (Base / Boost)</span>
-                                                                        <p className="font-medium">{p.base_clock_ghz} / {p.boost_clock_ghz} GHz</p>
-                                                                    </div>
-                                                                </div>
-                                                            ))}
+                                                                ),
+                                                            )}
                                                         </div>
                                                     ) : (
-                                                        <p className="text-muted-foreground text-sm">No processor specs available.</p>
+                                                        <p className="text-sm text-muted-foreground">
+                                                            No processor specs
+                                                            available.
+                                                        </p>
                                                     )}
 
                                                     {pc.issue && (
-                                                        <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-4">
-                                                            <span className="text-xs text-muted-foreground">Issue</span>
-                                                            <p className="font-medium text-red-600 dark:text-red-400">{pc.issue}</p>
+                                                        <div className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
+                                                            <span className="text-xs text-muted-foreground">
+                                                                Issue
+                                                            </span>
+                                                            <p className="font-medium text-red-600 dark:text-red-400">
+                                                                {pc.issue}
+                                                            </p>
                                                         </div>
                                                     )}
                                                 </div>
 
                                                 <DialogClose asChild>
-                                                    <Button variant="outline" className="mt-2 w-full">Close</Button>
+                                                    <Button
+                                                        variant="outline"
+                                                        className="mt-2 w-full"
+                                                    >
+                                                        Close
+                                                    </Button>
                                                 </DialogClose>
                                             </DialogContent>
                                         </Dialog>
@@ -1290,23 +1882,34 @@ export default function Index() {
                                         <AlertDialogTrigger asChild>
                                             <Button
                                                 variant="destructive"
-                                                className="bg-red-600 hover:bg-red-700 text-white w-full"
+                                                className="w-full bg-red-600 text-white hover:bg-red-700"
                                             >
                                                 Delete
                                             </Button>
                                         </AlertDialogTrigger>
                                         <AlertDialogContent className="max-w-[90vw] sm:max-w-lg">
                                             <AlertDialogHeader>
-                                                <AlertDialogTitle>Confirm Delete</AlertDialogTitle>
+                                                <AlertDialogTitle>
+                                                    Confirm Delete
+                                                </AlertDialogTitle>
                                                 <AlertDialogDescription>
-                                                    Are you sure you want to delete {pc.pc_number || pc.manufacturer}? This action cannot be undone.
+                                                    Are you sure you want to
+                                                    delete{' '}
+                                                    {pc.pc_number ||
+                                                        pc.manufacturer}
+                                                    ? This action cannot be
+                                                    undone.
                                                 </AlertDialogDescription>
                                             </AlertDialogHeader>
-                                            <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-                                                <AlertDialogCancel className="w-full sm:w-auto">Cancel</AlertDialogCancel>
+                                            <AlertDialogFooter className="flex-col gap-2 sm:flex-row">
+                                                <AlertDialogCancel className="w-full sm:w-auto">
+                                                    Cancel
+                                                </AlertDialogCancel>
                                                 <AlertDialogAction
-                                                    className="bg-red-600 hover:bg-red-700 w-full sm:w-auto"
-                                                    onClick={() => handleDelete(pc.id)}
+                                                    className="w-full bg-red-600 hover:bg-red-700 sm:w-auto"
+                                                    onClick={() =>
+                                                        handleDelete(pc.id)
+                                                    }
                                                 >
                                                     Yes, Delete
                                                 </AlertDialogAction>
@@ -1318,7 +1921,7 @@ export default function Index() {
                         );
                     })}
                     {pcspecs.data.length === 0 && (
-                        <div className="py-12 text-center text-gray-500 border rounded-lg bg-card">
+                        <div className="rounded-lg border bg-card py-12 text-center text-gray-500">
                             No PC specs found
                         </div>
                     )}
@@ -1330,30 +1933,48 @@ export default function Index() {
                 </div>
 
                 {/* Bulk Delete Confirmation */}
-                <Dialog open={bulkDeleteConfirmOpen} onOpenChange={setBulkDeleteConfirmOpen}>
+                <Dialog
+                    open={bulkDeleteConfirmOpen}
+                    onOpenChange={setBulkDeleteConfirmOpen}
+                >
                     <DialogContent className="max-w-[90vw] sm:max-w-md">
                         <DialogHeader>
-                            <DialogTitle>Delete {selectedPcIds.length} PC Spec{selectedPcIds.length !== 1 ? 's' : ''}?</DialogTitle>
+                            <DialogTitle>
+                                Delete {selectedPcIds.length} PC Spec
+                                {selectedPcIds.length !== 1 ? 's' : ''}?
+                            </DialogTitle>
                             <DialogDescription>
-                                This action cannot be undone. Any selected PC spec currently assigned to a
-                                station will be automatically unassigned first (the station itself is not
-                                deleted). PC specs with existing transfer or maintenance history are skipped
-                                by default.
+                                This action cannot be undone. Any selected PC
+                                spec currently assigned to a station will be
+                                automatically unassigned first (the station
+                                itself is not deleted). PC specs with existing
+                                transfer or maintenance history are skipped by
+                                default.
                             </DialogDescription>
                         </DialogHeader>
                         <div className="flex items-start gap-2 py-2">
                             <Checkbox
                                 id="force-bulk-delete"
                                 checked={forceBulkDelete}
-                                onCheckedChange={(checked) => setForceBulkDelete(checked === true)}
+                                onCheckedChange={(checked) =>
+                                    setForceBulkDelete(checked === true)
+                                }
                                 className="mt-0.5"
                             />
-                            <Label htmlFor="force-bulk-delete" className="text-sm font-normal leading-snug">
-                                Also delete PC specs with existing transfer/maintenance history
+                            <Label
+                                htmlFor="force-bulk-delete"
+                                className="text-sm leading-snug font-normal"
+                            >
+                                Also delete PC specs with existing
+                                transfer/maintenance history
                             </Label>
                         </div>
-                        <div className="flex flex-col sm:flex-row gap-2 justify-end pt-2">
-                            <Button variant="outline" onClick={() => setBulkDeleteConfirmOpen(false)} disabled={bulkDeleteSubmitting}>
+                        <div className="flex flex-col justify-end gap-2 pt-2 sm:flex-row">
+                            <Button
+                                variant="outline"
+                                onClick={() => setBulkDeleteConfirmOpen(false)}
+                                disabled={bulkDeleteSubmitting}
+                            >
                                 Cancel
                             </Button>
                             <Button
@@ -1361,21 +1982,27 @@ export default function Index() {
                                 onClick={handleSubmitBulkDelete}
                                 disabled={bulkDeleteSubmitting}
                             >
-                                {bulkDeleteSubmitting ? 'Deleting...' : 'Delete'}
+                                {bulkDeleteSubmitting
+                                    ? 'Deleting...'
+                                    : 'Delete'}
                             </Button>
                         </div>
                     </DialogContent>
                 </Dialog>
 
                 {/* Issue Dialog */}
-                <Dialog open={issueDialogOpen} onOpenChange={setIssueDialogOpen}>
+                <Dialog
+                    open={issueDialogOpen}
+                    onOpenChange={setIssueDialogOpen}
+                >
                     <DialogContent className="max-w-[90vw] sm:max-w-md">
                         <DialogHeader>
                             <DialogTitle>Manage Issue Note</DialogTitle>
                             <DialogDescription>
                                 {selectedPcSpec && (
                                     <span className="text-sm wrap-break-word">
-                                        {selectedPcSpec.pc_number || selectedPcSpec.manufacturer}
+                                        {selectedPcSpec.pc_number ||
+                                            selectedPcSpec.manufacturer}
                                     </span>
                                 )}
                             </DialogDescription>
@@ -1387,7 +2014,9 @@ export default function Index() {
                                     id="issue"
                                     placeholder="Describe any issues with this PC spec..."
                                     value={issueText}
-                                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setIssueText(e.target.value)}
+                                    onChange={(
+                                        e: React.ChangeEvent<HTMLTextAreaElement>,
+                                    ) => setIssueText(e.target.value)}
                                     rows={5}
                                     className="resize-none"
                                 />
@@ -1396,11 +2025,18 @@ export default function Index() {
                                 </p>
                             </div>
                         </div>
-                        <div className="flex flex-col sm:flex-row justify-end gap-2">
-                            <Button variant="outline" onClick={() => setIssueDialogOpen(false)} className="w-full sm:w-auto">
+                        <div className="flex flex-col justify-end gap-2 sm:flex-row">
+                            <Button
+                                variant="outline"
+                                onClick={() => setIssueDialogOpen(false)}
+                                className="w-full sm:w-auto"
+                            >
                                 Cancel
                             </Button>
-                            <Button onClick={handleSaveIssue} className="w-full sm:w-auto">
+                            <Button
+                                onClick={handleSaveIssue}
+                                className="w-full sm:w-auto"
+                            >
                                 Save Issue
                             </Button>
                         </div>
@@ -1408,14 +2044,19 @@ export default function Index() {
                 </Dialog>
 
                 {/* Notes Dialog */}
-                <Dialog open={notesDialogOpen} onOpenChange={setNotesDialogOpen}>
+                <Dialog
+                    open={notesDialogOpen}
+                    onOpenChange={setNotesDialogOpen}
+                >
                     <DialogContent className="max-w-[90vw] sm:max-w-md">
                         <DialogHeader>
                             <DialogTitle>Manage Notes</DialogTitle>
                             <DialogDescription>
                                 {selectedPcSpec && (
                                     <span className="text-sm wrap-break-word">
-                                        {selectedPcSpec.pc_number || `PC #${selectedPcSpec.id}`} — {selectedPcSpec.manufacturer}
+                                        {selectedPcSpec.pc_number ||
+                                            `PC #${selectedPcSpec.id}`}{' '}
+                                        — {selectedPcSpec.manufacturer}
                                     </span>
                                 )}
                             </DialogDescription>
@@ -1427,7 +2068,9 @@ export default function Index() {
                                     id="notes"
                                     placeholder="Add notes for this PC spec..."
                                     value={notesText}
-                                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNotesText(e.target.value)}
+                                    onChange={(
+                                        e: React.ChangeEvent<HTMLTextAreaElement>,
+                                    ) => setNotesText(e.target.value)}
                                     rows={5}
                                     className="resize-none"
                                 />
@@ -1436,17 +2079,23 @@ export default function Index() {
                                 </p>
                             </div>
                         </div>
-                        <div className="flex flex-col sm:flex-row justify-end gap-2">
-                            <Button variant="outline" onClick={() => setNotesDialogOpen(false)} className="w-full sm:w-auto">
+                        <div className="flex flex-col justify-end gap-2 sm:flex-row">
+                            <Button
+                                variant="outline"
+                                onClick={() => setNotesDialogOpen(false)}
+                                className="w-full sm:w-auto"
+                            >
                                 Cancel
                             </Button>
-                            <Button onClick={handleSaveNotes} className="w-full sm:w-auto">
+                            <Button
+                                onClick={handleSaveNotes}
+                                className="w-full sm:w-auto"
+                            >
                                 Save Notes
                             </Button>
                         </div>
                     </DialogContent>
                 </Dialog>
-
             </div>
         </AppLayout>
     );

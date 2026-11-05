@@ -27,7 +27,9 @@ interface UseInactivityLogoutOptions {
 export function useInactivityLogout(options: UseInactivityLogoutOptions = {}) {
     const { timeout = 15, enabled = true, showWarning = true } = options;
     const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const warningTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const warningTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+        null,
+    );
 
     const resetTimer = useCallback(() => {
         // Clear existing timers
@@ -45,27 +47,32 @@ export function useInactivityLogout(options: UseInactivityLogoutOptions = {}) {
         if (warningTime > 0 && showWarning) {
             warningTimeoutRef.current = setTimeout(() => {
                 toast.warning('Inactivity Warning', {
-                    description: 'You will be logged out in 1 minute due to inactivity.',
+                    description:
+                        'You will be logged out in 1 minute due to inactivity.',
                     duration: 60000, // Show for 1 minute
                 });
             }, warningTime);
         }
 
         // Set logout timer
-        timeoutRef.current = setTimeout(() => {
-            // Logout the user
-            router.post(
-                '/logout',
-                {},
-                {
-                    onSuccess: () => {
-                        toast.info('Session Expired', {
-                            description: 'You have been logged out due to inactivity.',
-                        });
+        timeoutRef.current = setTimeout(
+            () => {
+                // Logout the user
+                router.post(
+                    '/logout',
+                    {},
+                    {
+                        onSuccess: () => {
+                            toast.info('Session Expired', {
+                                description:
+                                    'You have been logged out due to inactivity.',
+                            });
+                        },
                     },
-                }
-            );
-        }, timeout * 60 * 1000); // Convert minutes to milliseconds
+                );
+            },
+            timeout * 60 * 1000,
+        ); // Convert minutes to milliseconds
     }, [timeout, enabled, showWarning]);
 
     useEffect(() => {

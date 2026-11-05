@@ -1,7 +1,7 @@
-import React, { ReactNode } from 'react';
-import { Link } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
+import { Link } from '@inertiajs/react';
 import { Plus } from 'lucide-react';
+import { ReactNode } from 'react';
 
 interface PageHeaderProps {
     title: string;
@@ -30,17 +30,21 @@ export function PageHeader({
     title,
     description,
     createLink,
-    createLabel = "Add New",
+    createLabel = 'Add New',
     actions,
-    children
+    children,
 }: PageHeaderProps) {
     return (
         <div className="flex flex-col gap-3">
-            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                    <h2 className="text-lg md:text-xl font-semibold">{title}</h2>
+                    <h2 className="text-lg font-semibold md:text-xl">
+                        {title}
+                    </h2>
                     {description && (
-                        <p className="text-sm text-muted-foreground mt-1">{description}</p>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                            {description}
+                        </p>
                     )}
                 </div>
 
@@ -48,9 +52,15 @@ export function PageHeader({
                     <div className="flex gap-2">
                         {actions}
                         {createLink && (
-                            <Link href={createLink} className="w-full sm:w-auto">
-                                <Button variant="default" className="w-full sm:w-auto">
-                                    <Plus className="w-4 h-4 mr-2" />
+                            <Link
+                                href={createLink}
+                                className="w-full sm:w-auto"
+                            >
+                                <Button
+                                    variant="default"
+                                    className="w-full sm:w-auto"
+                                >
+                                    <Plus className="mr-2 h-4 w-4" />
                                     {createLabel}
                                 </Button>
                             </Link>

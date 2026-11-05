@@ -1,5 +1,4 @@
-import { useState, useCallback } from 'react';
-import Cropper, { type Area } from 'react-easy-crop';
+import { Button } from '@/components/ui/button';
 import {
     Dialog,
     DialogContent,
@@ -7,8 +6,9 @@ import {
     DialogFooter,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { ZoomIn, ZoomOut, RotateCw } from 'lucide-react';
+import { RotateCw, ZoomIn, ZoomOut } from 'lucide-react';
+import { useCallback, useState } from 'react';
+import Cropper, { type Area } from 'react-easy-crop';
 
 interface AvatarCropDialogProps {
     open: boolean;
@@ -17,7 +17,10 @@ interface AvatarCropDialogProps {
     onClose: () => void;
 }
 
-async function getCroppedImage(imageSrc: string, pixelCrop: Area): Promise<Blob> {
+async function getCroppedImage(
+    imageSrc: string,
+    pixelCrop: Area,
+): Promise<Blob> {
     const image = await createImage(imageSrc);
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
@@ -65,11 +68,18 @@ function createImage(url: string): Promise<HTMLImageElement> {
     });
 }
 
-export function AvatarCropDialog({ open, imageSrc, onCropComplete, onClose }: AvatarCropDialogProps) {
+export function AvatarCropDialog({
+    open,
+    imageSrc,
+    onCropComplete,
+    onClose,
+}: AvatarCropDialogProps) {
     const [crop, setCrop] = useState({ x: 0, y: 0 });
     const [zoom, setZoom] = useState(1);
     const [rotation, setRotation] = useState(0);
-    const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
+    const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(
+        null,
+    );
     const [processing, setProcessing] = useState(false);
 
     const onCropChange = useCallback((location: { x: number; y: number }) => {
@@ -89,7 +99,10 @@ export function AvatarCropDialog({ open, imageSrc, onCropComplete, onClose }: Av
 
         setProcessing(true);
         try {
-            const croppedBlob = await getCroppedImage(imageSrc, croppedAreaPixels);
+            const croppedBlob = await getCroppedImage(
+                imageSrc,
+                croppedAreaPixels,
+            );
             onCropComplete(croppedBlob);
         } catch (error) {
             console.error('Error cropping image:', error);
@@ -113,7 +126,9 @@ export function AvatarCropDialog({ open, imageSrc, onCropComplete, onClose }: Av
         <Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
             <DialogContent className="max-w-[95vw] sm:max-w-lg">
                 <DialogTitle>Crop Profile Picture</DialogTitle>
-                <DialogDescription>Drag to reposition and use the slider to zoom in or out.</DialogDescription>
+                <DialogDescription>
+                    Drag to reposition and use the slider to zoom in or out.
+                </DialogDescription>
 
                 <div className="relative mx-auto aspect-square w-full max-w-sm overflow-hidden rounded-lg bg-neutral-900">
                     <Cropper
@@ -157,10 +172,19 @@ export function AvatarCropDialog({ open, imageSrc, onCropComplete, onClose }: Av
                 </div>
 
                 <DialogFooter className="gap-2">
-                    <Button type="button" variant="secondary" onClick={handleClose} disabled={processing}>
+                    <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={handleClose}
+                        disabled={processing}
+                    >
                         Cancel
                     </Button>
-                    <Button type="button" onClick={handleSave} disabled={processing}>
+                    <Button
+                        type="button"
+                        onClick={handleSave}
+                        disabled={processing}
+                    >
                         {processing ? 'Saving...' : 'Save'}
                     </Button>
                 </DialogFooter>

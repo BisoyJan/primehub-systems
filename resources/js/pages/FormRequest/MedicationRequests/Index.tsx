@@ -1,18 +1,8 @@
-import { Head, Link, router } from '@inertiajs/react';
-import { useState, useEffect, useCallback, useRef } from 'react';
-import AppLayout from '@/layouts/app-layout';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { PageHeader } from '@/components/PageHeader';
+import { TableSkeleton } from '@/components/TableSkeleton';
+import { Can } from '@/components/authorization';
+import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -23,14 +13,44 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Plus, Search, Eye, Trash2, RefreshCw, Filter, Play, Pause } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
-import { PageHeader } from '@/components/PageHeader';
-import { LoadingOverlay } from '@/components/LoadingOverlay';
-import { TableSkeleton } from '@/components/TableSkeleton';
-import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
-import { Can } from '@/components/authorization';
-import { index as medicationIndexRoute, create as medicationCreateRoute, show as medicationShowRoute, destroy as medicationDestroyRoute } from '@/routes/medication-requests';
+import AppLayout from '@/layouts/app-layout';
+import {
+    create as medicationCreateRoute,
+    destroy as medicationDestroyRoute,
+    index as medicationIndexRoute,
+    show as medicationShowRoute,
+} from '@/routes/medication-requests';
+import { Head, Link, router } from '@inertiajs/react';
+import {
+    Eye,
+    Filter,
+    Pause,
+    Play,
+    Plus,
+    RefreshCw,
+    Search,
+    Trash2,
+} from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface MedicationRequest {
     id: number;
@@ -79,7 +99,13 @@ interface Props {
     teamLeadCampaignIds?: number[];
 }
 
-export default function Index({ medicationRequests, filters, medicationTypes = [], campaigns = [], teamLeadCampaignIds }: Props) {
+export default function Index({
+    medicationRequests,
+    filters,
+    medicationTypes = [],
+    campaigns = [],
+    teamLeadCampaignIds,
+}: Props) {
     const { title, breadcrumbs } = usePageMeta({
         title: 'Medication Requests',
         breadcrumbs: [
@@ -93,7 +119,9 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
 
     const [search, setSearch] = useState(filters.search || '');
     const [status, setStatus] = useState(filters.status || 'all');
-    const [medicationType, setMedicationType] = useState(filters.medication_type || 'all');
+    const [medicationType, setMedicationType] = useState(
+        filters.medication_type || 'all',
+    );
     const [campaignFilter, setCampaignFilter] = useState(() => {
         if (filters.campaign_id) return filters.campaign_id;
         return 'all';
@@ -104,7 +132,11 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [requestToDelete, setRequestToDelete] = useState<number | null>(null);
 
-    const showClearFilters = Boolean(search) || status !== 'all' || medicationType !== 'all' || campaignFilter !== 'all';
+    const showClearFilters =
+        Boolean(search) ||
+        status !== 'all' ||
+        medicationType !== 'all' ||
+        campaignFilter !== 'all';
 
     const buildFilterParams = useCallback(() => {
         const params: Record<string, string> = {};
@@ -167,7 +199,10 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
         };
 
         return (
-            <Badge variant="outline" className={colors[status as keyof typeof colors]}>
+            <Badge
+                variant="outline"
+                className={colors[status as keyof typeof colors]}
+            >
                 {status.charAt(0).toUpperCase() + status.slice(1)}
             </Badge>
         );
@@ -190,7 +225,9 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
                 replace: true,
                 only: ['medicationRequests'],
                 onSuccess: () => setLastRefresh(new Date()),
-                onFinish: () => { isPollingRef.current = false; },
+                onFinish: () => {
+                    isPollingRef.current = false;
+                },
             });
         }, 30000);
 
@@ -214,8 +251,12 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
     const paginationLinks = medicationRequests.links || [];
 
     const hasResults = medicationRequests.data.length > 0;
-    const showingStart = hasResults ? (paginationMeta.per_page * (paginationMeta.current_page - 1)) + 1 : 0;
-    const showingEnd = hasResults ? showingStart + medicationRequests.data.length - 1 : 0;
+    const showingStart = hasResults
+        ? paginationMeta.per_page * (paginationMeta.current_page - 1) + 1
+        : 0;
+    const showingEnd = hasResults
+        ? showingStart + medicationRequests.data.length - 1
+        : 0;
     const summaryText = hasResults
         ? `Showing ${showingStart}-${showingEnd} of ${paginationMeta.total} requests`
         : 'No medication requests to display';
@@ -224,7 +265,7 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={title} />
 
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3 relative">
+            <div className="relative flex h-full flex-1 flex-col gap-4 rounded-xl p-3">
                 <LoadingOverlay isLoading={isPageLoading || localLoading} />
 
                 <PageHeader
@@ -233,15 +274,17 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
                 />
 
                 <div className="flex flex-col gap-4">
-                    <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
-                        <div className="w-full sm:w-auto flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+                        <div className="grid w-full flex-1 grid-cols-1 gap-3 sm:w-auto sm:grid-cols-2 lg:grid-cols-4">
                             <div className="relative">
-                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Search className="absolute top-2.5 left-2.5 h-4 w-4 text-muted-foreground" />
                                 <Input
                                     placeholder="Search..."
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
-                                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                                    onKeyDown={(e) =>
+                                        e.key === 'Enter' && handleSearch()
+                                    }
                                     className="pl-8"
                                 />
                             </div>
@@ -251,20 +294,35 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
                                     <SelectValue placeholder="All statuses" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="all">All statuses</SelectItem>
-                                    <SelectItem value="pending">Pending</SelectItem>
-                                    <SelectItem value="approved">Approved</SelectItem>
-                                    <SelectItem value="dispensed">Dispensed</SelectItem>
-                                    <SelectItem value="rejected">Rejected</SelectItem>
+                                    <SelectItem value="all">
+                                        All statuses
+                                    </SelectItem>
+                                    <SelectItem value="pending">
+                                        Pending
+                                    </SelectItem>
+                                    <SelectItem value="approved">
+                                        Approved
+                                    </SelectItem>
+                                    <SelectItem value="dispensed">
+                                        Dispensed
+                                    </SelectItem>
+                                    <SelectItem value="rejected">
+                                        Rejected
+                                    </SelectItem>
                                 </SelectContent>
                             </Select>
 
-                            <Select value={medicationType} onValueChange={setMedicationType}>
+                            <Select
+                                value={medicationType}
+                                onValueChange={setMedicationType}
+                            >
                                 <SelectTrigger className="w-full">
                                     <SelectValue placeholder="All medication types" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="all">All medication types</SelectItem>
+                                    <SelectItem value="all">
+                                        All medication types
+                                    </SelectItem>
                                     {medicationTypes.map((type) => (
                                         <SelectItem key={type} value={type}>
                                             {type}
@@ -273,14 +331,29 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
                                 </SelectContent>
                             </Select>
 
-                            <Select value={campaignFilter} onValueChange={setCampaignFilter}>
+                            <Select
+                                value={campaignFilter}
+                                onValueChange={setCampaignFilter}
+                            >
                                 <SelectTrigger className="w-full">
                                     <SelectValue placeholder="All Campaigns" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="all">All Campaigns</SelectItem>
-                                    {(teamLeadCampaignIds?.length ? campaigns.filter(c => teamLeadCampaignIds.includes(c.id)) : campaigns).map(campaign => (
-                                        <SelectItem key={campaign.id} value={String(campaign.id)}>
+                                    <SelectItem value="all">
+                                        All Campaigns
+                                    </SelectItem>
+                                    {(teamLeadCampaignIds?.length
+                                        ? campaigns.filter((c) =>
+                                              teamLeadCampaignIds.includes(
+                                                  c.id,
+                                              ),
+                                          )
+                                        : campaigns
+                                    ).map((campaign) => (
+                                        <SelectItem
+                                            key={campaign.id}
+                                            value={String(campaign.id)}
+                                        >
                                             {campaign.name}
                                         </SelectItem>
                                     ))}
@@ -288,34 +361,64 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
                             </Select>
                         </div>
 
-                        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-                            <Button variant="outline" onClick={handleSearch} className="flex-1 sm:flex-none">
+                        <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+                            <Button
+                                variant="outline"
+                                onClick={handleSearch}
+                                className="flex-1 sm:flex-none"
+                            >
                                 <Filter className="mr-2 h-4 w-4" />
                                 Filter
                             </Button>
 
                             {showClearFilters && (
-                                <Button variant="outline" onClick={clearFilters} className="flex-1 sm:flex-none">
+                                <Button
+                                    variant="outline"
+                                    onClick={clearFilters}
+                                    className="flex-1 sm:flex-none"
+                                >
                                     Reset
                                 </Button>
                             )}
 
                             <div className="flex gap-2">
-                                <Button variant="ghost" size="icon" onClick={handleManualRefresh} title="Refresh">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={handleManualRefresh}
+                                    title="Refresh"
+                                >
                                     <RefreshCw className="h-4 w-4" />
                                 </Button>
                                 <Button
-                                    variant={autoRefreshEnabled ? "default" : "ghost"}
+                                    variant={
+                                        autoRefreshEnabled ? 'default' : 'ghost'
+                                    }
                                     size="icon"
-                                    onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
-                                    title={autoRefreshEnabled ? "Disable auto-refresh" : "Enable auto-refresh (30s)"}
+                                    onClick={() =>
+                                        setAutoRefreshEnabled(
+                                            !autoRefreshEnabled,
+                                        )
+                                    }
+                                    title={
+                                        autoRefreshEnabled
+                                            ? 'Disable auto-refresh'
+                                            : 'Enable auto-refresh (30s)'
+                                    }
                                 >
-                                    {autoRefreshEnabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                                    {autoRefreshEnabled ? (
+                                        <Pause className="h-4 w-4" />
+                                    ) : (
+                                        <Play className="h-4 w-4" />
+                                    )}
                                 </Button>
                             </div>
 
                             <Can permission="medication_requests.create">
-                                <Link href={medicationCreateRoute().url} className="flex-1 sm:flex-none">
+                                <Link
+                                    href={medicationCreateRoute().url}
+                                    className="flex-1 sm:flex-none"
+                                >
                                     <Button className="w-full sm:w-auto">
                                         <Plus className="mr-2 h-4 w-4" />
                                         New Request
@@ -325,17 +428,19 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
                         </div>
                     </div>
 
-                    <div className="flex justify-between items-center text-sm">
+                    <div className="flex items-center justify-between text-sm">
                         <div className="text-muted-foreground">
                             {summaryText}
                             {showClearFilters && hasResults && ' (filtered)'}
                         </div>
-                        <div className="text-xs text-muted-foreground">Last updated: {lastRefresh.toLocaleTimeString()}</div>
+                        <div className="text-xs text-muted-foreground">
+                            Last updated: {lastRefresh.toLocaleTimeString()}
+                        </div>
                     </div>
                 </div>
 
                 {/* Desktop Table View */}
-                <div className="hidden md:block overflow-hidden rounded-md border bg-card">
+                <div className="hidden overflow-hidden rounded-md border bg-card md:block">
                     {isPageLoading ? (
                         <TableSkeleton columns={9} rows={8} />
                     ) : (
@@ -348,60 +453,120 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
                                             <TableHead>Email</TableHead>
                                             <TableHead>Campaign</TableHead>
                                             <TableHead>Site</TableHead>
-                                            <TableHead>Medication Type</TableHead>
-                                            <TableHead>Onset of Symptoms</TableHead>
+                                            <TableHead>
+                                                Medication Type
+                                            </TableHead>
+                                            <TableHead>
+                                                Onset of Symptoms
+                                            </TableHead>
                                             <TableHead>Status</TableHead>
-                                            <TableHead>Requested Date</TableHead>
-                                            <TableHead className="text-right">Actions</TableHead>
+                                            <TableHead>
+                                                Requested Date
+                                            </TableHead>
+                                            <TableHead className="text-right">
+                                                Actions
+                                            </TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {medicationRequests.data.length === 0 ? (
+                                        {medicationRequests.data.length ===
+                                        0 ? (
                                             <TableRow>
-                                                <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                                                <TableCell
+                                                    colSpan={9}
+                                                    className="py-8 text-center text-muted-foreground"
+                                                >
                                                     No medication requests found
                                                 </TableCell>
                                             </TableRow>
                                         ) : (
-                                            medicationRequests.data.map((request) => (
-                                                <TableRow key={request.id}>
-                                                    <TableCell className="font-medium">{request.name}</TableCell>
-                                                    <TableCell>{request.user?.email || '-'}</TableCell>
-                                                    <TableCell>{request.user?.active_schedule?.campaign?.name || '-'}</TableCell>
-                                                    <TableCell>{request.user?.active_schedule?.site?.name || '-'}</TableCell>
-                                                    <TableCell>{request.medication_type}</TableCell>
-                                                    <TableCell className="capitalize">{request.onset_of_symptoms.replace(/_/g, ' ')}</TableCell>
-                                                    <TableCell>{getStatusBadge(request.status)}</TableCell>
-                                                    <TableCell>{new Date(request.created_at).toLocaleDateString()}</TableCell>
-                                                    <TableCell className="text-right">
-                                                        <div className="flex justify-end gap-2">
-                                                            <Link href={medicationShowRoute(request.id).url}>
-                                                                <Button variant="outline" size="icon" title="View Details">
-                                                                    <Eye className="h-4 w-4" />
-                                                                </Button>
-                                                            </Link>
-                                                            <Can permission="medication_requests.delete">
-                                                                <Button
-                                                                    variant="outline"
-                                                                    size="icon"
-                                                                    onClick={() => handleDelete(request.id)}
-                                                                    title="Delete Request"
-                                                                    className="text-red-600 hover:text-red-700 border-red-300"
+                                            medicationRequests.data.map(
+                                                (request) => (
+                                                    <TableRow key={request.id}>
+                                                        <TableCell className="font-medium">
+                                                            {request.name}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {request.user
+                                                                ?.email || '-'}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {request.user
+                                                                ?.active_schedule
+                                                                ?.campaign
+                                                                ?.name || '-'}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {request.user
+                                                                ?.active_schedule
+                                                                ?.site?.name ||
+                                                                '-'}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {
+                                                                request.medication_type
+                                                            }
+                                                        </TableCell>
+                                                        <TableCell className="capitalize">
+                                                            {request.onset_of_symptoms.replace(
+                                                                /_/g,
+                                                                ' ',
+                                                            )}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {getStatusBadge(
+                                                                request.status,
+                                                            )}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {new Date(
+                                                                request.created_at,
+                                                            ).toLocaleDateString()}
+                                                        </TableCell>
+                                                        <TableCell className="text-right">
+                                                            <div className="flex justify-end gap-2">
+                                                                <Link
+                                                                    href={
+                                                                        medicationShowRoute(
+                                                                            request.id,
+                                                                        ).url
+                                                                    }
                                                                 >
-                                                                    <Trash2 className="h-4 w-4" />
-                                                                </Button>
-                                                            </Can>
-                                                        </div>
-                                                    </TableCell>
-                                                </TableRow>
-                                            ))
+                                                                    <Button
+                                                                        variant="outline"
+                                                                        size="icon"
+                                                                        title="View Details"
+                                                                    >
+                                                                        <Eye className="h-4 w-4" />
+                                                                    </Button>
+                                                                </Link>
+                                                                <Can permission="medication_requests.delete">
+                                                                    <Button
+                                                                        variant="outline"
+                                                                        size="icon"
+                                                                        onClick={() =>
+                                                                            handleDelete(
+                                                                                request.id,
+                                                                            )
+                                                                        }
+                                                                        title="Delete Request"
+                                                                        className="border-red-300 text-red-600 hover:text-red-700"
+                                                                    >
+                                                                        <Trash2 className="h-4 w-4" />
+                                                                    </Button>
+                                                                </Can>
+                                                            </div>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ),
+                                            )
                                         )}
                                     </TableBody>
                                 </Table>
                             </div>
 
                             {paginationLinks.length > 0 && (
-                                <div className="border-t px-4 py-3 flex justify-center">
+                                <div className="flex justify-center border-t px-4 py-3">
                                     <PaginationNav links={paginationLinks} />
                                 </div>
                             )}
@@ -410,47 +575,87 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
                 </div>
 
                 {/* Mobile Card View */}
-                <div className="md:hidden space-y-4">
+                <div className="space-y-4 md:hidden">
                     {medicationRequests.data.length === 0 ? (
-                        <div className="py-12 text-center text-muted-foreground border rounded-lg bg-card">
+                        <div className="rounded-lg border bg-card py-12 text-center text-muted-foreground">
                             No medication requests found
                         </div>
                     ) : (
                         medicationRequests.data.map((request) => (
-                            <div key={request.id} className="bg-card border rounded-lg p-4 shadow-sm space-y-3">
-                                <div className="flex justify-between items-start">
+                            <div
+                                key={request.id}
+                                className="space-y-3 rounded-lg border bg-card p-4 shadow-sm"
+                            >
+                                <div className="flex items-start justify-between">
                                     <div>
-                                        <div className="text-lg font-semibold">{request.name}</div>
-                                        <div className="text-sm text-muted-foreground">{request.user?.email || '-'}</div>
+                                        <div className="text-lg font-semibold">
+                                            {request.name}
+                                        </div>
+                                        <div className="text-sm text-muted-foreground">
+                                            {request.user?.email || '-'}
+                                        </div>
                                     </div>
                                     {getStatusBadge(request.status)}
                                 </div>
 
                                 <div className="space-y-2 text-sm">
                                     <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Campaign:</span>
-                                        <span className="font-medium">{request.user?.active_schedule?.campaign?.name || '-'}</span>
+                                        <span className="text-muted-foreground">
+                                            Campaign:
+                                        </span>
+                                        <span className="font-medium">
+                                            {request.user?.active_schedule
+                                                ?.campaign?.name || '-'}
+                                        </span>
                                     </div>
                                     <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Site:</span>
-                                        <span className="font-medium">{request.user?.active_schedule?.site?.name || '-'}</span>
+                                        <span className="text-muted-foreground">
+                                            Site:
+                                        </span>
+                                        <span className="font-medium">
+                                            {request.user?.active_schedule?.site
+                                                ?.name || '-'}
+                                        </span>
                                     </div>
                                     <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Medication Type:</span>
-                                        <span className="font-medium">{request.medication_type}</span>
+                                        <span className="text-muted-foreground">
+                                            Medication Type:
+                                        </span>
+                                        <span className="font-medium">
+                                            {request.medication_type}
+                                        </span>
                                     </div>
                                     <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Onset of Symptoms:</span>
-                                        <span className="font-medium capitalize">{request.onset_of_symptoms.replace(/_/g, ' ')}</span>
+                                        <span className="text-muted-foreground">
+                                            Onset of Symptoms:
+                                        </span>
+                                        <span className="font-medium capitalize">
+                                            {request.onset_of_symptoms.replace(
+                                                /_/g,
+                                                ' ',
+                                            )}
+                                        </span>
                                     </div>
-                                    <div className="text-xs text-muted-foreground pt-1">
-                                        Requested: {new Date(request.created_at).toLocaleDateString()}
+                                    <div className="pt-1 text-xs text-muted-foreground">
+                                        Requested:{' '}
+                                        {new Date(
+                                            request.created_at,
+                                        ).toLocaleDateString()}
                                     </div>
                                 </div>
 
-                                <div className="flex gap-2 pt-2 border-t">
-                                    <Link href={medicationShowRoute(request.id).url} className="flex-1">
-                                        <Button variant="outline" size="sm" className="w-full">
+                                <div className="flex gap-2 border-t pt-2">
+                                    <Link
+                                        href={
+                                            medicationShowRoute(request.id).url
+                                        }
+                                        className="flex-1"
+                                    >
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="w-full"
+                                        >
                                             <Eye className="mr-2 h-4 w-4" />
                                             View
                                         </Button>
@@ -459,8 +664,10 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
                                         <Button
                                             variant="outline"
                                             size="sm"
-                                            onClick={() => handleDelete(request.id)}
-                                            className="flex-1 text-red-600 hover:text-red-700 border-red-300"
+                                            onClick={() =>
+                                                handleDelete(request.id)
+                                            }
+                                            className="flex-1 border-red-300 text-red-600 hover:text-red-700"
                                         >
                                             <Trash2 className="mr-2 h-4 w-4" />
                                             Delete
@@ -479,17 +686,23 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
                 </div>
 
                 {/* Delete Confirmation Dialog */}
-                <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                <AlertDialog
+                    open={deleteDialogOpen}
+                    onOpenChange={setDeleteDialogOpen}
+                >
                     <AlertDialogContent>
                         <AlertDialogHeader>
                             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                             <AlertDialogDescription>
-                                This action cannot be undone. This will permanently delete the medication request.
+                                This action cannot be undone. This will
+                                permanently delete the medication request.
                             </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={confirmDelete}>Delete</AlertDialogAction>
+                            <AlertDialogAction onClick={confirmDelete}>
+                                Delete
+                            </AlertDialogAction>
                         </AlertDialogFooter>
                     </AlertDialogContent>
                 </AlertDialog>

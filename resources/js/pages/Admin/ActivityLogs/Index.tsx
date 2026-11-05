@@ -1,5 +1,25 @@
-import { Head, router } from '@inertiajs/react';
-import AppLayout from '@/layouts/app-layout';
+import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
+import { TableSkeleton } from '@/components/TableSkeleton';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
+import {
+    Sheet,
+    SheetContent,
+    SheetDescription,
+    SheetHeader,
+    SheetTitle,
+} from '@/components/ui/sheet';
 import {
     Table,
     TableBody,
@@ -8,33 +28,22 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
-import {
-    Sheet,
-    SheetContent,
-    SheetHeader,
-    SheetTitle,
-    SheetDescription,
-} from '@/components/ui/sheet';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
-import { Search, X, RefreshCw, Play, Pause, ArrowRight, Eye, Download } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
-import { useDebounce } from '@/hooks/use-debounce';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import activityLogs, { exportMethod } from '@/routes/activity-logs';
-import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
-import { TableSkeleton } from '@/components/TableSkeleton';
 import { usePageLoading } from '@/hooks';
+import { useDebounce } from '@/hooks/use-debounce';
+import AppLayout from '@/layouts/app-layout';
+import activityLogs, { exportMethod } from '@/routes/activity-logs';
+import { Head, router } from '@inertiajs/react';
+import {
+    ArrowRight,
+    Download,
+    Eye,
+    Pause,
+    Play,
+    RefreshCw,
+    Search,
+    X,
+} from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 
 interface Activity {
     id: number;
@@ -68,12 +77,18 @@ interface Props {
     };
 }
 
-export default function ActivityLogsIndex({ activities, causers, filters }: Props) {
+export default function ActivityLogsIndex({
+    activities,
+    causers,
+    filters,
+}: Props) {
     const [search, setSearch] = useState(filters.search || '');
     const [event, setEvent] = useState(filters.event || 'all');
     const [causer, setCauser] = useState(filters.causer || 'all');
     const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
-    const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
+    const [selectedActivity, setSelectedActivity] = useState<Activity | null>(
+        null,
+    );
     const debouncedSearch = useDebounce(search, 300);
     const isUserTyping = useRef(false);
     const isLoading = usePageLoading();
@@ -117,7 +132,15 @@ export default function ActivityLogsIndex({ activities, causers, filters }: Prop
                     event: event === 'all' ? '' : event,
                     causer: causer === 'all' ? '' : causer,
                 },
-                { preserveState: true, preserveScroll: true, replace: true, only: ['activities'], onFinish: () => { isPollingRef.current = false; } },
+                {
+                    preserveState: true,
+                    preserveScroll: true,
+                    replace: true,
+                    only: ['activities'],
+                    onFinish: () => {
+                        isPollingRef.current = false;
+                    },
+                },
             );
         }, 30000);
 
@@ -133,7 +156,11 @@ export default function ActivityLogsIndex({ activities, causers, filters }: Prop
         setEvent(value);
         router.get(
             activityLogs.index().url,
-            { search, event: value === 'all' ? '' : value, causer: causer === 'all' ? '' : causer },
+            {
+                search,
+                event: value === 'all' ? '' : value,
+                causer: causer === 'all' ? '' : causer,
+            },
             { preserveState: true, replace: true },
         );
     };
@@ -142,7 +169,11 @@ export default function ActivityLogsIndex({ activities, causers, filters }: Prop
         setCauser(value);
         router.get(
             activityLogs.index().url,
-            { search, event: event === 'all' ? '' : event, causer: value === 'all' ? '' : value },
+            {
+                search,
+                event: event === 'all' ? '' : event,
+                causer: value === 'all' ? '' : value,
+            },
             { preserveState: true, replace: true },
         );
     };
@@ -165,12 +196,18 @@ export default function ActivityLogsIndex({ activities, causers, filters }: Prop
 
     const getEventColor = (event: string) => {
         switch (event) {
-            case 'created': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
-            case 'updated': return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300';
-            case 'deleted': return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300';
-            case 'login': return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300';
-            case 'logout': return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
-            default: return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
+            case 'created':
+                return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
+            case 'updated':
+                return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300';
+            case 'deleted':
+                return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300';
+            case 'login':
+                return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300';
+            case 'logout':
+                return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
+            default:
+                return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
         }
     };
 
@@ -193,7 +230,12 @@ export default function ActivityLogsIndex({ activities, causers, filters }: Prop
         const props = activity.properties;
         if (!props) return [];
         if (props.old && props.attributes) {
-            return [...new Set([...Object.keys(props.old), ...Object.keys(props.attributes)])];
+            return [
+                ...new Set([
+                    ...Object.keys(props.old),
+                    ...Object.keys(props.attributes),
+                ]),
+            ];
         }
         if (props.attributes) return Object.keys(props.attributes);
         if (props.old) return Object.keys(props.old);
@@ -201,13 +243,19 @@ export default function ActivityLogsIndex({ activities, causers, filters }: Prop
     };
 
     return (
-        <AppLayout breadcrumbs={[{ title: 'Activity Logs', href: activityLogs.index().url }]}>
+        <AppLayout
+            breadcrumbs={[
+                { title: 'Activity Logs', href: activityLogs.index().url },
+            ]}
+        >
             <Head title="Activity Logs" />
 
             <div className="flex h-full flex-1 flex-col gap-4 p-4">
                 <div className="flex items-center justify-between">
                     <div>
-                        <h2 className="text-2xl font-bold tracking-tight">Activity Logs</h2>
+                        <h2 className="text-2xl font-bold tracking-tight">
+                            Activity Logs
+                        </h2>
                         <p className="text-muted-foreground">
                             Track user actions and system events.
                         </p>
@@ -219,7 +267,7 @@ export default function ActivityLogsIndex({ activities, causers, filters }: Prop
                         <div className="flex flex-col gap-4">
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div className="relative flex-1 sm:max-w-sm">
-                                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                    <Search className="absolute top-2.5 left-2.5 h-4 w-4 text-muted-foreground" />
                                     <Input
                                         placeholder="Search logs..."
                                         className="pl-8"
@@ -228,51 +276,113 @@ export default function ActivityLogsIndex({ activities, causers, filters }: Prop
                                     />
                                 </div>
                                 <div className="flex items-center gap-1">
-                                    <Button variant="ghost" size="icon" onClick={() => router.reload({ only: ['activities'] })} title="Refresh">
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() =>
+                                            router.reload({
+                                                only: ['activities'],
+                                            })
+                                        }
+                                        title="Refresh"
+                                    >
                                         <RefreshCw className="h-4 w-4" />
                                     </Button>
                                     <Button
-                                        variant={autoRefreshEnabled ? 'default' : 'ghost'}
+                                        variant={
+                                            autoRefreshEnabled
+                                                ? 'default'
+                                                : 'ghost'
+                                        }
                                         size="icon"
-                                        onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
-                                        title={autoRefreshEnabled ? 'Disable auto-refresh' : 'Enable auto-refresh (30s)'}
+                                        onClick={() =>
+                                            setAutoRefreshEnabled(
+                                                !autoRefreshEnabled,
+                                            )
+                                        }
+                                        title={
+                                            autoRefreshEnabled
+                                                ? 'Disable auto-refresh'
+                                                : 'Enable auto-refresh (30s)'
+                                        }
                                     >
-                                        {autoRefreshEnabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                                        {autoRefreshEnabled ? (
+                                            <Pause className="h-4 w-4" />
+                                        ) : (
+                                            <Play className="h-4 w-4" />
+                                        )}
                                     </Button>
-                                    <Button variant="ghost" size="icon" onClick={handleExport} title="Export CSV">
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={handleExport}
+                                        title="Export CSV"
+                                    >
                                         <Download className="h-4 w-4" />
                                     </Button>
                                 </div>
                             </div>
                             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                                <Select value={event} onValueChange={handleEventChange}>
+                                <Select
+                                    value={event}
+                                    onValueChange={handleEventChange}
+                                >
                                     <SelectTrigger className="w-full sm:w-[160px]">
                                         <SelectValue placeholder="Filter by Event" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="all">All Events</SelectItem>
-                                        <SelectItem value="created">Created</SelectItem>
-                                        <SelectItem value="updated">Updated</SelectItem>
-                                        <SelectItem value="deleted">Deleted</SelectItem>
-                                        <SelectItem value="login">Login</SelectItem>
-                                        <SelectItem value="logout">Logout</SelectItem>
+                                        <SelectItem value="all">
+                                            All Events
+                                        </SelectItem>
+                                        <SelectItem value="created">
+                                            Created
+                                        </SelectItem>
+                                        <SelectItem value="updated">
+                                            Updated
+                                        </SelectItem>
+                                        <SelectItem value="deleted">
+                                            Deleted
+                                        </SelectItem>
+                                        <SelectItem value="login">
+                                            Login
+                                        </SelectItem>
+                                        <SelectItem value="logout">
+                                            Logout
+                                        </SelectItem>
                                     </SelectContent>
                                 </Select>
-                                <Select value={causer} onValueChange={handleCauserChange}>
+                                <Select
+                                    value={causer}
+                                    onValueChange={handleCauserChange}
+                                >
                                     <SelectTrigger className="w-full sm:w-[200px]">
                                         <SelectValue placeholder="Filter by User" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="all">All Users</SelectItem>
-                                        {Object.entries(causers).map(([id, name]) => (
-                                            <SelectItem key={id} value={name}>
-                                                {name}
-                                            </SelectItem>
-                                        ))}
+                                        <SelectItem value="all">
+                                            All Users
+                                        </SelectItem>
+                                        {Object.entries(causers).map(
+                                            ([id, name]) => (
+                                                <SelectItem
+                                                    key={id}
+                                                    value={name}
+                                                >
+                                                    {name}
+                                                </SelectItem>
+                                            ),
+                                        )}
                                     </SelectContent>
                                 </Select>
-                                {(search || event !== 'all' || causer !== 'all') && (
-                                    <Button variant="ghost" size="icon" onClick={clearFilters} title="Clear filters">
+                                {(search ||
+                                    event !== 'all' ||
+                                    causer !== 'all') && (
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={clearFilters}
+                                        title="Clear filters"
+                                    >
                                         <X className="h-4 w-4" />
                                     </Button>
                                 )}
@@ -281,7 +391,7 @@ export default function ActivityLogsIndex({ activities, causers, filters }: Prop
                     </CardHeader>
                     <CardContent>
                         {/* Desktop Table View */}
-                        <div className="hidden md:block rounded-md border">
+                        <div className="hidden rounded-md border md:block">
                             {isLoading ? (
                                 <TableSkeleton columns={7} rows={8} />
                             ) : (
@@ -300,7 +410,10 @@ export default function ActivityLogsIndex({ activities, causers, filters }: Prop
                                     <TableBody>
                                         {activities.data.length === 0 ? (
                                             <TableRow>
-                                                <TableCell colSpan={7} className="h-24 text-center">
+                                                <TableCell
+                                                    colSpan={7}
+                                                    className="h-24 text-center"
+                                                >
                                                     No logs found.
                                                 </TableCell>
                                             </TableRow>
@@ -309,37 +422,81 @@ export default function ActivityLogsIndex({ activities, causers, filters }: Prop
                                                 <TableRow
                                                     key={activity.id}
                                                     className="cursor-pointer hover:bg-muted/50"
-                                                    onClick={() => setSelectedActivity(activity)}
+                                                    onClick={() =>
+                                                        setSelectedActivity(
+                                                            activity,
+                                                        )
+                                                    }
                                                 >
-                                                    <TableCell className="font-medium">{activity.causer}</TableCell>
+                                                    <TableCell className="font-medium">
+                                                        {activity.causer}
+                                                    </TableCell>
                                                     <TableCell>
-                                                        <Badge variant="outline" className={getEventColor(activity.event)}>
+                                                        <Badge
+                                                            variant="outline"
+                                                            className={getEventColor(
+                                                                activity.event,
+                                                            )}
+                                                        >
                                                             {activity.event}
                                                         </Badge>
                                                     </TableCell>
                                                     <TableCell>
-                                                        {activity.subject_type} #{activity.subject_id}
+                                                        {activity.subject_type}{' '}
+                                                        #{activity.subject_id}
                                                     </TableCell>
-                                                    <TableCell className="max-w-xs truncate" title={activity.description}>
+                                                    <TableCell
+                                                        className="max-w-xs truncate"
+                                                        title={
+                                                            activity.description
+                                                        }
+                                                    >
                                                         {activity.description}
                                                     </TableCell>
                                                     <TableCell>
-                                                        {hasChanges(activity) ? (
+                                                        {hasChanges(
+                                                            activity,
+                                                        ) ? (
                                                             <span className="text-xs text-muted-foreground">
-                                                                {getChangedFields(activity).length} field{getChangedFields(activity).length !== 1 ? 's' : ''}
+                                                                {
+                                                                    getChangedFields(
+                                                                        activity,
+                                                                    ).length
+                                                                }{' '}
+                                                                field
+                                                                {getChangedFields(
+                                                                    activity,
+                                                                ).length !== 1
+                                                                    ? 's'
+                                                                    : ''}
                                                             </span>
                                                         ) : (
-                                                            <span className="text-xs text-muted-foreground">—</span>
+                                                            <span className="text-xs text-muted-foreground">
+                                                                —
+                                                            </span>
                                                         )}
                                                     </TableCell>
                                                     <TableCell className="whitespace-nowrap text-muted-foreground">
                                                         <div className="flex flex-col">
-                                                            <span>{activity.created_at}</span>
-                                                            <span className="text-xs">{activity.created_at_human}</span>
+                                                            <span>
+                                                                {
+                                                                    activity.created_at
+                                                                }
+                                                            </span>
+                                                            <span className="text-xs">
+                                                                {
+                                                                    activity.created_at_human
+                                                                }
+                                                            </span>
                                                         </div>
                                                     </TableCell>
                                                     <TableCell>
-                                                        <Button variant="ghost" size="icon" className="h-8 w-8" title="View details">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-8 w-8"
+                                                            title="View details"
+                                                        >
                                                             <Eye className="h-4 w-4" />
                                                         </Button>
                                                     </TableCell>
@@ -352,50 +509,76 @@ export default function ActivityLogsIndex({ activities, causers, filters }: Prop
                         </div>
 
                         {/* Mobile Card View */}
-                        <div className="md:hidden space-y-4">
+                        <div className="space-y-4 md:hidden">
                             {activities.data.length === 0 ? (
-                                <div className="py-12 text-center text-muted-foreground border rounded-lg">
+                                <div className="rounded-lg border py-12 text-center text-muted-foreground">
                                     No logs found.
                                 </div>
                             ) : (
                                 activities.data.map((activity) => (
                                     <div
                                         key={activity.id}
-                                        className="border rounded-lg p-4 space-y-3 cursor-pointer hover:bg-muted/50 transition-colors"
-                                        onClick={() => setSelectedActivity(activity)}
+                                        className="cursor-pointer space-y-3 rounded-lg border p-4 transition-colors hover:bg-muted/50"
+                                        onClick={() =>
+                                            setSelectedActivity(activity)
+                                        }
                                     >
-                                        <div className="flex justify-between items-start">
+                                        <div className="flex items-start justify-between">
                                             <div>
-                                                <div className="font-semibold">{activity.causer}</div>
+                                                <div className="font-semibold">
+                                                    {activity.causer}
+                                                </div>
                                                 <div className="text-xs text-muted-foreground">
-                                                    {activity.subject_type} #{activity.subject_id}
+                                                    {activity.subject_type} #
+                                                    {activity.subject_id}
                                                 </div>
                                             </div>
-                                            <Badge variant="outline" className={getEventColor(activity.event)}>
+                                            <Badge
+                                                variant="outline"
+                                                className={getEventColor(
+                                                    activity.event,
+                                                )}
+                                            >
                                                 {activity.event}
                                             </Badge>
                                         </div>
                                         <div className="text-sm">
-                                            <span className="font-medium">Description:</span>{' '}
-                                            <span className="text-muted-foreground">{activity.description}</span>
+                                            <span className="font-medium">
+                                                Description:
+                                            </span>{' '}
+                                            <span className="text-muted-foreground">
+                                                {activity.description}
+                                            </span>
                                         </div>
                                         {hasChanges(activity) && (
                                             <div className="text-xs text-muted-foreground">
-                                                {getChangedFields(activity).length} field{getChangedFields(activity).length !== 1 ? 's' : ''} changed — tap for details
+                                                {
+                                                    getChangedFields(activity)
+                                                        .length
+                                                }{' '}
+                                                field
+                                                {getChangedFields(activity)
+                                                    .length !== 1
+                                                    ? 's'
+                                                    : ''}{' '}
+                                                changed — tap for details
                                             </div>
                                         )}
-                                        <div className="text-xs text-muted-foreground pt-2 border-t">
+                                        <div className="border-t pt-2 text-xs text-muted-foreground">
                                             <div>{activity.created_at}</div>
-                                            <div>{activity.created_at_human}</div>
+                                            <div>
+                                                {activity.created_at_human}
+                                            </div>
                                         </div>
                                     </div>
                                 ))
                             )}
                         </div>
 
-                        <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+                        <div className="mt-4 flex flex-col items-center justify-between gap-2 sm:flex-row">
                             <div className="text-sm text-muted-foreground">
-                                Showing {activities.data.length} of {activities.total} results
+                                Showing {activities.data.length} of{' '}
+                                {activities.total} results
                             </div>
                             <PaginationNav links={activities.links} />
                         </div>
@@ -404,13 +587,21 @@ export default function ActivityLogsIndex({ activities, causers, filters }: Prop
             </div>
 
             {/* Activity Detail Sheet */}
-            <Sheet open={!!selectedActivity} onOpenChange={(open) => !open && setSelectedActivity(null)}>
+            <Sheet
+                open={!!selectedActivity}
+                onOpenChange={(open) => !open && setSelectedActivity(null)}
+            >
                 <SheetContent className="w-full sm:max-w-lg">
                     <SheetHeader>
                         <SheetTitle className="flex items-center gap-2">
                             Activity Detail
                             {selectedActivity && (
-                                <Badge variant="outline" className={getEventColor(selectedActivity.event)}>
+                                <Badge
+                                    variant="outline"
+                                    className={getEventColor(
+                                        selectedActivity.event,
+                                    )}
+                                >
                                     {selectedActivity.event}
                                 </Badge>
                             )}
@@ -426,128 +617,233 @@ export default function ActivityLogsIndex({ activities, causers, filters }: Prop
                                 {/* Summary Info */}
                                 <div className="grid grid-cols-2 gap-4 text-sm">
                                     <div>
-                                        <div className="font-medium text-muted-foreground">User</div>
-                                        <div className="mt-1">{selectedActivity.causer}</div>
+                                        <div className="font-medium text-muted-foreground">
+                                            User
+                                        </div>
+                                        <div className="mt-1">
+                                            {selectedActivity.causer}
+                                        </div>
                                     </div>
                                     <div>
-                                        <div className="font-medium text-muted-foreground">Subject</div>
-                                        <div className="mt-1">{selectedActivity.subject_type} #{selectedActivity.subject_id}</div>
+                                        <div className="font-medium text-muted-foreground">
+                                            Subject
+                                        </div>
+                                        <div className="mt-1">
+                                            {selectedActivity.subject_type} #
+                                            {selectedActivity.subject_id}
+                                        </div>
                                     </div>
                                     <div>
-                                        <div className="font-medium text-muted-foreground">Date</div>
-                                        <div className="mt-1">{selectedActivity.created_at}</div>
+                                        <div className="font-medium text-muted-foreground">
+                                            Date
+                                        </div>
+                                        <div className="mt-1">
+                                            {selectedActivity.created_at}
+                                        </div>
                                     </div>
                                     <div>
-                                        <div className="font-medium text-muted-foreground">Time Ago</div>
-                                        <div className="mt-1">{selectedActivity.created_at_human}</div>
+                                        <div className="font-medium text-muted-foreground">
+                                            Time Ago
+                                        </div>
+                                        <div className="mt-1">
+                                            {selectedActivity.created_at_human}
+                                        </div>
                                     </div>
                                 </div>
 
                                 <Separator />
 
                                 {/* Updated Event — Diff View */}
-                                {selectedActivity.event === 'updated' && selectedActivity.properties.old && selectedActivity.properties.attributes && (
-                                    <div className="space-y-3">
-                                        <h4 className="text-sm font-semibold">Changes Made</h4>
-                                        <div className="space-y-2">
-                                            {getChangedFields(selectedActivity).map((field) => {
-                                                const oldVal = selectedActivity.properties.old?.[field];
-                                                const newVal = selectedActivity.properties.attributes?.[field];
-                                                const wasChanged = formatValue(oldVal) !== formatValue(newVal);
+                                {selectedActivity.event === 'updated' &&
+                                    selectedActivity.properties.old &&
+                                    selectedActivity.properties.attributes && (
+                                        <div className="space-y-3">
+                                            <h4 className="text-sm font-semibold">
+                                                Changes Made
+                                            </h4>
+                                            <div className="space-y-2">
+                                                {getChangedFields(
+                                                    selectedActivity,
+                                                ).map((field) => {
+                                                    const oldVal =
+                                                        selectedActivity
+                                                            .properties.old?.[
+                                                            field
+                                                        ];
+                                                    const newVal =
+                                                        selectedActivity
+                                                            .properties
+                                                            .attributes?.[
+                                                            field
+                                                        ];
+                                                    const wasChanged =
+                                                        formatValue(oldVal) !==
+                                                        formatValue(newVal);
 
-                                                return (
-                                                    <div key={field} className="rounded-lg border p-3 space-y-1.5">
-                                                        <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                                                            {formatFieldName(field)}
+                                                    return (
+                                                        <div
+                                                            key={field}
+                                                            className="space-y-1.5 rounded-lg border p-3"
+                                                        >
+                                                            <div className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                                                                {formatFieldName(
+                                                                    field,
+                                                                )}
+                                                            </div>
+                                                            {wasChanged ? (
+                                                                <div className="flex items-start gap-2 text-sm">
+                                                                    <div className="flex-1 rounded bg-red-50 px-2 py-1 dark:bg-red-950/30">
+                                                                        <span className="text-xs font-medium text-red-600 dark:text-red-400">
+                                                                            Old
+                                                                        </span>
+                                                                        <pre className="mt-0.5 font-mono text-xs break-all whitespace-pre-wrap text-red-800 dark:text-red-300">
+                                                                            {formatValue(
+                                                                                oldVal,
+                                                                            )}
+                                                                        </pre>
+                                                                    </div>
+                                                                    <ArrowRight className="mt-2 h-4 w-4 shrink-0 text-muted-foreground" />
+                                                                    <div className="flex-1 rounded bg-green-50 px-2 py-1 dark:bg-green-950/30">
+                                                                        <span className="text-xs font-medium text-green-600 dark:text-green-400">
+                                                                            New
+                                                                        </span>
+                                                                        <pre className="mt-0.5 font-mono text-xs break-all whitespace-pre-wrap text-green-800 dark:text-green-300">
+                                                                            {formatValue(
+                                                                                newVal,
+                                                                            )}
+                                                                        </pre>
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="text-sm text-muted-foreground">
+                                                                    No change:{' '}
+                                                                    {formatValue(
+                                                                        oldVal,
+                                                                    )}
+                                                                </div>
+                                                            )}
                                                         </div>
-                                                        {wasChanged ? (
-                                                            <div className="flex items-start gap-2 text-sm">
-                                                                <div className="flex-1 rounded bg-red-50 px-2 py-1 dark:bg-red-950/30">
-                                                                    <span className="text-xs font-medium text-red-600 dark:text-red-400">Old</span>
-                                                                    <pre className="mt-0.5 whitespace-pre-wrap break-all text-red-800 dark:text-red-300 font-mono text-xs">
-                                                                        {formatValue(oldVal)}
-                                                                    </pre>
-                                                                </div>
-                                                                <ArrowRight className="mt-2 h-4 w-4 shrink-0 text-muted-foreground" />
-                                                                <div className="flex-1 rounded bg-green-50 px-2 py-1 dark:bg-green-950/30">
-                                                                    <span className="text-xs font-medium text-green-600 dark:text-green-400">New</span>
-                                                                    <pre className="mt-0.5 whitespace-pre-wrap break-all text-green-800 dark:text-green-300 font-mono text-xs">
-                                                                        {formatValue(newVal)}
-                                                                    </pre>
-                                                                </div>
-                                                            </div>
-                                                        ) : (
-                                                            <div className="text-sm text-muted-foreground">
-                                                                No change: {formatValue(oldVal)}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                );
-                                            })}
+                                                    );
+                                                })}
+                                            </div>
                                         </div>
-                                    </div>
-                                )}
+                                    )}
 
                                 {/* Created Event — Show All Attributes */}
-                                {selectedActivity.event === 'created' && selectedActivity.properties.attributes && (
-                                    <div className="space-y-3">
-                                        <h4 className="text-sm font-semibold">Created With</h4>
-                                        <div className="rounded-lg border overflow-hidden">
-                                            <Table>
-                                                <TableHeader>
-                                                    <TableRow>
-                                                        <TableHead className="text-xs">Field</TableHead>
-                                                        <TableHead className="text-xs">Value</TableHead>
-                                                    </TableRow>
-                                                </TableHeader>
-                                                <TableBody>
-                                                    {Object.entries(selectedActivity.properties.attributes).map(([key, value]) => (
-                                                        <TableRow key={key}>
-                                                            <TableCell className="text-xs font-medium">{formatFieldName(key)}</TableCell>
-                                                            <TableCell className="text-xs font-mono break-all">{formatValue(value)}</TableCell>
+                                {selectedActivity.event === 'created' &&
+                                    selectedActivity.properties.attributes && (
+                                        <div className="space-y-3">
+                                            <h4 className="text-sm font-semibold">
+                                                Created With
+                                            </h4>
+                                            <div className="overflow-hidden rounded-lg border">
+                                                <Table>
+                                                    <TableHeader>
+                                                        <TableRow>
+                                                            <TableHead className="text-xs">
+                                                                Field
+                                                            </TableHead>
+                                                            <TableHead className="text-xs">
+                                                                Value
+                                                            </TableHead>
                                                         </TableRow>
-                                                    ))}
-                                                </TableBody>
-                                            </Table>
+                                                    </TableHeader>
+                                                    <TableBody>
+                                                        {Object.entries(
+                                                            selectedActivity
+                                                                .properties
+                                                                .attributes,
+                                                        ).map(
+                                                            ([key, value]) => (
+                                                                <TableRow
+                                                                    key={key}
+                                                                >
+                                                                    <TableCell className="text-xs font-medium">
+                                                                        {formatFieldName(
+                                                                            key,
+                                                                        )}
+                                                                    </TableCell>
+                                                                    <TableCell className="font-mono text-xs break-all">
+                                                                        {formatValue(
+                                                                            value,
+                                                                        )}
+                                                                    </TableCell>
+                                                                </TableRow>
+                                                            ),
+                                                        )}
+                                                    </TableBody>
+                                                </Table>
+                                            </div>
                                         </div>
-                                    </div>
-                                )}
+                                    )}
 
                                 {/* Deleted Event — Show Deleted Data */}
-                                {selectedActivity.event === 'deleted' && selectedActivity.properties.old && (
-                                    <div className="space-y-3">
-                                        <h4 className="text-sm font-semibold">Deleted Data</h4>
-                                        <div className="rounded-lg border overflow-hidden">
-                                            <Table>
-                                                <TableHeader>
-                                                    <TableRow>
-                                                        <TableHead className="text-xs">Field</TableHead>
-                                                        <TableHead className="text-xs">Value</TableHead>
-                                                    </TableRow>
-                                                </TableHeader>
-                                                <TableBody>
-                                                    {Object.entries(selectedActivity.properties.old).map(([key, value]) => (
-                                                        <TableRow key={key}>
-                                                            <TableCell className="text-xs font-medium">{formatFieldName(key)}</TableCell>
-                                                            <TableCell className="text-xs font-mono break-all">{formatValue(value)}</TableCell>
+                                {selectedActivity.event === 'deleted' &&
+                                    selectedActivity.properties.old && (
+                                        <div className="space-y-3">
+                                            <h4 className="text-sm font-semibold">
+                                                Deleted Data
+                                            </h4>
+                                            <div className="overflow-hidden rounded-lg border">
+                                                <Table>
+                                                    <TableHeader>
+                                                        <TableRow>
+                                                            <TableHead className="text-xs">
+                                                                Field
+                                                            </TableHead>
+                                                            <TableHead className="text-xs">
+                                                                Value
+                                                            </TableHead>
                                                         </TableRow>
-                                                    ))}
-                                                </TableBody>
-                                            </Table>
+                                                    </TableHeader>
+                                                    <TableBody>
+                                                        {Object.entries(
+                                                            selectedActivity
+                                                                .properties.old,
+                                                        ).map(
+                                                            ([key, value]) => (
+                                                                <TableRow
+                                                                    key={key}
+                                                                >
+                                                                    <TableCell className="text-xs font-medium">
+                                                                        {formatFieldName(
+                                                                            key,
+                                                                        )}
+                                                                    </TableCell>
+                                                                    <TableCell className="font-mono text-xs break-all">
+                                                                        {formatValue(
+                                                                            value,
+                                                                        )}
+                                                                    </TableCell>
+                                                                </TableRow>
+                                                            ),
+                                                        )}
+                                                    </TableBody>
+                                                </Table>
+                                            </div>
                                         </div>
-                                    </div>
-                                )}
+                                    )}
 
                                 {/* Login/Logout or Other Events — Raw Properties */}
                                 {!hasChanges(selectedActivity) && (
                                     <div className="space-y-3">
-                                        <h4 className="text-sm font-semibold">Properties</h4>
-                                        {Object.keys(selectedActivity.properties).length > 0 ? (
-                                            <pre className="rounded-lg border bg-muted/50 p-3 text-xs font-mono whitespace-pre-wrap break-all">
-                                                {JSON.stringify(selectedActivity.properties, null, 2)}
+                                        <h4 className="text-sm font-semibold">
+                                            Properties
+                                        </h4>
+                                        {Object.keys(
+                                            selectedActivity.properties,
+                                        ).length > 0 ? (
+                                            <pre className="rounded-lg border bg-muted/50 p-3 font-mono text-xs break-all whitespace-pre-wrap">
+                                                {JSON.stringify(
+                                                    selectedActivity.properties,
+                                                    null,
+                                                    2,
+                                                )}
                                             </pre>
                                         ) : (
-                                            <p className="text-sm text-muted-foreground">No additional data recorded.</p>
+                                            <p className="text-sm text-muted-foreground">
+                                                No additional data recorded.
+                                            </p>
                                         )}
                                     </div>
                                 )}

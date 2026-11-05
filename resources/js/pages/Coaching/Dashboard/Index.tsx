@@ -1,16 +1,56 @@
-import { useMemo, useState } from 'react';
-import { Head, Link, usePage, router } from '@inertiajs/react';
+import PaginationNav, {
+    type PaginationLink,
+} from '@/components/pagination-nav';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
-import { Calendar as CalendarIcon, CalendarClock, Eye, Plus, Filter, Users, AlertTriangle, ArrowUpDown, ChevronUp, ChevronDown, ClipboardList, TrendingUp, TrendingDown, Download, Loader2, ChevronsUpDown, X } from 'lucide-react';
-import PaginationNav, { type PaginationLink } from '@/components/pagination-nav';
+import { Head, Link, router, usePage } from '@inertiajs/react';
+import {
+    AlertTriangle,
+    ArrowUpDown,
+    CalendarClock,
+    Calendar as CalendarIcon,
+    ChevronDown,
+    ChevronsUpDown,
+    ChevronUp,
+    ClipboardList,
+    Download,
+    Eye,
+    Filter,
+    Loader2,
+    Plus,
+    TrendingDown,
+    TrendingUp,
+    Users,
+    X,
+} from 'lucide-react';
+import { useMemo, useState } from 'react';
 
-import AppLayout from '@/layouts/app-layout';
+import {
+    AckStatusBadge,
+    CoachingStatusBadge,
+    SeverityBadge,
+} from '@/components/coaching/CoachingStatusBadge';
+import { CoachingSummaryCards } from '@/components/coaching/CoachingSummaryCards';
+import { WeekIndicator } from '@/components/coaching/WeekIndicator';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { PageHeader } from '@/components/PageHeader';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { formatDate } from '@/lib/utils';
-import { Input } from '@/components/ui/input';
+import { Calendar } from '@/components/ui/calendar';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from '@/components/ui/command';
+import { Input } from '@/components/ui/input';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
 import {
     Select,
     SelectContent,
@@ -26,23 +66,30 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
-import { PageHeader } from '@/components/PageHeader';
-import { LoadingOverlay } from '@/components/LoadingOverlay';
-import { usePageMeta, useFlashMessage, usePageLoading } from '@/hooks';
-import { CoachingStatusBadge, AckStatusBadge, SeverityBadge } from '@/components/coaching/CoachingStatusBadge';
-import { CoachingSummaryCards } from '@/components/coaching/CoachingSummaryCards';
-import { WeekIndicator } from '@/components/coaching/WeekIndicator';
-import { getCurrentWeekOfMonth } from '@/lib/coaching';
-import { Badge } from '@/components/ui/badge';
-import { Calendar } from '@/components/ui/calendar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
+import AppLayout from '@/layouts/app-layout';
+import { getCurrentWeekOfMonth } from '@/lib/coaching';
+import { formatDate } from '@/lib/utils';
 
-import { toast } from 'sonner';
 import { dashboard as coachingDashboard } from '@/routes/coaching';
-import { create as sessionsCreate, show as sessionsShow } from '@/routes/coaching/sessions';
-import { start as exportStart, progress as exportProgress, download as exportDownload } from '@/routes/coaching/export';
+import {
+    download as exportDownload,
+    progress as exportProgress,
+    start as exportStart,
+} from '@/routes/coaching/export';
+import {
+    create as sessionsCreate,
+    show as sessionsShow,
+} from '@/routes/coaching/sessions';
+import { toast } from 'sonner';
 
-import type { CoachingSession, CoachingPurposeLabels, CoachingStatusColors, CoachingStatusLabel } from '@/types';
+import type {
+    CoachingPurposeLabels,
+    CoachingSession,
+    CoachingStatusColors,
+    CoachingStatusLabel,
+} from '@/types';
 
 interface AgentRow {
     id: number;
@@ -95,7 +142,11 @@ interface Props extends InertiaPageProps {
     campaignName: string;
     upcomingFollowUps: FollowUp[];
     overdueFollowUps: FollowUp[];
-    followUpComplianceRate?: { rate: number | null; completed: number; total: number };
+    followUpComplianceRate?: {
+        rate: number | null;
+        completed: number;
+        total: number;
+    };
     filters: Filters;
     statusColors: CoachingStatusColors;
     purposes: CoachingPurposeLabels;
@@ -111,21 +162,55 @@ function daysUntil(dateStr: string): number {
 }
 
 function getUrgencyStyles(days: number) {
-    if (days < 0) return { border: 'border-red-500/50 bg-red-500/5', text: 'text-red-600 dark:text-red-400', label: `${Math.abs(days)}d overdue` };
-    if (days === 0) return { border: 'border-red-500/50 bg-red-500/5', text: 'text-red-600 dark:text-red-400', label: 'Today' };
-    if (days === 1) return { border: 'border-orange-500/50 bg-orange-500/5', text: 'text-orange-600 dark:text-orange-400', label: 'Tomorrow' };
-    return { border: 'border-yellow-500/50 bg-yellow-500/5', text: 'text-yellow-600 dark:text-yellow-400', label: `${days}d away` };
+    if (days < 0)
+        return {
+            border: 'border-red-500/50 bg-red-500/5',
+            text: 'text-red-600 dark:text-red-400',
+            label: `${Math.abs(days)}d overdue`,
+        };
+    if (days === 0)
+        return {
+            border: 'border-red-500/50 bg-red-500/5',
+            text: 'text-red-600 dark:text-red-400',
+            label: 'Today',
+        };
+    if (days === 1)
+        return {
+            border: 'border-orange-500/50 bg-orange-500/5',
+            text: 'text-orange-600 dark:text-orange-400',
+            label: 'Tomorrow',
+        };
+    return {
+        border: 'border-yellow-500/50 bg-yellow-500/5',
+        text: 'text-yellow-600 dark:text-yellow-400',
+        label: `${days}d away`,
+    };
 }
 
 const TrendIndicator = ({ trend }: { trend?: number }) => {
-    if (!trend || trend === 0) return <span className="text-muted-foreground" title="Last 30d vs previous 30d">—</span>;
-    if (trend > 0) return (
-        <span className="inline-flex items-center gap-0.5 text-xs font-medium text-green-600" title="Sessions increased in last 30d vs prior 30d">
-            <TrendingUp className="h-3.5 w-3.5" /> +{trend}
-        </span>
-    );
+    if (!trend || trend === 0)
+        return (
+            <span
+                className="text-muted-foreground"
+                title="Last 30d vs previous 30d"
+            >
+                —
+            </span>
+        );
+    if (trend > 0)
+        return (
+            <span
+                className="inline-flex items-center gap-0.5 text-xs font-medium text-green-600"
+                title="Sessions increased in last 30d vs prior 30d"
+            >
+                <TrendingUp className="h-3.5 w-3.5" /> +{trend}
+            </span>
+        );
     return (
-        <span className="inline-flex items-center gap-0.5 text-xs font-medium text-red-600" title="Sessions decreased in last 30d vs prior 30d">
+        <span
+            className="inline-flex items-center gap-0.5 text-xs font-medium text-red-600"
+            title="Sessions decreased in last 30d vs prior 30d"
+        >
             <TrendingDown className="h-3.5 w-3.5" /> {trend}
         </span>
     );
@@ -137,49 +222,88 @@ const STATUS_PRIORITY: Record<string, number> = {
     'Needs Coaching': 2,
     'Coaching Done': 3,
     'No Record': 4,
-    'Draft': 5,
-    'Excluded': 6,
+    Draft: 5,
+    Excluded: 6,
 };
 
 function getStatusRowClass(status: string): string {
     switch (status) {
-        case 'Coaching Done': return 'bg-green-50/50 dark:bg-green-950/20';
-        case 'Needs Coaching': return 'bg-yellow-50/50 dark:bg-yellow-950/20';
-        case 'Badly Needs Coaching': return 'bg-orange-50/50 dark:bg-orange-950/20';
-        case 'Please Coach ASAP': return 'bg-red-50/50 dark:bg-red-950/20';
-        case 'Draft': return 'bg-blue-50/50 dark:bg-blue-950/20';
-        case 'Excluded': return 'bg-slate-50/50 dark:bg-slate-950/20 opacity-70';
-        default: return '';
+        case 'Coaching Done':
+            return 'bg-green-50/50 dark:bg-green-950/20';
+        case 'Needs Coaching':
+            return 'bg-yellow-50/50 dark:bg-yellow-950/20';
+        case 'Badly Needs Coaching':
+            return 'bg-orange-50/50 dark:bg-orange-950/20';
+        case 'Please Coach ASAP':
+            return 'bg-red-50/50 dark:bg-red-950/20';
+        case 'Draft':
+            return 'bg-blue-50/50 dark:bg-blue-950/20';
+        case 'Excluded':
+            return 'bg-slate-50/50 dark:bg-slate-950/20 opacity-70';
+        default:
+            return '';
     }
 }
 
 export default function CoachingDashboardIndex() {
-    const { dashboardData, recentSessions, campaignName, upcomingFollowUps, overdueFollowUps, followUpComplianceRate, filters: initialFilters, purposes, coachedThisWeekIds = [], draftedThisWeekIds = [] } = usePage<Props>().props;
+    const {
+        dashboardData,
+        recentSessions,
+        campaignName,
+        upcomingFollowUps,
+        overdueFollowUps,
+        followUpComplianceRate,
+        filters: initialFilters,
+        purposes,
+        coachedThisWeekIds = [],
+        draftedThisWeekIds = [],
+    } = usePage<Props>().props;
 
     const { title, breadcrumbs } = usePageMeta({
         title: 'Coaching Dashboard',
-        breadcrumbs: [{ title: 'Coaching Dashboard', href: coachingDashboard().url }],
+        breadcrumbs: [
+            { title: 'Coaching Dashboard', href: coachingDashboard().url },
+        ],
     });
     useFlashMessage();
     const isLoading = usePageLoading();
 
-    const [coachingStatus, setCoachingStatus] = useState(initialFilters.coaching_status || '');
+    const [coachingStatus, setCoachingStatus] = useState(
+        initialFilters.coaching_status || '',
+    );
     const [dateFrom, setDateFrom] = useState(initialFilters.date_from || '');
     const [dateTo, setDateTo] = useState(initialFilters.date_to || '');
-    const [calendarSelectedDate, setCalendarSelectedDate] = useState<Date | undefined>(undefined);
+    const [calendarSelectedDate, setCalendarSelectedDate] = useState<
+        Date | undefined
+    >(undefined);
     const [sortField, setSortField] = useState<string>('coaching_status');
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
     const [isExporting, setIsExporting] = useState(false);
-    const [exportStatusText, setExportStatusText] = useState<{ percent: number; status: string } | null>(null);
+    const [exportStatusText, setExportStatusText] = useState<{
+        percent: number;
+        status: string;
+    } | null>(null);
     const [selectedAgentIds, setSelectedAgentIds] = useState<number[]>([]);
-    const [selectedFilterAgentIds, setSelectedFilterAgentIds] = useState<number[]>([]);
+    const [selectedFilterAgentIds, setSelectedFilterAgentIds] = useState<
+        number[]
+    >([]);
     const [isAgentPopoverOpen, setIsAgentPopoverOpen] = useState(false);
     const [agentSearchQuery, setAgentSearchQuery] = useState('');
-    const [savedQueue, setSavedQueue] = useState<Array<{id: number; name: string; coaching_status?: string; done?: boolean; status?: string}>>(() => {
+    const [savedQueue, setSavedQueue] = useState<
+        Array<{
+            id: number;
+            name: string;
+            coaching_status?: string;
+            done?: boolean;
+            status?: string;
+        }>
+    >(() => {
         try {
             const raw = sessionStorage.getItem('coaching_queue');
             return raw ? JSON.parse(raw) : [];
-        } catch { return []; }
+        } catch {
+            return [];
+        }
     });
 
     const dismissQueue = () => {
@@ -190,7 +314,9 @@ export default function CoachingDashboardIndex() {
     const sortedAgents = useMemo(() => {
         let agents = [...dashboardData.agents];
         if (selectedFilterAgentIds.length > 0) {
-            agents = agents.filter(a => selectedFilterAgentIds.includes(a.id));
+            agents = agents.filter((a) =>
+                selectedFilterAgentIds.includes(a.id),
+            );
         }
         agents.sort((a, b) => {
             let cmp = 0;
@@ -199,10 +325,14 @@ export default function CoachingDashboardIndex() {
                     cmp = a.name.localeCompare(b.name);
                     break;
                 case 'coaching_status':
-                    cmp = (STATUS_PRIORITY[a.coaching_status] ?? 99) - (STATUS_PRIORITY[b.coaching_status] ?? 99);
+                    cmp =
+                        (STATUS_PRIORITY[a.coaching_status] ?? 99) -
+                        (STATUS_PRIORITY[b.coaching_status] ?? 99);
                     break;
                 case 'last_coached_date':
-                    cmp = (a.last_coached_date ?? '').localeCompare(b.last_coached_date ?? '');
+                    cmp = (a.last_coached_date ?? '').localeCompare(
+                        b.last_coached_date ?? '',
+                    );
                     break;
                 case 'total_sessions':
                     cmp = a.total_sessions - b.total_sessions;
@@ -211,7 +341,8 @@ export default function CoachingDashboardIndex() {
                     cmp = (a.trend ?? 0) - (b.trend ?? 0);
                     break;
                 case 'pending_acknowledgements':
-                    cmp = a.pending_acknowledgements - b.pending_acknowledgements;
+                    cmp =
+                        a.pending_acknowledgements - b.pending_acknowledgements;
                     break;
                 default:
                     cmp = 0;
@@ -231,16 +362,26 @@ export default function CoachingDashboardIndex() {
     };
 
     const SortIcon = ({ field }: { field: string }) => {
-        if (sortField !== field) return <ArrowUpDown className="ml-1 inline h-3.5 w-3.5 text-muted-foreground/50" />;
-        return sortDirection === 'asc'
-            ? <ChevronUp className="ml-1 inline h-3.5 w-3.5" />
-            : <ChevronDown className="ml-1 inline h-3.5 w-3.5" />;
+        if (sortField !== field)
+            return (
+                <ArrowUpDown className="ml-1 inline h-3.5 w-3.5 text-muted-foreground/50" />
+            );
+        return sortDirection === 'asc' ? (
+            <ChevronUp className="ml-1 inline h-3.5 w-3.5" />
+        ) : (
+            <ChevronDown className="ml-1 inline h-3.5 w-3.5" />
+        );
     };
 
-    const allFollowUps = useMemo(() => [...overdueFollowUps, ...upcomingFollowUps], [overdueFollowUps, upcomingFollowUps]);
+    const allFollowUps = useMemo(
+        () => [...overdueFollowUps, ...upcomingFollowUps],
+        [overdueFollowUps, upcomingFollowUps],
+    );
 
     const followUpDates = useMemo(() => {
-        return allFollowUps.map((item) => new Date(item.follow_up_date + 'T00:00:00'));
+        return allFollowUps.map(
+            (item) => new Date(item.follow_up_date + 'T00:00:00'),
+        );
     }, [allFollowUps]);
 
     const selectedDateFollowUps = useMemo(() => {
@@ -261,8 +402,11 @@ export default function CoachingDashboardIndex() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN':
+                        document
+                            .querySelector('meta[name="csrf-token"]')
+                            ?.getAttribute('content') || '',
                     'X-Requested-With': 'XMLHttpRequest',
                 },
                 body: JSON.stringify({
@@ -279,9 +423,14 @@ export default function CoachingDashboardIndex() {
 
             const pollInterval = setInterval(async () => {
                 try {
-                    const progressRes = await fetch(exportProgress(data.jobId).url);
+                    const progressRes = await fetch(
+                        exportProgress(data.jobId).url,
+                    );
                     const progressData = await progressRes.json();
-                    setExportStatusText({ percent: progressData.percent, status: progressData.status });
+                    setExportStatusText({
+                        percent: progressData.percent,
+                        status: progressData.status,
+                    });
 
                     if (progressData.finished) {
                         clearInterval(pollInterval);
@@ -335,15 +484,16 @@ export default function CoachingDashboardIndex() {
         const opts = dashboardData.agents;
         if (!agentSearchQuery) return opts;
         const lower = agentSearchQuery.toLowerCase();
-        return opts.filter(a =>
-            a.name.toLowerCase().includes(lower) ||
-            (a.account ?? '').toLowerCase().includes(lower)
+        return opts.filter(
+            (a) =>
+                a.name.toLowerCase().includes(lower) ||
+                (a.account ?? '').toLowerCase().includes(lower),
         );
     }, [dashboardData.agents, agentSearchQuery]);
 
     const toggleAgentFilter = (id: number) => {
-        setSelectedFilterAgentIds(prev =>
-            prev.includes(id) ? prev.filter(v => v !== id) : [...prev, id]
+        setSelectedFilterAgentIds((prev) =>
+            prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id],
         );
     };
 
@@ -385,13 +535,26 @@ export default function CoachingDashboardIndex() {
                     <div className="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800/50 dark:bg-blue-950/30">
                         <ClipboardList className="h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
                         <p className="flex-1 text-sm text-blue-800 dark:text-blue-200">
-                            You have <strong>{savedQueue.length} agent{savedQueue.length > 1 ? 's' : ''}</strong> in your coaching queue.
+                            You have{' '}
+                            <strong>
+                                {savedQueue.length} agent
+                                {savedQueue.length > 1 ? 's' : ''}
+                            </strong>{' '}
+                            in your coaching queue.
                         </p>
                         <div className="flex items-center gap-2">
-                            <Button size="sm" variant="default" onClick={() => router.get(sessionsCreate().url)}>
+                            <Button
+                                size="sm"
+                                variant="default"
+                                onClick={() => router.get(sessionsCreate().url)}
+                            >
                                 Resume
                             </Button>
-                            <Button size="sm" variant="ghost" onClick={dismissQueue}>
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={dismissQueue}
+                            >
                                 <X className="mr-1 h-4 w-4" /> Dismiss
                             </Button>
                         </div>
@@ -402,11 +565,17 @@ export default function CoachingDashboardIndex() {
                 {isLoading ? (
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
                         {Array.from({ length: 6 }).map((_, i) => (
-                            <div key={i} className="h-20 animate-pulse rounded-lg bg-muted" />
+                            <div
+                                key={i}
+                                className="h-20 animate-pulse rounded-lg bg-muted"
+                            />
                         ))}
                     </div>
                 ) : (
-                    <CoachingSummaryCards totalAgents={dashboardData.total_agents} statusCounts={dashboardData.status_counts} />
+                    <CoachingSummaryCards
+                        totalAgents={dashboardData.total_agents}
+                        statusCounts={dashboardData.status_counts}
+                    />
                 )}
 
                 {/* Follow-up Compliance Rate */}
@@ -414,20 +583,34 @@ export default function CoachingDashboardIndex() {
                     <div className="rounded-lg border bg-card p-4 shadow-sm">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm font-medium text-muted-foreground">Follow-up Compliance</p>
-                                <p className="text-2xl font-bold">{followUpComplianceRate.rate ?? 0}%</p>
+                                <p className="text-sm font-medium text-muted-foreground">
+                                    Follow-up Compliance
+                                </p>
+                                <p className="text-2xl font-bold">
+                                    {followUpComplianceRate.rate ?? 0}%
+                                </p>
                             </div>
                             <div className="text-right text-xs text-muted-foreground">
-                                <p>{followUpComplianceRate.completed} of {followUpComplianceRate.total}</p>
+                                <p>
+                                    {followUpComplianceRate.completed} of{' '}
+                                    {followUpComplianceRate.total}
+                                </p>
                                 <p>follow-ups completed</p>
                             </div>
                         </div>
                         <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted">
                             <div
-                                className={`h-full rounded-full transition-all ${(followUpComplianceRate.rate ?? 0) >= 80 ? 'bg-green-500' :
-                                    (followUpComplianceRate.rate ?? 0) >= 50 ? 'bg-amber-500' : 'bg-red-500'
-                                    }`}
-                                style={{ width: `${followUpComplianceRate.rate ?? 0}%` }}
+                                className={`h-full rounded-full transition-all ${
+                                    (followUpComplianceRate.rate ?? 0) >= 80
+                                        ? 'bg-green-500'
+                                        : (followUpComplianceRate.rate ?? 0) >=
+                                            50
+                                          ? 'bg-amber-500'
+                                          : 'bg-red-500'
+                                }`}
+                                style={{
+                                    width: `${followUpComplianceRate.rate ?? 0}%`,
+                                }}
                             />
                         </div>
                     </div>
@@ -436,37 +619,62 @@ export default function CoachingDashboardIndex() {
                 {/* Main Tabs */}
                 <Tabs defaultValue="agents" className="space-y-2">
                     <TabsList className="grid w-full grid-cols-3">
-                        <TabsTrigger value="agents" className="flex items-center gap-2">
+                        <TabsTrigger
+                            value="agents"
+                            className="flex items-center gap-2"
+                        >
                             <Users className="h-4 w-4" />
-                            <span className="hidden sm:inline">Agent Overview</span>
+                            <span className="hidden sm:inline">
+                                Agent Overview
+                            </span>
                             <span className="sm:hidden">Agents</span>
                             {dashboardData.agents.length > 0 && (
-                                <Badge variant="secondary" className="ml-0.5 px-1.5 py-0 text-[10px]">
+                                <Badge
+                                    variant="secondary"
+                                    className="ml-0.5 px-1.5 py-0 text-[10px]"
+                                >
                                     {dashboardData.agents.length}
                                 </Badge>
                             )}
                         </TabsTrigger>
-                        <TabsTrigger value="followups" className="flex items-center gap-2">
+                        <TabsTrigger
+                            value="followups"
+                            className="flex items-center gap-2"
+                        >
                             <CalendarClock className="h-4 w-4" />
                             <span className="hidden sm:inline">Follow-ups</span>
                             <span className="sm:hidden">Follow-ups</span>
                             {allFollowUps.length > 0 && (
-                                <Badge variant="secondary" className="ml-0.5 px-1.5 py-0 text-[10px]">
+                                <Badge
+                                    variant="secondary"
+                                    className="ml-0.5 px-1.5 py-0 text-[10px]"
+                                >
                                     {allFollowUps.length}
                                 </Badge>
                             )}
                             {overdueFollowUps.length > 0 && (
-                                <Badge variant="destructive" className="ml-0.5 px-1.5 py-0 text-[10px]">
+                                <Badge
+                                    variant="destructive"
+                                    className="ml-0.5 px-1.5 py-0 text-[10px]"
+                                >
                                     {overdueFollowUps.length}
                                 </Badge>
                             )}
                         </TabsTrigger>
-                        <TabsTrigger value="sessions" className="flex items-center gap-2">
+                        <TabsTrigger
+                            value="sessions"
+                            className="flex items-center gap-2"
+                        >
                             <CalendarIcon className="h-4 w-4" />
-                            <span className="hidden sm:inline">Recent Sessions</span>
+                            <span className="hidden sm:inline">
+                                Recent Sessions
+                            </span>
                             <span className="sm:hidden">Sessions</span>
                             {recentSessions.data.length > 0 && (
-                                <Badge variant="secondary" className="ml-0.5 px-1.5 py-0 text-[10px]">
+                                <Badge
+                                    variant="secondary"
+                                    className="ml-0.5 px-1.5 py-0 text-[10px]"
+                                >
                                     {recentSessions.data.length}
                                 </Badge>
                             )}
@@ -477,7 +685,10 @@ export default function CoachingDashboardIndex() {
                     <TabsContent value="agents" className="space-y-4">
                         {/* Filters */}
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
-                            <Popover open={isAgentPopoverOpen} onOpenChange={setIsAgentPopoverOpen}>
+                            <Popover
+                                open={isAgentPopoverOpen}
+                                onOpenChange={setIsAgentPopoverOpen}
+                            >
                                 <PopoverTrigger asChild>
                                     <Button
                                         variant="outline"
@@ -488,14 +699,23 @@ export default function CoachingDashboardIndex() {
                                         <span className="truncate">
                                             {selectedFilterAgentIds.length === 0
                                                 ? 'All Agents'
-                                                : selectedFilterAgentIds.length === 1
-                                                    ? dashboardData.agents.find(a => a.id === selectedFilterAgentIds[0])?.name || '1 agent selected'
-                                                    : `${selectedFilterAgentIds.length} agents selected`}
+                                                : selectedFilterAgentIds.length ===
+                                                    1
+                                                  ? dashboardData.agents.find(
+                                                        (a) =>
+                                                            a.id ===
+                                                            selectedFilterAgentIds[0],
+                                                    )?.name ||
+                                                    '1 agent selected'
+                                                  : `${selectedFilterAgentIds.length} agents selected`}
                                         </span>
                                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                     </Button>
                                 </PopoverTrigger>
-                                <PopoverContent className="w-full min-w-75 p-0" align="start">
+                                <PopoverContent
+                                    className="w-full min-w-75 p-0"
+                                    align="start"
+                                >
                                     <Command shouldFilter={false}>
                                         <CommandInput
                                             placeholder="Search agent..."
@@ -503,46 +723,82 @@ export default function CoachingDashboardIndex() {
                                             onValueChange={setAgentSearchQuery}
                                         />
                                         <CommandList>
-                                            <CommandEmpty>No agent found.</CommandEmpty>
+                                            <CommandEmpty>
+                                                No agent found.
+                                            </CommandEmpty>
                                             <CommandGroup>
-                                                {filteredAgentOptions.map((agent) => {
-                                                    const isSelected = selectedFilterAgentIds.includes(agent.id);
-                                                    return (
-                                                        <CommandItem
-                                                            key={agent.id}
-                                                            value={agent.name}
-                                                            onSelect={() => toggleAgentFilter(agent.id)}
-                                                            className="cursor-pointer"
-                                                        >
-                                                            <Checkbox
-                                                                checked={isSelected}
-                                                                className="mr-2"
-                                                                onCheckedChange={() => toggleAgentFilter(agent.id)}
-                                                                onClick={(e) => e.stopPropagation()}
-                                                            />
-                                                            <div className="flex flex-col">
-                                                                <span>{agent.name}</span>
-                                                                {agent.account && (
-                                                                    <span className="text-xs text-muted-foreground">{agent.account}</span>
-                                                                )}
-                                                            </div>
-                                                        </CommandItem>
-                                                    );
-                                                })}
+                                                {filteredAgentOptions.map(
+                                                    (agent) => {
+                                                        const isSelected =
+                                                            selectedFilterAgentIds.includes(
+                                                                agent.id,
+                                                            );
+                                                        return (
+                                                            <CommandItem
+                                                                key={agent.id}
+                                                                value={
+                                                                    agent.name
+                                                                }
+                                                                onSelect={() =>
+                                                                    toggleAgentFilter(
+                                                                        agent.id,
+                                                                    )
+                                                                }
+                                                                className="cursor-pointer"
+                                                            >
+                                                                <Checkbox
+                                                                    checked={
+                                                                        isSelected
+                                                                    }
+                                                                    className="mr-2"
+                                                                    onCheckedChange={() =>
+                                                                        toggleAgentFilter(
+                                                                            agent.id,
+                                                                        )
+                                                                    }
+                                                                    onClick={(
+                                                                        e,
+                                                                    ) =>
+                                                                        e.stopPropagation()
+                                                                    }
+                                                                />
+                                                                <div className="flex flex-col">
+                                                                    <span>
+                                                                        {
+                                                                            agent.name
+                                                                        }
+                                                                    </span>
+                                                                    {agent.account && (
+                                                                        <span className="text-xs text-muted-foreground">
+                                                                            {
+                                                                                agent.account
+                                                                            }
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </CommandItem>
+                                                        );
+                                                    },
+                                                )}
                                             </CommandGroup>
                                         </CommandList>
                                     </Command>
                                     {selectedFilterAgentIds.length > 0 && (
                                         <div className="flex items-center justify-between border-t p-2 text-xs">
                                             <span className="text-muted-foreground">
-                                                {selectedFilterAgentIds.length} selected
+                                                {selectedFilterAgentIds.length}{' '}
+                                                selected
                                             </span>
                                             <Button
                                                 type="button"
                                                 variant="ghost"
                                                 size="sm"
                                                 className="h-7 px-2"
-                                                onClick={() => setSelectedFilterAgentIds([])}
+                                                onClick={() =>
+                                                    setSelectedFilterAgentIds(
+                                                        [],
+                                                    )
+                                                }
                                             >
                                                 Clear
                                             </Button>
@@ -550,21 +806,44 @@ export default function CoachingDashboardIndex() {
                                     )}
                                 </PopoverContent>
                             </Popover>
-                            <Select value={coachingStatus} onValueChange={setCoachingStatus}>
+                            <Select
+                                value={coachingStatus}
+                                onValueChange={setCoachingStatus}
+                            >
                                 <SelectTrigger>
                                     <SelectValue placeholder="Coaching Status" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="Coaching Done">Coaching Done</SelectItem>
-                                    <SelectItem value="Needs Coaching">Needs Coaching</SelectItem>
-                                    <SelectItem value="Badly Needs Coaching">Badly Needs Coaching</SelectItem>
-                                    <SelectItem value="Please Coach ASAP">Please Coach ASAP</SelectItem>
-                                    <SelectItem value="No Record">No Record</SelectItem>
+                                    <SelectItem value="Coaching Done">
+                                        Coaching Done
+                                    </SelectItem>
+                                    <SelectItem value="Needs Coaching">
+                                        Needs Coaching
+                                    </SelectItem>
+                                    <SelectItem value="Badly Needs Coaching">
+                                        Badly Needs Coaching
+                                    </SelectItem>
+                                    <SelectItem value="Please Coach ASAP">
+                                        Please Coach ASAP
+                                    </SelectItem>
+                                    <SelectItem value="No Record">
+                                        No Record
+                                    </SelectItem>
                                     <SelectItem value="Draft">Draft</SelectItem>
                                 </SelectContent>
                             </Select>
-                            <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} placeholder="Date from" />
-                            <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} placeholder="Date to" />
+                            <Input
+                                type="date"
+                                value={dateFrom}
+                                onChange={(e) => setDateFrom(e.target.value)}
+                                placeholder="Date from"
+                            />
+                            <Input
+                                type="date"
+                                value={dateTo}
+                                onChange={(e) => setDateTo(e.target.value)}
+                                placeholder="Date to"
+                            />
                             <Button onClick={handleFilter}>
                                 <Filter className="mr-2 h-4 w-4" /> Filter
                             </Button>
@@ -576,24 +855,50 @@ export default function CoachingDashboardIndex() {
                         {/* Bulk Action Bar */}
                         {selectedAgentIds.length > 0 && (
                             <div className="flex items-center gap-3 rounded-lg border bg-primary/5 p-3">
-                                <span className="text-sm font-medium">{selectedAgentIds.length} agent(s) selected</span>
+                                <span className="text-sm font-medium">
+                                    {selectedAgentIds.length} agent(s) selected
+                                </span>
                                 <div className="flex gap-2">
                                     <Button
                                         size="sm"
                                         onClick={() => {
                                             const firstId = selectedAgentIds[0];
-                                            const queueAgents = selectedAgentIds.map(id => {
-                                                const agent = sortedAgents.find(a => a.id === id);
-                                                return { id, name: agent?.name ?? 'Unknown', coaching_status: agent?.coaching_status ?? '', done: false };
-                                            });
+                                            const queueAgents =
+                                                selectedAgentIds.map((id) => {
+                                                    const agent =
+                                                        sortedAgents.find(
+                                                            (a) => a.id === id,
+                                                        );
+                                                    return {
+                                                        id,
+                                                        name:
+                                                            agent?.name ??
+                                                            'Unknown',
+                                                        coaching_status:
+                                                            agent?.coaching_status ??
+                                                            '',
+                                                        done: false,
+                                                    };
+                                                });
                                             // Mark first as in-progress, store full queue
-                                            sessionStorage.setItem('coaching_queue', JSON.stringify(queueAgents));
-                                            router.visit(sessionsCreate().url + `?coachee_id=${firstId}`);
+                                            sessionStorage.setItem(
+                                                'coaching_queue',
+                                                JSON.stringify(queueAgents),
+                                            );
+                                            router.visit(
+                                                sessionsCreate().url +
+                                                    `?coachee_id=${firstId}`,
+                                            );
                                         }}
                                     >
-                                        <Plus className="mr-1.5 h-4 w-4" /> Coach Selected
+                                        <Plus className="mr-1.5 h-4 w-4" />{' '}
+                                        Coach Selected
                                     </Button>
-                                    <Button size="sm" variant="outline" onClick={() => setSelectedAgentIds([])}>
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => setSelectedAgentIds([])}
+                                    >
                                         Clear
                                     </Button>
                                 </div>
@@ -611,50 +916,159 @@ export default function CoachingDashboardIndex() {
                                                     type="checkbox"
                                                     aria-label="Select all agents"
                                                     className="rounded border-gray-300"
-                                                    checked={selectedAgentIds.length === sortedAgents.length && sortedAgents.length > 0}
+                                                    checked={
+                                                        selectedAgentIds.length ===
+                                                            sortedAgents.length &&
+                                                        sortedAgents.length > 0
+                                                    }
                                                     onChange={(e) => {
                                                         if (e.target.checked) {
-                                                            setSelectedAgentIds(sortedAgents.map(a => a.id));
+                                                            setSelectedAgentIds(
+                                                                sortedAgents.map(
+                                                                    (a) => a.id,
+                                                                ),
+                                                            );
                                                         } else {
-                                                            setSelectedAgentIds([]);
+                                                            setSelectedAgentIds(
+                                                                [],
+                                                            );
                                                         }
                                                     }}
                                                 />
                                             </TableHead>
-                                            <TableHead className="cursor-pointer select-none" onClick={() => handleSort('name')}>Agent <SortIcon field="name" /></TableHead>
+                                            <TableHead
+                                                className="cursor-pointer select-none"
+                                                onClick={() =>
+                                                    handleSort('name')
+                                                }
+                                            >
+                                                Agent <SortIcon field="name" />
+                                            </TableHead>
                                             <TableHead>Account</TableHead>
-                                            <TableHead className="cursor-pointer select-none" onClick={() => handleSort('coaching_status')}>Status <SortIcon field="coaching_status" /></TableHead>
-                                            <TableHead className="cursor-pointer select-none" onClick={() => handleSort('last_coached_date')}>Last Coached <SortIcon field="last_coached_date" /></TableHead>
-                                            <TableHead className="cursor-pointer select-none" onClick={() => handleSort('total_sessions')}>Sessions <SortIcon field="total_sessions" /></TableHead>
-                                             <TableHead className="text-center" title="Weekly coaching breakdown">Wk</TableHead>
-                                             <TableHead className="cursor-pointer select-none" onClick={() => handleSort('trend')}>Trend <SortIcon field="trend" /></TableHead>
-                                            <TableHead className="cursor-pointer select-none" onClick={() => handleSort('pending_acknowledgements')}>Pending Ack <SortIcon field="pending_acknowledgements" /></TableHead>
-                                            <TableHead className="text-center">Actions</TableHead>
+                                            <TableHead
+                                                className="cursor-pointer select-none"
+                                                onClick={() =>
+                                                    handleSort(
+                                                        'coaching_status',
+                                                    )
+                                                }
+                                            >
+                                                Status{' '}
+                                                <SortIcon field="coaching_status" />
+                                            </TableHead>
+                                            <TableHead
+                                                className="cursor-pointer select-none"
+                                                onClick={() =>
+                                                    handleSort(
+                                                        'last_coached_date',
+                                                    )
+                                                }
+                                            >
+                                                Last Coached{' '}
+                                                <SortIcon field="last_coached_date" />
+                                            </TableHead>
+                                            <TableHead
+                                                className="cursor-pointer select-none"
+                                                onClick={() =>
+                                                    handleSort('total_sessions')
+                                                }
+                                            >
+                                                Sessions{' '}
+                                                <SortIcon field="total_sessions" />
+                                            </TableHead>
+                                            <TableHead
+                                                className="text-center"
+                                                title="Weekly coaching breakdown"
+                                            >
+                                                Wk
+                                            </TableHead>
+                                            <TableHead
+                                                className="cursor-pointer select-none"
+                                                onClick={() =>
+                                                    handleSort('trend')
+                                                }
+                                            >
+                                                Trend <SortIcon field="trend" />
+                                            </TableHead>
+                                            <TableHead
+                                                className="cursor-pointer select-none"
+                                                onClick={() =>
+                                                    handleSort(
+                                                        'pending_acknowledgements',
+                                                    )
+                                                }
+                                            >
+                                                Pending Ack{' '}
+                                                <SortIcon field="pending_acknowledgements" />
+                                            </TableHead>
+                                            <TableHead className="text-center">
+                                                Actions
+                                            </TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {sortedAgents.length === 0 ? (
                                             <TableRow>
-                                                <TableCell colSpan={10} className="py-12 text-center">
+                                                <TableCell
+                                                    colSpan={10}
+                                                    className="py-12 text-center"
+                                                >
                                                     <Users className="mx-auto h-8 w-8 text-muted-foreground/40" />
-                                                    <p className="mt-2 text-sm font-medium text-muted-foreground">No agents found</p>
-                                                    <p className="text-xs text-muted-foreground/70">Try adjusting your filters or date range</p>
+                                                    <p className="mt-2 text-sm font-medium text-muted-foreground">
+                                                        No agents found
+                                                    </p>
+                                                    <p className="text-xs text-muted-foreground/70">
+                                                        Try adjusting your
+                                                        filters or date range
+                                                    </p>
                                                 </TableCell>
                                             </TableRow>
                                         ) : (
                                             sortedAgents.map((agent) => (
-                                                <TableRow key={agent.id} className={getStatusRowClass(agent.coaching_status)}>
-                                                    <TableCell onClick={(e) => e.stopPropagation()}>
+                                                <TableRow
+                                                    key={agent.id}
+                                                    className={getStatusRowClass(
+                                                        agent.coaching_status,
+                                                    )}
+                                                >
+                                                    <TableCell
+                                                        onClick={(e) =>
+                                                            e.stopPropagation()
+                                                        }
+                                                    >
                                                         <input
                                                             type="checkbox"
                                                             aria-label={`Select ${agent.name}`}
                                                             className="rounded border-gray-300"
-                                                            checked={selectedAgentIds.includes(agent.id)}
+                                                            checked={selectedAgentIds.includes(
+                                                                agent.id,
+                                                            )}
                                                             onChange={(e) => {
-                                                                if (e.target.checked) {
-                                                                    setSelectedAgentIds(prev => [...prev, agent.id]);
+                                                                if (
+                                                                    e.target
+                                                                        .checked
+                                                                ) {
+                                                                    setSelectedAgentIds(
+                                                                        (
+                                                                            prev,
+                                                                        ) => [
+                                                                            ...prev,
+                                                                            agent.id,
+                                                                        ],
+                                                                    );
                                                                 } else {
-                                                                    setSelectedAgentIds(prev => prev.filter(id => id !== agent.id));
+                                                                    setSelectedAgentIds(
+                                                                        (
+                                                                            prev,
+                                                                        ) =>
+                                                                            prev.filter(
+                                                                                (
+                                                                                    id,
+                                                                                ) =>
+                                                                                    id !==
+                                                                                    agent.id,
+                                                                            ),
+                                                                    );
                                                                 }
                                                             }}
                                                         />
@@ -662,17 +1076,30 @@ export default function CoachingDashboardIndex() {
                                                     <TableCell className="font-medium">
                                                         <div className="flex flex-col">
                                                             <div className="flex items-center gap-1.5">
-                                                                <span>{agent.name}</span>
-                                                                {coachedThisWeekIds.includes(agent.id) && (
-                                                                    <Badge className="bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 text-[10px] px-1.5 py-0 font-medium leading-none">
-                                                                        Wk {getCurrentWeekOfMonth()}
+                                                                <span>
+                                                                    {agent.name}
+                                                                </span>
+                                                                {coachedThisWeekIds.includes(
+                                                                    agent.id,
+                                                                ) && (
+                                                                    <Badge className="bg-green-100 px-1.5 py-0 text-[10px] leading-none font-medium text-green-800 dark:bg-green-900/40 dark:text-green-300">
+                                                                        Wk{' '}
+                                                                        {getCurrentWeekOfMonth()}
                                                                     </Badge>
                                                                 )}
-                                                                {draftedThisWeekIds.includes(agent.id) && !coachedThisWeekIds.includes(agent.id) && (
-                                                                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-medium leading-none">
-                                                                        Draft
-                                                                    </Badge>
-                                                                )}
+                                                                {draftedThisWeekIds.includes(
+                                                                    agent.id,
+                                                                ) &&
+                                                                    !coachedThisWeekIds.includes(
+                                                                        agent.id,
+                                                                    ) && (
+                                                                        <Badge
+                                                                            variant="secondary"
+                                                                            className="px-1.5 py-0 text-[10px] leading-none font-medium"
+                                                                        >
+                                                                            Draft
+                                                                        </Badge>
+                                                                    )}
                                                             </div>
                                                             {agent.is_coaching_excluded && (
                                                                 <span className="text-[10px] text-slate-500">
@@ -683,27 +1110,66 @@ export default function CoachingDashboardIndex() {
                                                             )}
                                                         </div>
                                                     </TableCell>
-                                                    <TableCell>{agent.account}</TableCell>
                                                     <TableCell>
-                                                        <CoachingStatusBadge status={agent.coaching_status} />
+                                                        {agent.account}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <CoachingStatusBadge
+                                                            status={
+                                                                agent.coaching_status
+                                                            }
+                                                        />
                                                     </TableCell>
                                                     <TableCell className="whitespace-nowrap">
-                                                        {agent.last_coached_date ? formatDate(agent.last_coached_date) : 'Never'}
+                                                        {agent.last_coached_date
+                                                            ? formatDate(
+                                                                  agent.last_coached_date,
+                                                              )
+                                                            : 'Never'}
                                                     </TableCell>
-                                                    <TableCell>{agent.total_sessions}</TableCell>
-                                                    <TableCell className="text-center"><WeekIndicator coachedWeeks={agent.coached_weeks} /></TableCell>
-                                                    <TableCell><TrendIndicator trend={agent.trend} /></TableCell>
                                                     <TableCell>
-                                                        {agent.pending_acknowledgements > 0 ? (
-                                                            <span className="font-medium text-amber-600">{agent.pending_acknowledgements}</span>
+                                                        {agent.total_sessions}
+                                                    </TableCell>
+                                                    <TableCell className="text-center">
+                                                        <WeekIndicator
+                                                            coachedWeeks={
+                                                                agent.coached_weeks
+                                                            }
+                                                        />
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <TrendIndicator
+                                                            trend={agent.trend}
+                                                        />
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {agent.pending_acknowledgements >
+                                                        0 ? (
+                                                            <span className="font-medium text-amber-600">
+                                                                {
+                                                                    agent.pending_acknowledgements
+                                                                }
+                                                            </span>
                                                         ) : (
-                                                            <span className="text-muted-foreground">0</span>
+                                                            <span className="text-muted-foreground">
+                                                                0
+                                                            </span>
                                                         )}
                                                     </TableCell>
                                                     <TableCell>
                                                         <div className="flex items-center justify-center">
-                                                            <Link href={sessionsCreate().url + `?coachee_id=${agent.id}`}>
-                                                                <Button variant="ghost" size="icon" title="Coach Agent">
+                                                            <Link
+                                                                href={
+                                                                    sessionsCreate()
+                                                                        .url +
+                                                                    `?coachee_id=${agent.id}`
+                                                                }
+                                                            >
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    title="Coach Agent"
+                                                                >
                                                                     <Plus className="h-4 w-4" />
                                                                 </Button>
                                                             </Link>
@@ -722,66 +1188,138 @@ export default function CoachingDashboardIndex() {
                             {sortedAgents.length === 0 ? (
                                 <div className="py-12 text-center">
                                     <Users className="mx-auto h-8 w-8 text-muted-foreground/40" />
-                                    <p className="mt-2 text-sm font-medium text-muted-foreground">No agents found</p>
-                                    <p className="text-xs text-muted-foreground/70">Try adjusting your filters or date range</p>
+                                    <p className="mt-2 text-sm font-medium text-muted-foreground">
+                                        No agents found
+                                    </p>
+                                    <p className="text-xs text-muted-foreground/70">
+                                        Try adjusting your filters or date range
+                                    </p>
                                 </div>
                             ) : (
                                 sortedAgents.map((agent) => (
-                                    <div key={agent.id} className={`rounded-lg border bg-card p-4 shadow-sm space-y-2 ${getStatusRowClass(agent.coaching_status)}`}>
+                                    <div
+                                        key={agent.id}
+                                        className={`space-y-2 rounded-lg border bg-card p-4 shadow-sm ${getStatusRowClass(agent.coaching_status)}`}
+                                    >
                                         <div className="flex items-start justify-between">
                                             <div className="flex items-center gap-2">
                                                 <input
                                                     type="checkbox"
                                                     aria-label={`Select ${agent.name}`}
                                                     className="rounded border-gray-300"
-                                                    checked={selectedAgentIds.includes(agent.id)}
+                                                    checked={selectedAgentIds.includes(
+                                                        agent.id,
+                                                    )}
                                                     onChange={(e) => {
                                                         if (e.target.checked) {
-                                                            setSelectedAgentIds(prev => [...prev, agent.id]);
+                                                            setSelectedAgentIds(
+                                                                (prev) => [
+                                                                    ...prev,
+                                                                    agent.id,
+                                                                ],
+                                                            );
                                                         } else {
-                                                            setSelectedAgentIds(prev => prev.filter(id => id !== agent.id));
+                                                            setSelectedAgentIds(
+                                                                (prev) =>
+                                                                    prev.filter(
+                                                                        (id) =>
+                                                                            id !==
+                                                                            agent.id,
+                                                                    ),
+                                                            );
                                                         }
                                                     }}
                                                 />
                                                 <div>
                                                     <div className="flex items-center gap-1.5">
-                                                        <p className="font-medium">{agent.name}</p>
-                                                        {coachedThisWeekIds.includes(agent.id) && (
-                                                            <Badge className="bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 text-[10px] px-1.5 py-0 font-medium leading-none">
-                                                                Wk {getCurrentWeekOfMonth()}
+                                                        <p className="font-medium">
+                                                            {agent.name}
+                                                        </p>
+                                                        {coachedThisWeekIds.includes(
+                                                            agent.id,
+                                                        ) && (
+                                                            <Badge className="bg-green-100 px-1.5 py-0 text-[10px] leading-none font-medium text-green-800 dark:bg-green-900/40 dark:text-green-300">
+                                                                Wk{' '}
+                                                                {getCurrentWeekOfMonth()}
                                                             </Badge>
                                                         )}
-                                                        {draftedThisWeekIds.includes(agent.id) && !coachedThisWeekIds.includes(agent.id) && (
-                                                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-medium leading-none">
-                                                                Draft
-                                                            </Badge>
-                                                        )}
+                                                        {draftedThisWeekIds.includes(
+                                                            agent.id,
+                                                        ) &&
+                                                            !coachedThisWeekIds.includes(
+                                                                agent.id,
+                                                            ) && (
+                                                                <Badge
+                                                                    variant="secondary"
+                                                                    className="px-1.5 py-0 text-[10px] leading-none font-medium"
+                                                                >
+                                                                    Draft
+                                                                </Badge>
+                                                            )}
                                                     </div>
-                                                    <p className="text-xs text-muted-foreground">{agent.account}</p>
+                                                    <p className="text-xs text-muted-foreground">
+                                                        {agent.account}
+                                                    </p>
                                                     {agent.is_coaching_excluded && (
                                                         <p className="text-[10px] text-slate-500">
-                                                            Excluded {agent.exclusion_expires_at
+                                                            Excluded{' '}
+                                                            {agent.exclusion_expires_at
                                                                 ? `until ${new Date(agent.exclusion_expires_at).toLocaleDateString()}`
                                                                 : '(forever)'}
                                                         </p>
                                                     )}
                                                 </div>
                                             </div>
-                                            <CoachingStatusBadge status={agent.coaching_status} />
+                                            <CoachingStatusBadge
+                                                status={agent.coaching_status}
+                                            />
                                         </div>
                                         <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-                                                <span>Last: {agent.last_coached_date ? formatDate(agent.last_coached_date) : 'Never'}</span>
-                                            <span className="flex items-center gap-1.5">Sessions: {agent.total_sessions} <WeekIndicator coachedWeeks={agent.coached_weeks} /></span>
-                                            {agent.trend !== undefined && agent.trend !== 0 && (
-                                                <TrendIndicator trend={agent.trend} />
-                                            )}
-                                            {agent.pending_acknowledgements > 0 && (
-                                                <span className="font-medium text-amber-600">{agent.pending_acknowledgements} Pending</span>
+                                            <span>
+                                                Last:{' '}
+                                                {agent.last_coached_date
+                                                    ? formatDate(
+                                                          agent.last_coached_date,
+                                                      )
+                                                    : 'Never'}
+                                            </span>
+                                            <span className="flex items-center gap-1.5">
+                                                Sessions: {agent.total_sessions}{' '}
+                                                <WeekIndicator
+                                                    coachedWeeks={
+                                                        agent.coached_weeks
+                                                    }
+                                                />
+                                            </span>
+                                            {agent.trend !== undefined &&
+                                                agent.trend !== 0 && (
+                                                    <TrendIndicator
+                                                        trend={agent.trend}
+                                                    />
+                                                )}
+                                            {agent.pending_acknowledgements >
+                                                0 && (
+                                                <span className="font-medium text-amber-600">
+                                                    {
+                                                        agent.pending_acknowledgements
+                                                    }{' '}
+                                                    Pending
+                                                </span>
                                             )}
                                         </div>
-                                        <Link href={sessionsCreate().url + `?coachee_id=${agent.id}`}>
-                                            <Button variant="outline" size="sm" className="mt-1 w-full">
-                                                <Plus className="mr-1.5 h-3.5 w-3.5" /> Coach Agent
+                                        <Link
+                                            href={
+                                                sessionsCreate().url +
+                                                `?coachee_id=${agent.id}`
+                                            }
+                                        >
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="mt-1 w-full"
+                                            >
+                                                <Plus className="mr-1.5 h-3.5 w-3.5" />{' '}
+                                                Coach Agent
                                             </Button>
                                         </Link>
                                     </div>
@@ -792,38 +1330,74 @@ export default function CoachingDashboardIndex() {
 
                     {/* Follow-ups Tab */}
                     <TabsContent value="followups">
-                        <Tabs defaultValue="upcoming" className="space-y-2" onValueChange={(v) => { if (v === 'calendar') setCalendarSelectedDate(undefined); }}>
+                        <Tabs
+                            defaultValue="upcoming"
+                            className="space-y-2"
+                            onValueChange={(v) => {
+                                if (v === 'calendar')
+                                    setCalendarSelectedDate(undefined);
+                            }}
+                        >
                             <TabsList className="grid w-full grid-cols-3">
-                                <TabsTrigger value="upcoming" className="flex items-center gap-2">
+                                <TabsTrigger
+                                    value="upcoming"
+                                    className="flex items-center gap-2"
+                                >
                                     <CalendarClock className="h-4 w-4" />
-                                    <span className="hidden sm:inline">Upcoming</span>
+                                    <span className="hidden sm:inline">
+                                        Upcoming
+                                    </span>
                                     {upcomingFollowUps.length > 0 && (
-                                        <Badge variant="secondary" className="ml-0.5 px-1.5 py-0 text-[10px]">
+                                        <Badge
+                                            variant="secondary"
+                                            className="ml-0.5 px-1.5 py-0 text-[10px]"
+                                        >
                                             {upcomingFollowUps.length}
                                         </Badge>
                                     )}
                                 </TabsTrigger>
-                                <TabsTrigger value="overdue" className="flex items-center gap-2">
+                                <TabsTrigger
+                                    value="overdue"
+                                    className="flex items-center gap-2"
+                                >
                                     <AlertTriangle className="h-4 w-4" />
-                                    <span className="hidden sm:inline">Overdue</span>
+                                    <span className="hidden sm:inline">
+                                        Overdue
+                                    </span>
                                     {overdueFollowUps.length > 0 && (
-                                        <Badge variant="destructive" className="ml-0.5 px-1.5 py-0 text-[10px]">
+                                        <Badge
+                                            variant="destructive"
+                                            className="ml-0.5 px-1.5 py-0 text-[10px]"
+                                        >
                                             {overdueFollowUps.length}
                                         </Badge>
                                     )}
                                 </TabsTrigger>
-                                <TabsTrigger value="calendar" className="flex items-center gap-2">
+                                <TabsTrigger
+                                    value="calendar"
+                                    className="flex items-center gap-2"
+                                >
                                     <CalendarIcon className="h-4 w-4" />
-                                    <span className="hidden sm:inline">Calendar</span>
+                                    <span className="hidden sm:inline">
+                                        Calendar
+                                    </span>
                                 </TabsTrigger>
                             </TabsList>
 
                             <TabsContent value="upcoming">
-                                <FollowUpTable items={upcomingFollowUps} emptyMessage="No upcoming follow-ups scheduled." emptyDescription="Set follow-up dates when creating coaching sessions." />
+                                <FollowUpTable
+                                    items={upcomingFollowUps}
+                                    emptyMessage="No upcoming follow-ups scheduled."
+                                    emptyDescription="Set follow-up dates when creating coaching sessions."
+                                />
                             </TabsContent>
 
                             <TabsContent value="overdue">
-                                <FollowUpTable items={overdueFollowUps} emptyMessage="No overdue follow-ups." emptyDescription="All follow-ups are on track." />
+                                <FollowUpTable
+                                    items={overdueFollowUps}
+                                    emptyMessage="No overdue follow-ups."
+                                    emptyDescription="All follow-ups are on track."
+                                />
                             </TabsContent>
 
                             <TabsContent value="calendar">
@@ -833,21 +1407,46 @@ export default function CoachingDashboardIndex() {
                                             mode="single"
                                             selected={calendarSelectedDate}
                                             onSelect={setCalendarSelectedDate}
-                                            modifiers={{ hasFollowUp: followUpDates }}
-                                            modifiersClassNames={{ hasFollowUp: 'ring-2 ring-primary/40 ring-offset-1' }}
+                                            modifiers={{
+                                                hasFollowUp: followUpDates,
+                                            }}
+                                            modifiersClassNames={{
+                                                hasFollowUp:
+                                                    'ring-2 ring-primary/40 ring-offset-1',
+                                            }}
                                         />
                                         <div className="flex items-center gap-4 border-t px-3 pt-2 text-[10px] text-muted-foreground">
-                                            <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full ring-2 ring-primary/40" /> Has follow-up</span>
+                                            <span className="flex items-center gap-1">
+                                                <span className="inline-block h-2 w-2 rounded-full ring-2 ring-primary/40" />{' '}
+                                                Has follow-up
+                                            </span>
                                             {calendarSelectedDate && (
-                                                <button onClick={() => setCalendarSelectedDate(undefined)} className="text-primary hover:underline">Clear selection</button>
+                                                <button
+                                                    onClick={() =>
+                                                        setCalendarSelectedDate(
+                                                            undefined,
+                                                        )
+                                                    }
+                                                    className="text-primary hover:underline"
+                                                >
+                                                    Clear selection
+                                                </button>
                                             )}
                                         </div>
                                     </div>
                                     <div className="flex-1">
                                         <FollowUpTable
                                             items={selectedDateFollowUps}
-                                            emptyMessage={calendarSelectedDate ? 'No follow-ups on this date.' : 'No follow-ups scheduled.'}
-                                            emptyDescription={calendarSelectedDate ? `${calendarSelectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}` : undefined}
+                                            emptyMessage={
+                                                calendarSelectedDate
+                                                    ? 'No follow-ups on this date.'
+                                                    : 'No follow-ups scheduled.'
+                                            }
+                                            emptyDescription={
+                                                calendarSelectedDate
+                                                    ? `${calendarSelectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}`
+                                                    : undefined
+                                            }
                                             compact
                                         />
                                     </div>
@@ -861,8 +1460,13 @@ export default function CoachingDashboardIndex() {
                         {recentSessions.data.length === 0 ? (
                             <div className="rounded-lg border border-dashed p-6 text-center">
                                 <ClipboardList className="mx-auto h-8 w-8 text-muted-foreground/40" />
-                                <p className="mt-2 text-sm font-medium text-muted-foreground">No recent sessions</p>
-                                <p className="text-xs text-muted-foreground/70">Coaching sessions will appear here once created</p>
+                                <p className="mt-2 text-sm font-medium text-muted-foreground">
+                                    No recent sessions
+                                </p>
+                                <p className="text-xs text-muted-foreground/70">
+                                    Coaching sessions will appear here once
+                                    created
+                                </p>
                             </div>
                         ) : (
                             <>
@@ -875,36 +1479,65 @@ export default function CoachingDashboardIndex() {
                                                 <TableHead>Purpose</TableHead>
                                                 <TableHead>Ack</TableHead>
                                                 <TableHead>Severity</TableHead>
-                                                <TableHead className="text-center">Actions</TableHead>
+                                                <TableHead className="text-center">
+                                                    Actions
+                                                </TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
-                                            {recentSessions.data.map((session) => (
-                                                <TableRow key={session.id}>
-                                                    <TableCell className="whitespace-nowrap">
-                                                        {formatDate(session.session_date)}
-                                                    </TableCell>
-                                                    <TableCell className="font-medium">
-                                                        {session.coachee ? `${session.coachee.first_name} ${session.coachee.last_name}` : 'N/A'}
-                                                    </TableCell>
-                                                    <TableCell>{purposes[session.purpose] ?? session.purpose}</TableCell>
-                                                    <TableCell>
-                                                        <AckStatusBadge status={session.ack_status} />
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <SeverityBadge flag={session.severity_flag} />
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <div className="flex items-center justify-center">
-                                                            <Link href={sessionsShow.url(session.id)}>
-                                                                <Button variant="ghost" size="icon" title="View">
-                                                                    <Eye className="h-4 w-4" />
-                                                                </Button>
-                                                            </Link>
-                                                        </div>
-                                                    </TableCell>
-                                                </TableRow>
-                                            ))}
+                                            {recentSessions.data.map(
+                                                (session) => (
+                                                    <TableRow key={session.id}>
+                                                        <TableCell className="whitespace-nowrap">
+                                                            {formatDate(
+                                                                session.session_date,
+                                                            )}
+                                                        </TableCell>
+                                                        <TableCell className="font-medium">
+                                                            {session.coachee
+                                                                ? `${session.coachee.first_name} ${session.coachee.last_name}`
+                                                                : 'N/A'}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {purposes[
+                                                                session.purpose
+                                                            ] ??
+                                                                session.purpose}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <AckStatusBadge
+                                                                status={
+                                                                    session.ack_status
+                                                                }
+                                                            />
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <SeverityBadge
+                                                                flag={
+                                                                    session.severity_flag
+                                                                }
+                                                            />
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <div className="flex items-center justify-center">
+                                                                <Link
+                                                                    href={sessionsShow.url(
+                                                                        session.id,
+                                                                    )}
+                                                                >
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        title="View"
+                                                                    >
+                                                                        <Eye className="h-4 w-4" />
+                                                                    </Button>
+                                                                </Link>
+                                                            </div>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ),
+                                            )}
                                         </TableBody>
                                     </Table>
                                 </div>
@@ -912,25 +1545,53 @@ export default function CoachingDashboardIndex() {
                                 {/* Mobile recent sessions */}
                                 <div className="space-y-3 md:hidden">
                                     {recentSessions.data.map((session) => (
-                                        <div key={session.id} className="rounded-lg border bg-card p-3 shadow-sm">
+                                        <div
+                                            key={session.id}
+                                            className="rounded-lg border bg-card p-3 shadow-sm"
+                                        >
                                             <div className="flex items-start justify-between gap-2">
                                                 <div>
                                                     <p className="text-xs text-muted-foreground">
-                                                        {formatDate(session.session_date)}
+                                                        {formatDate(
+                                                            session.session_date,
+                                                        )}
                                                     </p>
                                                     <p className="text-sm font-medium">
-                                                        {session.coachee ? `${session.coachee.first_name} ${session.coachee.last_name}` : 'N/A'}
+                                                        {session.coachee
+                                                            ? `${session.coachee.first_name} ${session.coachee.last_name}`
+                                                            : 'N/A'}
                                                     </p>
-                                                    <p className="text-xs text-muted-foreground">{purposes[session.purpose] ?? session.purpose}</p>
+                                                    <p className="text-xs text-muted-foreground">
+                                                        {purposes[
+                                                            session.purpose
+                                                        ] ?? session.purpose}
+                                                    </p>
                                                 </div>
                                                 <div className="flex flex-col items-end gap-1">
-                                                    <AckStatusBadge status={session.ack_status} />
-                                                    <SeverityBadge flag={session.severity_flag} />
+                                                    <AckStatusBadge
+                                                        status={
+                                                            session.ack_status
+                                                        }
+                                                    />
+                                                    <SeverityBadge
+                                                        flag={
+                                                            session.severity_flag
+                                                        }
+                                                    />
                                                 </div>
                                             </div>
-                                            <Link href={sessionsShow.url(session.id)}>
-                                                <Button variant="outline" size="sm" className="mt-2 w-full">
-                                                    <Eye className="mr-1.5 h-3.5 w-3.5" /> View
+                                            <Link
+                                                href={sessionsShow.url(
+                                                    session.id,
+                                                )}
+                                            >
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="mt-2 w-full"
+                                                >
+                                                    <Eye className="mr-1.5 h-3.5 w-3.5" />{' '}
+                                                    View
                                                 </Button>
                                             </Link>
                                         </div>
@@ -938,9 +1599,12 @@ export default function CoachingDashboardIndex() {
                                 </div>
 
                                 {/* Pagination */}
-                                {recentSessions.links && recentSessions.links.length > 3 && (
-                                    <PaginationNav links={recentSessions.links} />
-                                )}
+                                {recentSessions.links &&
+                                    recentSessions.links.length > 3 && (
+                                        <PaginationNav
+                                            links={recentSessions.links}
+                                        />
+                                    )}
                             </>
                         )}
                     </TabsContent>
@@ -972,8 +1636,14 @@ function FollowUpTable({
         return (
             <div className="rounded-lg border border-dashed p-6 text-center">
                 <CalendarClock className="mx-auto h-8 w-8 text-muted-foreground/50" />
-                <p className="mt-2 text-sm text-muted-foreground">{emptyMessage}</p>
-                {emptyDescription && <p className="text-xs text-muted-foreground">{emptyDescription}</p>}
+                <p className="mt-2 text-sm text-muted-foreground">
+                    {emptyMessage}
+                </p>
+                {emptyDescription && (
+                    <p className="text-xs text-muted-foreground">
+                        {emptyDescription}
+                    </p>
+                )}
             </div>
         );
     }
@@ -990,8 +1660,12 @@ function FollowUpTable({
                                 <TableHead>Coachee</TableHead>
                                 {!compact && <TableHead>Coach</TableHead>}
                                 <TableHead>Purpose</TableHead>
-                                {!compact && <TableHead>Session Date</TableHead>}
-                                <TableHead className="text-center">Actions</TableHead>
+                                {!compact && (
+                                    <TableHead>Session Date</TableHead>
+                                )}
+                                <TableHead className="text-center">
+                                    Actions
+                                </TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -1001,12 +1675,29 @@ function FollowUpTable({
                                 return (
                                     <TableRow key={item.id}>
                                         <TableCell className="whitespace-nowrap">
-                                            <span>{new Date(item.follow_up_date + 'T00:00:00').toLocaleDateString()}</span>
-                                            <span className={`ml-2 text-xs font-semibold ${s.text}`}>{s.label}</span>
+                                            <span>
+                                                {new Date(
+                                                    item.follow_up_date +
+                                                        'T00:00:00',
+                                                ).toLocaleDateString()}
+                                            </span>
+                                            <span
+                                                className={`ml-2 text-xs font-semibold ${s.text}`}
+                                            >
+                                                {s.label}
+                                            </span>
                                         </TableCell>
-                                        <TableCell className="font-medium">{item.agent_name}</TableCell>
-                                        {!compact && <TableCell>{item.team_lead_name}</TableCell>}
-                                        <TableCell>{item.purpose_label}</TableCell>
+                                        <TableCell className="font-medium">
+                                            {item.agent_name}
+                                        </TableCell>
+                                        {!compact && (
+                                            <TableCell>
+                                                {item.team_lead_name}
+                                            </TableCell>
+                                        )}
+                                        <TableCell>
+                                            {item.purpose_label}
+                                        </TableCell>
                                         {!compact && (
                                             <TableCell className="whitespace-nowrap">
                                                 {formatDate(item.session_date)}
@@ -1014,8 +1705,16 @@ function FollowUpTable({
                                         )}
                                         <TableCell>
                                             <div className="flex items-center justify-center">
-                                                <Link href={sessionsShow.url(item.id)}>
-                                                    <Button variant="ghost" size="icon" title="View Session">
+                                                <Link
+                                                    href={sessionsShow.url(
+                                                        item.id,
+                                                    )}
+                                                >
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        title="View Session"
+                                                    >
                                                         <Eye className="h-4 w-4" />
                                                     </Button>
                                                 </Link>
@@ -1035,15 +1734,39 @@ function FollowUpTable({
                     const days = daysUntil(item.follow_up_date);
                     const s = getUrgencyStyles(days);
                     return (
-                        <Link key={item.id} href={sessionsShow.url(item.id)} className={`block rounded-lg border p-3 space-y-1 transition-colors hover:bg-muted/50 ${s.border}`}>
+                        <Link
+                            key={item.id}
+                            href={sessionsShow.url(item.id)}
+                            className={`block space-y-1 rounded-lg border p-3 transition-colors hover:bg-muted/50 ${s.border}`}
+                        >
                             <div className="flex items-start justify-between gap-2">
-                                <p className="text-sm font-medium leading-tight truncate">{item.agent_name}</p>
-                                <span className={`text-xs font-semibold shrink-0 ${s.text}`}>{s.label}</span>
+                                <p className="truncate text-sm leading-tight font-medium">
+                                    {item.agent_name}
+                                </p>
+                                <span
+                                    className={`shrink-0 text-xs font-semibold ${s.text}`}
+                                >
+                                    {s.label}
+                                </span>
                             </div>
-                            <p className="text-xs text-muted-foreground truncate">{item.purpose_label}</p>
+                            <p className="truncate text-xs text-muted-foreground">
+                                {item.purpose_label}
+                            </p>
                             <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                                <span>Follow-up: {new Date(item.follow_up_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                                {!compact && <span>Session: {formatDate(item.session_date)}</span>}
+                                <span>
+                                    Follow-up:{' '}
+                                    {new Date(
+                                        item.follow_up_date + 'T00:00:00',
+                                    ).toLocaleDateString('en-US', {
+                                        month: 'short',
+                                        day: 'numeric',
+                                    })}
+                                </span>
+                                {!compact && (
+                                    <span>
+                                        Session: {formatDate(item.session_date)}
+                                    </span>
+                                )}
                             </div>
                         </Link>
                     );
@@ -1054,13 +1777,25 @@ function FollowUpTable({
             {totalPages > 1 && (
                 <div className="flex items-center justify-between border-t pt-3">
                     <p className="text-xs text-muted-foreground">
-                        {(page - 1) * perPage + 1}–{Math.min(page * perPage, items.length)} of {items.length}
+                        {(page - 1) * perPage + 1}–
+                        {Math.min(page * perPage, items.length)} of{' '}
+                        {items.length}
                     </p>
                     <div className="flex gap-2">
-                        <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={page <= 1}
+                            onClick={() => setPage(page - 1)}
+                        >
                             Previous
                         </Button>
-                        <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={page >= totalPages}
+                            onClick={() => setPage(page + 1)}
+                        >
                             Next
                         </Button>
                     </div>

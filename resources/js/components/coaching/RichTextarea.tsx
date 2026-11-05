@@ -1,21 +1,3 @@
-import { useRef, useCallback, useEffect, useState } from 'react';
-import {
-    Bold,
-    Italic,
-    Underline,
-    Strikethrough,
-    List,
-    ListOrdered,
-    IndentDecrease,
-    IndentIncrease,
-    Quote,
-    RemoveFormatting,
-    Undo2,
-    Redo2,
-    Baseline,
-    Type,
-    Rows3,
-} from 'lucide-react';
 import {
     Popover,
     PopoverContent,
@@ -28,24 +10,132 @@ import {
     TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import {
+    Baseline,
+    Bold,
+    IndentDecrease,
+    IndentIncrease,
+    Italic,
+    List,
+    ListOrdered,
+    Quote,
+    Redo2,
+    RemoveFormatting,
+    Rows3,
+    Strikethrough,
+    Type,
+    Underline,
+    Undo2,
+} from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 // Gmail-style color palette (10 columns × 8 rows)
 const GMAIL_COLORS = [
-    ['#000000', '#434343', '#666666', '#999999', '#b7b7b7', '#cccccc', '#d9d9d9', '#efefef', '#f3f3f3', '#ffffff'],
-    ['#980000', '#ff0000', '#ff9900', '#ffff00', '#00ff00', '#00ffff', '#4a86e8', '#0000ff', '#9900ff', '#ff00ff'],
-    ['#e6b8af', '#f4cccc', '#fce5cd', '#fff2cc', '#d9ead3', '#d0e0e3', '#c9daf8', '#cfe2f3', '#d9d2e9', '#ead1dc'],
-    ['#dd7e6b', '#ea9999', '#f9cb9c', '#ffe599', '#b6d7a8', '#a2c4c9', '#a4c2f4', '#9fc5e8', '#b4a7d6', '#d5a6bd'],
-    ['#cc4125', '#e06666', '#f6b26b', '#ffd966', '#93c47d', '#76a5af', '#6d9eeb', '#6fa8dc', '#8e7cc3', '#c27ba0'],
-    ['#a61c00', '#cc0000', '#e69138', '#f1c232', '#6aa84f', '#45818e', '#3c78d8', '#3d85c6', '#674ea7', '#a64d79'],
-    ['#85200c', '#990000', '#b45f06', '#bf9000', '#38761d', '#134f5c', '#1155cc', '#0b5394', '#351c75', '#741b47'],
-    ['#5b0f00', '#660000', '#783f04', '#7f6000', '#274e13', '#0c343d', '#1c4587', '#073763', '#20124d', '#4c1130'],
+    [
+        '#000000',
+        '#434343',
+        '#666666',
+        '#999999',
+        '#b7b7b7',
+        '#cccccc',
+        '#d9d9d9',
+        '#efefef',
+        '#f3f3f3',
+        '#ffffff',
+    ],
+    [
+        '#980000',
+        '#ff0000',
+        '#ff9900',
+        '#ffff00',
+        '#00ff00',
+        '#00ffff',
+        '#4a86e8',
+        '#0000ff',
+        '#9900ff',
+        '#ff00ff',
+    ],
+    [
+        '#e6b8af',
+        '#f4cccc',
+        '#fce5cd',
+        '#fff2cc',
+        '#d9ead3',
+        '#d0e0e3',
+        '#c9daf8',
+        '#cfe2f3',
+        '#d9d2e9',
+        '#ead1dc',
+    ],
+    [
+        '#dd7e6b',
+        '#ea9999',
+        '#f9cb9c',
+        '#ffe599',
+        '#b6d7a8',
+        '#a2c4c9',
+        '#a4c2f4',
+        '#9fc5e8',
+        '#b4a7d6',
+        '#d5a6bd',
+    ],
+    [
+        '#cc4125',
+        '#e06666',
+        '#f6b26b',
+        '#ffd966',
+        '#93c47d',
+        '#76a5af',
+        '#6d9eeb',
+        '#6fa8dc',
+        '#8e7cc3',
+        '#c27ba0',
+    ],
+    [
+        '#a61c00',
+        '#cc0000',
+        '#e69138',
+        '#f1c232',
+        '#6aa84f',
+        '#45818e',
+        '#3c78d8',
+        '#3d85c6',
+        '#674ea7',
+        '#a64d79',
+    ],
+    [
+        '#85200c',
+        '#990000',
+        '#b45f06',
+        '#bf9000',
+        '#38761d',
+        '#134f5c',
+        '#1155cc',
+        '#0b5394',
+        '#351c75',
+        '#741b47',
+    ],
+    [
+        '#5b0f00',
+        '#660000',
+        '#783f04',
+        '#7f6000',
+        '#274e13',
+        '#0c343d',
+        '#1c4587',
+        '#073763',
+        '#20124d',
+        '#4c1130',
+    ],
 ];
 
 // Ordered list style cycle: 1. -> a. -> i. (like MS Word)
 const OL_STYLES = ['decimal', 'lower-alpha', 'lower-roman'] as const;
 
 // Font size presets (in points, like MS Office) offered in the toolbar.
-const FONT_SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 72] as const;
+const FONT_SIZES = [
+    8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 72,
+] as const;
 
 // Line spacing presets (unitless line-height, like MS Office) offered in the toolbar.
 const LINE_SPACINGS = [
@@ -58,7 +148,18 @@ const LINE_SPACINGS = [
 ] as const;
 
 // Block-level tags whose line-height can be adjusted for paragraph spacing.
-const BLOCK_TAGS = new Set(['P', 'DIV', 'LI', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE']);
+const BLOCK_TAGS = new Set([
+    'P',
+    'DIV',
+    'LI',
+    'H1',
+    'H2',
+    'H3',
+    'H4',
+    'H5',
+    'H6',
+    'BLOCKQUOTE',
+]);
 
 // Inline styles preserved when pasting from Word/Google Docs (maps to editor formatting).
 const SAFE_PASTE_STYLES = [
@@ -73,17 +174,29 @@ const SAFE_PASTE_STYLES = [
 ] as const;
 
 // Spacing styles preserved so paragraph gaps/line spacing/indentation carry over on paste.
-const SAFE_SPACING_STYLES = ['margin-top', 'margin-bottom', 'line-height', 'padding-left'] as const;
+const SAFE_SPACING_STYLES = [
+    'margin-top',
+    'margin-bottom',
+    'line-height',
+    'padding-left',
+] as const;
 
 /** Reject CSS values that could smuggle scripts (url(), expression()), allowing only color functions. */
 function isSafeStyleValue(value: string): boolean {
     if (!value) return false;
     const lower = value.toLowerCase();
-    if (lower.includes('javascript:') || lower.includes('expression(') || lower.includes('url(')) {
+    if (
+        lower.includes('javascript:') ||
+        lower.includes('expression(') ||
+        lower.includes('url(')
+    ) {
         return false;
     }
     // Allow parentheses only for known color functions
-    if (value.includes('(') && !/^[^()]*(rgb|rgba|hsl|hsla)\([^()]*\)[^()]*$/i.test(value)) {
+    if (
+        value.includes('(') &&
+        !/^[^()]*(rgb|rgba|hsl|hsla)\([^()]*\)[^()]*$/i.test(value)
+    ) {
         return false;
     }
     return true;
@@ -137,10 +250,15 @@ function isNormalWeight(weight: string): boolean {
 }
 
 /** Walk up from a node to find the closest ancestor matching a tag name within a boundary */
-function closestTag(node: Node | null, tag: string, boundary: HTMLElement): HTMLElement | null {
+function closestTag(
+    node: Node | null,
+    tag: string,
+    boundary: HTMLElement,
+): HTMLElement | null {
     let cur = node;
     while (cur && cur !== boundary) {
-        if (cur instanceof HTMLElement && cur.tagName === tag.toUpperCase()) return cur;
+        if (cur instanceof HTMLElement && cur.tagName === tag.toUpperCase())
+            return cur;
         cur = cur.parentNode;
     }
     return null;
@@ -148,7 +266,10 @@ function closestTag(node: Node | null, tag: string, boundary: HTMLElement): HTML
 
 /** Escape HTML entities in plain text */
 function escapeHtml(text: string): string {
-    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
 }
 
 /** Convert plain text (e.g. from Notepad) to structured HTML, detecting list patterns */
@@ -164,17 +285,35 @@ function convertPlainTextToHtml(text: string): string {
         const numberedMatch = raw.match(/^(\s*)\d+[.)]\s+(.*)$/);
 
         if (bulletMatch) {
-            if (inOl) { result.push('</ol>'); inOl = false; }
-            if (!inUl) { result.push('<ul>'); inUl = true; }
+            if (inOl) {
+                result.push('</ol>');
+                inOl = false;
+            }
+            if (!inUl) {
+                result.push('<ul>');
+                inUl = true;
+            }
             result.push(`<li>${escapeHtml(bulletMatch[2])}</li>`);
         } else if (numberedMatch) {
-            if (inUl) { result.push('</ul>'); inUl = false; }
-            if (!inOl) { result.push('<ol>'); inOl = true; }
+            if (inUl) {
+                result.push('</ul>');
+                inUl = false;
+            }
+            if (!inOl) {
+                result.push('<ol>');
+                inOl = true;
+            }
             result.push(`<li>${escapeHtml(numberedMatch[2])}</li>`);
         } else {
             // Close any open lists
-            if (inUl) { result.push('</ul>'); inUl = false; }
-            if (inOl) { result.push('</ol>'); inOl = false; }
+            if (inUl) {
+                result.push('</ul>');
+                inUl = false;
+            }
+            if (inOl) {
+                result.push('</ol>');
+                inOl = false;
+            }
 
             if (raw.trim() === '') {
                 result.push('<br>');
@@ -182,7 +321,9 @@ function convertPlainTextToHtml(text: string): string {
                 // Preserve leading whitespace with &nbsp;
                 const leadingMatch = raw.match(/^(\s+)/);
                 const indent = leadingMatch
-                    ? leadingMatch[1].replace(/\t/g, '    ').replace(/ /g, '&nbsp;')
+                    ? leadingMatch[1]
+                          .replace(/\t/g, '    ')
+                          .replace(/ /g, '&nbsp;')
                     : '';
                 result.push(`${indent}${escapeHtml(raw.trimStart())}<br>`);
             }
@@ -217,7 +358,7 @@ function ToolbarButton({
                 <button
                     type="button"
                     className={cn(
-                        'inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
+                        'inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:outline-none',
                         className,
                     )}
                     aria-label={label}
@@ -228,7 +369,12 @@ function ToolbarButton({
                 </button>
             </TooltipTrigger>
             <TooltipContent side="top" className="text-xs">
-                {label}{shortcut && <span className="ml-1.5 text-muted-foreground">({shortcut})</span>}
+                {label}
+                {shortcut && (
+                    <span className="ml-1.5 text-muted-foreground">
+                        ({shortcut})
+                    </span>
+                )}
             </TooltipContent>
         </Tooltip>
     );
@@ -242,7 +388,13 @@ interface RichTextareaProps {
     minHeight?: string;
 }
 
-export function RichTextarea({ id, value, onChange, placeholder, minHeight = '120px' }: RichTextareaProps) {
+export function RichTextarea({
+    id,
+    value,
+    onChange,
+    placeholder,
+    minHeight = '120px',
+}: RichTextareaProps) {
     const editorRef = useRef<HTMLDivElement>(null);
     const isInternalChange = useRef(false);
     const savedRangeRef = useRef<Range | null>(null);
@@ -292,12 +444,15 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
         }
     }, []);
 
-    const exec = useCallback((command: string, val?: string) => {
-        restoreSelection();
-        document.execCommand(command, false, val);
-        saveSelection();
-        emitChange();
-    }, [emitChange, restoreSelection, saveSelection]);
+    const exec = useCallback(
+        (command: string, val?: string) => {
+            restoreSelection();
+            document.execCommand(command, false, val);
+            saveSelection();
+            emitChange();
+        },
+        [emitChange, restoreSelection, saveSelection],
+    );
 
     // Formatting commands
     const handleUndo = () => exec('undo');
@@ -313,7 +468,9 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
         const editor = editorRef.current;
         if (editor) {
             requestAnimationFrame(() => {
-                editor.querySelectorAll('ol').forEach((ol) => applyOlStyle(ol, editor));
+                editor
+                    .querySelectorAll('ol')
+                    .forEach((ol) => applyOlStyle(ol, editor));
                 emitChange();
             });
         }
@@ -323,7 +480,9 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
         const editor = editorRef.current;
         if (editor) {
             requestAnimationFrame(() => {
-                editor.querySelectorAll('ol').forEach((ol) => applyOlStyle(ol, editor));
+                editor
+                    .querySelectorAll('ol')
+                    .forEach((ol) => applyOlStyle(ol, editor));
                 emitChange();
             });
         }
@@ -397,9 +556,11 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
 
         const collectBlocks = (): Set<HTMLElement> => {
             const set = new Set<HTMLElement>();
-            editor.querySelectorAll('p,div,li,h1,h2,h3,h4,h5,h6,blockquote').forEach((el) => {
-                if (range.intersectsNode(el)) set.add(el as HTMLElement);
-            });
+            editor
+                .querySelectorAll('p,div,li,h1,h2,h3,h4,h5,h6,blockquote')
+                .forEach((el) => {
+                    if (range.intersectsNode(el)) set.add(el as HTMLElement);
+                });
             let cur: Node | null = range.startContainer;
             while (cur && cur !== editor) {
                 if (cur instanceof HTMLElement && BLOCK_TAGS.has(cur.tagName)) {
@@ -422,7 +583,9 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
 
         // Apply only to the innermost blocks so ancestors don't over-space unselected lines
         const blockArr = [...blocks];
-        const leaves = blockArr.filter((b) => !blockArr.some((o) => o !== b && b.contains(o)));
+        const leaves = blockArr.filter(
+            (b) => !blockArr.some((o) => o !== b && b.contains(o)),
+        );
         leaves.forEach((b) => {
             b.style.lineHeight = spacing;
         });
@@ -439,255 +602,359 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
     };
 
     /** Apply the correct list-style-type to an <ol> based on its nesting depth */
-    const applyOlStyle = useCallback((ol: HTMLElement, boundary: HTMLElement) => {
-        let depth = 0;
-        let cur: Node | null = ol.parentElement;
-        while (cur && cur !== boundary) {
-            if (cur instanceof HTMLElement && (cur.tagName === 'OL' || cur.tagName === 'UL')) {
-                depth++;
+    const applyOlStyle = useCallback(
+        (ol: HTMLElement, boundary: HTMLElement) => {
+            let depth = 0;
+            let cur: Node | null = ol.parentElement;
+            while (cur && cur !== boundary) {
+                if (
+                    cur instanceof HTMLElement &&
+                    (cur.tagName === 'OL' || cur.tagName === 'UL')
+                ) {
+                    depth++;
+                }
+                cur = cur.parentNode;
             }
-            cur = cur.parentNode;
-        }
-        const styleType = OL_STYLES[depth % OL_STYLES.length];
-        ol.style.listStyleType = styleType;
-    }, []);
+            const styleType = OL_STYLES[depth % OL_STYLES.length];
+            ol.style.listStyleType = styleType;
+        },
+        [],
+    );
 
     /** Strip unwanted inline styles from pasted HTML, keeping only structural formatting */
-    const handlePaste = useCallback((e: React.ClipboardEvent<HTMLDivElement>) => {
-        e.preventDefault();
-        const clipboard = e.clipboardData;
+    const handlePaste = useCallback(
+        (e: React.ClipboardEvent<HTMLDivElement>) => {
+            e.preventDefault();
+            const clipboard = e.clipboardData;
 
-        // Try to get HTML content first
-        const html = clipboard.getData('text/html');
-        const plain = clipboard.getData('text/plain');
+            // Try to get HTML content first
+            const html = clipboard.getData('text/html');
+            const plain = clipboard.getData('text/plain');
 
-        if (html) {
-            // Parse the HTML and clean it
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
+            if (html) {
+                // Parse the HTML and clean it
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
 
-            // Tags we allow to keep (structural + basic formatting)
-            const ALLOWED = new Set([
-                'P', 'BR', 'STRONG', 'B', 'EM', 'I', 'U', 'S',
-                'UL', 'OL', 'LI', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6',
-                'BLOCKQUOTE', 'A', 'SPAN', 'SUB', 'SUP', 'DIV',
-            ]);
+                // Tags we allow to keep (structural + basic formatting)
+                const ALLOWED = new Set([
+                    'P',
+                    'BR',
+                    'STRONG',
+                    'B',
+                    'EM',
+                    'I',
+                    'U',
+                    'S',
+                    'UL',
+                    'OL',
+                    'LI',
+                    'H1',
+                    'H2',
+                    'H3',
+                    'H4',
+                    'H5',
+                    'H6',
+                    'BLOCKQUOTE',
+                    'A',
+                    'SPAN',
+                    'SUB',
+                    'SUP',
+                    'DIV',
+                ]);
 
-            const cleanNode = (node: Node): Node | null => {
-                if (node.nodeType === Node.TEXT_NODE) {
-                    return node.cloneNode();
-                }
-
-                if (node.nodeType !== Node.ELEMENT_NODE) {
-                    return null;
-                }
-
-                const el = node as HTMLElement;
-                const tag = el.tagName;
-
-                // Remove completely unwanted elements
-                if (['STYLE', 'SCRIPT', 'META', 'LINK', 'TITLE', 'HEAD'].includes(tag)) {
-                    return null;
-                }
-
-                let newEl: HTMLElement;
-
-                // Legacy <font> from some editors: convert to span, carry over color/size
-                if (tag === 'FONT') {
-                    newEl = document.createElement('span');
-                    const colorAttr = el.getAttribute('color');
-                    if (colorAttr && isSafeStyleValue(colorAttr)) {
-                        newEl.style.color = colorAttr;
+                const cleanNode = (node: Node): Node | null => {
+                    if (node.nodeType === Node.TEXT_NODE) {
+                        return node.cloneNode();
                     }
-                    copySafeStyles(el, newEl);
-                } else if (ALLOWED.has(tag)) {
-                    // Google Docs wraps content in <b style="font-weight:normal"> (and similar
-                    // <i>/<u> wrappers). Downgrade those to <span> so they don't force formatting
-                    // onto every child; the real bold/italic runs carry their own inline styles.
-                    const deco = el.style.textDecorationLine || el.style.textDecoration;
-                    const neutralBold = (tag === 'B' || tag === 'STRONG') && isNormalWeight(el.style.fontWeight);
-                    const neutralItalic = (tag === 'I' || tag === 'EM') && el.style.fontStyle === 'normal';
-                    const neutralUnderline = tag === 'U' && (deco === 'none' || deco === 'line-through');
 
-                    if (neutralBold || neutralItalic || neutralUnderline) {
+                    if (node.nodeType !== Node.ELEMENT_NODE) {
+                        return null;
+                    }
+
+                    const el = node as HTMLElement;
+                    const tag = el.tagName;
+
+                    // Remove completely unwanted elements
+                    if (
+                        [
+                            'STYLE',
+                            'SCRIPT',
+                            'META',
+                            'LINK',
+                            'TITLE',
+                            'HEAD',
+                        ].includes(tag)
+                    ) {
+                        return null;
+                    }
+
+                    let newEl: HTMLElement;
+
+                    // Legacy <font> from some editors: convert to span, carry over color/size
+                    if (tag === 'FONT') {
                         newEl = document.createElement('span');
+                        const colorAttr = el.getAttribute('color');
+                        if (colorAttr && isSafeStyleValue(colorAttr)) {
+                            newEl.style.color = colorAttr;
+                        }
                         copySafeStyles(el, newEl);
+                    } else if (ALLOWED.has(tag)) {
+                        // Google Docs wraps content in <b style="font-weight:normal"> (and similar
+                        // <i>/<u> wrappers). Downgrade those to <span> so they don't force formatting
+                        // onto every child; the real bold/italic runs carry their own inline styles.
+                        const deco =
+                            el.style.textDecorationLine ||
+                            el.style.textDecoration;
+                        const neutralBold =
+                            (tag === 'B' || tag === 'STRONG') &&
+                            isNormalWeight(el.style.fontWeight);
+                        const neutralItalic =
+                            (tag === 'I' || tag === 'EM') &&
+                            el.style.fontStyle === 'normal';
+                        const neutralUnderline =
+                            tag === 'U' &&
+                            (deco === 'none' || deco === 'line-through');
+
+                        if (neutralBold || neutralItalic || neutralUnderline) {
+                            newEl = document.createElement('span');
+                            copySafeStyles(el, newEl);
+                        } else {
+                            newEl = document.createElement(tag);
+
+                            // Only preserve href on anchors
+                            if (tag === 'A' && el.getAttribute('href')) {
+                                newEl.setAttribute(
+                                    'href',
+                                    el.getAttribute('href')!,
+                                );
+                            }
+
+                            // Preserve list-style-type on OL (used for nested list styles)
+                            if (tag === 'OL' && el.style.listStyleType) {
+                                newEl.style.listStyleType =
+                                    el.style.listStyleType;
+                            }
+
+                            // Preserve whitelisted formatting styles (bold, italic, color, etc.)
+                            copySafeStyles(el, newEl);
+                        }
                     } else {
-                        newEl = document.createElement(tag);
-
-                        // Only preserve href on anchors
-                        if (tag === 'A' && el.getAttribute('href')) {
-                            newEl.setAttribute('href', el.getAttribute('href')!);
-                        }
-
-                        // Preserve list-style-type on OL (used for nested list styles)
-                        if (tag === 'OL' && el.style.listStyleType) {
-                            newEl.style.listStyleType = el.style.listStyleType;
-                        }
-
-                        // Preserve whitelisted formatting styles (bold, italic, color, etc.)
+                        // Convert unrecognized block elements to DIV, inline to SPAN
+                        const display = window.getComputedStyle?.(el)?.display;
+                        const isBlock = display
+                            ? display === 'block' || display === 'list-item'
+                            : [
+                                  'DIV',
+                                  'TABLE',
+                                  'TR',
+                                  'TD',
+                                  'TH',
+                                  'THEAD',
+                                  'TBODY',
+                                  'SECTION',
+                                  'ARTICLE',
+                                  'HEADER',
+                                  'FOOTER',
+                                  'NAV',
+                                  'MAIN',
+                                  'FIGURE',
+                                  'FIGCAPTION',
+                                  'PRE',
+                                  'HR',
+                              ].includes(tag);
+                        newEl = document.createElement(
+                            isBlock ? 'div' : 'span',
+                        );
+                        // Keep formatting even when downgrading the element type
                         copySafeStyles(el, newEl);
                     }
-                } else {
-                    // Convert unrecognized block elements to DIV, inline to SPAN
-                    const display = window.getComputedStyle?.(el)?.display;
-                    const isBlock = display ? display === 'block' || display === 'list-item' : ['DIV', 'TABLE', 'TR', 'TD', 'TH', 'THEAD', 'TBODY', 'SECTION', 'ARTICLE', 'HEADER', 'FOOTER', 'NAV', 'MAIN', 'FIGURE', 'FIGCAPTION', 'PRE', 'HR'].includes(tag);
-                    newEl = document.createElement(isBlock ? 'div' : 'span');
-                    // Keep formatting even when downgrading the element type
-                    copySafeStyles(el, newEl);
-                }
 
-                // Recurse into children
-                for (const child of Array.from(el.childNodes)) {
+                    // Recurse into children
+                    for (const child of Array.from(el.childNodes)) {
+                        const cleaned = cleanNode(child);
+                        if (cleaned) {
+                            newEl.appendChild(cleaned);
+                        }
+                    }
+
+                    return newEl;
+                };
+
+                const fragment = document.createDocumentFragment();
+                for (const child of Array.from(doc.body.childNodes)) {
                     const cleaned = cleanNode(child);
                     if (cleaned) {
-                        newEl.appendChild(cleaned);
+                        fragment.appendChild(cleaned);
                     }
                 }
 
-                return newEl;
-            };
-
-            const fragment = document.createDocumentFragment();
-            for (const child of Array.from(doc.body.childNodes)) {
-                const cleaned = cleanNode(child);
-                if (cleaned) {
-                    fragment.appendChild(cleaned);
+                // Drop the leading top margin so pasted content doesn't start with a stray gap.
+                const firstBlock =
+                    fragment.firstElementChild as HTMLElement | null;
+                if (firstBlock?.style?.marginTop) {
+                    firstBlock.style.marginTop = '0';
                 }
-            }
 
-            // Drop the leading top margin so pasted content doesn't start with a stray gap.
-            const firstBlock = fragment.firstElementChild as HTMLElement | null;
-            if (firstBlock?.style?.marginTop) {
-                firstBlock.style.marginTop = '0';
-            }
-
-            // Insert the cleaned HTML
-            const sel = window.getSelection();
-            if (sel && sel.rangeCount > 0) {
-                const range = sel.getRangeAt(0);
-                range.deleteContents();
-                range.insertNode(fragment);
-                // Move cursor to end of inserted content
-                range.collapse(false);
-                sel.removeAllRanges();
-                sel.addRange(range);
-            }
-        } else if (plain) {
-            // Convert plain text to structured HTML, detecting list patterns
-            const htmlContent = convertPlainTextToHtml(plain);
-            document.execCommand('insertHTML', false, htmlContent);
-        }
-
-        emitChange();
-    }, [emitChange]);
-
-    const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
-        const editor = editorRef.current;
-        if (!editor) return;
-
-        const sel = window.getSelection();
-        if (!sel || sel.rangeCount === 0) return;
-
-        const anchorNode = sel.anchorNode;
-
-        // SPACE after markdown-style list markers: auto-convert to list
-        // "- " or "* " → bullet list, "1. " → numbered list
-        if (e.key === ' ' && anchorNode && anchorNode.nodeType === Node.TEXT_NODE && !closestTag(anchorNode, 'LI', editor)) {
-            const text = anchorNode.textContent || '';
-            const offset = sel.anchorOffset;
-            const beforeCursor = text.substring(0, offset);
-
-            let listCommand = '';
-
-            if (beforeCursor === '-' || beforeCursor === '*') {
-                listCommand = 'insertUnorderedList';
-            } else if (/^\d\.$/.test(beforeCursor)) {
-                listCommand = 'insertOrderedList';
-            }
-
-            if (listCommand) {
-                e.preventDefault();
-                // Remove the marker text, keep any remaining content
-                const remaining = text.substring(offset);
-                if (remaining) {
-                    anchorNode.textContent = remaining;
-                    const range = document.createRange();
-                    range.setStart(anchorNode, 0);
-                    range.collapse(true);
+                // Insert the cleaned HTML
+                const sel = window.getSelection();
+                if (sel && sel.rangeCount > 0) {
+                    const range = sel.getRangeAt(0);
+                    range.deleteContents();
+                    range.insertNode(fragment);
+                    // Move cursor to end of inserted content
+                    range.collapse(false);
                     sel.removeAllRanges();
                     sel.addRange(range);
-                } else {
-                    anchorNode.textContent = '';
                 }
-                document.execCommand(listCommand, false);
-                // Apply correct OL styles if numbered list
-                if (listCommand === 'insertOrderedList') {
-                    requestAnimationFrame(() => {
-                        editor.querySelectorAll('ol').forEach((ol) => applyOlStyle(ol, editor));
-                        emitChange();
-                    });
-                }
-                emitChange();
-                return;
+            } else if (plain) {
+                // Convert plain text to structured HTML, detecting list patterns
+                const htmlContent = convertPlainTextToHtml(plain);
+                document.execCommand('insertHTML', false, htmlContent);
             }
-        }
 
-        const li = closestTag(anchorNode, 'LI', editor);
+            emitChange();
+        },
+        [emitChange],
+    );
 
-        if (!li) return;
+    const handleKeyDown = useCallback(
+        (e: React.KeyboardEvent<HTMLDivElement>) => {
+            const editor = editorRef.current;
+            if (!editor) return;
 
-        const parentList = li.parentElement;
-        if (!parentList || (parentList.tagName !== 'OL' && parentList.tagName !== 'UL')) return;
+            const sel = window.getSelection();
+            if (!sel || sel.rangeCount === 0) return;
 
-        // BACKSPACE on empty list item: exit the list
-        if (e.key === 'Backspace') {
-            const text = li.textContent || '';
-            if (text.length === 0 || (text === '\n' && li.childNodes.length <= 1)) {
-                e.preventDefault();
+            const anchorNode = sel.anchorNode;
 
-                if (parentList.parentElement && parentList.parentElement !== editor && closestTag(parentList.parentElement, 'LI', editor)) {
-                    document.execCommand('outdent', false);
-                    editor.querySelectorAll('ol').forEach((ol) => applyOlStyle(ol, editor));
+            // SPACE after markdown-style list markers: auto-convert to list
+            // "- " or "* " → bullet list, "1. " → numbered list
+            if (
+                e.key === ' ' &&
+                anchorNode &&
+                anchorNode.nodeType === Node.TEXT_NODE &&
+                !closestTag(anchorNode, 'LI', editor)
+            ) {
+                const text = anchorNode.textContent || '';
+                const offset = sel.anchorOffset;
+                const beforeCursor = text.substring(0, offset);
+
+                let listCommand = '';
+
+                if (beforeCursor === '-' || beforeCursor === '*') {
+                    listCommand = 'insertUnorderedList';
+                } else if (/^\d\.$/.test(beforeCursor)) {
+                    listCommand = 'insertOrderedList';
+                }
+
+                if (listCommand) {
+                    e.preventDefault();
+                    // Remove the marker text, keep any remaining content
+                    const remaining = text.substring(offset);
+                    if (remaining) {
+                        anchorNode.textContent = remaining;
+                        const range = document.createRange();
+                        range.setStart(anchorNode, 0);
+                        range.collapse(true);
+                        sel.removeAllRanges();
+                        sel.addRange(range);
+                    } else {
+                        anchorNode.textContent = '';
+                    }
+                    document.execCommand(listCommand, false);
+                    // Apply correct OL styles if numbered list
+                    if (listCommand === 'insertOrderedList') {
+                        requestAnimationFrame(() => {
+                            editor
+                                .querySelectorAll('ol')
+                                .forEach((ol) => applyOlStyle(ol, editor));
+                            emitChange();
+                        });
+                    }
                     emitChange();
                     return;
                 }
+            }
 
-                if (parentList.tagName === 'OL') {
-                    document.execCommand('insertOrderedList', false);
-                } else {
-                    document.execCommand('insertUnorderedList', false);
+            const li = closestTag(anchorNode, 'LI', editor);
+
+            if (!li) return;
+
+            const parentList = li.parentElement;
+            if (
+                !parentList ||
+                (parentList.tagName !== 'OL' && parentList.tagName !== 'UL')
+            )
+                return;
+
+            // BACKSPACE on empty list item: exit the list
+            if (e.key === 'Backspace') {
+                const text = li.textContent || '';
+                if (
+                    text.length === 0 ||
+                    (text === '\n' && li.childNodes.length <= 1)
+                ) {
+                    e.preventDefault();
+
+                    if (
+                        parentList.parentElement &&
+                        parentList.parentElement !== editor &&
+                        closestTag(parentList.parentElement, 'LI', editor)
+                    ) {
+                        document.execCommand('outdent', false);
+                        editor
+                            .querySelectorAll('ol')
+                            .forEach((ol) => applyOlStyle(ol, editor));
+                        emitChange();
+                        return;
+                    }
+
+                    if (parentList.tagName === 'OL') {
+                        document.execCommand('insertOrderedList', false);
+                    } else {
+                        document.execCommand('insertUnorderedList', false);
+                    }
+                    emitChange();
+                    return;
                 }
-                emitChange();
+            }
+
+            // TAB: indent a list item only when a previous sibling can be nested under.
+            if (e.key === 'Tab' && !e.shiftKey && li.previousElementSibling) {
+                e.preventDefault();
+                document.execCommand('indent', false);
+
+                requestAnimationFrame(() => {
+                    editor
+                        .querySelectorAll('ol')
+                        .forEach((ol) => applyOlStyle(ol, editor));
+                    emitChange();
+                });
                 return;
             }
-        }
 
-        // TAB: indent a list item only when a previous sibling can be nested under.
-        if (e.key === 'Tab' && !e.shiftKey && li.previousElementSibling) {
-            e.preventDefault();
-            document.execCommand('indent', false);
+            // SHIFT+TAB: outdent nested items; leave top-level lists navigable.
+            if (
+                e.key === 'Tab' &&
+                e.shiftKey &&
+                parentList.parentElement?.tagName === 'LI'
+            ) {
+                e.preventDefault();
 
-            requestAnimationFrame(() => {
-                editor.querySelectorAll('ol').forEach((ol) => applyOlStyle(ol, editor));
-                emitChange();
-            });
-            return;
-        }
+                document.execCommand('outdent', false);
 
-        // SHIFT+TAB: outdent nested items; leave top-level lists navigable.
-        if (e.key === 'Tab' && e.shiftKey && parentList.parentElement?.tagName === 'LI') {
-            e.preventDefault();
-
-            document.execCommand('outdent', false);
-
-            requestAnimationFrame(() => {
-                editor.querySelectorAll('ol').forEach((ol) => applyOlStyle(ol, editor));
-                emitChange();
-            });
-            return;
-        }
-    }, [emitChange, applyOlStyle]);
+                requestAnimationFrame(() => {
+                    editor
+                        .querySelectorAll('ol')
+                        .forEach((ol) => applyOlStyle(ol, editor));
+                    emitChange();
+                });
+                return;
+            }
+        },
+        [emitChange, applyOlStyle],
+    );
 
     const iconSize = 'h-4 w-4';
 
@@ -708,10 +975,10 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
                         'bg-white text-black',
                         'empty:before:text-gray-400 empty:before:content-[attr(data-placeholder)]',
                         'overflow-y-auto rounded-t-md',
-                        '[&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_li]:my-0.5',
+                        '[&_li]:my-0.5 [&_ol]:list-decimal [&_ol]:pl-6 [&_ul]:list-disc [&_ul]:pl-6',
                         '[&_ol_ol]:list-[lower-alpha] [&_ol_ol_ol]:list-[lower-roman]',
                         '[&_ul_ul]:list-[circle] [&_ul_ul_ul]:list-[square]',
-                        '[&_blockquote]:border-l-4 [&_blockquote]:border-gray-300 [&_blockquote]:pl-3 [&_blockquote]:my-1',
+                        '[&_blockquote]:my-1 [&_blockquote]:border-l-4 [&_blockquote]:border-gray-300 [&_blockquote]:pl-3',
                     )}
                     style={{ minHeight }}
                     data-placeholder={placeholder}
@@ -729,23 +996,43 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
                 {/* Bottom toolbar (Gmail-style) */}
                 <div className="flex flex-wrap items-center gap-0.5 border-t px-1.5 py-1">
                     {/* Undo / Redo */}
-                    <ToolbarButton onClick={handleUndo} label="Undo" shortcut="Ctrl+Z">
+                    <ToolbarButton
+                        onClick={handleUndo}
+                        label="Undo"
+                        shortcut="Ctrl+Z"
+                    >
                         <Undo2 className={iconSize} />
                     </ToolbarButton>
-                    <ToolbarButton onClick={handleRedo} label="Redo" shortcut="Ctrl+Y">
+                    <ToolbarButton
+                        onClick={handleRedo}
+                        label="Redo"
+                        shortcut="Ctrl+Y"
+                    >
                         <Redo2 className={iconSize} />
                     </ToolbarButton>
 
                     <div className="mx-0.5 h-5 w-px bg-border" />
 
                     {/* Bold, Italic, Underline */}
-                    <ToolbarButton onClick={handleBold} label="Bold" shortcut="Ctrl+B">
+                    <ToolbarButton
+                        onClick={handleBold}
+                        label="Bold"
+                        shortcut="Ctrl+B"
+                    >
                         <Bold className={iconSize} />
                     </ToolbarButton>
-                    <ToolbarButton onClick={handleItalic} label="Italic" shortcut="Ctrl+I">
+                    <ToolbarButton
+                        onClick={handleItalic}
+                        label="Italic"
+                        shortcut="Ctrl+I"
+                    >
                         <Italic className={iconSize} />
                     </ToolbarButton>
-                    <ToolbarButton onClick={handleUnderline} label="Underline" shortcut="Ctrl+U">
+                    <ToolbarButton
+                        onClick={handleUnderline}
+                        label="Underline"
+                        shortcut="Ctrl+U"
+                    >
                         <Underline className={iconSize} />
                     </ToolbarButton>
 
@@ -764,13 +1051,22 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
                                     </button>
                                 </PopoverTrigger>
                             </TooltipTrigger>
-                            <TooltipContent side="top" className="text-xs">Text color</TooltipContent>
+                            <TooltipContent side="top" className="text-xs">
+                                Text color
+                            </TooltipContent>
                         </Tooltip>
-                        <PopoverContent className="w-auto p-3" align="start" side="top" onCloseAutoFocus={(e) => e.preventDefault()}>
+                        <PopoverContent
+                            className="w-auto p-3"
+                            align="start"
+                            side="top"
+                            onCloseAutoFocus={(e) => e.preventDefault()}
+                        >
                             <div className="flex gap-4">
                                 {/* Background color column */}
                                 <div>
-                                    <p className="mb-1.5 text-xs font-medium">Background color</p>
+                                    <p className="mb-1.5 text-xs font-medium">
+                                        Background color
+                                    </p>
                                     <div className="grid grid-cols-10 gap-px">
                                         {GMAIL_COLORS.flat().map((color) => (
                                             <button
@@ -778,10 +1074,16 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
                                                 type="button"
                                                 aria-label={`Set background color ${color}`}
                                                 title={color}
-                                                className="h-4.5 w-4.5 border border-gray-200 transition-transform hover:scale-125 hover:z-10 hover:border-gray-400"
-                                                style={{ backgroundColor: color }}
-                                                onMouseDown={(e) => e.preventDefault()}
-                                                onClick={() => handleHighlight(color)}
+                                                className="h-4.5 w-4.5 border border-gray-200 transition-transform hover:z-10 hover:scale-125 hover:border-gray-400"
+                                                style={{
+                                                    backgroundColor: color,
+                                                }}
+                                                onMouseDown={(e) =>
+                                                    e.preventDefault()
+                                                }
+                                                onClick={() =>
+                                                    handleHighlight(color)
+                                                }
                                             />
                                         ))}
                                     </div>
@@ -798,7 +1100,9 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
 
                                 {/* Text color column */}
                                 <div>
-                                    <p className="mb-1.5 text-xs font-medium">Text color</p>
+                                    <p className="mb-1.5 text-xs font-medium">
+                                        Text color
+                                    </p>
                                     <div className="grid grid-cols-10 gap-px">
                                         {GMAIL_COLORS.flat().map((color) => (
                                             <button
@@ -806,10 +1110,16 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
                                                 type="button"
                                                 aria-label={`Set text color ${color}`}
                                                 title={color}
-                                                className="h-4.5 w-4.5 border border-gray-200 transition-transform hover:scale-125 hover:z-10 hover:border-gray-400"
-                                                style={{ backgroundColor: color }}
-                                                onMouseDown={(e) => e.preventDefault()}
-                                                onClick={() => handleTextColor(color)}
+                                                className="h-4.5 w-4.5 border border-gray-200 transition-transform hover:z-10 hover:scale-125 hover:border-gray-400"
+                                                style={{
+                                                    backgroundColor: color,
+                                                }}
+                                                onMouseDown={(e) =>
+                                                    e.preventDefault()
+                                                }
+                                                onClick={() =>
+                                                    handleTextColor(color)
+                                                }
                                             />
                                         ))}
                                     </div>
@@ -836,15 +1146,25 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
                                         type="button"
                                         className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
                                         aria-label="Font size"
-                                        onMouseDown={(e) => { e.preventDefault(); saveSelection(); }}
+                                        onMouseDown={(e) => {
+                                            e.preventDefault();
+                                            saveSelection();
+                                        }}
                                     >
                                         <Type className={iconSize} />
                                     </button>
                                 </PopoverTrigger>
                             </TooltipTrigger>
-                            <TooltipContent side="top" className="text-xs">Font size</TooltipContent>
+                            <TooltipContent side="top" className="text-xs">
+                                Font size
+                            </TooltipContent>
                         </Tooltip>
-                        <PopoverContent className="w-32 p-1" align="start" side="top" onCloseAutoFocus={(e) => e.preventDefault()}>
+                        <PopoverContent
+                            className="w-32 p-1"
+                            align="start"
+                            side="top"
+                            onCloseAutoFocus={(e) => e.preventDefault()}
+                        >
                             <div className="flex flex-col">
                                 {/* Custom size input (like MS Office) */}
                                 <div className="flex items-center gap-1 px-1 pb-1">
@@ -853,12 +1173,18 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
                                         min={1}
                                         max={200}
                                         value={customSize}
-                                        onChange={(e) => setCustomSize(e.target.value)}
+                                        onChange={(e) =>
+                                            setCustomSize(e.target.value)
+                                        }
                                         onKeyDown={(e) => {
                                             if (e.key === 'Enter') {
                                                 e.preventDefault();
-                                                const n = parseInt(customSize, 10);
-                                                if (n > 0) handleFontSize(`${n}pt`);
+                                                const n = parseInt(
+                                                    customSize,
+                                                    10,
+                                                );
+                                                if (n > 0)
+                                                    handleFontSize(`${n}pt`);
                                             }
                                         }}
                                         placeholder="Size"
@@ -871,8 +1197,12 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
                                             key={size}
                                             type="button"
                                             className="flex w-full items-center rounded px-2 py-1 text-left text-sm text-foreground transition-colors hover:bg-accent"
-                                            onMouseDown={(e) => e.preventDefault()}
-                                            onClick={() => handleFontSize(`${size}pt`)}
+                                            onMouseDown={(e) =>
+                                                e.preventDefault()
+                                            }
+                                            onClick={() =>
+                                                handleFontSize(`${size}pt`)
+                                            }
                                         >
                                             {size}
                                         </button>
@@ -891,15 +1221,25 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
                                         type="button"
                                         className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
                                         aria-label="Line spacing"
-                                        onMouseDown={(e) => { e.preventDefault(); saveSelection(); }}
+                                        onMouseDown={(e) => {
+                                            e.preventDefault();
+                                            saveSelection();
+                                        }}
                                     >
                                         <Rows3 className={iconSize} />
                                     </button>
                                 </PopoverTrigger>
                             </TooltipTrigger>
-                            <TooltipContent side="top" className="text-xs">Line spacing</TooltipContent>
+                            <TooltipContent side="top" className="text-xs">
+                                Line spacing
+                            </TooltipContent>
                         </Tooltip>
-                        <PopoverContent className="w-28 p-1" align="start" side="top" onCloseAutoFocus={(e) => e.preventDefault()}>
+                        <PopoverContent
+                            className="w-28 p-1"
+                            align="start"
+                            side="top"
+                            onCloseAutoFocus={(e) => e.preventDefault()}
+                        >
                             <div className="max-h-48 overflow-y-auto">
                                 {LINE_SPACINGS.map((spacing) => (
                                     <button
@@ -907,7 +1247,9 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
                                         type="button"
                                         className="flex w-full items-center rounded px-2 py-1 text-left text-sm text-foreground transition-colors hover:bg-accent"
                                         onMouseDown={(e) => e.preventDefault()}
-                                        onClick={() => handleLineSpacing(spacing.value)}
+                                        onClick={() =>
+                                            handleLineSpacing(spacing.value)
+                                        }
                                     >
                                         {spacing.label}
                                     </button>
@@ -919,20 +1261,34 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
                     <div className="mx-0.5 h-5 w-px bg-border" />
 
                     {/* Lists */}
-                    <ToolbarButton onClick={handleNumberedList} label="Numbered list">
+                    <ToolbarButton
+                        onClick={handleNumberedList}
+                        label="Numbered list"
+                    >
                         <ListOrdered className={iconSize} />
                     </ToolbarButton>
-                    <ToolbarButton onClick={handleBulletList} label="Bulleted list">
+                    <ToolbarButton
+                        onClick={handleBulletList}
+                        label="Bulleted list"
+                    >
                         <List className={iconSize} />
                     </ToolbarButton>
 
                     <div className="mx-0.5 h-5 w-px bg-border" />
 
                     {/* Indent */}
-                    <ToolbarButton onClick={handleOutdent} label="Decrease indent" shortcut="Shift+Tab">
+                    <ToolbarButton
+                        onClick={handleOutdent}
+                        label="Decrease indent"
+                        shortcut="Shift+Tab"
+                    >
                         <IndentDecrease className={iconSize} />
                     </ToolbarButton>
-                    <ToolbarButton onClick={handleIndent} label="Increase indent" shortcut="Tab">
+                    <ToolbarButton
+                        onClick={handleIndent}
+                        label="Increase indent"
+                        shortcut="Tab"
+                    >
                         <IndentIncrease className={iconSize} />
                     </ToolbarButton>
 
@@ -944,12 +1300,18 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
                     </ToolbarButton>
 
                     {/* Strikethrough */}
-                    <ToolbarButton onClick={handleStrikethrough} label="Strikethrough">
+                    <ToolbarButton
+                        onClick={handleStrikethrough}
+                        label="Strikethrough"
+                    >
                         <Strikethrough className={iconSize} />
                     </ToolbarButton>
 
                     {/* Remove formatting */}
-                    <ToolbarButton onClick={handleRemoveFormatting} label="Remove formatting">
+                    <ToolbarButton
+                        onClick={handleRemoveFormatting}
+                        label="Remove formatting"
+                    >
                         <RemoveFormatting className={iconSize} />
                     </ToolbarButton>
                 </div>

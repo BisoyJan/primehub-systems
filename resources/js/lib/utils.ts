@@ -30,7 +30,9 @@ export function formatTime(timeString: string | null | undefined): string {
  * Format a datetime string to display in browser's local timezone
  * Returns date and time formatted according to browser locale
  */
-export function formatDateTime(dateTimeString: string | null | undefined): string {
+export function formatDateTime(
+    dateTimeString: string | null | undefined,
+): string {
     if (!dateTimeString) return '-';
 
     const date = new Date(dateTimeString);
@@ -48,7 +50,9 @@ export function formatDateTime(dateTimeString: string | null | undefined): strin
 /**
  * Format a datetime string to display only time in browser's local timezone
  */
-export function formatDateTimeToTime(dateTimeString: string | null | undefined): string {
+export function formatDateTimeToTime(
+    dateTimeString: string | null | undefined,
+): string {
     if (!dateTimeString) return '-';
 
     const date = new Date(dateTimeString);
@@ -152,7 +156,9 @@ export function formatWorkDuration(minutes: number | null | undefined): string {
  * @param minutes Time adjustment in minutes (integer)
  * @returns Formatted string like "1h 23m" or "45m"
  */
-export function formatTimeAdjustment(minutes: number | null | undefined): string {
+export function formatTimeAdjustment(
+    minutes: number | null | undefined,
+): string {
     if (minutes == null || minutes === 0) return '0m';
 
     const hours = Math.floor(minutes / 60);

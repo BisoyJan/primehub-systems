@@ -156,7 +156,8 @@ export function getProjectedBalance(
         leaveMonth = 11;
     }
 
-    const monthsOfCredits = (leaveYear - eligYear) * 12 + (leaveMonth - eligMonth);
+    const monthsOfCredits =
+        (leaveYear - eligYear) * 12 + (leaveMonth - eligMonth);
     projectedBalance += Math.max(0, monthsOfCredits) * monthlyRate;
 
     return projectedBalance;
@@ -200,7 +201,11 @@ export function calculateFutureCredits(
 }
 
 /** Count leave days between two date strings; weekends excluded unless includeWeekends is true */
-export function countWorkingDays(startDate: string, endDate: string, includeWeekends: boolean = false): number {
+export function countWorkingDays(
+    startDate: string,
+    endDate: string,
+    includeWeekends: boolean = false,
+): number {
     const start = parseISO(startDate);
     const end = parseISO(endDate);
     let workingDays = 0;

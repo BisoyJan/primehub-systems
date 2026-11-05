@@ -1,5 +1,5 @@
-import { usePage } from '@inertiajs/react';
 import type { SharedData, UserRole } from '@/types';
+import { usePage } from '@inertiajs/react';
 
 /**
  * Hook to access user permissions
@@ -21,14 +21,18 @@ export function usePermission() {
      * Check if user has any of the specified permissions
      */
     const canAny = (permissionsToCheck: string[]): boolean => {
-        return permissionsToCheck.some(permission => permissions.includes(permission));
+        return permissionsToCheck.some((permission) =>
+            permissions.includes(permission),
+        );
     };
 
     /**
      * Check if user has all of the specified permissions
      */
     const canAll = (permissionsToCheck: string[]): boolean => {
-        return permissionsToCheck.every(permission => permissions.includes(permission));
+        return permissionsToCheck.every((permission) =>
+            permissions.includes(permission),
+        );
     };
 
     /**

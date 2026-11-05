@@ -32,7 +32,8 @@ const DIRS: [number, number][] = [
 const idx = (r: number, c: number): number => r * GW + c;
 const rowOf = (i: number): number => (i / GW) | 0;
 const colOf = (i: number): number => i % GW;
-const inBounds = (r: number, c: number): boolean => r >= 0 && r < GH && c >= 0 && c < GW;
+const inBounds = (r: number, c: number): boolean =>
+    r >= 0 && r < GH && c >= 0 && c < GW;
 
 interface Food {
     cell: number;
@@ -213,9 +214,11 @@ export function SnakeEngine({ opacity }: { opacity: number }) {
                 const nc = c + dc;
                 if (!inBounds(nr, nc)) continue;
                 const cand = idx(nr, nc);
-                if (occupiedRef.current[cand] && cand !== body[body.length - 1]) continue;
+                if (occupiedRef.current[cand] && cand !== body[body.length - 1])
+                    continue;
                 const moved = [cand, ...body.slice(0, body.length - 1)];
-                const space = freeSpace(moved, cand) + (tailReachable(moved) ? CELLS : 0);
+                const space =
+                    freeSpace(moved, cand) + (tailReachable(moved) ? CELLS : 0);
                 if (space > bestScore) {
                     bestScore = space;
                     best = cand;
@@ -236,7 +239,10 @@ export function SnakeEngine({ opacity }: { opacity: number }) {
             const body = bodyRef.current;
             const occupied = occupiedRef.current;
             const head = body[0];
-            dirRef.current = [rowOf(next) - rowOf(head), colOf(next) - colOf(head)];
+            dirRef.current = [
+                rowOf(next) - rowOf(head),
+                colOf(next) - colOf(head),
+            ];
 
             const ate = next === foodRef.current.cell;
             if (!ate) {
@@ -262,7 +268,10 @@ export function SnakeEngine({ opacity }: { opacity: number }) {
                     scoreRef.current += 500;
                     phaseRef.current = 'over';
                     phaseStartRef.current = performance.now();
-                    highRef.current = Math.max(highRef.current, scoreRef.current);
+                    highRef.current = Math.max(
+                        highRef.current,
+                        scoreRef.current,
+                    );
                 }
             }
         }
@@ -315,7 +324,15 @@ export function SnakeEngine({ opacity }: { opacity: number }) {
     const HUD_ROWS = 1.4;
     const FIT = 0.86;
     const { w, h } = size;
-    const cell = w && h ? Math.max(6, Math.floor(Math.min((w * FIT) / GW, (h * FIT) / (GH + HUD_ROWS)))) : 0;
+    const cell =
+        w && h
+            ? Math.max(
+                  6,
+                  Math.floor(
+                      Math.min((w * FIT) / GW, (h * FIT) / (GH + HUD_ROWS)),
+                  ),
+              )
+            : 0;
     const boardW = cell * GW;
     const boardH = cell * GH;
     const hudH = Math.max(18, cell * 0.95);
@@ -335,7 +352,8 @@ export function SnakeEngine({ opacity }: { opacity: number }) {
                         'linear-gradient(rgba(57,255,20,0.10) 1px, transparent 1px), linear-gradient(90deg, rgba(57,255,20,0.10) 1px, transparent 1px)',
                     backgroundSize: `${cell}px ${cell}px`,
                     border: '2px solid rgba(57,255,20,0.45)',
-                    boxShadow: '0 0 18px rgba(57,255,20,0.35), inset 0 0 28px rgba(57,255,20,0.08)',
+                    boxShadow:
+                        '0 0 18px rgba(57,255,20,0.35), inset 0 0 28px rgba(57,255,20,0.08)',
                     borderRadius: 4,
                     opacity: vis,
                 }}
@@ -358,17 +376,33 @@ export function SnakeEngine({ opacity }: { opacity: number }) {
         : '';
 
     return (
-        <div ref={wrapRef} className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+        <div
+            ref={wrapRef}
+            className="pointer-events-none absolute inset-0 overflow-hidden"
+            aria-hidden="true"
+        >
             <style>{`@keyframes snake-food-pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(0.6);opacity:0.65}}`}</style>
 
             {/* Arcade backdrop */}
             <div
                 className="absolute inset-0"
-                style={{ background: 'radial-gradient(circle at 50% 45%, transparent 25%, rgba(2,10,4,0.82) 100%)', opacity }}
+                style={{
+                    background:
+                        'radial-gradient(circle at 50% 45%, transparent 25%, rgba(2,10,4,0.82) 100%)',
+                    opacity,
+                }}
             />
 
             {cell > 0 && (
-                <div style={{ position: 'absolute', left: offX, top: offY, width: boardW, height: boardH }}>
+                <div
+                    style={{
+                        position: 'absolute',
+                        left: offX,
+                        top: offY,
+                        width: boardW,
+                        height: boardH,
+                    }}
+                >
                     {gridEl}
 
                     {/* Food */}
@@ -385,7 +419,8 @@ export function SnakeEngine({ opacity }: { opacity: number }) {
                                 boxShadow: food.golden
                                     ? '0 0 10px #ffe600, 0 0 20px #ffe600'
                                     : '0 0 10px #ff2d95, 0 0 18px #ff2d95',
-                                animation: 'snake-food-pulse 0.75s ease-in-out infinite',
+                                animation:
+                                    'snake-food-pulse 0.75s ease-in-out infinite',
                                 opacity: vis,
                             }}
                         />
@@ -396,7 +431,12 @@ export function SnakeEngine({ opacity }: { opacity: number }) {
                         <svg
                             width={boardW}
                             height={boardH}
-                            style={{ position: 'absolute', left: 0, top: 0, opacity: vis }}
+                            style={{
+                                position: 'absolute',
+                                left: 0,
+                                top: 0,
+                                opacity: vis,
+                            }}
                         >
                             <path
                                 d={bodyPath}
@@ -434,7 +474,11 @@ export function SnakeEngine({ opacity }: { opacity: number }) {
                                 opacity: vis,
                             }}
                         >
-                            <svg viewBox="0 0 100 100" width={cell} height={cell}>
+                            <svg
+                                viewBox="0 0 100 100"
+                                width={cell}
+                                height={cell}
+                            >
                                 <rect
                                     x="8"
                                     y="10"
@@ -460,7 +504,8 @@ export function SnakeEngine({ opacity }: { opacity: number }) {
                                 inset: 0,
                                 background: 'rgba(255,45,149,0.18)',
                                 border: '2px solid #ff2d95',
-                                boxShadow: '0 0 40px #ff2d95, inset 0 0 30px rgba(255,45,149,0.35)',
+                                boxShadow:
+                                    '0 0 40px #ff2d95, inset 0 0 30px rgba(255,45,149,0.35)',
                                 borderRadius: 4,
                                 display: 'flex',
                                 alignItems: 'center',
@@ -503,8 +548,20 @@ export function SnakeEngine({ opacity }: { opacity: number }) {
                         }}
                     >
                         <span>SCORE {scoreRef.current}</span>
-                        <span style={{ color: '#00e5ff', textShadow: '0 0 8px #00e5ff' }}>LEN {body.length}</span>
-                        <span style={{ color: '#ff2d95', textShadow: '0 0 8px #ff2d95' }}>
+                        <span
+                            style={{
+                                color: '#00e5ff',
+                                textShadow: '0 0 8px #00e5ff',
+                            }}
+                        >
+                            LEN {body.length}
+                        </span>
+                        <span
+                            style={{
+                                color: '#ff2d95',
+                                textShadow: '0 0 8px #ff2d95',
+                            }}
+                        >
                             HI {Math.max(highRef.current, scoreRef.current)}
                         </span>
                     </div>

@@ -1,19 +1,42 @@
-import { Head, useForm } from '@inertiajs/react';
-import AppLayout from '@/layouts/app-layout';
-import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
-import { PageHeader } from '@/components/PageHeader';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { PageHeader } from '@/components/PageHeader';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertCircle, ArrowLeft, ArrowRight, Check, ChevronsUpDown } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from '@/components/ui/card';
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from '@/components/ui/command';
+import { Label } from '@/components/ui/label';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Textarea } from '@/components/ui/textarea';
+import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
+import AppLayout from '@/layouts/app-layout';
+import { Head, useForm } from '@inertiajs/react';
+import {
+    AlertCircle,
+    ArrowLeft,
+    ArrowRight,
+    Check,
+    ChevronsUpDown,
+} from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 
 interface User {
     id: number;
@@ -28,11 +51,19 @@ interface CreateProps {
     users?: User[] | null;
 }
 
-export default function Create({ medicationTypes, onsetOptions, canRequestForOthers, users }: CreateProps) {
+export default function Create({
+    medicationTypes,
+    onsetOptions,
+    canRequestForOthers,
+    users,
+}: CreateProps) {
     const { title, breadcrumbs } = usePageMeta({
         title: 'New Medication Request',
         breadcrumbs: [
-            { title: 'Medication Requests', href: '/form-requests/medication-requests' },
+            {
+                title: 'Medication Requests',
+                href: '/form-requests/medication-requests',
+            },
         ],
     });
 
@@ -47,9 +78,10 @@ export default function Create({ medicationTypes, onsetOptions, canRequestForOth
         if (!users) return [];
         if (!userSearchQuery) return users;
         const query = userSearchQuery.toLowerCase();
-        return users.filter(user =>
-            user.name.toLowerCase().includes(query) ||
-            user.email.toLowerCase().includes(query)
+        return users.filter(
+            (user) =>
+                user.name.toLowerCase().includes(query) ||
+                user.email.toLowerCase().includes(query),
         );
     }, [users, userSearchQuery]);
 
@@ -100,7 +132,7 @@ export default function Create({ medicationTypes, onsetOptions, canRequestForOth
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={title} />
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3 relative">
+            <div className="relative flex h-full flex-1 flex-col gap-4 rounded-xl p-3">
                 <LoadingOverlay isLoading={isPageLoading} />
 
                 <PageHeader
@@ -108,34 +140,52 @@ export default function Create({ medicationTypes, onsetOptions, canRequestForOth
                     description="Submit a request for medication from the office"
                 />
 
-                <div className="max-w-3xl mx-auto w-full">
+                <div className="mx-auto w-full max-w-3xl">
                     {/* Progress Indicator */}
                     <div className="mb-8">
                         <div className="flex items-center justify-center gap-4">
                             <div className="flex items-center gap-2">
                                 <div
-                                    className={`h-10 w-10 rounded-full flex items-center justify-center border-2 ${currentStep >= 1
-                                        ? 'bg-primary border-primary text-primary-foreground'
-                                        : 'border-muted-foreground text-muted-foreground'
-                                        }`}
+                                    className={`flex h-10 w-10 items-center justify-center rounded-full border-2 ${
+                                        currentStep >= 1
+                                            ? 'border-primary bg-primary text-primary-foreground'
+                                            : 'border-muted-foreground text-muted-foreground'
+                                    }`}
                                 >
-                                    {currentStep > 1 ? <Check className="h-5 w-5" /> : '1'}
+                                    {currentStep > 1 ? (
+                                        <Check className="h-5 w-5" />
+                                    ) : (
+                                        '1'
+                                    )}
                                 </div>
-                                <span className={currentStep >= 1 ? 'font-medium' : 'text-muted-foreground'}>
+                                <span
+                                    className={
+                                        currentStep >= 1
+                                            ? 'font-medium'
+                                            : 'text-muted-foreground'
+                                    }
+                                >
                                     Request Details
                                 </span>
                             </div>
-                            <div className="w-24 h-0.5 bg-muted" />
+                            <div className="h-0.5 w-24 bg-muted" />
                             <div className="flex items-center gap-2">
                                 <div
-                                    className={`h-10 w-10 rounded-full flex items-center justify-center border-2 ${currentStep >= 2
-                                        ? 'bg-primary border-primary text-primary-foreground'
-                                        : 'border-muted-foreground text-muted-foreground'
-                                        }`}
+                                    className={`flex h-10 w-10 items-center justify-center rounded-full border-2 ${
+                                        currentStep >= 2
+                                            ? 'border-primary bg-primary text-primary-foreground'
+                                            : 'border-muted-foreground text-muted-foreground'
+                                    }`}
                                 >
                                     2
                                 </div>
-                                <span className={currentStep >= 2 ? 'font-medium' : 'text-muted-foreground'}>
+                                <span
+                                    className={
+                                        currentStep >= 2
+                                            ? 'font-medium'
+                                            : 'text-muted-foreground'
+                                    }
+                                >
                                     Policy Agreement
                                 </span>
                             </div>
@@ -149,7 +199,8 @@ export default function Create({ medicationTypes, onsetOptions, canRequestForOth
                                 <CardHeader>
                                     <CardTitle>Request Details</CardTitle>
                                     <CardDescription>
-                                        Please provide your information and medication needs
+                                        Please provide your information and
+                                        medication needs
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent className="space-y-6">
@@ -157,64 +208,118 @@ export default function Create({ medicationTypes, onsetOptions, canRequestForOth
                                     {canRequestForOthers && users && (
                                         <div className="space-y-2">
                                             <Label htmlFor="requested_for_user_id">
-                                                Request for Employee <span className="text-red-500">*</span>
+                                                Request for Employee{' '}
+                                                <span className="text-red-500">
+                                                    *
+                                                </span>
                                             </Label>
-                                            <Popover open={isUserPopoverOpen} onOpenChange={setIsUserPopoverOpen}>
+                                            <Popover
+                                                open={isUserPopoverOpen}
+                                                onOpenChange={
+                                                    setIsUserPopoverOpen
+                                                }
+                                            >
                                                 <PopoverTrigger asChild>
                                                     <Button
                                                         variant="outline"
                                                         role="combobox"
-                                                        aria-expanded={isUserPopoverOpen}
+                                                        aria-expanded={
+                                                            isUserPopoverOpen
+                                                        }
                                                         className="w-full justify-between font-normal"
                                                     >
                                                         <span className="truncate">
                                                             {data.requested_for_user_id
-                                                                ? users.find(u => u.id === data.requested_for_user_id)?.name || "Select employee..."
-                                                                : "Select employee..."}
+                                                                ? users.find(
+                                                                      (u) =>
+                                                                          u.id ===
+                                                                          data.requested_for_user_id,
+                                                                  )?.name ||
+                                                                  'Select employee...'
+                                                                : 'Select employee...'}
                                                         </span>
                                                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                                     </Button>
                                                 </PopoverTrigger>
-                                                <PopoverContent className="w-full p-0" align="start">
-                                                    <Command shouldFilter={false}>
+                                                <PopoverContent
+                                                    className="w-full p-0"
+                                                    align="start"
+                                                >
+                                                    <Command
+                                                        shouldFilter={false}
+                                                    >
                                                         <CommandInput
                                                             placeholder="Search employee..."
-                                                            value={userSearchQuery}
-                                                            onValueChange={setUserSearchQuery}
+                                                            value={
+                                                                userSearchQuery
+                                                            }
+                                                            onValueChange={
+                                                                setUserSearchQuery
+                                                            }
                                                         />
                                                         <CommandList>
-                                                            <CommandEmpty>No employee found.</CommandEmpty>
+                                                            <CommandEmpty>
+                                                                No employee
+                                                                found.
+                                                            </CommandEmpty>
                                                             <CommandGroup>
-                                                                {filteredUsers.map((user) => (
-                                                                    <CommandItem
-                                                                        key={user.id}
-                                                                        value={user.name}
-                                                                        onSelect={() => {
-                                                                            setData('requested_for_user_id', user.id);
-                                                                            setIsUserPopoverOpen(false);
-                                                                            setUserSearchQuery('');
-                                                                        }}
-                                                                        className="cursor-pointer"
-                                                                    >
-                                                                        <Check
-                                                                            className={`mr-2 h-4 w-4 shrink-0 ${data.requested_for_user_id === user.id
-                                                                                ? "opacity-100"
-                                                                                : "opacity-0"
+                                                                {filteredUsers.map(
+                                                                    (user) => (
+                                                                        <CommandItem
+                                                                            key={
+                                                                                user.id
+                                                                            }
+                                                                            value={
+                                                                                user.name
+                                                                            }
+                                                                            onSelect={() => {
+                                                                                setData(
+                                                                                    'requested_for_user_id',
+                                                                                    user.id,
+                                                                                );
+                                                                                setIsUserPopoverOpen(
+                                                                                    false,
+                                                                                );
+                                                                                setUserSearchQuery(
+                                                                                    '',
+                                                                                );
+                                                                            }}
+                                                                            className="cursor-pointer"
+                                                                        >
+                                                                            <Check
+                                                                                className={`mr-2 h-4 w-4 shrink-0 ${
+                                                                                    data.requested_for_user_id ===
+                                                                                    user.id
+                                                                                        ? 'opacity-100'
+                                                                                        : 'opacity-0'
                                                                                 }`}
-                                                                        />
-                                                                        <div className="flex flex-col">
-                                                                            <span>{user.name}</span>
-                                                                            <span className="text-xs text-muted-foreground">{user.email}</span>
-                                                                        </div>
-                                                                    </CommandItem>
-                                                                ))}
+                                                                            />
+                                                                            <div className="flex flex-col">
+                                                                                <span>
+                                                                                    {
+                                                                                        user.name
+                                                                                    }
+                                                                                </span>
+                                                                                <span className="text-xs text-muted-foreground">
+                                                                                    {
+                                                                                        user.email
+                                                                                    }
+                                                                                </span>
+                                                                            </div>
+                                                                        </CommandItem>
+                                                                    ),
+                                                                )}
                                                             </CommandGroup>
                                                         </CommandList>
                                                     </Command>
                                                 </PopoverContent>
                                             </Popover>
                                             {errors.requested_for_user_id && (
-                                                <p className="text-sm text-red-500">{errors.requested_for_user_id}</p>
+                                                <p className="text-sm text-red-500">
+                                                    {
+                                                        errors.requested_for_user_id
+                                                    }
+                                                </p>
                                             )}
                                         </div>
                                     )}
@@ -222,69 +327,123 @@ export default function Create({ medicationTypes, onsetOptions, canRequestForOth
                                     {/* Type of Medication */}
                                     <div className="space-y-3">
                                         <Label>
-                                            Type of Medication <span className="text-red-500">*</span>
+                                            Type of Medication{' '}
+                                            <span className="text-red-500">
+                                                *
+                                            </span>
                                         </Label>
                                         <RadioGroup
                                             value={data.medication_type}
-                                            onValueChange={(value) => setData('medication_type', value)}
+                                            onValueChange={(value) =>
+                                                setData(
+                                                    'medication_type',
+                                                    value,
+                                                )
+                                            }
                                         >
                                             {medicationTypes.map((type) => (
-                                                <div key={type} className="flex items-center space-x-2">
-                                                    <RadioGroupItem value={type} id={type} />
-                                                    <Label htmlFor={type} className="cursor-pointer font-normal">
+                                                <div
+                                                    key={type}
+                                                    className="flex items-center space-x-2"
+                                                >
+                                                    <RadioGroupItem
+                                                        value={type}
+                                                        id={type}
+                                                    />
+                                                    <Label
+                                                        htmlFor={type}
+                                                        className="cursor-pointer font-normal"
+                                                    >
                                                         {type}
                                                     </Label>
                                                 </div>
                                             ))}
                                         </RadioGroup>
                                         {errors.medication_type && (
-                                            <p className="text-sm text-red-500">{errors.medication_type}</p>
+                                            <p className="text-sm text-red-500">
+                                                {errors.medication_type}
+                                            </p>
                                         )}
                                     </div>
 
                                     {/* Reason for Request */}
                                     <div className="space-y-2">
                                         <Label htmlFor="reason">
-                                            Reason for Request <span className="text-red-500">*</span>
+                                            Reason for Request{' '}
+                                            <span className="text-red-500">
+                                                *
+                                            </span>
                                         </Label>
                                         <Textarea
                                             id="reason"
                                             value={data.reason}
-                                            onChange={(e) => setData('reason', e.target.value)}
+                                            onChange={(e) =>
+                                                setData(
+                                                    'reason',
+                                                    e.target.value,
+                                                )
+                                            }
                                             placeholder="Please describe your symptoms"
                                             rows={4}
                                             required
                                         />
                                         {errors.reason && (
-                                            <p className="text-sm text-red-500">{errors.reason}</p>
+                                            <p className="text-sm text-red-500">
+                                                {errors.reason}
+                                            </p>
                                         )}
                                     </div>
 
                                     {/* Onset of symptoms */}
                                     <div className="space-y-3">
                                         <Label>
-                                            Onset of symptoms <span className="text-red-500">*</span>
+                                            Onset of symptoms{' '}
+                                            <span className="text-red-500">
+                                                *
+                                            </span>
                                         </Label>
                                         <RadioGroup
                                             value={data.onset_of_symptoms}
-                                            onValueChange={(value) => setData('onset_of_symptoms', value)}
+                                            onValueChange={(value) =>
+                                                setData(
+                                                    'onset_of_symptoms',
+                                                    value,
+                                                )
+                                            }
                                         >
                                             {onsetOptions.map((option) => (
-                                                <div key={option} className="flex items-center space-x-2">
-                                                    <RadioGroupItem value={option} id={option} />
-                                                    <Label htmlFor={option} className="cursor-pointer font-normal capitalize">
-                                                        {option.replace(/_/g, ' ')}
+                                                <div
+                                                    key={option}
+                                                    className="flex items-center space-x-2"
+                                                >
+                                                    <RadioGroupItem
+                                                        value={option}
+                                                        id={option}
+                                                    />
+                                                    <Label
+                                                        htmlFor={option}
+                                                        className="cursor-pointer font-normal capitalize"
+                                                    >
+                                                        {option.replace(
+                                                            /_/g,
+                                                            ' ',
+                                                        )}
                                                     </Label>
                                                 </div>
                                             ))}
                                         </RadioGroup>
                                         {errors.onset_of_symptoms && (
-                                            <p className="text-sm text-red-500">{errors.onset_of_symptoms}</p>
+                                            <p className="text-sm text-red-500">
+                                                {errors.onset_of_symptoms}
+                                            </p>
                                         )}
                                     </div>
 
                                     <div className="flex justify-end">
-                                        <Button type="button" onClick={goToNextStep}>
+                                        <Button
+                                            type="button"
+                                            onClick={goToNextStep}
+                                        >
                                             Next
                                             <ArrowRight className="ml-2 h-4 w-4" />
                                         </Button>
@@ -298,50 +457,95 @@ export default function Create({ medicationTypes, onsetOptions, canRequestForOth
                             <Card>
                                 <CardHeader>
                                     <CardTitle>Policy Agreement</CardTitle>
-                                    <CardDescription>Please review and agree to our medication policy</CardDescription>
+                                    <CardDescription>
+                                        Please review and agree to our
+                                        medication policy
+                                    </CardDescription>
                                 </CardHeader>
                                 <CardContent className="space-y-6">
                                     <Alert>
                                         <AlertCircle className="h-4 w-4" />
                                         <AlertDescription>
-                                            <strong>Please note:</strong> If symptoms persist beyond today, we encourage you to{' '}
-                                            <strong>bring your own medication to the office</strong> to ensure your well-being and
+                                            <strong>Please note:</strong> If
+                                            symptoms persist beyond today, we
+                                            encourage you to{' '}
+                                            <strong>
+                                                bring your own medication to the
+                                                office
+                                            </strong>{' '}
+                                            to ensure your well-being and
                                             minimize interruptions.
                                         </AlertDescription>
                                     </Alert>
 
                                     <div className="space-y-3">
                                         <Label>
-                                            Do you agree? <span className="text-red-500">*</span>
+                                            Do you agree?{' '}
+                                            <span className="text-red-500">
+                                                *
+                                            </span>
                                         </Label>
                                         <RadioGroup
-                                            value={data.agrees_to_policy ? 'yes' : 'no'}
-                                            onValueChange={(value) => setData('agrees_to_policy', value === 'yes')}
+                                            value={
+                                                data.agrees_to_policy
+                                                    ? 'yes'
+                                                    : 'no'
+                                            }
+                                            onValueChange={(value) =>
+                                                setData(
+                                                    'agrees_to_policy',
+                                                    value === 'yes',
+                                                )
+                                            }
                                         >
                                             <div className="flex items-center space-x-2">
-                                                <RadioGroupItem value="yes" id="yes" />
-                                                <Label htmlFor="yes" className="font-normal cursor-pointer">
+                                                <RadioGroupItem
+                                                    value="yes"
+                                                    id="yes"
+                                                />
+                                                <Label
+                                                    htmlFor="yes"
+                                                    className="cursor-pointer font-normal"
+                                                >
                                                     Yes
                                                 </Label>
                                             </div>
                                             <div className="flex items-center space-x-2">
-                                                <RadioGroupItem value="no" id="no" />
-                                                <Label htmlFor="no" className="font-normal cursor-pointer">
+                                                <RadioGroupItem
+                                                    value="no"
+                                                    id="no"
+                                                />
+                                                <Label
+                                                    htmlFor="no"
+                                                    className="cursor-pointer font-normal"
+                                                >
                                                     No
                                                 </Label>
                                             </div>
                                         </RadioGroup>
                                         {errors.agrees_to_policy && (
-                                            <p className="text-sm text-red-500">{errors.agrees_to_policy}</p>
+                                            <p className="text-sm text-red-500">
+                                                {errors.agrees_to_policy}
+                                            </p>
                                         )}
                                     </div>
 
                                     <div className="flex justify-between">
-                                        <Button type="button" variant="outline" onClick={goToPreviousStep}>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={goToPreviousStep}
+                                        >
                                             <ArrowLeft className="mr-2 h-4 w-4" />
                                             Back
                                         </Button>
-                                        <Button type="submit" disabled={processing || !data.agrees_to_policy}>
+                                        <Button
+                                            type="submit"
+                                            disabled={
+                                                processing ||
+                                                !data.agrees_to_policy
+                                            }
+                                        >
                                             Submit Request
                                         </Button>
                                     </div>

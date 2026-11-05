@@ -1,6 +1,12 @@
-import React from 'react';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { motion } from 'framer-motion';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import React from 'react';
 
 export interface DetailDialogProps {
     open: boolean;
@@ -19,16 +25,22 @@ export const DetailDialog: React.FC<DetailDialogProps> = ({
 }) => {
     return (
         <Dialog open={open} onOpenChange={onClose}>
-            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+            <DialogContent className="max-h-[80vh] max-w-2xl overflow-y-auto">
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 20 }}
-                    transition={{ duration: 0.3, type: 'spring', stiffness: 200 }}
+                    transition={{
+                        duration: 0.3,
+                        type: 'spring',
+                        stiffness: 200,
+                    }}
                 >
                     <DialogHeader>
                         <DialogTitle>{title}</DialogTitle>
-                        {description && <DialogDescription>{description}</DialogDescription>}
+                        {description && (
+                            <DialogDescription>{description}</DialogDescription>
+                        )}
                     </DialogHeader>
                     <div className="mt-4">{children}</div>
                 </motion.div>

@@ -1,11 +1,22 @@
-import { Head, Link, usePage, useForm } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
-import { AlertTriangle, Calendar, CheckCircle2, Eye, FileText } from 'lucide-react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
+import {
+    AlertTriangle,
+    Calendar,
+    CheckCircle2,
+    Eye,
+    FileText,
+} from 'lucide-react';
 
-import AppLayout from '@/layouts/app-layout';
+import {
+    AckStatusBadge,
+    CoachingStatusBadge,
+    SeverityBadge,
+} from '@/components/coaching/CoachingStatusBadge';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { PageHeader } from '@/components/PageHeader';
+import PaginationNav from '@/components/pagination-nav';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import {
     Dialog,
     DialogContent,
@@ -15,6 +26,7 @@ import {
     DialogTitle,
     DialogTrigger,
 } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import {
     Table,
     TableBody,
@@ -23,17 +35,24 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
-import { PageHeader } from '@/components/PageHeader';
-import { LoadingOverlay } from '@/components/LoadingOverlay';
-import PaginationNav from '@/components/pagination-nav';
-import { usePageMeta, useFlashMessage, usePageLoading } from '@/hooks';
-import { CoachingStatusBadge, AckStatusBadge, SeverityBadge } from '@/components/coaching/CoachingStatusBadge';
+import { Textarea } from '@/components/ui/textarea';
+import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
+import AppLayout from '@/layouts/app-layout';
 import { formatDate } from '@/lib/utils';
 
 import { dashboard as coachingDashboard } from '@/routes/coaching';
-import { show as sessionsShow, acknowledge as sessionsAcknowledge } from '@/routes/coaching/sessions';
+import {
+    acknowledge as sessionsAcknowledge,
+    show as sessionsShow,
+} from '@/routes/coaching/sessions';
 
-import type { CoachingSession, CoachingSummary, CoachingPurposeLabels, CoachingStatusColors, PaginatedData } from '@/types';
+import type {
+    CoachingPurposeLabels,
+    CoachingSession,
+    CoachingStatusColors,
+    CoachingSummary,
+    PaginatedData,
+} from '@/types';
 
 interface Props extends InertiaPageProps {
     summary: CoachingSummary;
@@ -44,11 +63,14 @@ interface Props extends InertiaPageProps {
 }
 
 export default function MyCoachingLogsIndex() {
-    const { summary, sessions, pendingSessions, purposes } = usePage<Props>().props;
+    const { summary, sessions, pendingSessions, purposes } =
+        usePage<Props>().props;
 
     const { title, breadcrumbs } = usePageMeta({
         title: 'My Coaching Logs',
-        breadcrumbs: [{ title: 'My Coaching Logs', href: coachingDashboard().url }],
+        breadcrumbs: [
+            { title: 'My Coaching Logs', href: coachingDashboard().url },
+        ],
     });
     useFlashMessage();
     const isLoading = usePageLoading();
@@ -61,7 +83,9 @@ export default function MyCoachingLogsIndex() {
         });
     };
 
-    const formatName = (user?: { first_name: string; last_name: string } | null) => {
+    const formatName = (
+        user?: { first_name: string; last_name: string } | null,
+    ) => {
         if (!user) return 'N/A';
         return `${user.first_name} ${user.last_name}`;
     };
@@ -81,10 +105,13 @@ export default function MyCoachingLogsIndex() {
                         <AlertTriangle className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
                         <div className="flex-1">
                             <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
-                                You have {pendingSessions} coaching session{pendingSessions > 1 ? 's' : ''} pending acknowledgement.
+                                You have {pendingSessions} coaching session
+                                {pendingSessions > 1 ? 's' : ''} pending
+                                acknowledgement.
                             </p>
                             <p className="text-xs text-amber-600 dark:text-amber-400">
-                                Please review and acknowledge your coaching sessions below.
+                                Please review and acknowledge your coaching
+                                sessions below.
                             </p>
                         </div>
                     </div>
@@ -93,30 +120,50 @@ export default function MyCoachingLogsIndex() {
                 {/* Summary Card */}
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
                     <div className="col-span-2 rounded-lg border bg-card p-4 shadow-sm sm:col-span-1">
-                        <p className="text-xs font-medium text-muted-foreground">My Status</p>
+                        <p className="text-xs font-medium text-muted-foreground">
+                            My Status
+                        </p>
                         <div className="mt-1">
-                            <CoachingStatusBadge status={summary.coaching_status} />
+                            <CoachingStatusBadge
+                                status={summary.coaching_status}
+                            />
                         </div>
                     </div>
                     <div className="rounded-lg border bg-card p-4 shadow-sm">
-                        <p className="text-xs font-medium text-muted-foreground">Last Coached</p>
+                        <p className="text-xs font-medium text-muted-foreground">
+                            Last Coached
+                        </p>
                         <p className="mt-1 text-lg font-bold">
-                            {summary.last_coached_date ? formatDate(summary.last_coached_date) : 'Never'}
+                            {summary.last_coached_date
+                                ? formatDate(summary.last_coached_date)
+                                : 'Never'}
                         </p>
                     </div>
                     <div className="rounded-lg border bg-card p-4 shadow-sm">
-                        <p className="text-xs font-medium text-muted-foreground">Previous</p>
+                        <p className="text-xs font-medium text-muted-foreground">
+                            Previous
+                        </p>
                         <p className="mt-1 text-lg font-bold">
-                            {summary.previous_coached_date ? formatDate(summary.previous_coached_date) : '—'}
+                            {summary.previous_coached_date
+                                ? formatDate(summary.previous_coached_date)
+                                : '—'}
                         </p>
                     </div>
                     <div className="rounded-lg border bg-card p-4 shadow-sm">
-                        <p className="text-xs font-medium text-muted-foreground">Total Sessions</p>
-                        <p className="mt-1 text-2xl font-bold">{summary.total_sessions}</p>
+                        <p className="text-xs font-medium text-muted-foreground">
+                            Total Sessions
+                        </p>
+                        <p className="mt-1 text-2xl font-bold">
+                            {summary.total_sessions}
+                        </p>
                     </div>
                     <div className="rounded-lg border bg-card p-4 shadow-sm">
-                        <p className="text-xs font-medium text-muted-foreground">Pending Ack</p>
-                        <p className={`mt-1 text-2xl font-bold ${summary.pending_acknowledgements > 0 ? 'text-amber-600' : ''}`}>
+                        <p className="text-xs font-medium text-muted-foreground">
+                            Pending Ack
+                        </p>
+                        <p
+                            className={`mt-1 text-2xl font-bold ${summary.pending_acknowledgements > 0 ? 'text-amber-600' : ''}`}
+                        >
                             {summary.pending_acknowledgements}
                         </p>
                     </div>
@@ -124,14 +171,20 @@ export default function MyCoachingLogsIndex() {
 
                 {/* Coaching Progress */}
                 <div className="rounded-lg border bg-card p-4 shadow-sm">
-                    <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium">Coaching Progress ({new Date().getFullYear()})</span>
-                        <span className="text-sm text-muted-foreground">{summary.total_sessions} / 52 sessions</span>
+                    <div className="mb-2 flex items-center justify-between">
+                        <span className="text-sm font-medium">
+                            Coaching Progress ({new Date().getFullYear()})
+                        </span>
+                        <span className="text-sm text-muted-foreground">
+                            {summary.total_sessions} / 52 sessions
+                        </span>
                     </div>
-                    <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
                         <div
                             className="h-full rounded-full bg-primary transition-all duration-500"
-                            style={{ width: `${Math.min((summary.total_sessions / 52) * 100, 100)}%` }}
+                            style={{
+                                width: `${Math.min((summary.total_sessions / 52) * 100, 100)}%`,
+                            }}
                         />
                     </div>
                     <p className="mt-1.5 text-xs text-muted-foreground">
@@ -144,7 +197,8 @@ export default function MyCoachingLogsIndex() {
                 {/* Sessions Table */}
                 <div className="space-y-2">
                     <h3 className="flex items-center gap-2 text-sm font-semibold">
-                        <Calendar className="h-4 w-4" /> Coaching Sessions ({sessions.total})
+                        <Calendar className="h-4 w-4" /> Coaching Sessions (
+                        {sessions.total})
                     </h3>
 
                     {/* Desktop Table */}
@@ -158,83 +212,195 @@ export default function MyCoachingLogsIndex() {
                                         <TableHead>Purpose</TableHead>
                                         <TableHead>Status</TableHead>
                                         <TableHead>Severity</TableHead>
-                                        <TableHead className="text-center">Actions</TableHead>
+                                        <TableHead className="text-center">
+                                            Actions
+                                        </TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {sessions.data.length === 0 ? (
                                         <TableRow>
-                                            <TableCell colSpan={6} className="py-12 text-center">
+                                            <TableCell
+                                                colSpan={6}
+                                                className="py-12 text-center"
+                                            >
                                                 <div className="flex flex-col items-center justify-center">
                                                     <FileText className="h-12 w-12 text-muted-foreground/30" />
-                                                    <p className="mt-3 text-sm font-medium text-muted-foreground">No coaching sessions yet</p>
-                                                    <p className="mt-1 text-xs text-muted-foreground/70">Your coaching sessions will appear here once your team lead creates one.</p>
+                                                    <p className="mt-3 text-sm font-medium text-muted-foreground">
+                                                        No coaching sessions yet
+                                                    </p>
+                                                    <p className="mt-1 text-xs text-muted-foreground/70">
+                                                        Your coaching sessions
+                                                        will appear here once
+                                                        your team lead creates
+                                                        one.
+                                                    </p>
                                                 </div>
                                             </TableCell>
                                         </TableRow>
                                     ) : (
                                         sessions.data.map((session) => (
                                             <TableRow key={session.id}>
-                                            <TableCell className="whitespace-nowrap">
-                                                {formatDate(session.session_date)}
-                                            </TableCell>
-                                            <TableCell>{formatName(session.coach)}</TableCell>
-                                                <TableCell>{purposes[session.purpose] ?? session.purpose}</TableCell>
-                                                <TableCell>
-                                                    <AckStatusBadge status={session.ack_status} />
+                                                <TableCell className="whitespace-nowrap">
+                                                    {formatDate(
+                                                        session.session_date,
+                                                    )}
                                                 </TableCell>
                                                 <TableCell>
-                                                    <SeverityBadge flag={session.severity_flag} />
+                                                    {formatName(session.coach)}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {purposes[
+                                                        session.purpose
+                                                    ] ?? session.purpose}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <AckStatusBadge
+                                                        status={
+                                                            session.ack_status
+                                                        }
+                                                    />
+                                                </TableCell>
+                                                <TableCell>
+                                                    <SeverityBadge
+                                                        flag={
+                                                            session.severity_flag
+                                                        }
+                                                    />
                                                 </TableCell>
                                                 <TableCell>
                                                     <div className="flex items-center justify-center gap-1">
-                                                        <Link href={sessionsShow.url(session.id)}>
-                                                            <Button variant="ghost" size="icon" title="View">
+                                                        <Link
+                                                            href={sessionsShow.url(
+                                                                session.id,
+                                                            )}
+                                                        >
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                title="View"
+                                                            >
                                                                 <Eye className="h-4 w-4" />
                                                             </Button>
                                                         </Link>
-                                                        {session.ack_status === 'Pending' && (
+                                                        {session.ack_status ===
+                                                            'Pending' && (
                                                             <Dialog>
-                                                                <DialogTrigger asChild>
-                                                                    <Button variant="ghost" size="icon" className="text-green-600 hover:text-green-700" title="Acknowledge">
+                                                                <DialogTrigger
+                                                                    asChild
+                                                                >
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        className="text-green-600 hover:text-green-700"
+                                                                        title="Acknowledge"
+                                                                    >
                                                                         <CheckCircle2 className="h-4 w-4" />
                                                                     </Button>
                                                                 </DialogTrigger>
                                                                 <DialogContent className="max-w-[90vw] sm:max-w-md">
                                                                     <DialogHeader>
-                                                                        <DialogTitle>Acknowledge Session</DialogTitle>
+                                                                        <DialogTitle>
+                                                                            Acknowledge
+                                                                            Session
+                                                                        </DialogTitle>
                                                                         <DialogDescription>
-                                                                            Confirm you have reviewed this coaching session from {formatName(session.coach)} on{' '}
-                                                                            {formatDate(session.session_date)}.
+                                                                            Confirm
+                                                                            you
+                                                                            have
+                                                                            reviewed
+                                                                            this
+                                                                            coaching
+                                                                            session
+                                                                            from{' '}
+                                                                            {formatName(
+                                                                                session.coach,
+                                                                            )}{' '}
+                                                                            on{' '}
+                                                                            {formatDate(
+                                                                                session.session_date,
+                                                                            )}
+                                                                            .
                                                                         </DialogDescription>
                                                                     </DialogHeader>
                                                                     <div className="space-y-3 py-2">
-                                                                        <Label htmlFor={`ack-comment-${session.id}`}>Comment (optional)</Label>
+                                                                        <Label
+                                                                            htmlFor={`ack-comment-${session.id}`}
+                                                                        >
+                                                                            Comment
+                                                                            (optional)
+                                                                        </Label>
                                                                         <Textarea
                                                                             id={`ack-comment-${session.id}`}
-                                                                            value={ackForm.data.ack_comment}
-                                                                            onChange={(e) => ackForm.setData('ack_comment', e.target.value)}
+                                                                            value={
+                                                                                ackForm
+                                                                                    .data
+                                                                                    .ack_comment
+                                                                            }
+                                                                            onChange={(
+                                                                                e,
+                                                                            ) =>
+                                                                                ackForm.setData(
+                                                                                    'ack_comment',
+                                                                                    e
+                                                                                        .target
+                                                                                        .value,
+                                                                                )
+                                                                            }
                                                                             placeholder="Add any comments..."
-                                                                            rows={3}
+                                                                            rows={
+                                                                                3
+                                                                            }
                                                                         />
                                                                         <div className="space-y-2">
-                                                                            <Label htmlFor={`ack-response-${session.id}`}>Your Reflection / Response (optional)</Label>
+                                                                            <Label
+                                                                                htmlFor={`ack-response-${session.id}`}
+                                                                            >
+                                                                                Your
+                                                                                Reflection
+                                                                                /
+                                                                                Response
+                                                                                (optional)
+                                                                            </Label>
                                                                             <Textarea
                                                                                 id={`ack-response-${session.id}`}
-                                                                                value={ackForm.data.agent_response}
-                                                                                onChange={(e) => ackForm.setData('agent_response', e.target.value)}
+                                                                                value={
+                                                                                    ackForm
+                                                                                        .data
+                                                                                        .agent_response
+                                                                                }
+                                                                                onChange={(
+                                                                                    e,
+                                                                                ) =>
+                                                                                    ackForm.setData(
+                                                                                        'agent_response',
+                                                                                        e
+                                                                                            .target
+                                                                                            .value,
+                                                                                    )
+                                                                                }
                                                                                 placeholder="Share your thoughts, reflections, or commitments from this coaching session..."
-                                                                                rows={4}
+                                                                                rows={
+                                                                                    4
+                                                                                }
                                                                             />
                                                                         </div>
                                                                     </div>
                                                                     <DialogFooter>
                                                                         <Button
-                                                                            onClick={() => handleAcknowledge(session.id)}
-                                                                            disabled={ackForm.processing}
+                                                                            onClick={() =>
+                                                                                handleAcknowledge(
+                                                                                    session.id,
+                                                                                )
+                                                                            }
+                                                                            disabled={
+                                                                                ackForm.processing
+                                                                            }
                                                                             className="bg-green-600 hover:bg-green-700"
                                                                         >
-                                                                            {ackForm.processing ? 'Submitting...' : 'Acknowledge'}
+                                                                            {ackForm.processing
+                                                                                ? 'Submitting...'
+                                                                                : 'Acknowledge'}
                                                                         </Button>
                                                                     </DialogFooter>
                                                                 </DialogContent>
@@ -255,60 +421,123 @@ export default function MyCoachingLogsIndex() {
                         {sessions.data.length === 0 ? (
                             <div className="flex flex-col items-center justify-center py-12 text-center">
                                 <FileText className="h-12 w-12 text-muted-foreground/30" />
-                                <p className="mt-3 text-sm font-medium text-muted-foreground">No coaching sessions yet</p>
-                                <p className="mt-1 text-xs text-muted-foreground/70">Your coaching sessions will appear here once your team lead creates one.</p>
+                                <p className="mt-3 text-sm font-medium text-muted-foreground">
+                                    No coaching sessions yet
+                                </p>
+                                <p className="mt-1 text-xs text-muted-foreground/70">
+                                    Your coaching sessions will appear here once
+                                    your team lead creates one.
+                                </p>
                             </div>
                         ) : (
                             sessions.data.map((session) => (
-                                <div key={session.id} className="rounded-lg border bg-card p-4 shadow-sm space-y-3">
+                                <div
+                                    key={session.id}
+                                    className="space-y-3 rounded-lg border bg-card p-4 shadow-sm"
+                                >
                                     <div className="flex items-start justify-between gap-2">
                                         <div>
                                             <p className="text-xs text-muted-foreground">
-                                                {formatDate(session.session_date)}
+                                                {formatDate(
+                                                    session.session_date,
+                                                )}
                                             </p>
-                                            <p className="text-sm font-medium">{formatName(session.coach)}</p>
-                                            <p className="text-xs text-muted-foreground">{purposes[session.purpose] ?? session.purpose}</p>
+                                            <p className="text-sm font-medium">
+                                                {formatName(session.coach)}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground">
+                                                {purposes[session.purpose] ??
+                                                    session.purpose}
+                                            </p>
                                         </div>
                                         <div className="flex flex-col items-end gap-1">
-                                            <AckStatusBadge status={session.ack_status} />
-                                            <SeverityBadge flag={session.severity_flag} />
+                                            <AckStatusBadge
+                                                status={session.ack_status}
+                                            />
+                                            <SeverityBadge
+                                                flag={session.severity_flag}
+                                            />
                                         </div>
                                     </div>
                                     <div className="flex flex-col gap-2 sm:flex-row">
-                                        <Link href={sessionsShow.url(session.id)} className="flex-1">
-                                            <Button variant="outline" size="sm" className="w-full">
-                                                <Eye className="mr-1.5 h-3.5 w-3.5" /> View
+                                        <Link
+                                            href={sessionsShow.url(session.id)}
+                                            className="flex-1"
+                                        >
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="w-full"
+                                            >
+                                                <Eye className="mr-1.5 h-3.5 w-3.5" />{' '}
+                                                View
                                             </Button>
                                         </Link>
                                         {session.ack_status === 'Pending' && (
                                             <Dialog>
                                                 <DialogTrigger asChild>
-                                                    <Button size="sm" className="flex-1 bg-green-600 hover:bg-green-700 text-white">
-                                                        <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> Acknowledge
+                                                    <Button
+                                                        size="sm"
+                                                        className="flex-1 bg-green-600 text-white hover:bg-green-700"
+                                                    >
+                                                        <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />{' '}
+                                                        Acknowledge
                                                     </Button>
                                                 </DialogTrigger>
                                                 <DialogContent className="max-w-[90vw] sm:max-w-md">
                                                     <DialogHeader>
-                                                        <DialogTitle>Acknowledge Session</DialogTitle>
+                                                        <DialogTitle>
+                                                            Acknowledge Session
+                                                        </DialogTitle>
                                                         <DialogDescription>
-                                                            Confirm you have reviewed this coaching session.
+                                                            Confirm you have
+                                                            reviewed this
+                                                            coaching session.
                                                         </DialogDescription>
                                                     </DialogHeader>
                                                     <div className="space-y-3 py-2">
-                                                        <Label htmlFor={`ack-mobile-${session.id}`}>Comment (optional)</Label>
+                                                        <Label
+                                                            htmlFor={`ack-mobile-${session.id}`}
+                                                        >
+                                                            Comment (optional)
+                                                        </Label>
                                                         <Textarea
                                                             id={`ack-mobile-${session.id}`}
-                                                            value={ackForm.data.ack_comment}
-                                                            onChange={(e) => ackForm.setData('ack_comment', e.target.value)}
+                                                            value={
+                                                                ackForm.data
+                                                                    .ack_comment
+                                                            }
+                                                            onChange={(e) =>
+                                                                ackForm.setData(
+                                                                    'ack_comment',
+                                                                    e.target
+                                                                        .value,
+                                                                )
+                                                            }
                                                             placeholder="Add any comments..."
                                                             rows={3}
                                                         />
                                                         <div className="space-y-2">
-                                                            <Label htmlFor={`ack-mobile-response-${session.id}`}>Your Reflection / Response (optional)</Label>
+                                                            <Label
+                                                                htmlFor={`ack-mobile-response-${session.id}`}
+                                                            >
+                                                                Your Reflection
+                                                                / Response
+                                                                (optional)
+                                                            </Label>
                                                             <Textarea
                                                                 id={`ack-mobile-response-${session.id}`}
-                                                                value={ackForm.data.agent_response}
-                                                                onChange={(e) => ackForm.setData('agent_response', e.target.value)}
+                                                                value={
+                                                                    ackForm.data
+                                                                        .agent_response
+                                                                }
+                                                                onChange={(e) =>
+                                                                    ackForm.setData(
+                                                                        'agent_response',
+                                                                        e.target
+                                                                            .value,
+                                                                    )
+                                                                }
                                                                 placeholder="Share your thoughts, reflections, or commitments from this coaching session..."
                                                                 rows={4}
                                                             />
@@ -316,11 +545,19 @@ export default function MyCoachingLogsIndex() {
                                                     </div>
                                                     <DialogFooter>
                                                         <Button
-                                                            onClick={() => handleAcknowledge(session.id)}
-                                                            disabled={ackForm.processing}
+                                                            onClick={() =>
+                                                                handleAcknowledge(
+                                                                    session.id,
+                                                                )
+                                                            }
+                                                            disabled={
+                                                                ackForm.processing
+                                                            }
                                                             className="bg-green-600 hover:bg-green-700"
                                                         >
-                                                            {ackForm.processing ? 'Submitting...' : 'Acknowledge'}
+                                                            {ackForm.processing
+                                                                ? 'Submitting...'
+                                                                : 'Acknowledge'}
                                                         </Button>
                                                     </DialogFooter>
                                                 </DialogContent>

@@ -1,10 +1,14 @@
-import { Link } from '@inertiajs/react';
-import { Calendar, User2, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { AckStatusBadge, ComplianceStatusBadge, SeverityBadge } from './CoachingStatusBadge';
-import type { CoachingSession, CoachingPurposeLabels } from '@/types';
-import { show } from '@/routes/coaching/sessions';
 import { formatDate } from '@/lib/utils';
+import { show } from '@/routes/coaching/sessions';
+import type { CoachingPurposeLabels, CoachingSession } from '@/types';
+import { Link } from '@inertiajs/react';
+import { Calendar, Eye, User2 } from 'lucide-react';
+import {
+    AckStatusBadge,
+    ComplianceStatusBadge,
+    SeverityBadge,
+} from './CoachingStatusBadge';
 
 interface CoachingSessionCardProps {
     session: CoachingSession;
@@ -20,7 +24,7 @@ export function CoachingSessionCard({
     showCoach = false,
 }: CoachingSessionCardProps) {
     return (
-        <div className="bg-card border rounded-lg p-4 shadow-sm space-y-3">
+        <div className="space-y-3 rounded-lg border bg-card p-4 shadow-sm">
             <div className="flex items-start justify-between gap-2">
                 <div className="space-y-1">
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -30,15 +34,19 @@ export function CoachingSessionCard({
                     {showCoachee && session.coachee && (
                         <div className="flex items-center gap-2">
                             <User2 className="h-3.5 w-3.5 text-muted-foreground" />
-                            <span className="font-medium text-sm">
-                                {session.coachee.first_name} {session.coachee.last_name}
+                            <span className="text-sm font-medium">
+                                {session.coachee.first_name}{' '}
+                                {session.coachee.last_name}
                             </span>
                         </div>
                     )}
                     {showCoach && session.coach && (
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <User2 className="h-3.5 w-3.5" />
-                            <span>Coach: {session.coach.first_name} {session.coach.last_name}</span>
+                            <span>
+                                Coach: {session.coach.first_name}{' '}
+                                {session.coach.last_name}
+                            </span>
                         </div>
                     )}
                 </div>
@@ -54,10 +62,10 @@ export function CoachingSessionCard({
                 <ComplianceStatusBadge status={session.compliance_status} />
             </div>
 
-            <div className="pt-2 border-t">
+            <div className="border-t pt-2">
                 <Link href={show.url(session.id)}>
                     <Button variant="outline" size="sm" className="w-full">
-                        <Eye className="h-3.5 w-3.5 mr-1.5" />
+                        <Eye className="mr-1.5 h-3.5 w-3.5" />
                         View Details
                     </Button>
                 </Link>

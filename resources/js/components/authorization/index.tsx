@@ -1,6 +1,6 @@
-import { type ReactNode } from 'react';
 import { usePermission, useRole } from '@/hooks/useAuthorization';
 import type { UserRole } from '@/types';
+import { type ReactNode } from 'react';
 
 interface CanProps {
     permission: string;
@@ -40,7 +40,11 @@ interface CanAnyProps {
  *   <Button>Manage Accounts</Button>
  * </CanAny>
  */
-export function CanAny({ permissions, children, fallback = null }: CanAnyProps) {
+export function CanAny({
+    permissions,
+    children,
+    fallback = null,
+}: CanAnyProps) {
     const { canAny } = usePermission();
 
     if (!canAny(permissions)) {
@@ -64,7 +68,11 @@ interface CanAllProps {
  *   <EditAccountForm />
  * </CanAll>
  */
-export function CanAll({ permissions, children, fallback = null }: CanAllProps) {
+export function CanAll({
+    permissions,
+    children,
+    fallback = null,
+}: CanAllProps) {
     const { canAll } = usePermission();
 
     if (!canAll(permissions)) {

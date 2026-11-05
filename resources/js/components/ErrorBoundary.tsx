@@ -1,6 +1,6 @@
-import React, { Component, type ErrorInfo, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle } from 'lucide-react';
+import { Component, type ErrorInfo, type ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
     children: ReactNode;
@@ -16,7 +16,10 @@ interface ErrorBoundaryState {
  * React Error Boundary — catches rendering errors in child components
  * and shows a fallback UI instead of crashing the whole page.
  */
-export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+export class ErrorBoundary extends Component<
+    ErrorBoundaryProps,
+    ErrorBoundaryState
+> {
     constructor(props: ErrorBoundaryProps) {
         super(props);
         this.state = { hasError: false, error: null };
@@ -48,18 +51,19 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                 <div className="flex min-h-[400px] flex-col items-center justify-center gap-4 p-8 text-center">
                     <AlertTriangle className="h-12 w-12 text-destructive" />
                     <div className="space-y-2">
-                        <h2 className="text-lg font-semibold">Something went wrong</h2>
-                        <p className="text-sm text-muted-foreground max-w-md">
-                            An unexpected error occurred while rendering this section.
+                        <h2 className="text-lg font-semibold">
+                            Something went wrong
+                        </h2>
+                        <p className="max-w-md text-sm text-muted-foreground">
+                            An unexpected error occurred while rendering this
+                            section.
                         </p>
                     </div>
                     <div className="flex gap-2">
                         <Button variant="outline" onClick={this.handleRetry}>
                             Try Again
                         </Button>
-                        <Button onClick={this.handleReload}>
-                            Reload Page
-                        </Button>
+                        <Button onClick={this.handleReload}>Reload Page</Button>
                     </div>
                 </div>
             );

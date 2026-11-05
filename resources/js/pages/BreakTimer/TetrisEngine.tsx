@@ -24,64 +24,204 @@ const PIECES: Record<string, PieceDef> = {
     I: {
         color: '#00d4ff',
         rotations: [
-            [[1, 0], [1, 1], [1, 2], [1, 3]],
-            [[0, 2], [1, 2], [2, 2], [3, 2]],
-            [[2, 0], [2, 1], [2, 2], [2, 3]],
-            [[0, 1], [1, 1], [2, 1], [3, 1]],
+            [
+                [1, 0],
+                [1, 1],
+                [1, 2],
+                [1, 3],
+            ],
+            [
+                [0, 2],
+                [1, 2],
+                [2, 2],
+                [3, 2],
+            ],
+            [
+                [2, 0],
+                [2, 1],
+                [2, 2],
+                [2, 3],
+            ],
+            [
+                [0, 1],
+                [1, 1],
+                [2, 1],
+                [3, 1],
+            ],
         ],
     },
     O: {
         color: '#ffe600',
         rotations: [
-            [[0, 1], [0, 2], [1, 1], [1, 2]],
-            [[0, 1], [0, 2], [1, 1], [1, 2]],
-            [[0, 1], [0, 2], [1, 1], [1, 2]],
-            [[0, 1], [0, 2], [1, 1], [1, 2]],
+            [
+                [0, 1],
+                [0, 2],
+                [1, 1],
+                [1, 2],
+            ],
+            [
+                [0, 1],
+                [0, 2],
+                [1, 1],
+                [1, 2],
+            ],
+            [
+                [0, 1],
+                [0, 2],
+                [1, 1],
+                [1, 2],
+            ],
+            [
+                [0, 1],
+                [0, 2],
+                [1, 1],
+                [1, 2],
+            ],
         ],
     },
     T: {
         color: '#b026ff',
         rotations: [
-            [[0, 1], [1, 0], [1, 1], [1, 2]],
-            [[0, 1], [1, 1], [1, 2], [2, 1]],
-            [[1, 0], [1, 1], [1, 2], [2, 1]],
-            [[0, 1], [1, 0], [1, 1], [2, 1]],
+            [
+                [0, 1],
+                [1, 0],
+                [1, 1],
+                [1, 2],
+            ],
+            [
+                [0, 1],
+                [1, 1],
+                [1, 2],
+                [2, 1],
+            ],
+            [
+                [1, 0],
+                [1, 1],
+                [1, 2],
+                [2, 1],
+            ],
+            [
+                [0, 1],
+                [1, 0],
+                [1, 1],
+                [2, 1],
+            ],
         ],
     },
     S: {
         color: '#39ff14',
         rotations: [
-            [[0, 1], [0, 2], [1, 0], [1, 1]],
-            [[0, 1], [1, 1], [1, 2], [2, 2]],
-            [[1, 1], [1, 2], [2, 0], [2, 1]],
-            [[0, 0], [1, 0], [1, 1], [2, 1]],
+            [
+                [0, 1],
+                [0, 2],
+                [1, 0],
+                [1, 1],
+            ],
+            [
+                [0, 1],
+                [1, 1],
+                [1, 2],
+                [2, 2],
+            ],
+            [
+                [1, 1],
+                [1, 2],
+                [2, 0],
+                [2, 1],
+            ],
+            [
+                [0, 0],
+                [1, 0],
+                [1, 1],
+                [2, 1],
+            ],
         ],
     },
     Z: {
         color: '#ff2d95',
         rotations: [
-            [[0, 0], [0, 1], [1, 1], [1, 2]],
-            [[0, 2], [1, 1], [1, 2], [2, 1]],
-            [[1, 0], [1, 1], [2, 1], [2, 2]],
-            [[0, 1], [1, 0], [1, 1], [2, 0]],
+            [
+                [0, 0],
+                [0, 1],
+                [1, 1],
+                [1, 2],
+            ],
+            [
+                [0, 2],
+                [1, 1],
+                [1, 2],
+                [2, 1],
+            ],
+            [
+                [1, 0],
+                [1, 1],
+                [2, 1],
+                [2, 2],
+            ],
+            [
+                [0, 1],
+                [1, 0],
+                [1, 1],
+                [2, 0],
+            ],
         ],
     },
     J: {
         color: '#2979ff',
         rotations: [
-            [[0, 0], [1, 0], [1, 1], [1, 2]],
-            [[0, 1], [0, 2], [1, 1], [2, 1]],
-            [[1, 0], [1, 1], [1, 2], [2, 2]],
-            [[0, 1], [1, 1], [2, 0], [2, 1]],
+            [
+                [0, 0],
+                [1, 0],
+                [1, 1],
+                [1, 2],
+            ],
+            [
+                [0, 1],
+                [0, 2],
+                [1, 1],
+                [2, 1],
+            ],
+            [
+                [1, 0],
+                [1, 1],
+                [1, 2],
+                [2, 2],
+            ],
+            [
+                [0, 1],
+                [1, 1],
+                [2, 0],
+                [2, 1],
+            ],
         ],
     },
     L: {
         color: '#ff8a00',
         rotations: [
-            [[0, 2], [1, 0], [1, 1], [1, 2]],
-            [[0, 1], [1, 1], [2, 1], [2, 2]],
-            [[1, 0], [1, 1], [1, 2], [2, 0]],
-            [[0, 0], [0, 1], [1, 1], [2, 1]],
+            [
+                [0, 2],
+                [1, 0],
+                [1, 1],
+                [1, 2],
+            ],
+            [
+                [0, 1],
+                [1, 1],
+                [2, 1],
+                [2, 2],
+            ],
+            [
+                [1, 0],
+                [1, 1],
+                [1, 2],
+                [2, 0],
+            ],
+            [
+                [0, 0],
+                [0, 1],
+                [1, 1],
+                [2, 1],
+            ],
         ],
     },
 };
@@ -105,7 +245,10 @@ function emptyBoard(): Cell[][] {
 }
 
 function cellsOf(p: ActivePiece): [number, number][] {
-    return PIECES[p.key].rotations[p.rot].map(([dr, dc]) => [p.r + dr, p.c + dc]);
+    return PIECES[p.key].rotations[p.rot].map(([dr, dc]) => [
+        p.r + dr,
+        p.c + dc,
+    ]);
 }
 
 function collides(board: Cell[][], p: ActivePiece): boolean {
@@ -152,12 +295,16 @@ function boardMetrics(board: Cell[][]): Metrics {
     let agg = 0;
     for (const h of heights) agg += h;
     let bump = 0;
-    for (let c = 0; c < COLS - 1; c++) bump += Math.abs(heights[c] - heights[c + 1]);
+    for (let c = 0; c < COLS - 1; c++)
+        bump += Math.abs(heights[c] - heights[c + 1]);
     return { agg, holes, bump };
 }
 
 /** Heuristic planner: choose the best {rot, col} landing for the piece. */
-function planMove(board: Cell[][], piece: ActivePiece): { rot: number; c: number } | null {
+function planMove(
+    board: Cell[][],
+    piece: ActivePiece,
+): { rot: number; c: number } | null {
     let best: { rot: number; c: number } | null = null;
     let bestScore = -Infinity;
 
@@ -188,7 +335,10 @@ function planMove(board: Cell[][], piece: ActivePiece): { rot: number; c: number
             }
             const m = boardMetrics(sim);
             const score =
-                -0.510066 * m.agg + 0.760666 * lines - 0.35663 * m.holes - 0.184483 * m.bump;
+                -0.510066 * m.agg +
+                0.760666 * lines -
+                0.35663 * m.holes -
+                0.184483 * m.bump;
             if (score > bestScore) {
                 bestScore = score;
                 best = { rot, c };
@@ -199,7 +349,10 @@ function planMove(board: Cell[][], piece: ActivePiece): { rot: number; c: number
 }
 
 /** Pick a random legal landing — used to simulate human mistakes. */
-function pickRandomMove(board: Cell[][], piece: ActivePiece): { rot: number; c: number } | null {
+function pickRandomMove(
+    board: Cell[][],
+    piece: ActivePiece,
+): { rot: number; c: number } | null {
     const options: { rot: number; c: number }[] = [];
     for (let rot = 0; rot < 4; rot++) {
         const offsets = PIECES[piece.key].rotations[rot];
@@ -265,7 +418,10 @@ export function TetrisEngine({ opacity }: { opacity: number }) {
         const update = () => {
             const top = el.getBoundingClientRect().top;
             const visibleH = Math.max(0, window.innerHeight - Math.max(0, top));
-            setSize({ w: el.clientWidth, h: Math.min(el.clientHeight, visibleH) });
+            setSize({
+                w: el.clientWidth,
+                h: Math.min(el.clientHeight, visibleH),
+            });
         };
         update();
         const ro = new ResizeObserver(update);
@@ -292,7 +448,8 @@ export function TetrisEngine({ opacity }: { opacity: number }) {
             const p = pieceRef.current!;
             const color = PIECES[p.key].color;
             for (const [r, c] of cellsOf(p)) {
-                if (r >= 0 && r < ROWS && c >= 0 && c < COLS) board[r][c] = color;
+                if (r >= 0 && r < ROWS && c >= 0 && c < COLS)
+                    board[r][c] = color;
             }
             const full: number[] = [];
             for (let r = 0; r < ROWS; r++) {
@@ -313,7 +470,8 @@ export function TetrisEngine({ opacity }: { opacity: number }) {
             const board = boardRef.current;
             const rows = clearRowsRef.current;
             const remaining = board.filter((_, r) => !rows.includes(r));
-            while (remaining.length < ROWS) remaining.unshift(Array<Cell>(COLS).fill(null));
+            while (remaining.length < ROWS)
+                remaining.unshift(Array<Cell>(COLS).fill(null));
             boardRef.current = remaining;
             clearRowsRef.current = [];
             phaseRef.current = 'play';
@@ -336,10 +494,12 @@ export function TetrisEngine({ opacity }: { opacity: number }) {
                 // (sub-optimal) placement, which builds the stack higher and can
                 // eventually top out and fail.
                 const mistakeChance = 0.1 + Math.random() * 0.15;
-                const plan = Math.random() < mistakeChance
-                    ? pickRandomMove(boardRef.current, np)
-                    : planMove(boardRef.current, np);
-                targetRef.current = plan ?? planMove(boardRef.current, np) ?? { rot: np.rot, c: np.c };
+                const plan =
+                    Math.random() < mistakeChance
+                        ? pickRandomMove(boardRef.current, np)
+                        : planMove(boardRef.current, np);
+                targetRef.current = plan ??
+                    planMove(boardRef.current, np) ?? { rot: np.rot, c: np.c };
                 return;
             }
 
@@ -397,7 +557,13 @@ export function TetrisEngine({ opacity }: { opacity: number }) {
 
     // ─── Rendering ───────────────────────────────────────────
     const { w, h } = size;
-    const cell = w && h ? Math.max(8, Math.floor(Math.min((w * 0.9) / COLS, (h * 0.94) / ROWS))) : 0;
+    const cell =
+        w && h
+            ? Math.max(
+                  8,
+                  Math.floor(Math.min((w * 0.9) / COLS, (h * 0.94) / ROWS)),
+              )
+            : 0;
     const boardW = cell * COLS;
     const boardH = cell * ROWS;
     const boardLeft = (w - boardW) / 2;
@@ -408,9 +574,14 @@ export function TetrisEngine({ opacity }: { opacity: number }) {
     const clearing = clearRowsRef.current;
     const vis = Math.min(1, opacity * 2.4); // boost block visibility behind glass card
 
-    const ghost = piece && phaseRef.current === 'play' ? ghostOf(board, piece) : null;
+    const ghost =
+        piece && phaseRef.current === 'play' ? ghostOf(board, piece) : null;
 
-    function blockStyle(color: string, r: number, c: number): React.CSSProperties {
+    function blockStyle(
+        color: string,
+        r: number,
+        c: number,
+    ): React.CSSProperties {
         return {
             position: 'absolute',
             left: c * cell,
@@ -425,7 +596,11 @@ export function TetrisEngine({ opacity }: { opacity: number }) {
     }
 
     return (
-        <div ref={wrapRef} className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+        <div
+            ref={wrapRef}
+            className="pointer-events-none absolute inset-0 overflow-hidden"
+            aria-hidden="true"
+        >
             {/* Matrix grid background */}
             <div
                 className="absolute inset-0"
@@ -439,20 +614,30 @@ export function TetrisEngine({ opacity }: { opacity: number }) {
             <div
                 className="absolute inset-0"
                 style={{
-                    background: 'radial-gradient(circle at 50% 45%, transparent 25%, rgba(5,3,20,0.75) 100%)',
+                    background:
+                        'radial-gradient(circle at 50% 45%, transparent 25%, rgba(5,3,20,0.75) 100%)',
                     opacity,
                 }}
             />
 
             {cell > 0 && (
-                <div style={{ position: 'absolute', left: boardLeft, top: boardTop, width: boardW, height: boardH }}>
+                <div
+                    style={{
+                        position: 'absolute',
+                        left: boardLeft,
+                        top: boardTop,
+                        width: boardW,
+                        height: boardH,
+                    }}
+                >
                     {/* Well panel */}
                     <div
                         className="absolute inset-0"
                         style={{
                             background: 'rgba(10,6,26,0.35)',
                             border: '1px solid rgba(0,212,255,0.25)',
-                            boxShadow: '0 0 30px rgba(0,212,255,0.15), inset 0 0 40px rgba(176,38,255,0.08)',
+                            boxShadow:
+                                '0 0 30px rgba(0,212,255,0.15), inset 0 0 40px rgba(176,38,255,0.08)',
                             borderRadius: 4,
                         }}
                     />
@@ -491,7 +676,13 @@ export function TetrisEngine({ opacity }: { opacity: number }) {
                     {board.map((row, r) =>
                         row.map((color, c) =>
                             color ? (
-                                <div key={`b-${r}-${c}`} style={{ ...blockStyle(color, r, c), opacity: vis }} />
+                                <div
+                                    key={`b-${r}-${c}`}
+                                    style={{
+                                        ...blockStyle(color, r, c),
+                                        opacity: vis,
+                                    }}
+                                />
                             ) : null,
                         ),
                     )}
@@ -502,7 +693,14 @@ export function TetrisEngine({ opacity }: { opacity: number }) {
                             r < 0 ? null : (
                                 <div
                                     key={`p-${i}`}
-                                    style={{ ...blockStyle(PIECES[piece.key].color, r, c), opacity: vis }}
+                                    style={{
+                                        ...blockStyle(
+                                            PIECES[piece.key].color,
+                                            r,
+                                            c,
+                                        ),
+                                        opacity: vis,
+                                    }}
                                 />
                             ),
                         )}
@@ -518,8 +716,10 @@ export function TetrisEngine({ opacity }: { opacity: number }) {
                                     top: r * cell,
                                     width: boardW,
                                     height: cell,
-                                    background: 'linear-gradient(90deg, #ffffff, #00d4ff, #ffffff)',
-                                    boxShadow: '0 0 20px #00d4ff, 0 0 40px #ffffff',
+                                    background:
+                                        'linear-gradient(90deg, #ffffff, #00d4ff, #ffffff)',
+                                    boxShadow:
+                                        '0 0 20px #00d4ff, 0 0 40px #ffffff',
                                     borderRadius: 2,
                                     mixBlendMode: 'screen',
                                     opacity: Math.min(1, opacity * 3),
@@ -535,7 +735,8 @@ export function TetrisEngine({ opacity }: { opacity: number }) {
                                 inset: 0,
                                 background: 'rgba(255,45,149,0.22)',
                                 border: '2px solid #ff2d95',
-                                boxShadow: '0 0 40px #ff2d95, inset 0 0 30px rgba(255,45,149,0.4)',
+                                boxShadow:
+                                    '0 0 40px #ff2d95, inset 0 0 30px rgba(255,45,149,0.4)',
                                 borderRadius: 4,
                                 display: 'flex',
                                 alignItems: 'center',
@@ -574,7 +775,7 @@ export function TetrisEngine({ opacity }: { opacity: number }) {
                             whiteSpace: 'nowrap',
                         }}
                     >
-                        SCORE {scoreRef.current}  ·  LINES {linesRef.current}
+                        SCORE {scoreRef.current} · LINES {linesRef.current}
                     </div>
                 </div>
             )}

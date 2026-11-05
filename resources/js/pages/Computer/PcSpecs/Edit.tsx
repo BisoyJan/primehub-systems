@@ -1,37 +1,53 @@
-import { useEffect, useState } from 'react';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
-import { ArrowLeft, Check, ChevronsUpDown, Loader2, Plus, X } from 'lucide-react';
-
-import AppLayout from '@/layouts/app-layout';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
 import {
-    Select,
-    SelectTrigger,
-    SelectValue,
-    SelectContent,
-    SelectItem,
-} from '@/components/ui/select';
-import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+    ArrowLeft,
+    Check,
+    ChevronsUpDown,
+    Loader2,
+    Plus,
+    X,
+} from 'lucide-react';
+import { useEffect, useState } from 'react';
+
+import { Button } from '@/components/ui/button';
 import {
     Command,
-    CommandInput,
-    CommandList,
     CommandEmpty,
     CommandGroup,
+    CommandInput,
     CommandItem,
+    CommandList,
 } from '@/components/ui/command';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 
-import { PageHeader } from '@/components/PageHeader';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
-import { useFlashMessage, usePageLoading, usePageMeta, useReturnTo } from '@/hooks';
+import { PageHeader } from '@/components/PageHeader';
+import {
+    useFlashMessage,
+    usePageLoading,
+    usePageMeta,
+    useReturnTo,
+} from '@/hooks';
 
 import {
+    edit as pcSpecEdit,
     index as pcSpecIndex,
     update as pcSpecUpdate,
-    edit as pcSpecEdit,
 } from '@/routes/pcspecs';
 
 interface ProcessorSpecDetail {
@@ -134,7 +150,10 @@ export default function Edit() {
         }
         // Unchanged from original → don't query
         if (value === initialPcNumber) {
-            setAvailability({ state: 'available', message: 'Current QR Number' });
+            setAvailability({
+                state: 'available',
+                message: 'Current QR Number',
+            });
             return;
         }
 
@@ -146,21 +165,33 @@ export default function Edit() {
                     pc_number: value,
                     exclude_id: String(pcspec.id),
                 });
-                const res = await fetch(`/pcspecs/check-availability?${params.toString()}`, {
-                    headers: { Accept: 'application/json' },
-                    credentials: 'same-origin',
-                    signal: controller.signal,
-                });
+                const res = await fetch(
+                    `/pcspecs/check-availability?${params.toString()}`,
+                    {
+                        headers: { Accept: 'application/json' },
+                        credentials: 'same-origin',
+                        signal: controller.signal,
+                    },
+                );
                 if (!res.ok) throw new Error('Request failed');
                 const data = (await res.json()) as { available: boolean };
                 setAvailability(
                     data.available
-                        ? { state: 'available', message: 'QR Number is available' }
-                        : { state: 'taken', message: 'This QR Number is already taken' }
+                        ? {
+                              state: 'available',
+                              message: 'QR Number is available',
+                          }
+                        : {
+                              state: 'taken',
+                              message: 'This QR Number is already taken',
+                          },
                 );
             } catch (err) {
                 if ((err as Error).name === 'AbortError') return;
-                setAvailability({ state: 'error', message: 'Could not verify availability' });
+                setAvailability({
+                    state: 'error',
+                    message: 'Could not verify availability',
+                });
             }
         }, 350);
 
@@ -185,7 +216,11 @@ export default function Edit() {
             <div className="relative mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3 md:p-6">
                 <LoadingOverlay
                     isLoading={isPageLoading || form.processing}
-                    message={form.processing ? 'Updating PC specification...' : undefined}
+                    message={
+                        form.processing
+                            ? 'Updating PC specification...'
+                            : undefined
+                    }
                 />
 
                 <PageHeader
@@ -204,80 +239,134 @@ export default function Edit() {
                 <form onSubmit={handleSubmit} className="space-y-8">
                     {/* Core Info */}
                     <section>
-                        <h2 className="mb-2 text-lg font-semibold">Core Info</h2>
+                        <h2 className="mb-2 text-lg font-semibold">
+                            Core Info
+                        </h2>
                         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                             <div>
-                                <Label htmlFor="pc_number">QR Number <span className="text-red-500">*</span></Label>
+                                <Label htmlFor="pc_number">
+                                    QR Number{' '}
+                                    <span className="text-red-500">*</span>
+                                </Label>
                                 <Input
                                     id="pc_number"
                                     type="text"
                                     inputMode="numeric"
                                     pattern="\d*"
                                     value={form.data.pc_number}
-                                    onChange={(e) => form.setData('pc_number', e.target.value.replace(/\D/g, ''))}
+                                    onChange={(e) =>
+                                        form.setData(
+                                            'pc_number',
+                                            e.target.value.replace(/\D/g, ''),
+                                        )
+                                    }
                                     onBlur={(e) => {
-                                        const v = e.target.value.replace(/\D/g, '');
-                                        if (v && v.length < 4) form.setData('pc_number', v.padStart(4, '0'));
+                                        const v = e.target.value.replace(
+                                            /\D/g,
+                                            '',
+                                        );
+                                        if (v && v.length < 4)
+                                            form.setData(
+                                                'pc_number',
+                                                v.padStart(4, '0'),
+                                            );
                                     }}
                                     placeholder="e.g., 0042"
                                     required
                                 />
-                                {form.errors.pc_number && <p className="text-sm text-red-600">{form.errors.pc_number}</p>}
-                                {!form.errors.pc_number && availability.state === 'checking' && (
-                                    <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-                                        <Loader2 className="h-3 w-3 animate-spin" />
-                                        Checking availability...
+                                {form.errors.pc_number && (
+                                    <p className="text-sm text-red-600">
+                                        {form.errors.pc_number}
                                     </p>
                                 )}
-                                {!form.errors.pc_number && availability.state === 'available' && (
-                                    <p className="mt-1 flex items-center gap-1 text-xs text-green-600">
-                                        <Check className="h-3 w-3" />
-                                        {availability.message}
-                                    </p>
-                                )}
-                                {!form.errors.pc_number && availability.state === 'taken' && (
-                                    <p className="mt-1 flex items-center gap-1 text-xs text-red-600">
-                                        <X className="h-3 w-3" />
-                                        {availability.message}
-                                    </p>
-                                )}
-                                {!form.errors.pc_number && availability.state === 'error' && (
-                                    <p className="mt-1 text-xs text-amber-600">{availability.message}</p>
-                                )}
+                                {!form.errors.pc_number &&
+                                    availability.state === 'checking' && (
+                                        <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                                            <Loader2 className="h-3 w-3 animate-spin" />
+                                            Checking availability...
+                                        </p>
+                                    )}
+                                {!form.errors.pc_number &&
+                                    availability.state === 'available' && (
+                                        <p className="mt-1 flex items-center gap-1 text-xs text-green-600">
+                                            <Check className="h-3 w-3" />
+                                            {availability.message}
+                                        </p>
+                                    )}
+                                {!form.errors.pc_number &&
+                                    availability.state === 'taken' && (
+                                        <p className="mt-1 flex items-center gap-1 text-xs text-red-600">
+                                            <X className="h-3 w-3" />
+                                            {availability.message}
+                                        </p>
+                                    )}
+                                {!form.errors.pc_number &&
+                                    availability.state === 'error' && (
+                                        <p className="mt-1 text-xs text-amber-600">
+                                            {availability.message}
+                                        </p>
+                                    )}
                             </div>
 
                             <div>
-                                <Label htmlFor="manufacturer">Manufacturer</Label>
+                                <Label htmlFor="manufacturer">
+                                    Manufacturer
+                                </Label>
                                 <Input
                                     id="manufacturer"
                                     value={form.data.manufacturer}
-                                    onChange={(e) => form.setData('manufacturer', e.target.value)}
+                                    onChange={(e) =>
+                                        form.setData(
+                                            'manufacturer',
+                                            e.target.value,
+                                        )
+                                    }
                                 />
-                                {form.errors.manufacturer && <p className="text-sm text-red-600">{form.errors.manufacturer}</p>}
+                                {form.errors.manufacturer && (
+                                    <p className="text-sm text-red-600">
+                                        {form.errors.manufacturer}
+                                    </p>
+                                )}
                             </div>
 
                             <div className="md:col-span-2">
                                 <Label htmlFor="notes">Notes</Label>
                                 <textarea
                                     id="notes"
-                                    className="w-full min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                    className="min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
                                     value={form.data.notes}
-                                    onChange={(e) => form.setData('notes', e.target.value)}
+                                    onChange={(e) =>
+                                        form.setData('notes', e.target.value)
+                                    }
                                     placeholder="Optional notes..."
                                 />
-                                {form.errors.notes && <p className="text-sm text-red-600">{form.errors.notes}</p>}
+                                {form.errors.notes && (
+                                    <p className="text-sm text-red-600">
+                                        {form.errors.notes}
+                                    </p>
+                                )}
                             </div>
                         </div>
                     </section>
 
                     {/* Specifications */}
                     <section>
-                        <h2 className="mb-2 text-lg font-semibold">Specifications</h2>
+                        <h2 className="mb-2 text-lg font-semibold">
+                            Specifications
+                        </h2>
                         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                             <div>
                                 <Label htmlFor="memory_type">Memory Type</Label>
-                                <Select value={form.data.memory_type} onValueChange={(val) => form.setData('memory_type', val)}>
-                                    <SelectTrigger id="memory_type" className="w-full">
+                                <Select
+                                    value={form.data.memory_type}
+                                    onValueChange={(val) =>
+                                        form.setData('memory_type', val)
+                                    }
+                                >
+                                    <SelectTrigger
+                                        id="memory_type"
+                                        className="w-full"
+                                    >
                                         <SelectValue placeholder="Select memory type" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -288,7 +377,11 @@ export default function Edit() {
                                         ))}
                                     </SelectContent>
                                 </Select>
-                                {form.errors.memory_type && <p className="text-sm text-red-600">{form.errors.memory_type}</p>}
+                                {form.errors.memory_type && (
+                                    <p className="text-sm text-red-600">
+                                        {form.errors.memory_type}
+                                    </p>
+                                )}
                             </div>
 
                             <div>
@@ -298,9 +391,18 @@ export default function Edit() {
                                     type="number"
                                     min="0"
                                     value={form.data.ram_gb}
-                                    onChange={(e) => form.setData('ram_gb', Number(e.target.value))}
+                                    onChange={(e) =>
+                                        form.setData(
+                                            'ram_gb',
+                                            Number(e.target.value),
+                                        )
+                                    }
                                 />
-                                {form.errors.ram_gb && <p className="text-sm text-red-600">{form.errors.ram_gb}</p>}
+                                {form.errors.ram_gb && (
+                                    <p className="text-sm text-red-600">
+                                        {form.errors.ram_gb}
+                                    </p>
+                                )}
                             </div>
 
                             <div>
@@ -310,31 +412,62 @@ export default function Edit() {
                                     type="number"
                                     min="0"
                                     value={form.data.disk_gb}
-                                    onChange={(e) => form.setData('disk_gb', Number(e.target.value))}
+                                    onChange={(e) =>
+                                        form.setData(
+                                            'disk_gb',
+                                            Number(e.target.value),
+                                        )
+                                    }
                                 />
-                                {form.errors.disk_gb && <p className="text-sm text-red-600">{form.errors.disk_gb}</p>}
+                                {form.errors.disk_gb && (
+                                    <p className="text-sm text-red-600">
+                                        {form.errors.disk_gb}
+                                    </p>
+                                )}
                             </div>
 
                             <div>
-                                <Label htmlFor="available_ports">Available Ports</Label>
+                                <Label htmlFor="available_ports">
+                                    Available Ports
+                                </Label>
                                 <Input
                                     id="available_ports"
                                     value={form.data.available_ports}
-                                    onChange={(e) => form.setData('available_ports', e.target.value)}
+                                    onChange={(e) =>
+                                        form.setData(
+                                            'available_ports',
+                                            e.target.value,
+                                        )
+                                    }
                                     placeholder="e.g., HDMI, DisplayPort, USB-C, VGA"
                                 />
-                                {form.errors.available_ports && <p className="text-sm text-red-600">{form.errors.available_ports}</p>}
+                                {form.errors.available_ports && (
+                                    <p className="text-sm text-red-600">
+                                        {form.errors.available_ports}
+                                    </p>
+                                )}
                             </div>
 
                             <div>
-                                <Label htmlFor="bios_release_date">Bios Release Date</Label>
+                                <Label htmlFor="bios_release_date">
+                                    Bios Release Date
+                                </Label>
                                 <Input
                                     id="bios_release_date"
                                     type="date"
                                     value={form.data.bios_release_date}
-                                    onChange={(e) => form.setData('bios_release_date', e.target.value)}
+                                    onChange={(e) =>
+                                        form.setData(
+                                            'bios_release_date',
+                                            e.target.value,
+                                        )
+                                    }
                                 />
-                                {form.errors.bios_release_date && <p className="text-sm text-red-600">{form.errors.bios_release_date}</p>}
+                                {form.errors.bios_release_date && (
+                                    <p className="text-sm text-red-600">
+                                        {form.errors.bios_release_date}
+                                    </p>
+                                )}
                             </div>
                         </div>
                     </section>
@@ -348,7 +481,10 @@ export default function Edit() {
                                 variant="outline"
                                 size="sm"
                                 onClick={() => {
-                                    const newMode = form.data.processor_mode === 'existing' ? 'new' : 'existing';
+                                    const newMode =
+                                        form.data.processor_mode === 'existing'
+                                            ? 'new'
+                                            : 'existing';
                                     form.setData('processor_mode', newMode);
                                 }}
                             >
@@ -365,8 +501,13 @@ export default function Edit() {
 
                         {form.data.processor_mode === 'existing' ? (
                             <div className="space-y-2">
-                                <Label htmlFor="processor_spec_id">Select Processor</Label>
-                                <Popover open={processorOpen} onOpenChange={setProcessorOpen}>
+                                <Label htmlFor="processor_spec_id">
+                                    Select Processor
+                                </Label>
+                                <Popover
+                                    open={processorOpen}
+                                    onOpenChange={setProcessorOpen}
+                                >
                                     <PopoverTrigger asChild>
                                         <Button
                                             variant="outline"
@@ -374,11 +515,17 @@ export default function Edit() {
                                             aria-expanded={processorOpen}
                                             className={cn(
                                                 'w-full justify-between',
-                                                form.errors.processor_spec_id && 'border-destructive'
+                                                form.errors.processor_spec_id &&
+                                                    'border-destructive',
                                             )}
                                         >
                                             {form.data.processor_spec_id
-                                                ? processorOptions.find((p) => p.id === form.data.processor_spec_id)?.label
+                                                ? processorOptions.find(
+                                                      (p) =>
+                                                          p.id ===
+                                                          form.data
+                                                              .processor_spec_id,
+                                                  )?.label
                                                 : 'Select a processor...'}
                                             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                         </Button>
@@ -387,65 +534,137 @@ export default function Edit() {
                                         <Command>
                                             <CommandInput placeholder="Search processors..." />
                                             <CommandList>
-                                                <CommandEmpty>No processor found.</CommandEmpty>
+                                                <CommandEmpty>
+                                                    No processor found.
+                                                </CommandEmpty>
                                                 <CommandGroup>
-                                                    {processorOptions.map((opt) => (
-                                                        <CommandItem
-                                                            key={opt.id}
-                                                            value={opt.label}
-                                                            onSelect={() => {
-                                                                form.setData('processor_spec_id', opt.id);
-                                                                setProcessorOpen(false);
-                                                            }}
-                                                        >
-                                                            <Check
-                                                                className={cn(
-                                                                    'mr-2 h-4 w-4',
-                                                                    form.data.processor_spec_id === opt.id ? 'opacity-100' : 'opacity-0'
-                                                                )}
-                                                            />
-                                                            <div className="flex flex-col">
-                                                                <span>{opt.label}</span>
-                                                                <span className="text-xs text-muted-foreground">
-                                                                    {opt.core_count}C/{opt.thread_count}T • {opt.base_clock_ghz}–{opt.boost_clock_ghz} GHz
-                                                                </span>
-                                                            </div>
-                                                        </CommandItem>
-                                                    ))}
+                                                    {processorOptions.map(
+                                                        (opt) => (
+                                                            <CommandItem
+                                                                key={opt.id}
+                                                                value={
+                                                                    opt.label
+                                                                }
+                                                                onSelect={() => {
+                                                                    form.setData(
+                                                                        'processor_spec_id',
+                                                                        opt.id,
+                                                                    );
+                                                                    setProcessorOpen(
+                                                                        false,
+                                                                    );
+                                                                }}
+                                                            >
+                                                                <Check
+                                                                    className={cn(
+                                                                        'mr-2 h-4 w-4',
+                                                                        form
+                                                                            .data
+                                                                            .processor_spec_id ===
+                                                                            opt.id
+                                                                            ? 'opacity-100'
+                                                                            : 'opacity-0',
+                                                                    )}
+                                                                />
+                                                                <div className="flex flex-col">
+                                                                    <span>
+                                                                        {
+                                                                            opt.label
+                                                                        }
+                                                                    </span>
+                                                                    <span className="text-xs text-muted-foreground">
+                                                                        {
+                                                                            opt.core_count
+                                                                        }
+                                                                        C/
+                                                                        {
+                                                                            opt.thread_count
+                                                                        }
+                                                                        T •{' '}
+                                                                        {
+                                                                            opt.base_clock_ghz
+                                                                        }
+                                                                        –
+                                                                        {
+                                                                            opt.boost_clock_ghz
+                                                                        }{' '}
+                                                                        GHz
+                                                                    </span>
+                                                                </div>
+                                                            </CommandItem>
+                                                        ),
+                                                    )}
                                                 </CommandGroup>
                                             </CommandList>
                                         </Command>
                                     </PopoverContent>
                                 </Popover>
-                                {form.errors.processor_spec_id && <p className="text-sm text-destructive">{form.errors.processor_spec_id}</p>}
+                                {form.errors.processor_spec_id && (
+                                    <p className="text-sm text-destructive">
+                                        {form.errors.processor_spec_id}
+                                    </p>
+                                )}
 
                                 {/* Selected Processor Details */}
                                 {(() => {
-                                    const selected = pcspec.processorSpecs.find((p) => p.id === form.data.processor_spec_id);
+                                    const selected = pcspec.processorSpecs.find(
+                                        (p) =>
+                                            p.id ===
+                                            form.data.processor_spec_id,
+                                    );
                                     if (!selected) return null;
                                     return (
                                         <div className="mt-3 rounded-lg border p-4">
-                                            <p className="text-sm font-medium text-muted-foreground mb-2">Processor Details</p>
-                                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 text-sm">
+                                            <p className="mb-2 text-sm font-medium text-muted-foreground">
+                                                Processor Details
+                                            </p>
+                                            <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
                                                 <div className="flex justify-between">
-                                                    <span className="text-muted-foreground">Manufacturer:</span>
-                                                    <span className="font-medium">{selected.manufacturer}</span>
+                                                    <span className="text-muted-foreground">
+                                                        Manufacturer:
+                                                    </span>
+                                                    <span className="font-medium">
+                                                        {selected.manufacturer}
+                                                    </span>
                                                 </div>
                                                 <div className="flex justify-between">
-                                                    <span className="text-muted-foreground">Model:</span>
-                                                    <span className="font-medium">{selected.model}</span>
+                                                    <span className="text-muted-foreground">
+                                                        Model:
+                                                    </span>
+                                                    <span className="font-medium">
+                                                        {selected.model}
+                                                    </span>
                                                 </div>
                                                 <div className="flex justify-between">
-                                                    <span className="text-muted-foreground">Cores / Threads:</span>
-                                                    <span className="font-medium">{selected.core_count} / {selected.thread_count}</span>
+                                                    <span className="text-muted-foreground">
+                                                        Cores / Threads:
+                                                    </span>
+                                                    <span className="font-medium">
+                                                        {selected.core_count} /{' '}
+                                                        {selected.thread_count}
+                                                    </span>
                                                 </div>
                                                 <div className="flex justify-between">
-                                                    <span className="text-muted-foreground">Base Clock:</span>
-                                                    <span className="font-medium">{selected.base_clock_ghz} GHz</span>
+                                                    <span className="text-muted-foreground">
+                                                        Base Clock:
+                                                    </span>
+                                                    <span className="font-medium">
+                                                        {
+                                                            selected.base_clock_ghz
+                                                        }{' '}
+                                                        GHz
+                                                    </span>
                                                 </div>
                                                 <div className="flex justify-between">
-                                                    <span className="text-muted-foreground">Boost Clock:</span>
-                                                    <span className="font-medium">{selected.boost_clock_ghz} GHz</span>
+                                                    <span className="text-muted-foreground">
+                                                        Boost Clock:
+                                                    </span>
+                                                    <span className="font-medium">
+                                                        {
+                                                            selected.boost_clock_ghz
+                                                        }{' '}
+                                                        GHz
+                                                    </span>
                                                 </div>
                                             </div>
                                         </div>
@@ -453,90 +672,202 @@ export default function Edit() {
                                 })()}
                             </div>
                         ) : (
-                            <div className="rounded-lg border p-4 space-y-4">
-                                <p className="text-muted-foreground text-sm">Fill in the processor details below. A new processor spec will be created automatically.</p>
+                            <div className="space-y-4 rounded-lg border p-4">
+                                <p className="text-sm text-muted-foreground">
+                                    Fill in the processor details below. A new
+                                    processor spec will be created
+                                    automatically.
+                                </p>
                                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                     <div>
-                                        <Label htmlFor="processor_manufacturer">Manufacturer</Label>
+                                        <Label htmlFor="processor_manufacturer">
+                                            Manufacturer
+                                        </Label>
                                         <Select
-                                            value={form.data.processor_manufacturer}
-                                            onValueChange={(val) => form.setData('processor_manufacturer', val)}
+                                            value={
+                                                form.data.processor_manufacturer
+                                            }
+                                            onValueChange={(val) =>
+                                                form.setData(
+                                                    'processor_manufacturer',
+                                                    val,
+                                                )
+                                            }
                                         >
                                             <SelectTrigger id="processor_manufacturer">
                                                 <SelectValue placeholder="Select manufacturer" />
                                             </SelectTrigger>
                                             <SelectContent>
                                                 {['Intel', 'AMD'].map((b) => (
-                                                    <SelectItem key={b} value={b}>{b}</SelectItem>
+                                                    <SelectItem
+                                                        key={b}
+                                                        value={b}
+                                                    >
+                                                        {b}
+                                                    </SelectItem>
                                                 ))}
                                             </SelectContent>
                                         </Select>
-                                        {form.errors.processor_manufacturer && <p className="text-sm text-red-600">{form.errors.processor_manufacturer}</p>}
+                                        {form.errors.processor_manufacturer && (
+                                            <p className="text-sm text-red-600">
+                                                {
+                                                    form.errors
+                                                        .processor_manufacturer
+                                                }
+                                            </p>
+                                        )}
                                     </div>
 
                                     <div>
-                                        <Label htmlFor="processor_model">Model</Label>
+                                        <Label htmlFor="processor_model">
+                                            Model
+                                        </Label>
                                         <Input
                                             id="processor_model"
                                             placeholder="e.g. Core i5-12400"
                                             value={form.data.processor_model}
-                                            onChange={(e) => form.setData('processor_model', e.target.value)}
+                                            onChange={(e) =>
+                                                form.setData(
+                                                    'processor_model',
+                                                    e.target.value,
+                                                )
+                                            }
                                         />
-                                        {form.errors.processor_model && <p className="text-sm text-red-600">{form.errors.processor_model}</p>}
+                                        {form.errors.processor_model && (
+                                            <p className="text-sm text-red-600">
+                                                {form.errors.processor_model}
+                                            </p>
+                                        )}
                                     </div>
 
                                     <div>
-                                        <Label htmlFor="processor_core_count">Core Count</Label>
+                                        <Label htmlFor="processor_core_count">
+                                            Core Count
+                                        </Label>
                                         <Input
                                             id="processor_core_count"
                                             type="number"
                                             min={1}
                                             placeholder="e.g. 6"
-                                            value={form.data.processor_core_count}
-                                            onChange={(e) => form.setData('processor_core_count', e.target.value ? Number(e.target.value) : '')}
+                                            value={
+                                                form.data.processor_core_count
+                                            }
+                                            onChange={(e) =>
+                                                form.setData(
+                                                    'processor_core_count',
+                                                    e.target.value
+                                                        ? Number(e.target.value)
+                                                        : '',
+                                                )
+                                            }
                                         />
-                                        {form.errors.processor_core_count && <p className="text-sm text-red-600">{form.errors.processor_core_count}</p>}
+                                        {form.errors.processor_core_count && (
+                                            <p className="text-sm text-red-600">
+                                                {
+                                                    form.errors
+                                                        .processor_core_count
+                                                }
+                                            </p>
+                                        )}
                                     </div>
 
                                     <div>
-                                        <Label htmlFor="processor_thread_count">Thread Count</Label>
+                                        <Label htmlFor="processor_thread_count">
+                                            Thread Count
+                                        </Label>
                                         <Input
                                             id="processor_thread_count"
                                             type="number"
                                             min={1}
                                             placeholder="e.g. 12"
-                                            value={form.data.processor_thread_count}
-                                            onChange={(e) => form.setData('processor_thread_count', e.target.value ? Number(e.target.value) : '')}
+                                            value={
+                                                form.data.processor_thread_count
+                                            }
+                                            onChange={(e) =>
+                                                form.setData(
+                                                    'processor_thread_count',
+                                                    e.target.value
+                                                        ? Number(e.target.value)
+                                                        : '',
+                                                )
+                                            }
                                         />
-                                        {form.errors.processor_thread_count && <p className="text-sm text-red-600">{form.errors.processor_thread_count}</p>}
+                                        {form.errors.processor_thread_count && (
+                                            <p className="text-sm text-red-600">
+                                                {
+                                                    form.errors
+                                                        .processor_thread_count
+                                                }
+                                            </p>
+                                        )}
                                     </div>
 
                                     <div>
-                                        <Label htmlFor="processor_base_clock_ghz">Base Clock (GHz)</Label>
+                                        <Label htmlFor="processor_base_clock_ghz">
+                                            Base Clock (GHz)
+                                        </Label>
                                         <Input
                                             id="processor_base_clock_ghz"
                                             type="number"
                                             step="0.01"
                                             min={0}
                                             placeholder="e.g. 2.50"
-                                            value={form.data.processor_base_clock_ghz}
-                                            onChange={(e) => form.setData('processor_base_clock_ghz', e.target.value ? Number(e.target.value) : '')}
+                                            value={
+                                                form.data
+                                                    .processor_base_clock_ghz
+                                            }
+                                            onChange={(e) =>
+                                                form.setData(
+                                                    'processor_base_clock_ghz',
+                                                    e.target.value
+                                                        ? Number(e.target.value)
+                                                        : '',
+                                                )
+                                            }
                                         />
-                                        {form.errors.processor_base_clock_ghz && <p className="text-sm text-red-600">{form.errors.processor_base_clock_ghz}</p>}
+                                        {form.errors
+                                            .processor_base_clock_ghz && (
+                                            <p className="text-sm text-red-600">
+                                                {
+                                                    form.errors
+                                                        .processor_base_clock_ghz
+                                                }
+                                            </p>
+                                        )}
                                     </div>
 
                                     <div>
-                                        <Label htmlFor="processor_boost_clock_ghz">Boost Clock (GHz)</Label>
+                                        <Label htmlFor="processor_boost_clock_ghz">
+                                            Boost Clock (GHz)
+                                        </Label>
                                         <Input
                                             id="processor_boost_clock_ghz"
                                             type="number"
                                             step="0.01"
                                             min={0}
                                             placeholder="e.g. 4.40"
-                                            value={form.data.processor_boost_clock_ghz}
-                                            onChange={(e) => form.setData('processor_boost_clock_ghz', e.target.value ? Number(e.target.value) : '')}
+                                            value={
+                                                form.data
+                                                    .processor_boost_clock_ghz
+                                            }
+                                            onChange={(e) =>
+                                                form.setData(
+                                                    'processor_boost_clock_ghz',
+                                                    e.target.value
+                                                        ? Number(e.target.value)
+                                                        : '',
+                                                )
+                                            }
                                         />
-                                        {form.errors.processor_boost_clock_ghz && <p className="text-sm text-red-600">{form.errors.processor_boost_clock_ghz}</p>}
+                                        {form.errors
+                                            .processor_boost_clock_ghz && (
+                                            <p className="text-sm text-red-600">
+                                                {
+                                                    form.errors
+                                                        .processor_boost_clock_ghz
+                                                }
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
                             </div>

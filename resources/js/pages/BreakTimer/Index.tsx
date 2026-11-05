@@ -1,38 +1,70 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Head, usePage, router } from '@inertiajs/react';
-import { motion, AnimatePresence } from 'framer-motion';
-import AppLayout from '@/layouts/app-layout';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { usePageMeta, useFlashMessage, usePageLoading } from '@/hooks';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { Can } from '@/components/authorization';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
-    start as startRoute,
-    pause as pauseRoute,
-    resume as resumeRoute,
-    end as endRoute,
-} from '@/routes/break-timer';
-import { Play, Pause, Square, Coffee, UtensilsCrossed, Merge, Layers, ChevronDown, ChevronUp, Palette, Maximize, Minimize, Volume2, Info, Eye, EyeOff } from 'lucide-react';
-import { ThemeDecor } from './ThemeDecor';
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogDescription,
-} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { useTimerTheme, useIsDark, btnStyle, getRingColor, getStatusColor, getTimerColor, getPageBackground, getGlassStyle } from './themes';
-import { useAlarmSound, ALARM_OPTIONS } from './useAlarmSound';
+import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
+import AppLayout from '@/layouts/app-layout';
+import {
+    end as endRoute,
+    pause as pauseRoute,
+    resume as resumeRoute,
+    start as startRoute,
+} from '@/routes/break-timer';
+import { Head, router, usePage } from '@inertiajs/react';
+import { AnimatePresence, motion } from 'framer-motion';
+import {
+    ChevronDown,
+    ChevronUp,
+    Coffee,
+    Eye,
+    EyeOff,
+    Info,
+    Layers,
+    Maximize,
+    Merge,
+    Minimize,
+    Palette,
+    Pause,
+    Play,
+    Square,
+    UtensilsCrossed,
+    Volume2,
+} from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ThemeDecor } from './ThemeDecor';
+import {
+    btnStyle,
+    getGlassStyle,
+    getPageBackground,
+    getRingColor,
+    getStatusColor,
+    getTimerColor,
+    useIsDark,
+    useTimerTheme,
+} from './themes';
+import { ALARM_OPTIONS, useAlarmSound } from './useAlarmSound';
 
 interface BreakPolicy {
     id: number;
@@ -104,27 +136,43 @@ const AUTO_HIDE_STORAGE_KEY = 'break-timer-auto-hide';
 const STATION_STORAGE_KEY = 'break-timer-station';
 
 export default function BreakTimerIndex() {
-    const { policy, activeSession, todaySessions, breaksUsed, lunchUsed, auth } =
-        usePage<PageProps>().props;
+    const {
+        policy,
+        activeSession,
+        todaySessions,
+        breaksUsed,
+        lunchUsed,
+        auth,
+    } = usePage<PageProps>().props;
 
     const stationRequired = ['Agent', 'Team Lead'].includes(auth.user.role);
 
     const { title, breadcrumbs } = usePageMeta({
         title: 'Break Timer',
-        breadcrumbs: [{ title: 'Dashboard', href: '/dashboard' }, { title: 'Break Timer' }],
+        breadcrumbs: [
+            { title: 'Dashboard', href: '/dashboard' },
+            { title: 'Break Timer' },
+        ],
     });
     useFlashMessage();
     const isLoading = usePageLoading();
 
     const { theme, themeId, setTheme, themes } = useTimerTheme();
     const isDark = useIsDark();
-    const { alarmId, setAlarmId, preview, checkOverage, stopAlarm } = useAlarmSound();
+    const { alarmId, setAlarmId, preview, checkOverage, stopAlarm } =
+        useAlarmSound();
 
     const [remainingSeconds, setRemainingSeconds] = useState<number>(0);
     const [isPauseDialogOpen, setIsPauseDialogOpen] = useState(false);
     const [isStartDialogOpen, setIsStartDialogOpen] = useState(false);
     const [isEndDialogOpen, setIsEndDialogOpen] = useState(false);
-    const [pendingStartType, setPendingStartType] = useState<'break' | 'lunch' | { combined: number } | { combinedBreak: number } | null>(null);
+    const [pendingStartType, setPendingStartType] = useState<
+        | 'break'
+        | 'lunch'
+        | { combined: number }
+        | { combinedBreak: number }
+        | null
+    >(null);
     const [pauseReason, setPauseReason] = useState('');
     const [station, setStationState] = useState<string>(() => {
         try {
@@ -158,17 +206,21 @@ export default function BreakTimerIndex() {
             return true;
         }
     });
-    const setAutoHide = useCallback((updater: boolean | ((prev: boolean) => boolean)) => {
-        setAutoHideState((prev) => {
-            const next = typeof updater === 'function' ? updater(prev) : updater;
-            try {
-                localStorage.setItem(AUTO_HIDE_STORAGE_KEY, String(next));
-            } catch {
-                // localStorage unavailable
-            }
-            return next;
-        });
-    }, []);
+    const setAutoHide = useCallback(
+        (updater: boolean | ((prev: boolean) => boolean)) => {
+            setAutoHideState((prev) => {
+                const next =
+                    typeof updater === 'function' ? updater(prev) : updater;
+                try {
+                    localStorage.setItem(AUTO_HIDE_STORAGE_KEY, String(next));
+                } catch {
+                    // localStorage unavailable
+                }
+                return next;
+            });
+        },
+        [],
+    );
     const containerRef = useRef<HTMLDivElement>(null);
 
     // Detect actual touch/mobile device (not just narrow viewport).
@@ -182,7 +234,8 @@ export default function BreakTimerIndex() {
 
     useEffect(() => {
         const mq = window.matchMedia('(pointer: coarse) and (hover: none)');
-        const handler = (e: MediaQueryListEvent) => setIsMobileDevice(e.matches);
+        const handler = (e: MediaQueryListEvent) =>
+            setIsMobileDevice(e.matches);
         mq.addEventListener('change', handler);
         return () => mq.removeEventListener('change', handler);
     }, []);
@@ -190,25 +243,38 @@ export default function BreakTimerIndex() {
     // Snapshot: when props arrive, record the server remaining_seconds and the client timestamp.
     // This avoids server-vs-client clock skew by only using Date.now() deltas.
     const propsReceivedAtRef = useRef<number>(Date.now());
-    const serverRemainingRef = useRef<number>(activeSession?.remaining_seconds ?? 0);
+    const serverRemainingRef = useRef<number>(
+        activeSession?.remaining_seconds ?? 0,
+    );
 
     useEffect(() => {
         propsReceivedAtRef.current = Date.now();
         serverRemainingRef.current = activeSession?.remaining_seconds ?? 0;
-    }, [activeSession?.id, activeSession?.remaining_seconds, activeSession?.status]);
+    }, [
+        activeSession?.id,
+        activeSession?.remaining_seconds,
+        activeSession?.status,
+    ]);
 
     const toggleFullscreen = useCallback(() => {
         if (!document.fullscreenElement) {
-            document.documentElement.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => { });
+            document.documentElement
+                .requestFullscreen()
+                .then(() => setIsFullscreen(true))
+                .catch(() => {});
         } else {
-            document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => { });
+            document
+                .exitFullscreen()
+                .then(() => setIsFullscreen(false))
+                .catch(() => {});
         }
     }, []);
 
     useEffect(() => {
         const onFsChange = () => setIsFullscreen(!!document.fullscreenElement);
         document.addEventListener('fullscreenchange', onFsChange);
-        return () => document.removeEventListener('fullscreenchange', onFsChange);
+        return () =>
+            document.removeEventListener('fullscreenchange', onFsChange);
     }, []);
 
     const maxBreaks = policy?.max_breaks ?? 2;
@@ -223,7 +289,9 @@ export default function BreakTimerIndex() {
             return activeSession.remaining_seconds ?? 0;
         }
 
-        const clientElapsed = Math.floor((Date.now() - propsReceivedAtRef.current) / 1000);
+        const clientElapsed = Math.floor(
+            (Date.now() - propsReceivedAtRef.current) / 1000,
+        );
         return serverRemainingRef.current - clientElapsed;
     }, [activeSession]);
 
@@ -240,7 +308,11 @@ export default function BreakTimerIndex() {
                 setRemainingSeconds(r);
                 checkOverage(r, true);
             }, 1000);
-        } else if (activeSession && activeSession.status === 'active' && dialogOpen) {
+        } else if (
+            activeSession &&
+            activeSession.status === 'active' &&
+            dialogOpen
+        ) {
             // Timer frozen while confirmation dialog is open
         } else if (activeSession && activeSession.status === 'paused') {
             setRemainingSeconds(activeSession.remaining_seconds ?? 0);
@@ -263,13 +335,19 @@ export default function BreakTimerIndex() {
             if (isSyncingRef.current) return;
             isSyncingRef.current = true;
             router.reload({
-                only: ['activeSession', 'todaySessions', 'breaksUsed', 'lunchUsed'],
-                onFinish: () => { isSyncingRef.current = false; },
+                only: [
+                    'activeSession',
+                    'todaySessions',
+                    'breaksUsed',
+                    'lunchUsed',
+                ],
+                onFinish: () => {
+                    isSyncingRef.current = false;
+                },
             });
         }, 60000);
         return () => clearInterval(syncInterval);
     }, [activeSession?.id, activeSession?.status]);
-
 
     function handleStartBreak() {
         setIsSubmitting(true);
@@ -305,7 +383,11 @@ export default function BreakTimerIndex() {
         setPendingStartType(null);
         router.post(
             startRoute().url,
-            { type: 'combined', combined_break_count: breakCount, station: station.trim() || null },
+            {
+                type: 'combined',
+                combined_break_count: breakCount,
+                station: station.trim() || null,
+            },
             {
                 preserveScroll: true,
                 onFinish: () => setIsSubmitting(false),
@@ -319,7 +401,11 @@ export default function BreakTimerIndex() {
         setPendingStartType(null);
         router.post(
             startRoute().url,
-            { type: 'combined_break', combined_break_count: breakCount, station: station.trim() || null },
+            {
+                type: 'combined_break',
+                combined_break_count: breakCount,
+                station: station.trim() || null,
+            },
             {
                 preserveScroll: true,
                 onFinish: () => setIsSubmitting(false),
@@ -347,19 +433,27 @@ export default function BreakTimerIndex() {
     function handleResume() {
         if (!activeSession) return;
         setIsSubmitting(true);
-        router.post(resumeRoute(activeSession.id).url, {}, {
-            preserveScroll: true,
-            onFinish: () => setIsSubmitting(false),
-        });
+        router.post(
+            resumeRoute(activeSession.id).url,
+            {},
+            {
+                preserveScroll: true,
+                onFinish: () => setIsSubmitting(false),
+            },
+        );
     }
 
     function handleEnd() {
         if (!activeSession) return;
         setIsSubmitting(true);
-        router.post(endRoute(activeSession.id).url, {}, {
-            preserveScroll: true,
-            onFinish: () => setIsSubmitting(false),
-        });
+        router.post(
+            endRoute(activeSession.id).url,
+            {},
+            {
+                preserveScroll: true,
+                onFinish: () => setIsSubmitting(false),
+            },
+        );
     }
 
     function handleEndClick() {
@@ -405,15 +499,35 @@ export default function BreakTimerIndex() {
     const circumference = 2 * Math.PI * radius;
     const strokeDashoffset = circumference * (1 - progress);
 
-    const overageSeconds = hasSession && remainingSeconds < 0 ? Math.abs(remainingSeconds) : 0;
+    const overageSeconds =
+        hasSession && remainingSeconds < 0 ? Math.abs(remainingSeconds) : 0;
 
     // Overage intensity level: escalates the longer they're overbreak
-    const overageLevel = isOverage ? (overageSeconds >= 60 ? 2 : overageSeconds >= 30 ? 1 : 0) : -1;
+    const overageLevel = isOverage
+        ? overageSeconds >= 60
+            ? 2
+            : overageSeconds >= 30
+              ? 1
+              : 0
+        : -1;
 
     // Theme-derived ring + text colors
-    const currentRingColor = getRingColor(theme, hasSession, isOverage, overageSeconds, isPaused);
+    const currentRingColor = getRingColor(
+        theme,
+        hasSession,
+        isOverage,
+        overageSeconds,
+        isPaused,
+    );
     const currentTrackColor = isDark ? theme.ringTrackDark : theme.ringTrack;
-    const statusColor = getStatusColor(theme, isDark, hasSession, isOverage, overageSeconds, isPaused);
+    const statusColor = getStatusColor(
+        theme,
+        isDark,
+        hasSession,
+        isOverage,
+        overageSeconds,
+        isPaused,
+    );
     const timerColor = getTimerColor(theme, isDark, isOverage, overageSeconds);
 
     const glowFilter = useMemo(() => {
@@ -430,17 +544,19 @@ export default function BreakTimerIndex() {
     const statusText = !hasSession
         ? 'Ready'
         : isPaused
-            ? 'Paused'
-            : isOverage && overageSeconds >= 60
-                ? 'Overage!'
-                : isOverage
-                    ? 'Over Time'
-                    : formatBreakType(activeSession.type);
+          ? 'Paused'
+          : isOverage && overageSeconds >= 60
+            ? 'Overage!'
+            : isOverage
+              ? 'Over Time'
+              : formatBreakType(activeSession.type);
 
     // Scale down font when time includes hours (HH:MM:SS is too wide for the ring)
     const displayedSeconds = hasSession ? remainingSeconds : 0;
     const hasHours = Math.abs(displayedSeconds) >= 3600;
-    const timerFontClass = hasHours ? 'text-[2.625rem] md:text-[6rem]' : 'text-[4.2rem] md:text-[9rem]';
+    const timerFontClass = hasHours
+        ? 'text-[2.625rem] md:text-[6rem]'
+        : 'text-[4.2rem] md:text-[9rem]';
 
     // ─── Tick Pulse: bump a key every second so framer-motion re-animates ───
     const [tickKey, setTickKey] = useState(0);
@@ -452,13 +568,21 @@ export default function BreakTimerIndex() {
 
     // ─── Track previous status for AnimatePresence transitions ───
     const prevStatusRef = useRef(statusText);
-    useEffect(() => { prevStatusRef.current = statusText; }, [statusText]);
+    useEffect(() => {
+        prevStatusRef.current = statusText;
+    }, [statusText]);
 
     // ─── Page background from theme ───
-    const pageBg = useMemo(() => getPageBackground(theme, isDark), [theme, isDark]);
+    const pageBg = useMemo(
+        () => getPageBackground(theme, isDark),
+        [theme, isDark],
+    );
     // Always-dark themes force light text even in system light mode
     const forceDarkText = !isDark && theme.alwaysDark;
-    const glassStyle = useMemo(() => getGlassStyle(theme, isDark || theme.alwaysDark), [theme, isDark]);
+    const glassStyle = useMemo(
+        () => getGlassStyle(theme, isDark || theme.alwaysDark),
+        [theme, isDark],
+    );
     // Immersive reveal: when the cursor is not over the timer column, fade all
     // chrome (card, ring, buttons, sessions) to 0 so only the countdown shows —
     // revealing the themed background behind it. Only on themed, non-touch views.
@@ -478,53 +602,111 @@ export default function BreakTimerIndex() {
             {/* ─── Themed Background ─── */}
             <div
                 ref={containerRef}
-                className={`p-2 md:p-4 ${isFullscreen ? 'fixed inset-0 z-50 overflow-y-auto' : 'relative -mx-4 -mb-4 mt-0 min-h-[calc(100svh-4rem)] overflow-x-clip md:min-h-[calc(100vh-4rem)]'} ${forceDarkText ? 'text-white' : ''}`}
+                className={`p-2 md:p-4 ${isFullscreen ? 'fixed inset-0 z-50 overflow-y-auto' : 'relative -mx-4 mt-0 -mb-4 min-h-[calc(100svh-4rem)] overflow-x-clip md:min-h-[calc(100vh-4rem)]'} ${forceDarkText ? 'text-white' : ''}`}
                 style={pageBg}
             >
                 {/* ─── Overage red vignette overlay ─── */}
                 {isOverage && overageLevel >= 1 && (
                     <motion.div
                         className="pointer-events-none absolute inset-0 z-10"
-                        animate={{ opacity: [0.15, overageLevel >= 2 ? 0.45 : 0.3, 0.15] }}
-                        transition={{ duration: overageLevel >= 2 ? 0.6 : 1.2, repeat: Infinity, ease: 'easeInOut' }}
-                        style={{ boxShadow: `inset 0 0 ${overageLevel >= 2 ? '120' : '80'}px ${overageLevel >= 2 ? '40' : '20'}px rgba(239,68,68,0.6)` }}
+                        animate={{
+                            opacity: [
+                                0.15,
+                                overageLevel >= 2 ? 0.45 : 0.3,
+                                0.15,
+                            ],
+                        }}
+                        transition={{
+                            duration: overageLevel >= 2 ? 0.6 : 1.2,
+                            repeat: Infinity,
+                            ease: 'easeInOut',
+                        }}
+                        style={{
+                            boxShadow: `inset 0 0 ${overageLevel >= 2 ? '120' : '80'}px ${overageLevel >= 2 ? '40' : '20'}px rgba(239,68,68,0.6)`,
+                        }}
                     />
                 )}
-                <ThemeDecor theme={theme} isDark={isDark || theme.alwaysDark} timerOver={isOverage} overageSeconds={overageSeconds} />
+                <ThemeDecor
+                    theme={theme}
+                    isDark={isDark || theme.alwaysDark}
+                    timerOver={isOverage}
+                    overageSeconds={overageSeconds}
+                />
                 <div
                     className={`relative mx-auto flex max-w-2xl flex-col items-center gap-4 px-4 py-4 ${isMobileDevice ? 'min-h-[calc(100svh-7rem)] justify-center' : 'justify-start'}`}
                     onMouseEnter={() => setCardHovered(true)}
                     onMouseLeave={() => setCardHovered(false)}
                 >
-
                     {/* ─── Theme Selector, Alarm & Fullscreen ─── */}
-                    <div className={isMobileDevice ? 'hidden' : 'flex w-full items-center justify-end gap-2'} style={chromeStyle}>
+                    <div
+                        className={
+                            isMobileDevice
+                                ? 'hidden'
+                                : 'flex w-full items-center justify-end gap-2'
+                        }
+                        style={chromeStyle}
+                    >
                         {revealMode && (
                             <button
                                 onClick={() => setAutoHide((v) => !v)}
                                 className="flex h-8 w-8 items-center justify-center rounded-full border border-white/20 backdrop-blur-md transition-opacity hover:opacity-80 dark:border-white/10"
                                 style={glassStyle}
-                                title={autoHide ? 'Auto-hide card: On (hover to reveal)' : 'Auto-hide card: Off'}
+                                title={
+                                    autoHide
+                                        ? 'Auto-hide card: On (hover to reveal)'
+                                        : 'Auto-hide card: Off'
+                                }
                             >
-                                {autoHide ? <EyeOff className="h-3.5 w-3.5 opacity-70" /> : <Eye className="h-3.5 w-3.5 opacity-70" />}
+                                {autoHide ? (
+                                    <EyeOff className="h-3.5 w-3.5 opacity-70" />
+                                ) : (
+                                    <Eye className="h-3.5 w-3.5 opacity-70" />
+                                )}
                             </button>
                         )}
                         <button
                             onClick={toggleFullscreen}
                             className="flex h-8 w-8 items-center justify-center rounded-full border border-white/20 backdrop-blur-md transition-opacity hover:opacity-80 dark:border-white/10"
                             style={glassStyle}
-                            title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+                            title={
+                                isFullscreen ? 'Exit fullscreen' : 'Fullscreen'
+                            }
                         >
-                            {isFullscreen ? <Minimize className="h-3.5 w-3.5 opacity-70" /> : <Maximize className="h-3.5 w-3.5 opacity-70" />}
+                            {isFullscreen ? (
+                                <Minimize className="h-3.5 w-3.5 opacity-70" />
+                            ) : (
+                                <Maximize className="h-3.5 w-3.5 opacity-70" />
+                            )}
                         </button>
-                        <div className="flex items-center gap-1.5 rounded-full border border-white/20 px-3 py-1 backdrop-blur-md dark:border-white/10" style={glassStyle}>
+                        <div
+                            className="flex items-center gap-1.5 rounded-full border border-white/20 px-3 py-1 backdrop-blur-md dark:border-white/10"
+                            style={glassStyle}
+                        >
                             <Volume2 className="h-3.5 w-3.5 opacity-60" />
-                            <Select value={alarmId} onValueChange={(v) => { setAlarmId(v); if (v !== 'none') preview(v); }}>
+                            <Select
+                                value={alarmId}
+                                onValueChange={(v) => {
+                                    setAlarmId(v);
+                                    if (v !== 'none') preview(v);
+                                }}
+                            >
                                 <SelectTrigger className="h-7 w-36 border-none bg-transparent px-1 text-xs shadow-none">
                                     <SelectValue>
                                         <span className="flex items-center gap-1.5">
-                                            <span>{ALARM_OPTIONS.find(a => a.id === alarmId)?.icon}</span>
-                                            <span className="truncate">{ALARM_OPTIONS.find(a => a.id === alarmId)?.name}</span>
+                                            <span>
+                                                {
+                                                    ALARM_OPTIONS.find(
+                                                        (a) => a.id === alarmId,
+                                                    )?.icon
+                                                }
+                                            </span>
+                                            <span className="truncate">
+                                                {
+                                                    ALARM_OPTIONS.find(
+                                                        (a) => a.id === alarmId,
+                                                    )?.name
+                                                }
+                                            </span>
                                         </span>
                                     </SelectValue>
                                 </SelectTrigger>
@@ -540,14 +722,29 @@ export default function BreakTimerIndex() {
                                 </SelectContent>
                             </Select>
                         </div>
-                        <div className="flex items-center gap-1.5 rounded-full border border-white/20 px-3 py-1 backdrop-blur-md dark:border-white/10" style={glassStyle}>
+                        <div
+                            className="flex items-center gap-1.5 rounded-full border border-white/20 px-3 py-1 backdrop-blur-md dark:border-white/10"
+                            style={glassStyle}
+                        >
                             <Palette className="h-3.5 w-3.5 opacity-60" />
                             <Select value={themeId} onValueChange={setTheme}>
                                 <SelectTrigger className="h-7 w-36 border-none bg-transparent px-1 text-xs shadow-none">
                                     <SelectValue>
                                         <span className="flex items-center gap-1.5">
-                                            <span>{themes.find(t => t.id === themeId)?.icon}</span>
-                                            <span className="truncate">{themes.find(t => t.id === themeId)?.name}</span>
+                                            <span>
+                                                {
+                                                    themes.find(
+                                                        (t) => t.id === themeId,
+                                                    )?.icon
+                                                }
+                                            </span>
+                                            <span className="truncate">
+                                                {
+                                                    themes.find(
+                                                        (t) => t.id === themeId,
+                                                    )?.name
+                                                }
+                                            </span>
                                         </span>
                                     </SelectValue>
                                 </SelectTrigger>
@@ -568,33 +765,72 @@ export default function BreakTimerIndex() {
                     {/* ─── Glass Card ─── */}
                     <div
                         className={`flex w-full flex-col items-center border ${chromeHidden ? 'border-transparent shadow-none' : 'border-white/25 shadow-2xl backdrop-blur-xl dark:border-white/10'} ${isMobileDevice ? 'max-w-sm gap-4 rounded-[1.75rem] p-5' : 'gap-6 rounded-3xl p-10'}`}
-                        style={{ ...(chromeHidden ? { background: 'transparent' } : glassStyle), transition: 'background 0.6s ease, box-shadow 0.6s ease' }}
+                        style={{
+                            ...(chromeHidden
+                                ? { background: 'transparent' }
+                                : glassStyle),
+                            transition:
+                                'background 0.6s ease, box-shadow 0.6s ease',
+                        }}
                     >
-
                         {/* ─── Circular Timer ─── */}
                         <motion.div
                             className="relative flex items-center justify-center"
                             animate={
                                 isOverage && overageLevel >= 2
-                                    ? { x: [0, -8, 8, -6, 6, -4, 4, -2, 2, 0], y: [0, 2, -2, 3, -3, 1, -1, 0], scale: [1, 1.03, 0.97, 1.04, 0.96, 1.02, 0.98, 1], rotate: [0, -2, 2, -1.5, 1.5, -0.5, 0.5, 0] }
+                                    ? {
+                                          x: [0, -8, 8, -6, 6, -4, 4, -2, 2, 0],
+                                          y: [0, 2, -2, 3, -3, 1, -1, 0],
+                                          scale: [
+                                              1, 1.03, 0.97, 1.04, 0.96, 1.02,
+                                              0.98, 1,
+                                          ],
+                                          rotate: [
+                                              0, -2, 2, -1.5, 1.5, -0.5, 0.5, 0,
+                                          ],
+                                      }
                                     : isOverage && overageLevel >= 1
-                                        ? { x: [0, -5, 5, -4, 4, -2, 2, 0], scale: [1, 1.02, 0.98, 1.01, 0.99, 1], rotate: [0, -1, 1, -0.5, 0.5, 0] }
-                                        : isOverage
-                                            ? { x: [0, -4, 4, -3, 3, -1, 1, 0] }
-                                            : isPaused
-                                                ? { scale: [1, 1.02, 1] }
-                                                : {}
+                                      ? {
+                                            x: [0, -5, 5, -4, 4, -2, 2, 0],
+                                            scale: [
+                                                1, 1.02, 0.98, 1.01, 0.99, 1,
+                                            ],
+                                            rotate: [0, -1, 1, -0.5, 0.5, 0],
+                                        }
+                                      : isOverage
+                                        ? { x: [0, -4, 4, -3, 3, -1, 1, 0] }
+                                        : isPaused
+                                          ? { scale: [1, 1.02, 1] }
+                                          : {}
                             }
                             transition={
                                 isOverage && overageLevel >= 2
-                                    ? { duration: 0.4, repeat: Infinity, repeatDelay: 0.2, ease: 'easeInOut' }
+                                    ? {
+                                          duration: 0.4,
+                                          repeat: Infinity,
+                                          repeatDelay: 0.2,
+                                          ease: 'easeInOut',
+                                      }
                                     : isOverage && overageLevel >= 1
-                                        ? { duration: 0.5, repeat: Infinity, repeatDelay: 0.8, ease: 'easeInOut' }
-                                        : isOverage
-                                            ? { duration: 0.5, repeat: Infinity, repeatDelay: 2 }
-                                            : isPaused
-                                                ? { duration: 2.5, repeat: Infinity, ease: 'easeInOut' }
-                                                : {}
+                                      ? {
+                                            duration: 0.5,
+                                            repeat: Infinity,
+                                            repeatDelay: 0.8,
+                                            ease: 'easeInOut',
+                                        }
+                                      : isOverage
+                                        ? {
+                                              duration: 0.5,
+                                              repeat: Infinity,
+                                              repeatDelay: 2,
+                                          }
+                                        : isPaused
+                                          ? {
+                                                duration: 2.5,
+                                                repeat: Infinity,
+                                                ease: 'easeInOut',
+                                            }
+                                          : {}
                             }
                         >
                             {/* Aurora animated gradient keyframe */}
@@ -615,8 +851,13 @@ export default function BreakTimerIndex() {
                                 style={{
                                     filter: glowFilter,
                                     opacity: chromeHidden ? 0 : 1,
-                                    transition: 'filter 0.5s ease, opacity 0.6s ease',
-                                    ...(isOverage ? { animation: `overage-glow-pulse ${overageLevel >= 2 ? '0.6' : overageLevel >= 1 ? '1' : '1.5'}s ease-in-out infinite` } : {}),
+                                    transition:
+                                        'filter 0.5s ease, opacity 0.6s ease',
+                                    ...(isOverage
+                                        ? {
+                                              animation: `overage-glow-pulse ${overageLevel >= 2 ? '0.6' : overageLevel >= 1 ? '1' : '1.5'}s ease-in-out infinite`,
+                                          }
+                                        : {}),
                                 }}
                                 role="img"
                                 aria-label={`Break timer: ${hasSession ? formatTime(remainingSeconds) : 'Ready'}`}
@@ -628,7 +869,10 @@ export default function BreakTimerIndex() {
                                     r={radius}
                                     fill="none"
                                     strokeWidth={strokeWidth}
-                                    style={{ stroke: currentTrackColor, transition: 'stroke 0.4s ease' }}
+                                    style={{
+                                        stroke: currentTrackColor,
+                                        transition: 'stroke 0.4s ease',
+                                    }}
                                 />
                                 {/* Progress arc */}
                                 <circle
@@ -636,19 +880,31 @@ export default function BreakTimerIndex() {
                                     cy={ringSize / 2}
                                     r={radius}
                                     fill="none"
-                                    strokeWidth={isOverage && overageLevel >= 1 ? strokeWidth * 1.5 : strokeWidth}
+                                    strokeWidth={
+                                        isOverage && overageLevel >= 1
+                                            ? strokeWidth * 1.5
+                                            : strokeWidth
+                                    }
                                     strokeLinecap="round"
                                     strokeDasharray={circumference}
                                     strokeDashoffset={strokeDashoffset}
                                     className="transition-[stroke-dashoffset] duration-1000 ease-linear"
                                     style={{
                                         stroke: currentRingColor,
-                                        transition: 'stroke 0.4s ease, stroke-dashoffset 1s linear, stroke-width 0.4s ease',
+                                        transition:
+                                            'stroke 0.4s ease, stroke-dashoffset 1s linear, stroke-width 0.4s ease',
                                         ...(isOverage
-                                            ? { animation: `overage-ring-pulse ${overageLevel >= 2 ? '0.5' : overageLevel >= 1 ? '0.8' : '1.2'}s ease-in-out infinite` }
-                                            : theme.ringAnimated && hasSession && !isPaused
-                                                ? { animation: 'aurora-hue 6s linear infinite' }
-                                                : {}),
+                                            ? {
+                                                  animation: `overage-ring-pulse ${overageLevel >= 2 ? '0.5' : overageLevel >= 1 ? '0.8' : '1.2'}s ease-in-out infinite`,
+                                              }
+                                            : theme.ringAnimated &&
+                                                hasSession &&
+                                                !isPaused
+                                              ? {
+                                                    animation:
+                                                        'aurora-hue 6s linear infinite',
+                                                }
+                                              : {}),
                                     }}
                                 />
                             </svg>
@@ -656,26 +912,63 @@ export default function BreakTimerIndex() {
                             {/* Center content */}
                             <div className="absolute inset-0 flex flex-col items-center justify-center">
                                 {/* ─── Status label with AnimatePresence transition ─── */}
-                                <div className={isMobileDevice ? 'hidden' : 'relative h-9 overflow-hidden'} style={chromeStyle}>
+                                <div
+                                    className={
+                                        isMobileDevice
+                                            ? 'hidden'
+                                            : 'relative h-9 overflow-hidden'
+                                    }
+                                    style={chromeStyle}
+                                >
                                     <AnimatePresence mode="wait">
                                         <motion.span
                                             key={statusText}
-                                            initial={{ y: 12, opacity: 0, filter: 'blur(4px)' }}
-                                            animate={{ y: 0, opacity: 1, filter: 'blur(0px)' }}
-                                            exit={{ y: -12, opacity: 0, filter: 'blur(4px)' }}
-                                            transition={{ duration: 0.3, ease: 'easeOut' }}
-                                            className="block text-xs font-semibold uppercase tracking-widest md:text-xl"
-                                            style={{ color: statusColor, transition: 'color 0.4s ease' }}
+                                            initial={{
+                                                y: 12,
+                                                opacity: 0,
+                                                filter: 'blur(4px)',
+                                            }}
+                                            animate={{
+                                                y: 0,
+                                                opacity: 1,
+                                                filter: 'blur(0px)',
+                                            }}
+                                            exit={{
+                                                y: -12,
+                                                opacity: 0,
+                                                filter: 'blur(4px)',
+                                            }}
+                                            transition={{
+                                                duration: 0.3,
+                                                ease: 'easeOut',
+                                            }}
+                                            className="block text-xs font-semibold tracking-widest uppercase md:text-xl"
+                                            style={{
+                                                color: statusColor,
+                                                transition: 'color 0.4s ease',
+                                            }}
                                         >
                                             {isOverage && overageLevel >= 1 ? (
                                                 <motion.span
-                                                    animate={{ opacity: [1, 0.4, 1], scale: [1, 1.1, 1] }}
-                                                    transition={{ duration: overageLevel >= 2 ? 0.5 : 0.8, repeat: Infinity, ease: 'easeInOut' }}
+                                                    animate={{
+                                                        opacity: [1, 0.4, 1],
+                                                        scale: [1, 1.1, 1],
+                                                    }}
+                                                    transition={{
+                                                        duration:
+                                                            overageLevel >= 2
+                                                                ? 0.5
+                                                                : 0.8,
+                                                        repeat: Infinity,
+                                                        ease: 'easeInOut',
+                                                    }}
                                                     className="inline-block"
                                                 >
                                                     {statusText}
                                                 </motion.span>
-                                            ) : statusText}
+                                            ) : (
+                                                statusText
+                                            )}
                                         </motion.span>
                                     </AnimatePresence>
                                 </div>
@@ -685,55 +978,110 @@ export default function BreakTimerIndex() {
                                     key={isActive ? tickKey : 'static'}
                                     initial={isActive ? { scale: 1.04 } : false}
                                     animate={{ scale: 1 }}
-                                    transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
-                                    className={`mt-1 font-mono font-medium tabular-nums leading-none tracking-tight ${timerFontClass}`}
+                                    transition={{
+                                        duration: 0.35,
+                                        ease: [0.25, 0.46, 0.45, 0.94],
+                                    }}
+                                    className={`mt-1 font-mono leading-none font-medium tracking-tight tabular-nums ${timerFontClass}`}
                                     style={{
                                         color: timerColor,
-                                        textShadow: isOverage ? `0 0 15px ${timerColor}` : theme.alwaysDark ? `0 0 8px ${timerColor}` : 'none',
-                                        transition: 'color 0.4s ease, text-shadow 0.4s ease'
+                                        textShadow: isOverage
+                                            ? `0 0 15px ${timerColor}`
+                                            : theme.alwaysDark
+                                              ? `0 0 8px ${timerColor}`
+                                              : 'none',
+                                        transition:
+                                            'color 0.4s ease, text-shadow 0.4s ease',
                                     }}
                                 >
                                     {isOverage && overageLevel >= 1 ? (
                                         <motion.span
                                             animate={
                                                 overageLevel >= 2
-                                                    ? { scale: [1, 1.08, 1], opacity: [1, 0.6, 1] }
+                                                    ? {
+                                                          scale: [1, 1.08, 1],
+                                                          opacity: [1, 0.6, 1],
+                                                      }
                                                     : { scale: [1, 1.05, 1] }
                                             }
-                                            transition={{ duration: overageLevel >= 2 ? 0.4 : 0.7, repeat: Infinity, ease: 'easeInOut' }}
+                                            transition={{
+                                                duration:
+                                                    overageLevel >= 2
+                                                        ? 0.4
+                                                        : 0.7,
+                                                repeat: Infinity,
+                                                ease: 'easeInOut',
+                                            }}
                                             className="inline-block"
                                         >
-                                            {hasSession ? formatTime(remainingSeconds) : '00:00'}
+                                            {hasSession
+                                                ? formatTime(remainingSeconds)
+                                                : '00:00'}
                                         </motion.span>
+                                    ) : hasSession ? (
+                                        formatTime(remainingSeconds)
                                     ) : (
-                                        hasSession ? formatTime(remainingSeconds) : '00:00'
+                                        '00:00'
                                     )}
                                 </motion.span>
                                 {hasSession && (
-                                    <span className={isMobileDevice ? 'hidden' : 'text-muted-foreground mt-3 block text-lg'} style={chromeStyle}>
+                                    <span
+                                        className={
+                                            isMobileDevice
+                                                ? 'hidden'
+                                                : 'mt-3 block text-lg text-muted-foreground'
+                                        }
+                                        style={chromeStyle}
+                                    >
                                         of {Math.floor(totalDuration / 60)} min
                                     </span>
                                 )}
-                                {activeSession?.status === 'paused' && activeSession?.last_pause_reason && (
-                                    <span className={isMobileDevice ? 'hidden' : 'text-muted-foreground mt-1 block max-w-[280px] text-center text-sm italic leading-snug'} style={chromeStyle}>
-                                        Paused: {activeSession.last_pause_reason}
-                                    </span>
-                                )}
+                                {activeSession?.status === 'paused' &&
+                                    activeSession?.last_pause_reason && (
+                                        <span
+                                            className={
+                                                isMobileDevice
+                                                    ? 'hidden'
+                                                    : 'mt-1 block max-w-[280px] text-center text-sm leading-snug text-muted-foreground italic'
+                                            }
+                                            style={chromeStyle}
+                                        >
+                                            Paused:{' '}
+                                            {activeSession.last_pause_reason}
+                                        </span>
+                                    )}
                             </div>
                         </motion.div>
 
                         {/* ─── Theme Quote ─── */}
                         {theme.quote && (
                             <p
-                                className={isMobileDevice ? 'hidden' : 'max-w-xs text-center text-xs italic leading-relaxed'}
-                                style={{ opacity: chromeHidden ? 0 : 0.5, transition: 'opacity 0.6s ease', pointerEvents: chromeHidden ? 'none' : 'auto' }}
+                                className={
+                                    isMobileDevice
+                                        ? 'hidden'
+                                        : 'max-w-xs text-center text-xs leading-relaxed italic'
+                                }
+                                style={{
+                                    opacity: chromeHidden ? 0 : 0.5,
+                                    transition: 'opacity 0.6s ease',
+                                    pointerEvents: chromeHidden
+                                        ? 'none'
+                                        : 'auto',
+                                }}
                             >
                                 "{theme.quote}"
                             </p>
                         )}
 
                         {/* ─── Action Buttons ─── */}
-                        <div className={isMobileDevice ? 'hidden' : 'flex flex-wrap items-center justify-center gap-3'} style={chromeStyle}>
+                        <div
+                            className={
+                                isMobileDevice
+                                    ? 'hidden'
+                                    : 'flex flex-wrap items-center justify-center gap-3'
+                            }
+                            style={chromeStyle}
+                        >
                             {!hasSession && (
                                 <>
                                     <Can permission="break_timer.use">
@@ -743,7 +1091,12 @@ export default function BreakTimerIndex() {
                                                 setPendingStartType('break');
                                                 setIsStartDialogOpen(true);
                                             }}
-                                            disabled={isSubmitting || remainingBreaks <= 0 || (stationRequired && !station.trim())}
+                                            disabled={
+                                                isSubmitting ||
+                                                remainingBreaks <= 0 ||
+                                                (stationRequired &&
+                                                    !station.trim())
+                                            }
                                             className="h-12 gap-2 rounded-full px-7 text-sm font-semibold text-white shadow-lg transition-[filter] hover:brightness-110"
                                             style={btnStyle(theme.btnBreak)}
                                         >
@@ -758,7 +1111,12 @@ export default function BreakTimerIndex() {
                                                 setPendingStartType('lunch');
                                                 setIsStartDialogOpen(true);
                                             }}
-                                            disabled={isSubmitting || lunchUsed || (stationRequired && !station.trim())}
+                                            disabled={
+                                                isSubmitting ||
+                                                lunchUsed ||
+                                                (stationRequired &&
+                                                    !station.trim())
+                                            }
                                             className="h-12 gap-2 rounded-full px-7 text-sm font-semibold text-white shadow-lg transition-[filter] hover:brightness-110"
                                             style={btnStyle(theme.btnLunch)}
                                         >
@@ -772,9 +1130,15 @@ export default function BreakTimerIndex() {
                                                 <DropdownMenuTrigger asChild>
                                                     <Button
                                                         size="lg"
-                                                        disabled={isSubmitting || (stationRequired && !station.trim())}
+                                                        disabled={
+                                                            isSubmitting ||
+                                                            (stationRequired &&
+                                                                !station.trim())
+                                                        }
                                                         className="h-12 gap-2 rounded-full px-7 text-sm font-semibold text-white shadow-lg transition-[filter] hover:brightness-110"
-                                                        style={btnStyle(theme.btnCombined)}
+                                                        style={btnStyle(
+                                                            theme.btnCombined,
+                                                        )}
                                                     >
                                                         <Merge className="h-4 w-4" />
                                                         Break + Lunch
@@ -782,17 +1146,32 @@ export default function BreakTimerIndex() {
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="center">
-                                                    {Array.from({ length: maxBreaks }, (_, i) => i + 1).map((n) => (
+                                                    {Array.from(
+                                                        { length: maxBreaks },
+                                                        (_, i) => i + 1,
+                                                    ).map((n) => (
                                                         <DropdownMenuItem
                                                             key={n}
                                                             onClick={() => {
-                                                                setPendingStartType({ combined: n });
-                                                                setIsStartDialogOpen(true);
+                                                                setPendingStartType(
+                                                                    {
+                                                                        combined:
+                                                                            n,
+                                                                    },
+                                                                );
+                                                                setIsStartDialogOpen(
+                                                                    true,
+                                                                );
                                                             }}
-                                                            disabled={remainingBreaks < n}
+                                                            disabled={
+                                                                remainingBreaks <
+                                                                n
+                                                            }
                                                         >
                                                             <Coffee className="mr-2 h-4 w-4 text-amber-500" />
-                                                            {n} Break{n > 1 ? 's' : ''} + Lunch
+                                                            {n} Break
+                                                            {n > 1 ? 's' : ''} +
+                                                            Lunch
                                                         </DropdownMenuItem>
                                                     ))}
                                                 </DropdownMenuContent>
@@ -805,9 +1184,15 @@ export default function BreakTimerIndex() {
                                                 <DropdownMenuTrigger asChild>
                                                     <Button
                                                         size="lg"
-                                                        disabled={isSubmitting || (stationRequired && !station.trim())}
+                                                        disabled={
+                                                            isSubmitting ||
+                                                            (stationRequired &&
+                                                                !station.trim())
+                                                        }
                                                         className="h-12 gap-2 rounded-full px-7 text-sm font-semibold text-white shadow-lg transition-[filter] hover:brightness-110"
-                                                        style={btnStyle(theme.btnCombinedBreak)}
+                                                        style={btnStyle(
+                                                            theme.btnCombinedBreak,
+                                                        )}
                                                     >
                                                         <Layers className="h-4 w-4" />
                                                         Combine Breaks
@@ -815,14 +1200,30 @@ export default function BreakTimerIndex() {
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="center">
-                                                    {Array.from({ length: maxBreaks - 1 }, (_, i) => i + 2).map((n) => (
+                                                    {Array.from(
+                                                        {
+                                                            length:
+                                                                maxBreaks - 1,
+                                                        },
+                                                        (_, i) => i + 2,
+                                                    ).map((n) => (
                                                         <DropdownMenuItem
                                                             key={n}
                                                             onClick={() => {
-                                                                setPendingStartType({ combinedBreak: n });
-                                                                setIsStartDialogOpen(true);
+                                                                setPendingStartType(
+                                                                    {
+                                                                        combinedBreak:
+                                                                            n,
+                                                                    },
+                                                                );
+                                                                setIsStartDialogOpen(
+                                                                    true,
+                                                                );
                                                             }}
-                                                            disabled={remainingBreaks < n}
+                                                            disabled={
+                                                                remainingBreaks <
+                                                                n
+                                                            }
                                                         >
                                                             <Coffee className="mr-2 h-4 w-4 text-amber-500" />
                                                             {n} Breaks Combined
@@ -873,17 +1274,24 @@ export default function BreakTimerIndex() {
                                     End
                                 </Button>
                             )}
-
                         </div>
-
-                    </div>{/* end glass card */}
+                    </div>
+                    {/* end glass card */}
 
                     {/* ─── Info Pills ─── */}
-                    <div className={isMobileDevice ? 'hidden' : 'flex flex-wrap justify-center gap-3'} style={chromeStyle}>
+                    <div
+                        className={
+                            isMobileDevice
+                                ? 'hidden'
+                                : 'flex flex-wrap justify-center gap-3'
+                        }
+                        style={chromeStyle}
+                    >
                         {!hasSession && (
                             <div className="w-56">
-                                <Label className="mb-1 block text-[11px] uppercase tracking-wider opacity-60">
-                                    Station {stationRequired ? '' : '(optional)'}
+                                <Label className="mb-1 block text-[11px] tracking-wider uppercase opacity-60">
+                                    Station{' '}
+                                    {stationRequired ? '' : '(optional)'}
                                 </Label>
                                 <Input
                                     value={station}
@@ -897,15 +1305,28 @@ export default function BreakTimerIndex() {
                         )}
 
                         <div className="flex gap-2">
-                            <div className="inline-flex items-center gap-2 rounded-full border border-white/20 px-4 py-2 text-xs font-medium backdrop-blur-md dark:border-white/10" style={glassStyle}>
-                                <Coffee className="text-amber-500 h-3.5 w-3.5" />
+                            <div
+                                className="inline-flex items-center gap-2 rounded-full border border-white/20 px-4 py-2 text-xs font-medium backdrop-blur-md dark:border-white/10"
+                                style={glassStyle}
+                            >
+                                <Coffee className="h-3.5 w-3.5 text-amber-500" />
                                 <span className="opacity-60">Breaks left</span>
-                                <span className="font-bold">{remainingBreaks}/{maxBreaks}</span>
+                                <span className="font-bold">
+                                    {remainingBreaks}/{maxBreaks}
+                                </span>
                             </div>
-                            <div className="inline-flex items-center gap-2 rounded-full border border-white/20 px-4 py-2 text-xs font-medium backdrop-blur-md dark:border-white/10" style={glassStyle}>
+                            <div
+                                className="inline-flex items-center gap-2 rounded-full border border-white/20 px-4 py-2 text-xs font-medium backdrop-blur-md dark:border-white/10"
+                                style={glassStyle}
+                            >
                                 <UtensilsCrossed className="h-3.5 w-3.5 text-rose-500" />
                                 <span className="opacity-60">Lunch</span>
-                                <Badge variant={lunchUsed ? 'secondary' : 'default'} className="h-5 text-[10px]">
+                                <Badge
+                                    variant={
+                                        lunchUsed ? 'secondary' : 'default'
+                                    }
+                                    className="h-5 text-[10px]"
+                                >
                                     {lunchUsed ? 'Used' : 'Available'}
                                 </Badge>
                             </div>
@@ -914,30 +1335,49 @@ export default function BreakTimerIndex() {
 
                     {/* ─── Today's Sessions ─── */}
                     {todaySessions.length > 0 && (
-                        <div className={isMobileDevice ? 'hidden' : 'w-full space-y-3'} style={chromeStyle}>
-                            <h3 className="text-xs font-semibold uppercase tracking-wider opacity-50">
+                        <div
+                            className={
+                                isMobileDevice ? 'hidden' : 'w-full space-y-3'
+                            }
+                            style={chromeStyle}
+                        >
+                            <h3 className="text-xs font-semibold tracking-wider uppercase opacity-50">
                                 Today's Sessions
                             </h3>
-                            <div className="divide-y rounded-2xl border border-white/20 backdrop-blur-xl dark:border-white/10" style={glassStyle}>
+                            <div
+                                className="divide-y rounded-2xl border border-white/20 backdrop-blur-xl dark:border-white/10"
+                                style={glassStyle}
+                            >
                                 {todaySessions.map((session) => (
                                     <div key={session.id}>
                                         <div
                                             className="flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors first:rounded-t-2xl last:rounded-b-2xl hover:bg-white/20 dark:hover:bg-white/5"
-                                            onClick={() => setExpandedSession(expandedSession === session.id ? null : session.id)}
+                                            onClick={() =>
+                                                setExpandedSession(
+                                                    expandedSession ===
+                                                        session.id
+                                                        ? null
+                                                        : session.id,
+                                                )
+                                            }
                                         >
                                             <div
-                                                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${session.type === 'combined'
-                                                    ? 'bg-violet-100 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400'
-                                                    : session.type === 'combined_break'
-                                                        ? 'bg-sky-100 text-sky-600 dark:bg-sky-500/10 dark:text-sky-400'
-                                                        : session.type === 'lunch'
+                                                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+                                                    session.type === 'combined'
+                                                        ? 'bg-violet-100 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400'
+                                                        : session.type ===
+                                                            'combined_break'
+                                                          ? 'bg-sky-100 text-sky-600 dark:bg-sky-500/10 dark:text-sky-400'
+                                                          : session.type ===
+                                                              'lunch'
                                                             ? 'bg-rose-100 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400'
                                                             : 'bg-amber-100 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400'
-                                                    }`}
+                                                }`}
                                             >
                                                 {session.type === 'combined' ? (
                                                     <Merge className="h-4 w-4" />
-                                                ) : session.type === 'combined_break' ? (
+                                                ) : session.type ===
+                                                  'combined_break' ? (
                                                     <Layers className="h-4 w-4" />
                                                 ) : session.type === 'lunch' ? (
                                                     <UtensilsCrossed className="h-4 w-4" />
@@ -946,97 +1386,224 @@ export default function BreakTimerIndex() {
                                                 )}
                                             </div>
                                             <div className="min-w-0 flex-1">
-                                                <p className="text-sm font-medium">{formatBreakType(session.type)}</p>
-                                                <p className="text-muted-foreground text-xs">
-                                                    {new Date(session.started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                <p className="text-sm font-medium">
+                                                    {formatBreakType(
+                                                        session.type,
+                                                    )}
+                                                </p>
+                                                <p className="text-xs text-muted-foreground">
+                                                    {new Date(
+                                                        session.started_at,
+                                                    ).toLocaleTimeString([], {
+                                                        hour: '2-digit',
+                                                        minute: '2-digit',
+                                                    })}
                                                     {session.ended_at &&
                                                         ` → ${new Date(session.ended_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
                                                 </p>
                                             </div>
                                             <div className="flex shrink-0 items-center gap-2">
-                                                {session.reimbursed_seconds > 0 && (
+                                                {session.reimbursed_seconds >
+                                                    0 && (
                                                     <span
                                                         className="rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400"
                                                         title="Minutes reimbursed by admin"
                                                     >
-                                                        +{formatTime(session.reimbursed_seconds)} reimbursed
+                                                        +
+                                                        {formatTime(
+                                                            session.reimbursed_seconds,
+                                                        )}{' '}
+                                                        reimbursed
                                                     </span>
                                                 )}
-                                                {session.overage_seconds > 0 && (
-                                                    <span className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${session.overage_seconds >= 60
-                                                        ? 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400'
-                                                        : session.overage_seconds >= 30
-                                                            ? 'bg-orange-50 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400'
-                                                            : 'bg-yellow-50 text-yellow-600 dark:bg-yellow-500/10 dark:text-yellow-400'
-                                                        }`}>
-                                                        +{formatTime(session.overage_seconds)}
+                                                {session.overage_seconds >
+                                                    0 && (
+                                                    <span
+                                                        className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${
+                                                            session.overage_seconds >=
+                                                            60
+                                                                ? 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400'
+                                                                : session.overage_seconds >=
+                                                                    30
+                                                                  ? 'bg-orange-50 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400'
+                                                                  : 'bg-yellow-50 text-yellow-600 dark:bg-yellow-500/10 dark:text-yellow-400'
+                                                        }`}
+                                                    >
+                                                        +
+                                                        {formatTime(
+                                                            session.overage_seconds,
+                                                        )}
                                                     </span>
                                                 )}
                                                 <Badge
                                                     variant={
-                                                        session.status === 'completed'
+                                                        session.status ===
+                                                        'completed'
                                                             ? 'default'
-                                                            : session.status === 'overage'
-                                                                ? 'destructive'
-                                                                : 'secondary'
+                                                            : session.status ===
+                                                                'overage'
+                                                              ? 'destructive'
+                                                              : 'secondary'
                                                     }
                                                     className="text-[10px]"
                                                 >
                                                     {session.status}
                                                 </Badge>
-                                                {session.break_events.length > 0 && (
-                                                    expandedSession === session.id
-                                                        ? <ChevronUp className="text-muted-foreground h-3.5 w-3.5" />
-                                                        : <ChevronDown className="text-muted-foreground h-3.5 w-3.5" />
-                                                )}
+                                                {session.break_events.length >
+                                                    0 &&
+                                                    (expandedSession ===
+                                                    session.id ? (
+                                                        <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
+                                                    ) : (
+                                                        <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                                                    ))}
                                             </div>
                                         </div>
                                         {/* Restore hint for early-ended sessions */}
-                                        {session.status === 'completed' && (session.remaining_seconds ?? 0) >= 60 && (
-                                            <div className="flex items-start gap-2 border-t border-blue-200/50 bg-blue-50/60 px-4 py-2.5 text-[11px] text-blue-700 last:rounded-b-2xl dark:border-blue-500/20 dark:bg-blue-500/5 dark:text-blue-400">
-                                                <Info className="mt-0.5 h-3 w-3 shrink-0" />
-                                                <span>
-                                                    Ended with <span className="font-semibold">{formatTime(session.remaining_seconds!)}</span> remaining — inform your <strong>Team Lead or Admin</strong> if you need your timer restored.
-                                                </span>
-                                            </div>
-                                        )}
-                                        {/* Break Event Timeline */}
-                                        {expandedSession === session.id && session.break_events.length > 0 && (
-                                            <div className="border-t border-white/15 px-4 py-3 dark:border-white/5">
-                                                <p className="text-muted-foreground mb-2 text-[10px] font-semibold uppercase tracking-wider">Timeline</p>
-                                                <div className="relative ml-2 space-y-2 border-l border-zinc-200 pl-4 dark:border-zinc-700">
-                                                    {session.break_events.map((event) => {
-                                                        const actionStyle: Record<string, { dot: string; label: string; text: string }> = {
-                                                            start: { dot: 'border-emerald-400 bg-emerald-100 dark:bg-emerald-500/20', label: 'Started', text: 'text-emerald-600 dark:text-emerald-400' },
-                                                            pause: { dot: 'border-amber-400 bg-amber-100 dark:bg-amber-500/20', label: 'Paused', text: 'text-amber-600 dark:text-amber-400' },
-                                                            resume: { dot: 'border-blue-400 bg-blue-100 dark:bg-blue-500/20', label: 'Resumed', text: 'text-blue-600 dark:text-blue-400' },
-                                                            end: { dot: 'border-zinc-400 bg-zinc-100 dark:bg-zinc-500/20', label: 'Ended', text: 'text-zinc-600 dark:text-zinc-400' },
-                                                            time_up: { dot: 'border-orange-400 bg-orange-100 dark:bg-orange-500/20', label: 'Time Up', text: 'text-orange-600 dark:text-orange-400' },
-                                                            reset: { dot: 'border-purple-400 bg-purple-100 dark:bg-purple-500/20', label: 'Reset (Admin)', text: 'text-purple-600 dark:text-purple-400' },
-                                                            force_end: { dot: 'border-red-500 bg-red-100 dark:bg-red-500/20', label: 'Force-Ended (Admin)', text: 'text-red-600 dark:text-red-400' },
-                                                            restore: { dot: 'border-green-500 bg-green-100 dark:bg-green-500/20', label: 'Restored (Admin)', text: 'text-green-600 dark:text-green-400' },
-                                                            auto_end: { dot: 'border-orange-500 bg-orange-100 dark:bg-orange-500/20', label: 'Auto-Ended', text: 'text-orange-600 dark:text-orange-400' },
-                                                            reimburse: { dot: 'border-emerald-500 bg-emerald-100 dark:bg-emerald-500/20', label: 'Reimbursed (Admin)', text: 'text-emerald-600 dark:text-emerald-400' },
-                                                        };
-                                                        const style = actionStyle[event.action] ?? { dot: 'border-zinc-300 dark:border-zinc-600 bg-background', label: event.action, text: '' };
-                                                        return (
-                                                            <div key={event.id} className="relative">
-                                                                <div className={`absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full border-2 ${style.dot}`} />
-                                                                <div className="flex items-baseline gap-2">
-                                                                    <span className={`text-xs font-medium capitalize ${style.text}`}>{style.label}</span>
-                                                                    <span className="text-muted-foreground text-[10px]">
-                                                                        {new Date(event.occurred_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                                                                    </span>
-                                                                </div>
-                                                                {event.reason && (
-                                                                    <p className="text-muted-foreground text-[11px] italic">{event.reason}</p>
-                                                                )}
-                                                            </div>
-                                                        );
-                                                    })}
+                                        {session.status === 'completed' &&
+                                            (session.remaining_seconds ?? 0) >=
+                                                60 && (
+                                                <div className="flex items-start gap-2 border-t border-blue-200/50 bg-blue-50/60 px-4 py-2.5 text-[11px] text-blue-700 last:rounded-b-2xl dark:border-blue-500/20 dark:bg-blue-500/5 dark:text-blue-400">
+                                                    <Info className="mt-0.5 h-3 w-3 shrink-0" />
+                                                    <span>
+                                                        Ended with{' '}
+                                                        <span className="font-semibold">
+                                                            {formatTime(
+                                                                session.remaining_seconds!,
+                                                            )}
+                                                        </span>{' '}
+                                                        remaining — inform your{' '}
+                                                        <strong>
+                                                            Team Lead or Admin
+                                                        </strong>{' '}
+                                                        if you need your timer
+                                                        restored.
+                                                    </span>
                                                 </div>
-                                            </div>
-                                        )}
+                                            )}
+                                        {/* Break Event Timeline */}
+                                        {expandedSession === session.id &&
+                                            session.break_events.length > 0 && (
+                                                <div className="border-t border-white/15 px-4 py-3 dark:border-white/5">
+                                                    <p className="mb-2 text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
+                                                        Timeline
+                                                    </p>
+                                                    <div className="relative ml-2 space-y-2 border-l border-zinc-200 pl-4 dark:border-zinc-700">
+                                                        {session.break_events.map(
+                                                            (event) => {
+                                                                const actionStyle: Record<
+                                                                    string,
+                                                                    {
+                                                                        dot: string;
+                                                                        label: string;
+                                                                        text: string;
+                                                                    }
+                                                                > = {
+                                                                    start: {
+                                                                        dot: 'border-emerald-400 bg-emerald-100 dark:bg-emerald-500/20',
+                                                                        label: 'Started',
+                                                                        text: 'text-emerald-600 dark:text-emerald-400',
+                                                                    },
+                                                                    pause: {
+                                                                        dot: 'border-amber-400 bg-amber-100 dark:bg-amber-500/20',
+                                                                        label: 'Paused',
+                                                                        text: 'text-amber-600 dark:text-amber-400',
+                                                                    },
+                                                                    resume: {
+                                                                        dot: 'border-blue-400 bg-blue-100 dark:bg-blue-500/20',
+                                                                        label: 'Resumed',
+                                                                        text: 'text-blue-600 dark:text-blue-400',
+                                                                    },
+                                                                    end: {
+                                                                        dot: 'border-zinc-400 bg-zinc-100 dark:bg-zinc-500/20',
+                                                                        label: 'Ended',
+                                                                        text: 'text-zinc-600 dark:text-zinc-400',
+                                                                    },
+                                                                    time_up: {
+                                                                        dot: 'border-orange-400 bg-orange-100 dark:bg-orange-500/20',
+                                                                        label: 'Time Up',
+                                                                        text: 'text-orange-600 dark:text-orange-400',
+                                                                    },
+                                                                    reset: {
+                                                                        dot: 'border-purple-400 bg-purple-100 dark:bg-purple-500/20',
+                                                                        label: 'Reset (Admin)',
+                                                                        text: 'text-purple-600 dark:text-purple-400',
+                                                                    },
+                                                                    force_end: {
+                                                                        dot: 'border-red-500 bg-red-100 dark:bg-red-500/20',
+                                                                        label: 'Force-Ended (Admin)',
+                                                                        text: 'text-red-600 dark:text-red-400',
+                                                                    },
+                                                                    restore: {
+                                                                        dot: 'border-green-500 bg-green-100 dark:bg-green-500/20',
+                                                                        label: 'Restored (Admin)',
+                                                                        text: 'text-green-600 dark:text-green-400',
+                                                                    },
+                                                                    auto_end: {
+                                                                        dot: 'border-orange-500 bg-orange-100 dark:bg-orange-500/20',
+                                                                        label: 'Auto-Ended',
+                                                                        text: 'text-orange-600 dark:text-orange-400',
+                                                                    },
+                                                                    reimburse: {
+                                                                        dot: 'border-emerald-500 bg-emerald-100 dark:bg-emerald-500/20',
+                                                                        label: 'Reimbursed (Admin)',
+                                                                        text: 'text-emerald-600 dark:text-emerald-400',
+                                                                    },
+                                                                };
+                                                                const style =
+                                                                    actionStyle[
+                                                                        event
+                                                                            .action
+                                                                    ] ?? {
+                                                                        dot: 'border-zinc-300 dark:border-zinc-600 bg-background',
+                                                                        label: event.action,
+                                                                        text: '',
+                                                                    };
+                                                                return (
+                                                                    <div
+                                                                        key={
+                                                                            event.id
+                                                                        }
+                                                                        className="relative"
+                                                                    >
+                                                                        <div
+                                                                            className={`absolute top-1 -left-[21px] h-2.5 w-2.5 rounded-full border-2 ${style.dot}`}
+                                                                        />
+                                                                        <div className="flex items-baseline gap-2">
+                                                                            <span
+                                                                                className={`text-xs font-medium capitalize ${style.text}`}
+                                                                            >
+                                                                                {
+                                                                                    style.label
+                                                                                }
+                                                                            </span>
+                                                                            <span className="text-[10px] text-muted-foreground">
+                                                                                {new Date(
+                                                                                    event.occurred_at,
+                                                                                ).toLocaleTimeString(
+                                                                                    [],
+                                                                                    {
+                                                                                        hour: '2-digit',
+                                                                                        minute: '2-digit',
+                                                                                        second: '2-digit',
+                                                                                    },
+                                                                                )}
+                                                                            </span>
+                                                                        </div>
+                                                                        {event.reason && (
+                                                                            <p className="text-[11px] text-muted-foreground italic">
+                                                                                {
+                                                                                    event.reason
+                                                                                }
+                                                                            </p>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            },
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
                                     </div>
                                 ))}
                             </div>
@@ -1046,32 +1613,46 @@ export default function BreakTimerIndex() {
             </div>
 
             {/* Pause Reason Dialog */}
-            <Dialog open={isPauseDialogOpen} onOpenChange={(open) => {
-                if (!open) {
-                    // Re-baseline timer from frozen value so it resumes correctly
-                    propsReceivedAtRef.current = Date.now();
-                    serverRemainingRef.current = remainingSeconds;
-                    setIsPauseDialogOpen(false);
-                    setPauseReason('');
-                }
-            }}>
+            <Dialog
+                open={isPauseDialogOpen}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        // Re-baseline timer from frozen value so it resumes correctly
+                        propsReceivedAtRef.current = Date.now();
+                        serverRemainingRef.current = remainingSeconds;
+                        setIsPauseDialogOpen(false);
+                        setPauseReason('');
+                    }
+                }}
+            >
                 <DialogContent className="max-w-[90vw] sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle>Pause Timer</DialogTitle>
-                        <DialogDescription>Enter the reason for pausing.</DialogDescription>
+                        <DialogDescription>
+                            Enter the reason for pausing.
+                        </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
-                        {policy?.allowed_pause_reasons && policy.allowed_pause_reasons.length > 0 ? (
-                            <Select value={pauseReason} onValueChange={setPauseReason}>
+                        {policy?.allowed_pause_reasons &&
+                        policy.allowed_pause_reasons.length > 0 ? (
+                            <Select
+                                value={pauseReason}
+                                onValueChange={setPauseReason}
+                            >
                                 <SelectTrigger>
                                     <SelectValue placeholder="Select reason..." />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {policy.allowed_pause_reasons.map((reason) => (
-                                        <SelectItem key={reason} value={reason}>
-                                            {reason}
-                                        </SelectItem>
-                                    ))}
+                                    {policy.allowed_pause_reasons.map(
+                                        (reason) => (
+                                            <SelectItem
+                                                key={reason}
+                                                value={reason}
+                                            >
+                                                {reason}
+                                            </SelectItem>
+                                        ),
+                                    )}
                                 </SelectContent>
                             </Select>
                         ) : (
@@ -1082,15 +1663,22 @@ export default function BreakTimerIndex() {
                             />
                         )}
                         <div className="flex justify-end gap-2">
-                            <Button variant="outline" onClick={() => {
-                                propsReceivedAtRef.current = Date.now();
-                                serverRemainingRef.current = remainingSeconds;
-                                setIsPauseDialogOpen(false);
-                                setPauseReason('');
-                            }}>
+                            <Button
+                                variant="outline"
+                                onClick={() => {
+                                    propsReceivedAtRef.current = Date.now();
+                                    serverRemainingRef.current =
+                                        remainingSeconds;
+                                    setIsPauseDialogOpen(false);
+                                    setPauseReason('');
+                                }}
+                            >
                                 Cancel
                             </Button>
-                            <Button onClick={handlePause} disabled={!pauseReason.trim() || isSubmitting}>
+                            <Button
+                                onClick={handlePause}
+                                disabled={!pauseReason.trim() || isSubmitting}
+                            >
                                 Pause
                             </Button>
                         </div>
@@ -1099,25 +1687,39 @@ export default function BreakTimerIndex() {
             </Dialog>
 
             {/* End Confirmation Dialog */}
-            <Dialog open={isEndDialogOpen} onOpenChange={(open) => { if (!open) handleEndCancel(); }}>
+            <Dialog
+                open={isEndDialogOpen}
+                onOpenChange={(open) => {
+                    if (!open) handleEndCancel();
+                }}
+            >
                 <DialogContent className="max-w-[90vw] sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle>End Break Early?</DialogTitle>
                         <DialogDescription>
-                            You still have {formatTime(remainingSeconds)} remaining. Are you sure you want to end now?
+                            You still have {formatTime(remainingSeconds)}{' '}
+                            remaining. Are you sure you want to end now?
                         </DialogDescription>
                     </DialogHeader>
                     {remainingSeconds >= 60 && (
                         <div className="flex items-start gap-2 rounded-lg bg-blue-50 px-3 py-2.5 text-xs text-blue-700 dark:bg-blue-500/10 dark:text-blue-400">
                             <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                            <span>If you ended by mistake, let your <strong>Team Lead or Admin</strong> know — they can restore your remaining time.</span>
+                            <span>
+                                If you ended by mistake, let your{' '}
+                                <strong>Team Lead or Admin</strong> know — they
+                                can restore your remaining time.
+                            </span>
                         </div>
                     )}
                     <div className="flex justify-end gap-2">
                         <Button variant="outline" onClick={handleEndCancel}>
                             Cancel
                         </Button>
-                        <Button onClick={handleEndConfirm} disabled={isSubmitting} variant="destructive">
+                        <Button
+                            onClick={handleEndConfirm}
+                            disabled={isSubmitting}
+                            variant="destructive"
+                        >
                             End Now
                         </Button>
                     </div>
@@ -1125,40 +1727,78 @@ export default function BreakTimerIndex() {
             </Dialog>
 
             {/* Start Confirmation Dialog */}
-            <Dialog open={isStartDialogOpen} onOpenChange={(open) => { setIsStartDialogOpen(open); if (!open) setPendingStartType(null); }}>
+            <Dialog
+                open={isStartDialogOpen}
+                onOpenChange={(open) => {
+                    setIsStartDialogOpen(open);
+                    if (!open) setPendingStartType(null);
+                }}
+            >
                 <DialogContent className="max-w-[90vw] sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle>
-                            {pendingStartType === 'break' ? 'Start Break'
-                                : pendingStartType === 'lunch' ? 'Start Lunch'
-                                    : typeof pendingStartType === 'object' && pendingStartType !== null && 'combinedBreak' in pendingStartType
-                                        ? `Start ${pendingStartType.combinedBreak} Combined Breaks`
-                                        : typeof pendingStartType === 'object' && pendingStartType !== null && 'combined' in pendingStartType
-                                            ? `Start ${pendingStartType.combined} Break${pendingStartType.combined > 1 ? 's' : ''} + Lunch`
-                                            : 'Start Break'}
+                            {pendingStartType === 'break'
+                                ? 'Start Break'
+                                : pendingStartType === 'lunch'
+                                  ? 'Start Lunch'
+                                  : typeof pendingStartType === 'object' &&
+                                      pendingStartType !== null &&
+                                      'combinedBreak' in pendingStartType
+                                    ? `Start ${pendingStartType.combinedBreak} Combined Breaks`
+                                    : typeof pendingStartType === 'object' &&
+                                        pendingStartType !== null &&
+                                        'combined' in pendingStartType
+                                      ? `Start ${pendingStartType.combined} Break${pendingStartType.combined > 1 ? 's' : ''} + Lunch`
+                                      : 'Start Break'}
                         </DialogTitle>
                         <DialogDescription>
                             {pendingStartType === 'break'
                                 ? `This will start a ${policy?.break_duration_minutes ?? 15} minute break. You have ${remainingBreaks} break(s) remaining.`
                                 : pendingStartType === 'lunch'
-                                    ? `This will start a ${policy?.lunch_duration_minutes ?? 60} minute lunch break.`
-                                    : typeof pendingStartType === 'object' && pendingStartType !== null && 'combinedBreak' in pendingStartType
-                                        ? `This will combine ${pendingStartType.combinedBreak} breaks into one session (${(policy?.break_duration_minutes ?? 15) * pendingStartType.combinedBreak} minutes). Uses ${pendingStartType.combinedBreak} break slots. No lunch included.`
-                                        : typeof pendingStartType === 'object' && pendingStartType !== null && 'combined' in pendingStartType
-                                            ? `This will start a combined ${pendingStartType.combined} break${pendingStartType.combined > 1 ? 's' : ''} + lunch (${(policy?.break_duration_minutes ?? 15) * pendingStartType.combined + (policy?.lunch_duration_minutes ?? 60)} minutes). Uses ${pendingStartType.combined} break slot${pendingStartType.combined > 1 ? 's' : ''} and your lunch.`
-                                            : ''}
+                                  ? `This will start a ${policy?.lunch_duration_minutes ?? 60} minute lunch break.`
+                                  : typeof pendingStartType === 'object' &&
+                                      pendingStartType !== null &&
+                                      'combinedBreak' in pendingStartType
+                                    ? `This will combine ${pendingStartType.combinedBreak} breaks into one session (${(policy?.break_duration_minutes ?? 15) * pendingStartType.combinedBreak} minutes). Uses ${pendingStartType.combinedBreak} break slots. No lunch included.`
+                                    : typeof pendingStartType === 'object' &&
+                                        pendingStartType !== null &&
+                                        'combined' in pendingStartType
+                                      ? `This will start a combined ${pendingStartType.combined} break${pendingStartType.combined > 1 ? 's' : ''} + lunch (${(policy?.break_duration_minutes ?? 15) * pendingStartType.combined + (policy?.lunch_duration_minutes ?? 60)} minutes). Uses ${pendingStartType.combined} break slot${pendingStartType.combined > 1 ? 's' : ''} and your lunch.`
+                                      : ''}
                         </DialogDescription>
                     </DialogHeader>
                     <div className="flex justify-end gap-2">
-                        <Button variant="outline" onClick={() => { setIsStartDialogOpen(false); setPendingStartType(null); }}>
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                setIsStartDialogOpen(false);
+                                setPendingStartType(null);
+                            }}
+                        >
                             Cancel
                         </Button>
                         <Button
                             onClick={() => {
-                                if (pendingStartType === 'break') handleStartBreak();
-                                else if (pendingStartType === 'lunch') handleStartLunch();
-                                else if (typeof pendingStartType === 'object' && pendingStartType !== null && 'combinedBreak' in pendingStartType) handleStartCombinedBreak(pendingStartType.combinedBreak);
-                                else if (typeof pendingStartType === 'object' && pendingStartType !== null && 'combined' in pendingStartType) handleStartCombined(pendingStartType.combined);
+                                if (pendingStartType === 'break')
+                                    handleStartBreak();
+                                else if (pendingStartType === 'lunch')
+                                    handleStartLunch();
+                                else if (
+                                    typeof pendingStartType === 'object' &&
+                                    pendingStartType !== null &&
+                                    'combinedBreak' in pendingStartType
+                                )
+                                    handleStartCombinedBreak(
+                                        pendingStartType.combinedBreak,
+                                    );
+                                else if (
+                                    typeof pendingStartType === 'object' &&
+                                    pendingStartType !== null &&
+                                    'combined' in pendingStartType
+                                )
+                                    handleStartCombined(
+                                        pendingStartType.combined,
+                                    );
                             }}
                             disabled={isSubmitting}
                         >

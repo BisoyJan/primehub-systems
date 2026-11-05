@@ -1,9 +1,9 @@
-import React from 'react';
-import { motion } from 'framer-motion';
-import { Link } from '@inertiajs/react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Link } from '@inertiajs/react';
+import { motion } from 'framer-motion';
 import { Bell, ChevronRight } from 'lucide-react';
+import React from 'react';
 import type { NotificationSummary } from '../types';
 
 export interface NotificationSummaryWidgetProps {
@@ -25,9 +25,9 @@ function formatTimeAgo(dateString: string): string {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-export const NotificationSummaryWidget: React.FC<NotificationSummaryWidgetProps> = ({
-    notificationSummary,
-}) => {
+export const NotificationSummaryWidget: React.FC<
+    NotificationSummaryWidgetProps
+> = ({ notificationSummary }) => {
     if (!notificationSummary) return null;
 
     const { unread_count, recent } = notificationSummary;
@@ -46,7 +46,10 @@ export const NotificationSummaryWidget: React.FC<NotificationSummaryWidgetProps>
                             Notifications
                         </span>
                         {unread_count > 0 && (
-                            <Badge variant="destructive" className="text-[10px] px-1.5 py-0.5">
+                            <Badge
+                                variant="destructive"
+                                className="px-1.5 py-0.5 text-[10px]"
+                            >
                                 {unread_count}
                             </Badge>
                         )}
@@ -55,21 +58,23 @@ export const NotificationSummaryWidget: React.FC<NotificationSummaryWidgetProps>
                 <CardContent className="space-y-2">
                     {recent.length > 0 ? (
                         <>
-                            <div className="max-h-[220px] overflow-y-auto space-y-2 pr-1 scrollbar-thin">
+                            <div className="max-h-[220px] scrollbar-thin space-y-2 overflow-y-auto pr-1">
                                 {recent.map((notification) => (
                                     <div
                                         key={notification.id}
-                                        className="rounded-lg border p-2.5 space-y-0.5 hover:bg-muted/50 transition-colors"
+                                        className="space-y-0.5 rounded-lg border p-2.5 transition-colors hover:bg-muted/50"
                                     >
                                         <div className="flex items-start justify-between gap-2">
-                                            <p className="text-xs font-medium leading-tight line-clamp-1">
+                                            <p className="line-clamp-1 text-xs leading-tight font-medium">
                                                 {notification.title}
                                             </p>
-                                            <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
-                                                {formatTimeAgo(notification.created_at)}
+                                            <span className="shrink-0 text-[10px] whitespace-nowrap text-muted-foreground">
+                                                {formatTimeAgo(
+                                                    notification.created_at,
+                                                )}
                                             </span>
                                         </div>
-                                        <p className="text-[11px] text-muted-foreground line-clamp-2">
+                                        <p className="line-clamp-2 text-[11px] text-muted-foreground">
                                             {notification.message}
                                         </p>
                                     </div>
@@ -77,14 +82,14 @@ export const NotificationSummaryWidget: React.FC<NotificationSummaryWidgetProps>
                             </div>
                             <Link
                                 href="/notifications"
-                                className="flex items-center justify-center gap-1 text-xs text-primary hover:underline pt-1"
+                                className="flex items-center justify-center gap-1 pt-1 text-xs text-primary hover:underline"
                             >
                                 View All
                                 <ChevronRight className="h-3 w-3" />
                             </Link>
                         </>
                     ) : (
-                        <p className="text-xs text-muted-foreground text-center py-2">
+                        <p className="py-2 text-center text-xs text-muted-foreground">
                             No new notifications.
                         </p>
                     )}

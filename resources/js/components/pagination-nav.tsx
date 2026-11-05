@@ -1,7 +1,7 @@
-import React from "react";
-import { Link } from "@inertiajs/react";
-import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Button } from '@/components/ui/button';
+import { Link } from '@inertiajs/react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import React from 'react';
 
 export interface PaginationLink {
     url: string | null;
@@ -23,11 +23,11 @@ interface Props {
 
 export default function PaginationNav({
     links,
-    className = "",
+    className = '',
     onPageChange,
     only,
     maxVisiblePagesMobile = 5,
-    maxVisiblePagesDesktop = 10
+    maxVisiblePagesDesktop = 10,
 }: Props) {
     if (!links || links.length === 0) return null;
 
@@ -41,11 +41,18 @@ export default function PaginationNav({
     const prevLink = links[0]; // First link is typically "Previous"
     const nextLink = links[links.length - 1]; // Last link is typically "Next"
     const pageLinks = links.slice(1, -1); // Page number links (excluding prev/next)
-    const currentPage = pageLinks.find(l => l.active);
-    const currentPageNum = currentPage ? parseInt(currentPage.label, 10) || 1 : 1;
-    const totalPages = pageLinks.filter(l => !["...", "…"].includes(l.label)).length > 0
-        ? Math.max(...pageLinks.filter(l => !["...", "…"].includes(l.label)).map(l => parseInt(l.label, 10) || 0))
+    const currentPage = pageLinks.find((l) => l.active);
+    const currentPageNum = currentPage
+        ? parseInt(currentPage.label, 10) || 1
         : 1;
+    const totalPages =
+        pageLinks.filter((l) => !['...', '…'].includes(l.label)).length > 0
+            ? Math.max(
+                  ...pageLinks
+                      .filter((l) => !['...', '…'].includes(l.label))
+                      .map((l) => parseInt(l.label, 10) || 0),
+              )
+            : 1;
 
     // Calculate which pages to show (smart pagination)
     const getVisiblePages = (maxVisible: number): (number | 'ellipsis')[] => {
@@ -100,13 +107,19 @@ export default function PaginationNav({
     const desktopPages = getVisiblePages(maxVisiblePagesDesktop);
 
     const base =
-        "inline-flex items-center justify-center min-w-[2rem] h-8 px-2 rounded-md text-sm font-medium border transition-colors";
+        'inline-flex items-center justify-center min-w-[2rem] h-8 px-2 rounded-md text-sm font-medium border transition-colors';
 
-    const activeClasses = "bg-blue-600 text-white border-blue-600 shadow-sm";
-    const normalClasses = "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700";
-    const disabledClasses = "bg-transparent text-gray-400 dark:text-gray-500 border-transparent cursor-not-allowed";
+    const activeClasses = 'bg-blue-600 text-white border-blue-600 shadow-sm';
+    const normalClasses =
+        'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700';
+    const disabledClasses =
+        'bg-transparent text-gray-400 dark:text-gray-500 border-transparent cursor-not-allowed';
 
-    const renderPageButton = (page: number | 'ellipsis', key: React.Key, responsiveClass: string) => {
+    const renderPageButton = (
+        page: number | 'ellipsis',
+        key: React.Key,
+        responsiveClass: string,
+    ) => {
         if (page === 'ellipsis') {
             return (
                 <span
@@ -120,7 +133,7 @@ export default function PaginationNav({
         }
 
         const isActive = page === currentPageNum;
-        const pageLink = pageLinks.find(l => l.label === String(page));
+        const pageLink = pageLinks.find((l) => l.label === String(page));
         const url = pageLink?.url;
 
         if (url) {
@@ -130,7 +143,7 @@ export default function PaginationNav({
                         key={key}
                         type="button"
                         className={`${base} ${isActive ? activeClasses : normalClasses} ${responsiveClass}`}
-                        aria-current={isActive ? "page" : undefined}
+                        aria-current={isActive ? 'page' : undefined}
                         onClick={() => onPageChange(page)}
                     >
                         {page}
@@ -144,7 +157,7 @@ export default function PaginationNav({
                         className={`${base} ${isActive ? activeClasses : normalClasses} ${responsiveClass}`}
                         preserveScroll
                         only={only}
-                        aria-current={isActive ? "page" : undefined}
+                        aria-current={isActive ? 'page' : undefined}
                     >
                         {page}
                     </Link>
@@ -158,14 +171,17 @@ export default function PaginationNav({
                 type="button"
                 disabled={!isActive}
                 className={`${base} ${isActive ? activeClasses : disabledClasses} ${responsiveClass}`}
-                aria-current={isActive ? "page" : undefined}
+                aria-current={isActive ? 'page' : undefined}
             >
                 {page}
             </Button>
         );
     };
 
-    const renderNavButton = (link: PaginationLink, direction: 'prev' | 'next') => {
+    const renderNavButton = (
+        link: PaginationLink,
+        direction: 'prev' | 'next',
+    ) => {
         const enabled = link.enabled !== false && !!link.url;
         const Icon = direction === 'prev' ? ChevronLeft : ChevronRight;
 
@@ -177,7 +193,9 @@ export default function PaginationNav({
                         type="button"
                         className={`${base} ${normalClasses}`}
                         onClick={() => pageNum && onPageChange(pageNum)}
-                        aria-label={direction === 'prev' ? 'Previous page' : 'Next page'}
+                        aria-label={
+                            direction === 'prev' ? 'Previous page' : 'Next page'
+                        }
                     >
                         <Icon className="h-4 w-4" />
                     </Button>
@@ -189,7 +207,9 @@ export default function PaginationNav({
                         className={`${base} ${normalClasses}`}
                         preserveScroll
                         only={only}
-                        aria-label={direction === 'prev' ? 'Previous page' : 'Next page'}
+                        aria-label={
+                            direction === 'prev' ? 'Previous page' : 'Next page'
+                        }
                     >
                         <Icon className="h-4 w-4" />
                     </Link>
@@ -203,7 +223,9 @@ export default function PaginationNav({
                 disabled
                 className={`${base} ${disabledClasses}`}
                 aria-disabled="true"
-                aria-label={direction === 'prev' ? 'Previous page' : 'Next page'}
+                aria-label={
+                    direction === 'prev' ? 'Previous page' : 'Next page'
+                }
             >
                 <Icon className="h-4 w-4" />
             </Button>
@@ -211,18 +233,25 @@ export default function PaginationNav({
     };
 
     return (
-        <nav aria-label="Pagination" className={`inline-flex flex-wrap items-center justify-center gap-1 md:gap-2 ${className}`}>
+        <nav
+            aria-label="Pagination"
+            className={`inline-flex flex-wrap items-center justify-center gap-1 md:gap-2 ${className}`}
+        >
             {/* Previous button - always visible */}
             {renderNavButton(prevLink, 'prev')}
 
             {/* Mobile: Show fewer page links (hidden on md and up) */}
             <div className="flex items-center gap-1 md:hidden">
-                {mobilePages.map((page, i) => renderPageButton(page, `mobile-${i}`, "inline-flex"))}
+                {mobilePages.map((page, i) =>
+                    renderPageButton(page, `mobile-${i}`, 'inline-flex'),
+                )}
             </div>
 
             {/* Desktop: Show more page links (hidden below md) */}
-            <div className="hidden md:flex items-center gap-1">
-                {desktopPages.map((page, i) => renderPageButton(page, `desktop-${i}`, "inline-flex"))}
+            <div className="hidden items-center gap-1 md:flex">
+                {desktopPages.map((page, i) =>
+                    renderPageButton(page, `desktop-${i}`, 'inline-flex'),
+                )}
             </div>
 
             {/* Next button - always visible */}

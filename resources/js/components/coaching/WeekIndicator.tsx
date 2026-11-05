@@ -2,7 +2,11 @@ import { getCurrentWeekOfMonth } from '@/lib/coaching';
 
 export { getCurrentWeekOfMonth };
 
-export function WeekIndicator({ coachedWeeks }: { coachedWeeks?: Record<number, boolean> }) {
+export function WeekIndicator({
+    coachedWeeks,
+}: {
+    coachedWeeks?: Record<number, boolean>;
+}) {
     const currentWeek = getCurrentWeekOfMonth();
     return (
         <div className="flex items-center gap-[3px]">
@@ -16,8 +20,8 @@ export function WeekIndicator({ coachedWeeks }: { coachedWeeks?: Record<number, 
                             isCoached
                                 ? 'border-green-500 bg-green-500'
                                 : isPast
-                                    ? 'border-red-300 bg-red-100 dark:border-red-700 dark:bg-red-950/40'
-                                    : 'border-gray-300 bg-transparent dark:border-gray-600'
+                                  ? 'border-red-300 bg-red-100 dark:border-red-700 dark:bg-red-950/40'
+                                  : 'border-gray-300 bg-transparent dark:border-gray-600'
                         }`}
                         title={`Week ${wk}: ${isCoached ? 'Coached' : isPast ? 'Missed' : 'Upcoming'}`}
                     />

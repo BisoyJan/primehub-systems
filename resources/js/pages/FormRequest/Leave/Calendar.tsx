@@ -1,22 +1,34 @@
-import React, { useState, useMemo } from "react";
-import { Head, router, usePage } from "@inertiajs/react";
-import { format, parseISO } from 'date-fns';
-import AppLayout from "@/layouts/app-layout";
-import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
-import { PageHeader } from "@/components/PageHeader";
-import { LoadingOverlay } from "@/components/LoadingOverlay";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { PageHeader } from '@/components/PageHeader';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from '@/components/ui/card';
 import {
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
     SelectValue,
-} from "@/components/ui/select";
-import { Calendar, ChevronLeft, ChevronRight, LayoutGrid, Columns, ArrowLeft } from "lucide-react";
-import { Link } from "@inertiajs/react";
+} from '@/components/ui/select';
+import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
+import AppLayout from '@/layouts/app-layout';
+import { Head, Link, router, usePage } from '@inertiajs/react';
+import { format, parseISO } from 'date-fns';
+import {
+    ArrowLeft,
+    Calendar,
+    ChevronLeft,
+    ChevronRight,
+    Columns,
+    LayoutGrid,
+} from 'lucide-react';
+import React, { useMemo, useState } from 'react';
 
 interface Leave {
     id: number;
@@ -66,27 +78,33 @@ const leaveTypes = [
 ];
 
 const leaveTypeColors: Record<string, string> = {
-    'VL': 'bg-blue-500',
-    'SL': 'bg-red-500',
-    'BL': 'bg-gray-500',
-    'SPL': 'bg-teal-500',
-    'LOA': 'bg-amber-500',
-    'LDV': 'bg-indigo-500',
-    'UPTO': 'bg-orange-500',
-    'ML': 'bg-pink-500',
-    'IW': 'bg-lime-500',
+    VL: 'bg-blue-500',
+    SL: 'bg-red-500',
+    BL: 'bg-gray-500',
+    SPL: 'bg-teal-500',
+    LOA: 'bg-amber-500',
+    LDV: 'bg-indigo-500',
+    UPTO: 'bg-orange-500',
+    ML: 'bg-pink-500',
+    IW: 'bg-lime-500',
 };
 
 export default function LeaveCalendar() {
-    const { leaves, campaigns, teamLeadCampaignIds, filters, isRestrictedRole } = usePage<PageProps>().props;
+    const {
+        leaves,
+        campaigns,
+        teamLeadCampaignIds,
+        filters,
+        isRestrictedRole,
+    } = usePage<PageProps>().props;
     const [hoveredLeaveId, setHoveredLeaveId] = useState<number | null>(null);
     const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
     const { title, breadcrumbs } = usePageMeta({
-        title: "Leave Calendar",
+        title: 'Leave Calendar',
         breadcrumbs: [
-            { title: "Leave Requests", href: "/form-requests/leave-requests" },
-            { title: "Calendar", href: "" },
+            { title: 'Leave Requests', href: '/form-requests/leave-requests' },
+            { title: 'Calendar', href: '' },
         ],
     });
 
@@ -96,37 +114,44 @@ export default function LeaveCalendar() {
     const renderLeaveItem = (leave: Leave) => {
         const content = (
             <>
-                <div className="flex items-start justify-between gap-2 mb-1">
+                <div className="mb-1 flex items-start justify-between gap-2">
                     <div>
                         <span className="font-medium">{leave.user_name}</span>
-                        <div className="text-xs text-muted-foreground">{leave.campaign_name}</div>
+                        <div className="text-xs text-muted-foreground">
+                            {leave.campaign_name}
+                        </div>
                     </div>
                     <div className="flex flex-col items-end gap-1">
                         <Badge
                             variant="outline"
-                            className={`text-xs shrink-0 text-white border-0 ${leaveTypeColors[leave.leave_type] || 'bg-gray-500'}`}
+                            className={`shrink-0 border-0 text-xs text-white ${leaveTypeColors[leave.leave_type] || 'bg-gray-500'}`}
                         >
                             {leave.leave_type}
                         </Badge>
                         <Badge
                             variant="outline"
-                            className={`text-xs shrink-0 text-white border-0 ${leave.status === 'approved' ? 'bg-green-500' : 'bg-yellow-500'}`}
+                            className={`shrink-0 border-0 text-xs text-white ${leave.status === 'approved' ? 'bg-green-500' : 'bg-yellow-500'}`}
                         >
-                            {leave.status === 'approved' ? 'Approved' : 'Pending'}
+                            {leave.status === 'approved'
+                                ? 'Approved'
+                                : 'Pending'}
                         </Badge>
                     </div>
                 </div>
                 <div className="text-xs text-muted-foreground">
                     {Number(leave.days_requested) === 1
                         ? `${format(parseISO(leave.start_date), 'MMM d')} (1 day)`
-                        : `${format(parseISO(leave.start_date), 'MMM d')} - ${format(parseISO(leave.end_date), 'MMM d')} (${Math.round(Number(leave.days_requested))} days)`
-                    }
+                        : `${format(parseISO(leave.start_date), 'MMM d')} - ${format(parseISO(leave.end_date), 'MMM d')} (${Math.round(Number(leave.days_requested))} days)`}
                 </div>
                 <div className="text-xs text-muted-foreground">
-                    Requested: {format(parseISO(leave.requested_at), 'MMM d, yyyy, h:mm a')}
+                    Requested:{' '}
+                    {format(
+                        parseISO(leave.requested_at),
+                        'MMM d, yyyy, h:mm a',
+                    )}
                 </div>
                 {!isRestrictedRole && leave.reason && (
-                    <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                    <div className="mt-1 line-clamp-2 text-xs text-muted-foreground">
                         {leave.reason}
                     </div>
                 )}
@@ -137,7 +162,7 @@ export default function LeaveCalendar() {
             return (
                 <div
                     key={leave.id}
-                    className={`block p-3 border rounded-lg text-sm ${hoveredLeaveId === leave.id ? 'bg-accent border-primary' : ''}`}
+                    className={`block rounded-lg border p-3 text-sm ${hoveredLeaveId === leave.id ? 'border-primary bg-accent' : ''}`}
                     onMouseEnter={() => setHoveredLeaveId(leave.id)}
                     onMouseLeave={() => setHoveredLeaveId(null)}
                 >
@@ -152,7 +177,7 @@ export default function LeaveCalendar() {
                 href={`/form-requests/leave-requests/${leave.id}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className={`block p-3 border rounded-lg cursor-pointer transition-colors text-sm ${hoveredLeaveId === leave.id ? 'bg-accent border-primary' : 'hover:bg-accent/50'}`}
+                className={`block cursor-pointer rounded-lg border p-3 text-sm transition-colors ${hoveredLeaveId === leave.id ? 'border-primary bg-accent' : 'hover:bg-accent/50'}`}
                 onMouseEnter={() => setHoveredLeaveId(leave.id)}
                 onMouseLeave={() => setHoveredLeaveId(null)}
             >
@@ -185,28 +210,40 @@ export default function LeaveCalendar() {
         const sorted = [...displayedLeaves].sort((a, b) =>
             a.campaign_name !== b.campaign_name
                 ? a.campaign_name.localeCompare(b.campaign_name)
-                : a.requested_at.localeCompare(b.requested_at)
+                : a.requested_at.localeCompare(b.requested_at),
         );
-        const groups: { campaign: string; showHeader: boolean; rows: Leave[] }[] = [];
+        const groups: {
+            campaign: string;
+            showHeader: boolean;
+            rows: Leave[];
+        }[] = [];
         for (const leave of sorted) {
             const last = groups[groups.length - 1];
             if (last && last.campaign === leave.campaign_name) {
                 last.rows.push(leave);
             } else {
-                groups.push({ campaign: leave.campaign_name, showHeader: true, rows: [leave] });
+                groups.push({
+                    campaign: leave.campaign_name,
+                    showHeader: true,
+                    rows: [leave],
+                });
             }
         }
         return groups;
     }, [displayedLeaves, selectedDate]);
 
     const handleFilterChange = (key: string, value: string | null) => {
-        router.get('/form-requests/leave-requests/calendar', {
-            ...filters,
-            [key]: value === 'all' ? null : value,
-        }, {
-            preserveState: true,
-            preserveScroll: true,
-        });
+        router.get(
+            '/form-requests/leave-requests/calendar',
+            {
+                ...filters,
+                [key]: value === 'all' ? null : value,
+            },
+            {
+                preserveState: true,
+                preserveScroll: true,
+            },
+        );
     };
 
     const handleMonthChange = (direction: 'prev' | 'next') => {
@@ -258,7 +295,7 @@ export default function LeaveCalendar() {
 
         // Get leaves by date for this month
         const leavesByDate: Record<string, Leave[]> = {};
-        leaves.forEach(leave => {
+        leaves.forEach((leave) => {
             const startStr = leave.start_date.split('T')[0];
             const endStr = leave.end_date.split('T')[0];
             const [sy, sm, sd] = startStr.split('-').map(Number);
@@ -285,13 +322,19 @@ export default function LeaveCalendar() {
         return (
             <div className={`space-y-2 ${isCompact ? '' : 'p-4'}`}>
                 {/* Month header */}
-                <div className="text-center font-semibold text-sm mb-2">
-                    {monthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                <div className="mb-2 text-center text-sm font-semibold">
+                    {monthDate.toLocaleDateString('en-US', {
+                        month: 'long',
+                        year: 'numeric',
+                    })}
                 </div>
                 {/* Day names */}
                 <div className="grid grid-cols-7 gap-1">
                     {dayNames.map((day, idx) => (
-                        <div key={idx} className="text-center text-xs font-medium text-muted-foreground p-0.5">
+                        <div
+                            key={idx}
+                            className="p-0.5 text-center text-xs font-medium text-muted-foreground"
+                        >
                             {day}
                         </div>
                     ))}
@@ -300,43 +343,57 @@ export default function LeaveCalendar() {
                 <div className="grid grid-cols-7 gap-1">
                     {/* Empty cells */}
                     {Array.from({ length: startingDayOfWeek }).map((_, i) => (
-                        <div key={`empty-${i}`} className={isCompact ? "aspect-square" : "aspect-square"} />
+                        <div
+                            key={`empty-${i}`}
+                            className={
+                                isCompact ? 'aspect-square' : 'aspect-square'
+                            }
+                        />
                     ))}
                     {/* Actual days */}
                     {Array.from({ length: daysInMonth }).map((_, i) => {
                         const day = i + 1;
-                        const dateKey = formatDateKey(new Date(year, month, day));
+                        const dateKey = formatDateKey(
+                            new Date(year, month, day),
+                        );
                         const leavesOnDay = leavesByDate[dateKey] || [];
-                        const isToday = day === today.getDate() && month === today.getMonth() && year === today.getFullYear();
+                        const isToday =
+                            day === today.getDate() &&
+                            month === today.getMonth() &&
+                            year === today.getFullYear();
                         const hasLeaves = leavesOnDay.length > 0;
-                        const isHoveredLeaveDay = hoveredLeaveId !== null && leavesOnDay.some(l => l.id === hoveredLeaveId);
+                        const isHoveredLeaveDay =
+                            hoveredLeaveId !== null &&
+                            leavesOnDay.some((l) => l.id === hoveredLeaveId);
 
                         // Count approved vs pending
-                        const approvedCount = leavesOnDay.filter(l => l.status === 'approved').length;
-                        const pendingCount = leavesOnDay.filter(l => l.status === 'pending').length;
+                        const approvedCount = leavesOnDay.filter(
+                            (l) => l.status === 'approved',
+                        ).length;
+                        const pendingCount = leavesOnDay.filter(
+                            (l) => l.status === 'pending',
+                        ).length;
                         const hasApprovedLeaves = approvedCount > 0;
                         const hasPendingLeaves = pendingCount > 0;
 
                         return (
                             <div
                                 key={day}
-                                onClick={() => setSelectedDate((prev) => (prev === dateKey ? null : dateKey))}
-                                className={`
-                                    ${isCompact ? 'aspect-square p-0.5' : 'aspect-square p-1'}
-                                    rounded flex items-center justify-center text-xs relative transition-all duration-150 cursor-pointer select-none
-                                    ${hasApprovedLeaves ? 'bg-green-500 dark:bg-green-600 font-semibold text-white' : ''}
-                                    ${hasPendingLeaves && !hasApprovedLeaves ? 'bg-yellow-500 dark:bg-yellow-600 font-semibold text-white' : ''}
-                                    ${hasApprovedLeaves && hasPendingLeaves ? 'bg-gradient-to-br from-green-500 to-yellow-500 font-semibold text-white' : ''}
-                                    ${!hasLeaves ? 'text-muted-foreground hover:bg-accent' : ''}
-                                    ${isToday ? 'ring-2 ring-primary' : ''}
-                                    ${selectedDate === dateKey ? 'ring-2 ring-blue-600 ring-offset-2 ring-offset-background' : ''}
-                                    ${isHoveredLeaveDay ? 'ring-2 ring-offset-1 ring-offset-background ring-primary shadow-lg' : ''}
-                                `}
-                                title={hasLeaves ? `${approvedCount} approved, ${pendingCount} pending` : undefined}
+                                onClick={() =>
+                                    setSelectedDate((prev) =>
+                                        prev === dateKey ? null : dateKey,
+                                    )
+                                }
+                                className={` ${isCompact ? 'aspect-square p-0.5' : 'aspect-square p-1'} relative flex cursor-pointer items-center justify-center rounded text-xs transition-all duration-150 select-none ${hasApprovedLeaves ? 'bg-green-500 font-semibold text-white dark:bg-green-600' : ''} ${hasPendingLeaves && !hasApprovedLeaves ? 'bg-yellow-500 font-semibold text-white dark:bg-yellow-600' : ''} ${hasApprovedLeaves && hasPendingLeaves ? 'bg-gradient-to-br from-green-500 to-yellow-500 font-semibold text-white' : ''} ${!hasLeaves ? 'text-muted-foreground hover:bg-accent' : ''} ${isToday ? 'ring-2 ring-primary' : ''} ${selectedDate === dateKey ? 'ring-2 ring-blue-600 ring-offset-2 ring-offset-background' : ''} ${isHoveredLeaveDay ? 'shadow-lg ring-2 ring-primary ring-offset-1 ring-offset-background' : ''} `}
+                                title={
+                                    hasLeaves
+                                        ? `${approvedCount} approved, ${pendingCount} pending`
+                                        : undefined
+                                }
                             >
                                 {day}
                                 {hasLeaves && leavesOnDay.length > 1 && (
-                                    <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-red-500 rounded-full text-[7px] text-white flex items-center justify-center">
+                                    <div className="absolute -top-0.5 -right-0.5 flex h-3 w-3 items-center justify-center rounded-full bg-red-500 text-[7px] text-white">
                                         {leavesOnDay.length}
                                     </div>
                                 )}
@@ -351,7 +408,7 @@ export default function LeaveCalendar() {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={title} />
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3 relative">
+            <div className="relative flex h-full flex-1 flex-col gap-4 rounded-xl p-3">
                 <LoadingOverlay isLoading={isPageLoading} />
 
                 <PageHeader
@@ -362,11 +419,11 @@ export default function LeaveCalendar() {
                 {/* Filters */}
                 <Card>
                     <CardContent className="pt-2">
-                        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-                            <div className="flex flex-wrap gap-3 items-center">
+                        <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+                            <div className="flex flex-wrap items-center gap-3">
                                 <Button variant="outline" size="sm" asChild>
                                     <Link href="/form-requests/leave-requests">
-                                        <ArrowLeft className="h-4 w-4 mr-2" />
+                                        <ArrowLeft className="mr-2 h-4 w-4" />
                                         Back to Leave Requests
                                     </Link>
                                 </Button>
@@ -374,15 +431,32 @@ export default function LeaveCalendar() {
                                 {!isRestrictedRole && campaigns && (
                                     <Select
                                         value={filters.campaign_id || 'all'}
-                                        onValueChange={(value) => handleFilterChange('campaign_id', value)}
+                                        onValueChange={(value) =>
+                                            handleFilterChange(
+                                                'campaign_id',
+                                                value,
+                                            )
+                                        }
                                     >
                                         <SelectTrigger className="w-[180px]">
                                             <SelectValue placeholder="All Campaigns" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="all">All Campaigns</SelectItem>
-                                            {(teamLeadCampaignIds?.length ? campaigns.filter(c => teamLeadCampaignIds.includes(c.id)) : campaigns).map((campaign) => (
-                                                <SelectItem key={campaign.id} value={String(campaign.id)}>
+                                            <SelectItem value="all">
+                                                All Campaigns
+                                            </SelectItem>
+                                            {(teamLeadCampaignIds?.length
+                                                ? campaigns.filter((c) =>
+                                                      teamLeadCampaignIds.includes(
+                                                          c.id,
+                                                      ),
+                                                  )
+                                                : campaigns
+                                            ).map((campaign) => (
+                                                <SelectItem
+                                                    key={campaign.id}
+                                                    value={String(campaign.id)}
+                                                >
                                                     {campaign.name}
                                                 </SelectItem>
                                             ))}
@@ -392,15 +466,22 @@ export default function LeaveCalendar() {
 
                                 <Select
                                     value={filters.leave_type || 'all'}
-                                    onValueChange={(value) => handleFilterChange('leave_type', value)}
+                                    onValueChange={(value) =>
+                                        handleFilterChange('leave_type', value)
+                                    }
                                 >
                                     <SelectTrigger className="w-[160px]">
                                         <SelectValue placeholder="All Types" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="all">All Leave Types</SelectItem>
+                                        <SelectItem value="all">
+                                            All Leave Types
+                                        </SelectItem>
                                         {leaveTypes.map((type) => (
-                                            <SelectItem key={type.value} value={type.value}>
+                                            <SelectItem
+                                                key={type.value}
+                                                value={type.value}
+                                            >
                                                 {type.label}
                                             </SelectItem>
                                         ))}
@@ -409,51 +490,92 @@ export default function LeaveCalendar() {
 
                                 <Select
                                     value={filters.status || 'all'}
-                                    onValueChange={(value) => handleFilterChange('status', value)}
+                                    onValueChange={(value) =>
+                                        handleFilterChange('status', value)
+                                    }
                                 >
                                     <SelectTrigger className="w-[140px]">
                                         <SelectValue placeholder="All Status" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="all">All Status</SelectItem>
-                                        <SelectItem value="approved">Approved</SelectItem>
-                                        <SelectItem value="pending">Pending</SelectItem>
+                                        <SelectItem value="all">
+                                            All Status
+                                        </SelectItem>
+                                        <SelectItem value="approved">
+                                            Approved
+                                        </SelectItem>
+                                        <SelectItem value="pending">
+                                            Pending
+                                        </SelectItem>
                                     </SelectContent>
                                 </Select>
 
-                                <div className="flex items-center border rounded-md">
+                                <div className="flex items-center rounded-md border">
                                     <Button
-                                        variant={filters.view_mode === 'single' ? 'secondary' : 'ghost'}
+                                        variant={
+                                            filters.view_mode === 'single'
+                                                ? 'secondary'
+                                                : 'ghost'
+                                        }
                                         size="sm"
                                         className="rounded-r-none"
-                                        onClick={() => handleFilterChange('view_mode', 'single')}
+                                        onClick={() =>
+                                            handleFilterChange(
+                                                'view_mode',
+                                                'single',
+                                            )
+                                        }
                                     >
-                                        <LayoutGrid className="h-4 w-4 mr-1" />
+                                        <LayoutGrid className="mr-1 h-4 w-4" />
                                         Single
                                     </Button>
                                     <Button
-                                        variant={filters.view_mode === 'multi' ? 'secondary' : 'ghost'}
+                                        variant={
+                                            filters.view_mode === 'multi'
+                                                ? 'secondary'
+                                                : 'ghost'
+                                        }
                                         size="sm"
                                         className="rounded-l-none"
-                                        onClick={() => handleFilterChange('view_mode', 'multi')}
+                                        onClick={() =>
+                                            handleFilterChange(
+                                                'view_mode',
+                                                'multi',
+                                            )
+                                        }
                                     >
-                                        <Columns className="h-4 w-4 mr-1" />
-                                        3 Months
+                                        <Columns className="mr-1 h-4 w-4" />3
+                                        Months
                                     </Button>
                                 </div>
                             </div>
 
                             <div className="flex items-center gap-2">
-                                <Button variant="outline" size="sm" onClick={handleToday}>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleToday}
+                                >
                                     Today
                                 </Button>
-                                <Button variant="outline" size="icon" onClick={() => handleMonthChange('prev')}>
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => handleMonthChange('prev')}
+                                >
                                     <ChevronLeft className="h-4 w-4" />
                                 </Button>
-                                <div className="text-sm font-semibold min-w-[140px] text-center">
-                                    {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                                <div className="min-w-[140px] text-center text-sm font-semibold">
+                                    {currentMonth.toLocaleDateString('en-US', {
+                                        month: 'long',
+                                        year: 'numeric',
+                                    })}
                                 </div>
-                                <Button variant="outline" size="icon" onClick={() => handleMonthChange('next')}>
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => handleMonthChange('next')}
+                                >
                                     <ChevronRight className="h-4 w-4" />
                                 </Button>
                             </div>
@@ -462,54 +584,69 @@ export default function LeaveCalendar() {
                 </Card>
 
                 {/* Calendar and Details */}
-                <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
                     {/* Calendar(s) */}
                     <Card className="lg:col-span-3">
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
                                 <Calendar className="h-5 w-5" />
-                                {filters.view_mode === 'multi' ? '3-Month View' : 'Monthly View'}
+                                {filters.view_mode === 'multi'
+                                    ? '3-Month View'
+                                    : 'Monthly View'}
                             </CardTitle>
                             <CardDescription>
-                                {leaves.filter(l => l.status === 'approved').length} approved, {leaves.filter(l => l.status === 'pending').length} pending in view
+                                {
+                                    leaves.filter(
+                                        (l) => l.status === 'approved',
+                                    ).length
+                                }{' '}
+                                approved,{' '}
+                                {
+                                    leaves.filter((l) => l.status === 'pending')
+                                        .length
+                                }{' '}
+                                pending in view
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
                             {filters.view_mode === 'multi' ? (
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                                     {monthsToDisplay.map((monthDate, idx) => (
-                                        <div key={idx} className="border rounded-lg p-2">
+                                        <div
+                                            key={idx}
+                                            className="rounded-lg border p-2"
+                                        >
                                             {renderMonth(monthDate, true)}
                                         </div>
                                     ))}
                                 </div>
                             ) : (
-                                <div className="border rounded-lg max-w-lg mx-auto p-4">
+                                <div className="mx-auto max-w-lg rounded-lg border p-4">
                                     {renderMonth(currentMonth, false)}
                                 </div>
                             )}
 
                             {/* Legend */}
-                            <div className="flex flex-wrap gap-4 text-xs pt-4 mt-4 border-t">
+                            <div className="mt-4 flex flex-wrap gap-4 border-t pt-4 text-xs">
                                 <div className="flex items-center gap-2">
-                                    <div className="w-4 h-4 rounded bg-green-500 dark:bg-green-600" />
+                                    <div className="h-4 w-4 rounded bg-green-500 dark:bg-green-600" />
                                     <span>Approved</span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <div className="w-4 h-4 rounded bg-yellow-500 dark:bg-yellow-600" />
+                                    <div className="h-4 w-4 rounded bg-yellow-500 dark:bg-yellow-600" />
                                     <span>Pending</span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <div className="w-4 h-4 rounded bg-gradient-to-br from-green-500 to-yellow-500" />
+                                    <div className="h-4 w-4 rounded bg-gradient-to-br from-green-500 to-yellow-500" />
                                     <span>Both</span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <div className="w-4 h-4 rounded ring-2 ring-primary" />
+                                    <div className="h-4 w-4 rounded ring-2 ring-primary" />
                                     <span>Today</span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <div className="w-4 h-4 rounded bg-green-500 relative">
-                                        <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full" />
+                                    <div className="relative h-4 w-4 rounded bg-green-500">
+                                        <div className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-red-500" />
                                     </div>
                                     <span>Multiple employees</span>
                                 </div>
@@ -522,7 +659,10 @@ export default function LeaveCalendar() {
                         <CardHeader>
                             <div className="flex items-start justify-between gap-2">
                                 <div>
-                                    <CardTitle>Leave Requests ({displayedLeaves.length})</CardTitle>
+                                    <CardTitle>
+                                        Leave Requests ({displayedLeaves.length}
+                                        )
+                                    </CardTitle>
                                     <CardDescription>
                                         {selectedDate
                                             ? `On ${format(parseISO(selectedDate), 'MMM d, yyyy')} · grouped by campaign`
@@ -530,25 +670,35 @@ export default function LeaveCalendar() {
                                     </CardDescription>
                                 </div>
                                 {selectedDate && (
-                                    <Button variant="outline" size="sm" onClick={() => setSelectedDate(null)}>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setSelectedDate(null)}
+                                    >
                                         Clear
                                     </Button>
                                 )}
                             </div>
                         </CardHeader>
                         <CardContent>
-                            <div className="space-y-2 max-h-[600px] overflow-y-auto pr-2">
+                            <div className="max-h-[600px] space-y-2 overflow-y-auto pr-2">
                                 {displayedLeaves.length === 0 ? (
-                                    <div className="text-center text-muted-foreground py-8">
-                                        {selectedDate ? 'No leaves on this date' : 'No leaves in this period'}
+                                    <div className="py-8 text-center text-muted-foreground">
+                                        {selectedDate
+                                            ? 'No leaves on this date'
+                                            : 'No leaves in this period'}
                                     </div>
                                 ) : (
                                     displayGroups.map((group) => (
-                                        <React.Fragment key={group.campaign || 'all'}>
+                                        <React.Fragment
+                                            key={group.campaign || 'all'}
+                                        >
                                             {group.showHeader && (
                                                 <div className="flex items-center gap-2 px-1 pt-2 text-sm font-semibold">
                                                     {group.campaign}
-                                                    <span className="text-xs font-normal text-muted-foreground">({group.rows.length})</span>
+                                                    <span className="text-xs font-normal text-muted-foreground">
+                                                        ({group.rows.length})
+                                                    </span>
                                                 </div>
                                             )}
                                             {group.rows.map(renderLeaveItem)}

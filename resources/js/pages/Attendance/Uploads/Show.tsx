@@ -1,16 +1,35 @@
-import React from "react";
-import { Head, router } from "@inertiajs/react";
+import { PageHeader } from '@/components/PageHeader';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from '@/components/ui/card';
+import { useFlashMessage, usePageMeta } from '@/hooks';
+import AppLayout from '@/layouts/app-layout';
+import {
+    index as attendanceUploadsIndex,
+    show as attendanceUploadsShow,
+} from '@/routes/attendance-uploads';
+import type { SharedData } from '@/types';
+import { Head, router } from '@inertiajs/react';
 import { format } from 'date-fns';
-import AppLayout from "@/layouts/app-layout";
-import { useFlashMessage, usePageMeta } from "@/hooks";
-import { PageHeader } from "@/components/PageHeader";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ArrowLeft, FileText, AlertTriangle, Calendar, Users, CheckCircle, XCircle, Clock, MapPin } from "lucide-react";
-import type { SharedData } from "@/types";
-import { index as attendanceUploadsIndex, show as attendanceUploadsShow } from "@/routes/attendance-uploads";
+import {
+    AlertTriangle,
+    ArrowLeft,
+    Calendar,
+    CheckCircle,
+    Clock,
+    FileText,
+    MapPin,
+    Users,
+    XCircle,
+} from 'lucide-react';
+import React from 'react';
 
 interface Upload {
     id: number;
@@ -51,7 +70,10 @@ const UploadShow: React.FC<PageProps> = ({ upload }) => {
         title: `Upload Details - ${upload.original_filename}`,
         breadcrumbs: [
             { title: 'Recent Uploads', href: attendanceUploadsIndex().url },
-            { title: upload.original_filename, href: attendanceUploadsShow({ upload: upload.id }).url },
+            {
+                title: upload.original_filename,
+                href: attendanceUploadsShow({ upload: upload.id }).url,
+            },
         ],
     });
 
@@ -61,10 +83,26 @@ const UploadShow: React.FC<PageProps> = ({ upload }) => {
 
     const getStatusBadge = (status: Upload['status']) => {
         const variants = {
-            pending: { className: 'bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-100', icon: Clock },
-            processing: { className: 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900 dark:text-blue-100', icon: Clock },
-            completed: { className: 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900 dark:text-green-100', icon: CheckCircle },
-            failed: { className: 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900 dark:text-red-100', icon: XCircle },
+            pending: {
+                className:
+                    'bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-100',
+                icon: Clock,
+            },
+            processing: {
+                className:
+                    'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900 dark:text-blue-100',
+                icon: Clock,
+            },
+            completed: {
+                className:
+                    'bg-green-100 text-green-800 border-green-200 dark:bg-green-900 dark:text-green-100',
+                icon: CheckCircle,
+            },
+            failed: {
+                className:
+                    'bg-red-100 text-red-800 border-red-200 dark:bg-red-900 dark:text-red-100',
+                icon: XCircle,
+            },
         };
 
         const variant = variants[status];
@@ -78,12 +116,15 @@ const UploadShow: React.FC<PageProps> = ({ upload }) => {
         );
     };
 
-    const formattedDateRange = upload.date_from && upload.date_to
-        ? (upload.date_from === upload.date_to
-            ? format(new Date(upload.date_from), 'EEEE, MMMM dd, yyyy')
-            : `${format(new Date(upload.date_from), 'MMMM dd, yyyy')} - ${format(new Date(upload.date_to), 'MMMM dd, yyyy')}`)
-        : format(new Date(upload.shift_date), 'EEEE, MMMM dd, yyyy');
-    const hasIssues = (upload.unmatched_names_list && upload.unmatched_names_list.length > 0) ||
+    const formattedDateRange =
+        upload.date_from && upload.date_to
+            ? upload.date_from === upload.date_to
+                ? format(new Date(upload.date_from), 'EEEE, MMMM dd, yyyy')
+                : `${format(new Date(upload.date_from), 'MMMM dd, yyyy')} - ${format(new Date(upload.date_to), 'MMMM dd, yyyy')}`
+            : format(new Date(upload.shift_date), 'EEEE, MMMM dd, yyyy');
+    const hasIssues =
+        (upload.unmatched_names_list &&
+            upload.unmatched_names_list.length > 0) ||
         (upload.date_warnings && upload.date_warnings.length > 0);
 
     return (
@@ -93,7 +134,7 @@ const UploadShow: React.FC<PageProps> = ({ upload }) => {
             <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3">
                 <div className="flex items-center gap-4">
                     <Button variant="ghost" size="sm" onClick={goBack}>
-                        <ArrowLeft className="h-4 w-4 mr-2" />
+                        <ArrowLeft className="mr-2 h-4 w-4" />
                         Back to Uploads
                     </Button>
                 </div>
@@ -107,7 +148,9 @@ const UploadShow: React.FC<PageProps> = ({ upload }) => {
                 {upload.error_message && (
                     <Alert variant="destructive">
                         <AlertTriangle className="h-4 w-4" />
-                        <AlertDescription>{upload.error_message}</AlertDescription>
+                        <AlertDescription>
+                            {upload.error_message}
+                        </AlertDescription>
                     </Alert>
                 )}
 
@@ -115,11 +158,15 @@ const UploadShow: React.FC<PageProps> = ({ upload }) => {
                 <div className="grid gap-4 md:grid-cols-4">
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium">Total Records</CardTitle>
+                            <CardTitle className="text-sm font-medium">
+                                Total Records
+                            </CardTitle>
                             <FileText className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">{upload.total_records}</div>
+                            <div className="text-2xl font-bold">
+                                {upload.total_records}
+                            </div>
                             <p className="text-xs text-muted-foreground">
                                 {upload.processed_records} processed
                             </p>
@@ -128,7 +175,9 @@ const UploadShow: React.FC<PageProps> = ({ upload }) => {
 
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium">Matched</CardTitle>
+                            <CardTitle className="text-sm font-medium">
+                                Matched
+                            </CardTitle>
                             <CheckCircle className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
@@ -137,15 +186,22 @@ const UploadShow: React.FC<PageProps> = ({ upload }) => {
                             </div>
                             <p className="text-xs text-muted-foreground">
                                 {upload.total_records > 0
-                                    ? Math.round((upload.matched_employees / upload.total_records) * 100)
-                                    : 0}% match rate
+                                    ? Math.round(
+                                          (upload.matched_employees /
+                                              upload.total_records) *
+                                              100,
+                                      )
+                                    : 0}
+                                % match rate
                             </p>
                         </CardContent>
                     </Card>
 
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium">Unmatched</CardTitle>
+                            <CardTitle className="text-sm font-medium">
+                                Unmatched
+                            </CardTitle>
                             <XCircle className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
@@ -153,14 +209,18 @@ const UploadShow: React.FC<PageProps> = ({ upload }) => {
                                 {upload.unmatched_names}
                             </div>
                             <p className="text-xs text-muted-foreground">
-                                {upload.unmatched_names > 0 ? 'Needs attention' : 'All matched'}
+                                {upload.unmatched_names > 0
+                                    ? 'Needs attention'
+                                    : 'All matched'}
                             </p>
                         </CardContent>
                     </Card>
 
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium">Status</CardTitle>
+                            <CardTitle className="text-sm font-medium">
+                                Status
+                            </CardTitle>
                             {upload.status === 'completed' ? (
                                 <CheckCircle className="h-4 w-4 text-muted-foreground" />
                             ) : upload.status === 'failed' ? (
@@ -170,7 +230,9 @@ const UploadShow: React.FC<PageProps> = ({ upload }) => {
                             )}
                         </CardHeader>
                         <CardContent>
-                            <div className="mb-2">{getStatusBadge(upload.status)}</div>
+                            <div className="mb-2">
+                                {getStatusBadge(upload.status)}
+                            </div>
                         </CardContent>
                     </Card>
                 </div>
@@ -187,52 +249,82 @@ const UploadShow: React.FC<PageProps> = ({ upload }) => {
                         <div className="grid gap-4 md:grid-cols-2">
                             <div className="space-y-3">
                                 <div>
-                                    <p className="text-sm font-medium text-muted-foreground">Biometric Site</p>
-                                    <div className="flex items-center gap-2 mt-1">
+                                    <p className="text-sm font-medium text-muted-foreground">
+                                        Biometric Site
+                                    </p>
+                                    <div className="mt-1 flex items-center gap-2">
                                         <MapPin className="h-4 w-4 text-muted-foreground" />
-                                        <span className="text-base">{upload.biometric_site?.name || 'N/A'}</span>
+                                        <span className="text-base">
+                                            {upload.biometric_site?.name ||
+                                                'N/A'}
+                                        </span>
                                     </div>
                                 </div>
                                 <div>
-                                    <p className="text-sm font-medium text-muted-foreground">Date Range</p>
-                                    <div className="flex items-center gap-2 mt-1">
+                                    <p className="text-sm font-medium text-muted-foreground">
+                                        Date Range
+                                    </p>
+                                    <div className="mt-1 flex items-center gap-2">
                                         <Calendar className="h-4 w-4 text-muted-foreground" />
                                         <span className="text-base">
-                                            {upload.date_from && upload.date_to ? (
-                                                upload.date_from === upload.date_to ? (
-                                                    format(new Date(upload.date_from), 'MMM dd, yyyy')
-                                                ) : (
-                                                    `${format(new Date(upload.date_from), 'MMM dd, yyyy')} - ${format(new Date(upload.date_to), 'MMM dd, yyyy')}`
-                                                )
-                                            ) : (
-                                                format(new Date(upload.shift_date), 'MMM dd, yyyy')
-                                            )}
+                                            {upload.date_from && upload.date_to
+                                                ? upload.date_from ===
+                                                  upload.date_to
+                                                    ? format(
+                                                          new Date(
+                                                              upload.date_from,
+                                                          ),
+                                                          'MMM dd, yyyy',
+                                                      )
+                                                    : `${format(new Date(upload.date_from), 'MMM dd, yyyy')} - ${format(new Date(upload.date_to), 'MMM dd, yyyy')}`
+                                                : format(
+                                                      new Date(
+                                                          upload.shift_date,
+                                                      ),
+                                                      'MMM dd, yyyy',
+                                                  )}
                                         </span>
                                     </div>
                                 </div>
                             </div>
                             <div className="space-y-3">
                                 <div>
-                                    <p className="text-sm font-medium text-muted-foreground">Uploaded By</p>
-                                    <div className="flex items-center gap-2 mt-1">
+                                    <p className="text-sm font-medium text-muted-foreground">
+                                        Uploaded By
+                                    </p>
+                                    <div className="mt-1 flex items-center gap-2">
                                         <Users className="h-4 w-4 text-muted-foreground" />
-                                        <span className="text-base">{upload.uploaded_by?.name || 'Unknown'}</span>
+                                        <span className="text-base">
+                                            {upload.uploaded_by?.name ||
+                                                'Unknown'}
+                                        </span>
                                     </div>
                                 </div>
                                 <div>
-                                    <p className="text-sm font-medium text-muted-foreground">Upload Date</p>
-                                    <div className="flex items-center gap-2 mt-1">
+                                    <p className="text-sm font-medium text-muted-foreground">
+                                        Upload Date
+                                    </p>
+                                    <div className="mt-1 flex items-center gap-2">
                                         <Clock className="h-4 w-4 text-muted-foreground" />
-                                        <span className="text-base">{format(new Date(upload.created_at), 'MMM dd, yyyy HH:mm')}</span>
+                                        <span className="text-base">
+                                            {format(
+                                                new Date(upload.created_at),
+                                                'MMM dd, yyyy HH:mm',
+                                            )}
+                                        </span>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
                         {upload.notes && (
-                            <div className="mt-4 pt-4 border-t">
-                                <p className="text-sm font-medium text-muted-foreground mb-2">Notes</p>
-                                <p className="text-foreground">{upload.notes}</p>
+                            <div className="mt-4 border-t pt-4">
+                                <p className="mb-2 text-sm font-medium text-muted-foreground">
+                                    Notes
+                                </p>
+                                <p className="text-foreground">
+                                    {upload.notes}
+                                </p>
                             </div>
                         )}
                     </CardContent>
@@ -251,66 +343,94 @@ const UploadShow: React.FC<PageProps> = ({ upload }) => {
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <Alert className="border-orange-200 bg-orange-50 dark:bg-orange-950 dark:border-orange-800">
+                            <Alert className="border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950">
                                 <AlertTriangle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
                                 <AlertDescription className="text-orange-800 dark:text-orange-200">
-                                    {upload.date_warnings.map((warning, index) => (
-                                        <div key={index} className="mb-1 last:mb-0">{warning}</div>
-                                    ))}
+                                    {upload.date_warnings.map(
+                                        (warning, index) => (
+                                            <div
+                                                key={index}
+                                                className="mb-1 last:mb-0"
+                                            >
+                                                {warning}
+                                            </div>
+                                        ),
+                                    )}
                                 </AlertDescription>
                             </Alert>
 
-                            {upload.dates_found && upload.dates_found.length > 0 && (
-                                <div className="mt-4">
-                                    <p className="text-sm font-medium text-foreground mb-2">Dates Found in File:</p>
-                                    <div className="flex flex-wrap gap-2">
-                                        {upload.dates_found.map((date, index) => (
-                                            <Badge key={index} variant="outline" className="text-sm">
-                                                <Calendar className="mr-1 h-3 w-3" />
-                                                {format(new Date(date), 'MMM dd, yyyy')}
-                                            </Badge>
-                                        ))}
+                            {upload.dates_found &&
+                                upload.dates_found.length > 0 && (
+                                    <div className="mt-4">
+                                        <p className="mb-2 text-sm font-medium text-foreground">
+                                            Dates Found in File:
+                                        </p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {upload.dates_found.map(
+                                                (date, index) => (
+                                                    <Badge
+                                                        key={index}
+                                                        variant="outline"
+                                                        className="text-sm"
+                                                    >
+                                                        <Calendar className="mr-1 h-3 w-3" />
+                                                        {format(
+                                                            new Date(date),
+                                                            'MMM dd, yyyy',
+                                                        )}
+                                                    </Badge>
+                                                ),
+                                            )}
+                                        </div>
                                     </div>
-                                </div>
-                            )}
+                                )}
                         </CardContent>
                     </Card>
                 )}
 
                 {/* Unmatched Employee Names */}
-                {upload.unmatched_names_list && upload.unmatched_names_list.length > 0 && (
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2 text-red-600 dark:text-red-400">
-                                <XCircle className="h-5 w-5" />
-                                Unmatched Employee Names ({upload.unmatched_names_list.length})
-                            </CardTitle>
-                            <CardDescription>
-                                These names from the biometric file were not found in the system
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <Alert className="border-red-200 bg-red-50 mb-4 dark:bg-red-950 dark:border-red-800">
-                                <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
-                                <AlertDescription className="text-red-800 dark:text-red-200">
-                                    These employees may need to be added to the system or their names may need to be corrected in the biometric device.
-                                </AlertDescription>
-                            </Alert>
+                {upload.unmatched_names_list &&
+                    upload.unmatched_names_list.length > 0 && (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2 text-red-600 dark:text-red-400">
+                                    <XCircle className="h-5 w-5" />
+                                    Unmatched Employee Names (
+                                    {upload.unmatched_names_list.length})
+                                </CardTitle>
+                                <CardDescription>
+                                    These names from the biometric file were not
+                                    found in the system
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <Alert className="mb-4 border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950">
+                                    <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                                    <AlertDescription className="text-red-800 dark:text-red-200">
+                                        These employees may need to be added to
+                                        the system or their names may need to be
+                                        corrected in the biometric device.
+                                    </AlertDescription>
+                                </Alert>
 
-                            <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
-                                {upload.unmatched_names_list.map((name, index) => (
-                                    <div
-                                        key={index}
-                                        className="flex items-center gap-2 p-3 border rounded-lg bg-muted"
-                                    >
-                                        <XCircle className="h-4 w-4 text-red-500 dark:text-red-400 flex-shrink-0" />
-                                        <span className="text-sm font-medium text-foreground">{name}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </CardContent>
-                    </Card>
-                )}
+                                <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
+                                    {upload.unmatched_names_list.map(
+                                        (name, index) => (
+                                            <div
+                                                key={index}
+                                                className="flex items-center gap-2 rounded-lg border bg-muted p-3"
+                                            >
+                                                <XCircle className="h-4 w-4 flex-shrink-0 text-red-500 dark:text-red-400" />
+                                                <span className="text-sm font-medium text-foreground">
+                                                    {name}
+                                                </span>
+                                            </div>
+                                        ),
+                                    )}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
 
                 {/* Success Message */}
                 {upload.status === 'completed' && !hasIssues && (
@@ -319,8 +439,13 @@ const UploadShow: React.FC<PageProps> = ({ upload }) => {
                             <div className="flex items-center gap-3 text-green-600 dark:text-green-400">
                                 <CheckCircle className="h-6 w-6" />
                                 <div>
-                                    <p className="font-semibold text-lg">Upload Completed Successfully</p>
-                                    <p className="text-sm text-muted-foreground">All employees were matched and records processed without issues.</p>
+                                    <p className="text-lg font-semibold">
+                                        Upload Completed Successfully
+                                    </p>
+                                    <p className="text-sm text-muted-foreground">
+                                        All employees were matched and records
+                                        processed without issues.
+                                    </p>
                                 </div>
                             </div>
                         </CardContent>

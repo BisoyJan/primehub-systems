@@ -1,12 +1,15 @@
-import { useState, FormEvent } from 'react';
-import { Head, router } from '@inertiajs/react';
-import { toast } from 'sonner';
-import AppLayout from '@/layouts/app-layout';
+import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from '@/components/ui/card';
 import { DatePicker } from '@/components/ui/date-picker';
-import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
     Select,
     SelectContent,
@@ -14,16 +17,19 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, Save, Calendar } from 'lucide-react';
-import { PageHeader } from '@/components/PageHeader';
+import { Textarea } from '@/components/ui/textarea';
 import { usePageMeta, useReturnTo } from '@/hooks';
+import AppLayout from '@/layouts/app-layout';
 import {
-    index as pcMaintenanceIndexRoute,
     edit as pcMaintenanceEditRoute,
+    index as pcMaintenanceIndexRoute,
     update as pcMaintenanceUpdateRoute,
 } from '@/routes/pc-maintenance';
 import { index as pcSpecsIndexRoute } from '@/routes/pcspecs';
+import { Head, router } from '@inertiajs/react';
+import { ArrowLeft, Calendar, Save } from 'lucide-react';
+import { FormEvent, useState } from 'react';
+import { toast } from 'sonner';
 
 interface Site {
     id: number;
@@ -96,8 +102,8 @@ export default function Edit({ maintenance, pcSpecs }: EditProps) {
         breadcrumbs: [
             { title: 'PC Specs', href: pcSpecsIndexRoute().url },
             { title: 'PC Maintenance', href: pcMaintenanceIndexRoute().url },
-            { title: 'Edit', href: pcMaintenanceEditRoute(maintenance.id).url }
-        ]
+            { title: 'Edit', href: pcMaintenanceEditRoute(maintenance.id).url },
+        ],
     });
 
     // Get display name for a PC spec
@@ -118,26 +124,32 @@ export default function Edit({ maintenance, pcSpecs }: EditProps) {
 
         setLoading(true);
 
-        router.put(pcMaintenanceUpdateRoute(maintenance.id).url, {
-            pc_spec_id: formData.pc_spec_id,
-            last_maintenance_date: formData.last_maintenance_date,
-            next_due_date: formData.next_due_date,
-            maintenance_type: formData.maintenance_type,
-            notes: formData.notes,
-            performed_by: formData.performed_by,
-            status: formData.status,
-            _return_to: returnTo,
-        }, {
-            preserveScroll: true,
-            onSuccess: () => {
-                toast.success('Maintenance record updated successfully');
+        router.put(
+            pcMaintenanceUpdateRoute(maintenance.id).url,
+            {
+                pc_spec_id: formData.pc_spec_id,
+                last_maintenance_date: formData.last_maintenance_date,
+                next_due_date: formData.next_due_date,
+                maintenance_type: formData.maintenance_type,
+                notes: formData.notes,
+                performed_by: formData.performed_by,
+                status: formData.status,
+                _return_to: returnTo,
             },
-            onError: (errors) => {
-                console.error('Validation errors:', errors);
-                toast.error('Failed to update maintenance record. Please check the form.');
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    toast.success('Maintenance record updated successfully');
+                },
+                onError: (errors) => {
+                    console.error('Validation errors:', errors);
+                    toast.error(
+                        'Failed to update maintenance record. Please check the form.',
+                    );
+                },
+                onFinish: () => setLoading(false),
             },
-            onFinish: () => setLoading(false),
-        });
+        );
     };
 
     const handleCancel = () => {
@@ -174,15 +186,21 @@ export default function Edit({ maintenance, pcSpecs }: EditProps) {
                                 <Select
                                     value={formData.pc_spec_id.toString()}
                                     onValueChange={(value) =>
-                                        setFormData({ ...formData, pc_spec_id: parseInt(value) })
+                                        setFormData({
+                                            ...formData,
+                                            pc_spec_id: parseInt(value),
+                                        })
                                     }
                                 >
                                     <SelectTrigger>
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {pcSpecs.map(pcSpec => (
-                                            <SelectItem key={pcSpec.id} value={pcSpec.id.toString()}>
+                                        {pcSpecs.map((pcSpec) => (
+                                            <SelectItem
+                                                key={pcSpec.id}
+                                                value={pcSpec.id.toString()}
+                                            >
                                                 {getPcSpecDisplay(pcSpec)}
                                             </SelectItem>
                                         ))}
@@ -192,20 +210,34 @@ export default function Edit({ maintenance, pcSpecs }: EditProps) {
 
                             {/* Display current station info */}
                             {maintenance.current_station && (
-                                <div className="mt-4 p-3 bg-muted rounded-md">
+                                <div className="mt-4 rounded-md bg-muted p-3">
                                     <p className="text-sm text-muted-foreground">
-                                        <span className="font-medium">Current Station:</span>{' '}
-                                        {maintenance.current_station.station_number}
+                                        <span className="font-medium">
+                                            Current Station:
+                                        </span>{' '}
+                                        {
+                                            maintenance.current_station
+                                                .station_number
+                                        }
                                         {maintenance.current_station.site && (
-                                            <> ({maintenance.current_station.site.name})</>
+                                            <>
+                                                {' '}
+                                                (
+                                                {
+                                                    maintenance.current_station
+                                                        .site.name
+                                                }
+                                                )
+                                            </>
                                         )}
                                     </p>
                                 </div>
                             )}
                             {!maintenance.current_station && (
-                                <div className="mt-4 p-3 bg-muted rounded-md">
+                                <div className="mt-4 rounded-md bg-muted p-3">
                                     <p className="text-sm text-muted-foreground italic">
-                                        This PC is not currently assigned to any station.
+                                        This PC is not currently assigned to any
+                                        station.
                                     </p>
                                 </div>
                             )}
@@ -221,47 +253,74 @@ export default function Edit({ maintenance, pcSpecs }: EditProps) {
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                 <div>
                                     <Label htmlFor="last_maintenance_date">
-                                        Last Maintenance Date <span className="text-red-500">*</span>
+                                        Last Maintenance Date{' '}
+                                        <span className="text-red-500">*</span>
                                     </Label>
                                     <DatePicker
                                         value={formData.last_maintenance_date}
-                                        onChange={(value) => setFormData({ ...formData, last_maintenance_date: value })}
+                                        onChange={(value) =>
+                                            setFormData({
+                                                ...formData,
+                                                last_maintenance_date: value,
+                                            })
+                                        }
                                         placeholder="Select last maintenance date"
                                     />
                                 </div>
 
                                 <div>
                                     <Label htmlFor="next_due_date">
-                                        Next Due Date <span className="text-red-500">*</span>
+                                        Next Due Date{' '}
+                                        <span className="text-red-500">*</span>
                                     </Label>
                                     <DatePicker
                                         value={formData.next_due_date}
-                                        onChange={(value) => setFormData({ ...formData, next_due_date: value })}
+                                        onChange={(value) =>
+                                            setFormData({
+                                                ...formData,
+                                                next_due_date: value,
+                                            })
+                                        }
                                         placeholder="Select next due date"
                                     />
                                 </div>
 
                                 <div>
-                                    <Label htmlFor="maintenance_type">Maintenance Type</Label>
+                                    <Label htmlFor="maintenance_type">
+                                        Maintenance Type
+                                    </Label>
                                     <Input
                                         id="maintenance_type"
                                         type="text"
                                         value={formData.maintenance_type}
-                                        onChange={(e) => setFormData({ ...formData, maintenance_type: e.target.value })}
+                                        onChange={(e) =>
+                                            setFormData({
+                                                ...formData,
+                                                maintenance_type:
+                                                    e.target.value,
+                                            })
+                                        }
                                         placeholder="e.g., Routine Maintenance, Deep Cleaning, Hardware Check"
                                     />
                                 </div>
 
                                 <div>
-                                    <Label htmlFor="performed_by">Performed By</Label>
+                                    <Label htmlFor="performed_by">
+                                        Performed By
+                                    </Label>
                                     <Input
                                         id="performed_by"
                                         type="text"
                                         value={formData.performed_by}
-                                        onChange={(e) => setFormData({ ...formData, performed_by: e.target.value })}
+                                        onChange={(e) =>
+                                            setFormData({
+                                                ...formData,
+                                                performed_by: e.target.value,
+                                            })
+                                        }
                                         placeholder="Name of technician"
                                     />
                                 </div>
@@ -270,17 +329,31 @@ export default function Edit({ maintenance, pcSpecs }: EditProps) {
                                     <Label htmlFor="status">Status</Label>
                                     <Select
                                         value={formData.status}
-                                        onValueChange={(value: 'completed' | 'pending' | 'overdue') =>
-                                            setFormData({ ...formData, status: value })
+                                        onValueChange={(
+                                            value:
+                                                | 'completed'
+                                                | 'pending'
+                                                | 'overdue',
+                                        ) =>
+                                            setFormData({
+                                                ...formData,
+                                                status: value,
+                                            })
                                         }
                                     >
                                         <SelectTrigger>
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="completed">Completed</SelectItem>
-                                            <SelectItem value="pending">Pending</SelectItem>
-                                            <SelectItem value="overdue">Overdue</SelectItem>
+                                            <SelectItem value="completed">
+                                                Completed
+                                            </SelectItem>
+                                            <SelectItem value="pending">
+                                                Pending
+                                            </SelectItem>
+                                            <SelectItem value="overdue">
+                                                Overdue
+                                            </SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -291,7 +364,12 @@ export default function Edit({ maintenance, pcSpecs }: EditProps) {
                                 <Textarea
                                     id="notes"
                                     value={formData.notes}
-                                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                                    onChange={(e) =>
+                                        setFormData({
+                                            ...formData,
+                                            notes: e.target.value,
+                                        })
+                                    }
                                     placeholder="Additional notes about the maintenance..."
                                     rows={4}
                                 />
@@ -307,11 +385,11 @@ export default function Edit({ maintenance, pcSpecs }: EditProps) {
                             onClick={handleCancel}
                             disabled={loading}
                         >
-                            <ArrowLeft className="h-4 w-4 mr-2" />
+                            <ArrowLeft className="mr-2 h-4 w-4" />
                             Cancel
                         </Button>
                         <Button type="submit" disabled={loading}>
-                            <Save className="h-4 w-4 mr-2" />
+                            <Save className="mr-2 h-4 w-4" />
                             {loading ? 'Updating...' : 'Update'}
                         </Button>
                     </div>

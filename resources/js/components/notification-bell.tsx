@@ -1,16 +1,16 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { router } from '@inertiajs/react';
-import { Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useItConcernNotifications } from '@/hooks/use-it-concern-notifications';
+import { usePermission } from '@/hooks/use-permission';
+import { router } from '@inertiajs/react';
+import { Bell } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { NotificationDropdown } from './notification-dropdown';
-import { usePermission } from '@/hooks/use-permission';
-import { useItConcernNotifications } from '@/hooks/use-it-concern-notifications';
 
 interface Notification {
     id: number;
@@ -33,10 +33,12 @@ const isValidJsonResponse = (response: Response): boolean => {
 
 // Helper to get common headers for JSON requests
 const getJsonHeaders = (): HeadersInit => ({
-    'Accept': 'application/json',
+    Accept: 'application/json',
     'X-Requested-With': 'XMLHttpRequest',
     'Content-Type': 'application/json',
-    'X-CSRF-TOKEN': document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '',
+    'X-CSRF-TOKEN':
+        document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')
+            ?.content || '',
 });
 
 export function NotificationBell() {
@@ -94,7 +96,8 @@ export function NotificationBell() {
             const data = await response.json();
             setUnreadCount(data.count);
         } catch (error) {
-            if (error instanceof DOMException && error.name === 'AbortError') return;
+            if (error instanceof DOMException && error.name === 'AbortError')
+                return;
             console.error('Failed to fetch unread count:', error);
         }
     };
@@ -112,20 +115,27 @@ export function NotificationBell() {
 
     const handleMarkAsRead = async (notificationId: number) => {
         try {
-            const response = await fetch(`/notifications/${notificationId}/read`, {
-                method: 'POST',
-                headers: getJsonHeaders(),
-            });
+            const response = await fetch(
+                `/notifications/${notificationId}/read`,
+                {
+                    method: 'POST',
+                    headers: getJsonHeaders(),
+                },
+            );
 
             if (!isValidJsonResponse(response)) {
                 return;
             }
 
             // Update local state
-            setNotifications(prev =>
-                prev.map(n => n.id === notificationId ? { ...n, read_at: new Date().toISOString() } : n)
+            setNotifications((prev) =>
+                prev.map((n) =>
+                    n.id === notificationId
+                        ? { ...n, read_at: new Date().toISOString() }
+                        : n,
+                ),
             );
-            setUnreadCount(prev => Math.max(0, prev - 1));
+            setUnreadCount((prev) => Math.max(0, prev - 1));
             toast.success('Marked as read');
         } catch (error) {
             console.error('Failed to mark notification as read:', error);
@@ -145,8 +155,8 @@ export function NotificationBell() {
             }
 
             // Update local state
-            setNotifications(prev =>
-                prev.map(n => ({ ...n, read_at: new Date().toISOString() }))
+            setNotifications((prev) =>
+                prev.map((n) => ({ ...n, read_at: new Date().toISOString() })),
             );
             setUnreadCount(0);
             toast.success('All notifications marked as read');
@@ -195,10 +205,14 @@ export function NotificationBell() {
             }
 
             // Update local state
-            const deletedNotification = notifications.find(n => n.id === notificationId);
-            setNotifications(prev => prev.filter(n => n.id !== notificationId));
+            const deletedNotification = notifications.find(
+                (n) => n.id === notificationId,
+            );
+            setNotifications((prev) =>
+                prev.filter((n) => n.id !== notificationId),
+            );
             if (deletedNotification && !deletedNotification.read_at) {
-                setUnreadCount(prev => Math.max(0, prev - 1));
+                setUnreadCount((prev) => Math.max(0, prev - 1));
             }
             toast.success('Notification deleted');
         } catch (error) {
@@ -230,7 +244,9 @@ export function NotificationBell() {
             const hasNotificationPrefix = /^\(\d+\)\s/.test(title);
 
             if (unreadCount > 0) {
-                const cleanTitle = hasNotificationPrefix ? title.replace(/^\(\d+\)\s/, '') : title;
+                const cleanTitle = hasNotificationPrefix
+                    ? title.replace(/^\(\d+\)\s/, '')
+                    : title;
                 if (!title.startsWith(`(${unreadCount})`)) {
                     document.title = `(${unreadCount}) ${cleanTitle}`;
                 }
@@ -259,7 +275,11 @@ export function NotificationBell() {
                     variant="ghost"
                     size="icon"
                     className="relative h-9 w-9"
-                    aria-label={unreadCount > 0 ? `Notifications (${unreadCount} unread)` : 'Notifications'}
+                    aria-label={
+                        unreadCount > 0
+                            ? `Notifications (${unreadCount} unread)`
+                            : 'Notifications'
+                    }
                 >
                     <Bell className="h-5 w-5" />
                     {unreadCount > 0 && (

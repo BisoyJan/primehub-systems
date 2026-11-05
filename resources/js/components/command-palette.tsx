@@ -1,5 +1,3 @@
-import { useEffect, useState } from 'react';
-import { router, usePage } from '@inertiajs/react';
 import {
     CommandDialog,
     CommandEmpty,
@@ -10,19 +8,51 @@ import {
     CommandSeparator,
 } from '@/components/ui/command';
 import { usePermission } from '@/hooks/useAuthorization';
-import type { SharedData } from '@/types';
-import { LucideIcon, LayoutGrid, CpuIcon, Microchip, Computer, ArrowUpDown, Wrench, CalendarCheck, Clock, Database, Award, Settings, ClipboardCheck, FileText, AlertCircle, Plane, CreditCard, Pill, Shield, Timer, Coffee, BarChart3, User, Activity, DatabaseBackup } from 'lucide-react';
 import { dashboard } from '@/routes';
-import { index as processorIndex } from '@/routes/processorspecs';
-import { index as pcIndex } from '@/routes/pcspecs';
-import { index as stationIndex } from '@/routes/stations';
-import { index as medicationRequestsIndex } from '@/routes/medication-requests';
 import { index as attendanceToolsIndex } from '@/routes/attendance-tools';
+import {
+    dashboard as breakDashboard,
+    reports as breakReports,
+    index as breakTimerIndex,
+} from '@/routes/break-timer';
+import { index as breakPoliciesIndex } from '@/routes/break-timer/policies';
 import { dashboard as coachingDashboard } from '@/routes/coaching';
 import { index as coachingSessionsIndex } from '@/routes/coaching/sessions';
-import { index as breakTimerIndex, dashboard as breakDashboard, reports as breakReports } from '@/routes/break-timer';
-import { index as breakPoliciesIndex } from '@/routes/break-timer/policies';
 import { index as databaseBackupsIndex } from '@/routes/database-backups';
+import { index as medicationRequestsIndex } from '@/routes/medication-requests';
+import { index as pcIndex } from '@/routes/pcspecs';
+import { index as processorIndex } from '@/routes/processorspecs';
+import { index as stationIndex } from '@/routes/stations';
+import type { SharedData } from '@/types';
+import { router, usePage } from '@inertiajs/react';
+import {
+    Activity,
+    AlertCircle,
+    ArrowUpDown,
+    Award,
+    BarChart3,
+    CalendarCheck,
+    ClipboardCheck,
+    Clock,
+    Coffee,
+    Computer,
+    CpuIcon,
+    CreditCard,
+    Database,
+    DatabaseBackup,
+    FileText,
+    LayoutGrid,
+    LucideIcon,
+    Microchip,
+    Pill,
+    Plane,
+    Settings,
+    Shield,
+    Timer,
+    User,
+    Wrench,
+} from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 interface NavItemConfig {
     title: string;
@@ -36,13 +66,22 @@ interface NavGroupConfig {
     items: NavItemConfig[];
 }
 
-function getNavigationGroups(userId: number, userRole: string): NavGroupConfig[] {
+function getNavigationGroups(
+    userId: number,
+    userRole: string,
+): NavGroupConfig[] {
     const restrictedRoles = ['Agent', 'IT', 'Utility'];
     const isRestrictedUser = restrictedRoles.includes(userRole);
-    const attendancePointsHref = isRestrictedUser ? `/attendance-points/${userId}` : '/attendance-points';
-    const leaveCreditsHref = isRestrictedUser ? `/form-requests/leave-requests/credits/${userId}` : '/form-requests/leave-requests/credits';
+    const attendancePointsHref = isRestrictedUser
+        ? `/attendance-points/${userId}`
+        : '/attendance-points';
+    const leaveCreditsHref = isRestrictedUser
+        ? `/form-requests/leave-requests/credits/${userId}`
+        : '/form-requests/leave-requests/credits';
 
-    const resolveHref = (href: string | { url: string } | (() => string)): string => {
+    const resolveHref = (
+        href: string | { url: string } | (() => string),
+    ): string => {
         if (typeof href === 'string') return href;
         if (typeof href === 'function') return href();
         return href.url;
@@ -52,71 +91,203 @@ function getNavigationGroups(userId: number, userRole: string): NavGroupConfig[]
         {
             label: 'Platform',
             items: [
-                { title: 'Dashboard', href: resolveHref(dashboard()), icon: LayoutGrid },
+                {
+                    title: 'Dashboard',
+                    href: resolveHref(dashboard()),
+                    icon: LayoutGrid,
+                },
             ],
         },
         {
             label: 'Computer Specs',
             items: [
-                { title: 'Processor Specs', href: processorIndex.url(), icon: CpuIcon, permission: 'hardware.view' },
-                { title: 'PC Specs', href: pcIndex.url(), icon: Microchip, permission: 'hardware.view' },
+                {
+                    title: 'Processor Specs',
+                    href: processorIndex.url(),
+                    icon: CpuIcon,
+                    permission: 'hardware.view',
+                },
+                {
+                    title: 'PC Specs',
+                    href: pcIndex.url(),
+                    icon: Microchip,
+                    permission: 'hardware.view',
+                },
             ],
         },
         {
             label: 'Station Details',
             items: [
-                { title: 'Stations', href: stationIndex.url(), icon: Computer, permission: 'stations.view' },
-                { title: 'PC Transfer', href: '/pc-transfers', icon: ArrowUpDown, permission: 'pc_transfers.view' },
-                { title: 'PC Maintenance', href: '/pc-maintenance', icon: Wrench, permission: 'pc_maintenance.view' },
+                {
+                    title: 'Stations',
+                    href: stationIndex.url(),
+                    icon: Computer,
+                    permission: 'stations.view',
+                },
+                {
+                    title: 'PC Transfer',
+                    href: '/pc-transfers',
+                    icon: ArrowUpDown,
+                    permission: 'pc_transfers.view',
+                },
+                {
+                    title: 'PC Maintenance',
+                    href: '/pc-maintenance',
+                    icon: Wrench,
+                    permission: 'pc_maintenance.view',
+                },
             ],
         },
         {
             label: 'Attendance',
             items: [
-                { title: 'Attendance', href: '/attendance', icon: CalendarCheck, permission: 'attendance.view' },
-                { title: 'Employee Schedules', href: '/employee-schedules', icon: Clock, permission: 'schedules.view' },
-                { title: 'Biometric Records', href: '/biometric-records', icon: Database, permission: 'biometric.view' },
-                { title: 'Attendance Points', href: attendancePointsHref, icon: Award, permission: 'attendance.view' },
-                { title: 'Attendance Tools', href: attendanceToolsIndex.url(), icon: Settings, permission: 'biometric.view' },
+                {
+                    title: 'Attendance',
+                    href: '/attendance',
+                    icon: CalendarCheck,
+                    permission: 'attendance.view',
+                },
+                {
+                    title: 'Employee Schedules',
+                    href: '/employee-schedules',
+                    icon: Clock,
+                    permission: 'schedules.view',
+                },
+                {
+                    title: 'Biometric Records',
+                    href: '/biometric-records',
+                    icon: Database,
+                    permission: 'biometric.view',
+                },
+                {
+                    title: 'Attendance Points',
+                    href: attendancePointsHref,
+                    icon: Award,
+                    permission: 'attendance.view',
+                },
+                {
+                    title: 'Attendance Tools',
+                    href: attendanceToolsIndex.url(),
+                    icon: Settings,
+                    permission: 'biometric.view',
+                },
             ],
         },
         {
             label: 'Coaching',
             items: [
-                { title: 'Coaching Dashboard', href: coachingDashboard.url(), icon: ClipboardCheck, permission: ['coaching.view_own', 'coaching.view_team', 'coaching.view_all'] as readonly string[] },
-                { title: 'Coaching Sessions', href: coachingSessionsIndex.url(), icon: FileText, permission: ['coaching.view_own', 'coaching.view_team', 'coaching.view_all'] as readonly string[] },
+                {
+                    title: 'Coaching Dashboard',
+                    href: coachingDashboard.url(),
+                    icon: ClipboardCheck,
+                    permission: [
+                        'coaching.view_own',
+                        'coaching.view_team',
+                        'coaching.view_all',
+                    ] as readonly string[],
+                },
+                {
+                    title: 'Coaching Sessions',
+                    href: coachingSessionsIndex.url(),
+                    icon: FileText,
+                    permission: [
+                        'coaching.view_own',
+                        'coaching.view_team',
+                        'coaching.view_all',
+                    ] as readonly string[],
+                },
             ],
         },
         {
             label: 'Request Forms',
             items: [
-                { title: 'IT Concerns', href: '/form-requests/it-concerns', icon: AlertCircle, permission: 'it_concerns.create' },
-                { title: 'Leave Requests', href: '/form-requests/leave-requests', icon: Plane, permission: 'leave.view' },
-                { title: 'Leave Credits', href: leaveCreditsHref, icon: CreditCard, permission: 'leave_credits.view_own' },
-                { title: 'Medication Requests', href: medicationRequestsIndex.url(), icon: Pill, permission: 'medication_requests.view' },
-                { title: 'Retention Policies', href: '/form-requests/retention-policies', icon: Shield, permission: 'form_requests.retention' },
+                {
+                    title: 'IT Concerns',
+                    href: '/form-requests/it-concerns',
+                    icon: AlertCircle,
+                    permission: 'it_concerns.create',
+                },
+                {
+                    title: 'Leave Requests',
+                    href: '/form-requests/leave-requests',
+                    icon: Plane,
+                    permission: 'leave.view',
+                },
+                {
+                    title: 'Leave Credits',
+                    href: leaveCreditsHref,
+                    icon: CreditCard,
+                    permission: 'leave_credits.view_own',
+                },
+                {
+                    title: 'Medication Requests',
+                    href: medicationRequestsIndex.url(),
+                    icon: Pill,
+                    permission: 'medication_requests.view',
+                },
+                {
+                    title: 'Retention Policies',
+                    href: '/form-requests/retention-policies',
+                    icon: Shield,
+                    permission: 'form_requests.retention',
+                },
             ],
         },
         {
             label: 'Break Timer',
             items: [
-                { title: 'Timer', href: breakTimerIndex.url(), icon: Timer, permission: 'break_timer.view' },
-                { title: 'Break Dashboard', href: breakDashboard.url(), icon: Coffee, permission: 'break_timer.dashboard' },
-                { title: 'Break Reports', href: breakReports.url(), icon: BarChart3, permission: 'break_timer.reports' },
-                { title: 'Break Policies', href: breakPoliciesIndex.url(), icon: Settings, permission: 'break_timer.manage_policy' },
+                {
+                    title: 'Timer',
+                    href: breakTimerIndex.url(),
+                    icon: Timer,
+                    permission: 'break_timer.view',
+                },
+                {
+                    title: 'Break Dashboard',
+                    href: breakDashboard.url(),
+                    icon: Coffee,
+                    permission: 'break_timer.dashboard',
+                },
+                {
+                    title: 'Break Reports',
+                    href: breakReports.url(),
+                    icon: BarChart3,
+                    permission: 'break_timer.reports',
+                },
+                {
+                    title: 'Break Policies',
+                    href: breakPoliciesIndex.url(),
+                    icon: Settings,
+                    permission: 'break_timer.manage_policy',
+                },
             ],
         },
         {
             label: 'Account Management',
             items: [
-                { title: 'Accounts', href: '/accounts', icon: User, permission: 'accounts.view' },
-                { title: 'Activity Logs', href: '/activity-logs', icon: Activity, permission: 'activity_logs.view' },
+                {
+                    title: 'Accounts',
+                    href: '/accounts',
+                    icon: User,
+                    permission: 'accounts.view',
+                },
+                {
+                    title: 'Activity Logs',
+                    href: '/activity-logs',
+                    icon: Activity,
+                    permission: 'activity_logs.view',
+                },
             ],
         },
         {
             label: 'System',
             items: [
-                { title: 'Database Backups', href: databaseBackupsIndex.url(), icon: DatabaseBackup, permission: 'database_backups.view' },
+                {
+                    title: 'Database Backups',
+                    href: databaseBackupsIndex.url(),
+                    icon: DatabaseBackup,
+                    permission: 'database_backups.view',
+                },
             ],
         },
     ];
@@ -146,7 +317,8 @@ export function CommandPalette() {
             ...group,
             items: group.items.filter((item) => {
                 if (!item.permission) return true;
-                if (typeof item.permission === 'string') return can(item.permission);
+                if (typeof item.permission === 'string')
+                    return can(item.permission);
                 return canAny([...item.permission]);
             }),
         }))

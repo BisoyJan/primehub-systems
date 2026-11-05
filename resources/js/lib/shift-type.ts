@@ -1,8 +1,5 @@
 export type ShiftType =
-    | 'morning_shift'
-    | 'afternoon_shift'
-    | 'night_shift'
-    | 'utility_24h';
+    'morning_shift' | 'afternoon_shift' | 'night_shift' | 'utility_24h';
 
 export interface ShiftMeta {
     label: string;

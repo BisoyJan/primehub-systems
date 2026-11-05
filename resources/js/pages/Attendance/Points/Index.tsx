@@ -1,44 +1,12 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import { Head, router } from "@inertiajs/react";
-import AppLayout from "@/layouts/app-layout";
-import { useFlashMessage, usePageMeta, usePageLoading } from "@/hooks";
-import { PageHeader } from "@/components/PageHeader";
-import { Button } from "@/components/ui/button";
-import type { SharedData, UserRole } from "@/types";
-import { formatDateShort, formatDateTime } from "@/lib/utils";
-import { toast } from "sonner";
 import { Can, HasRole } from '@/components/authorization';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue
-} from "@/components/ui/select";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { MultiSelectFilter, parseMultiSelectParam, multiSelectToParam } from "@/components/multi-select-filter";
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
-import { DatePicker } from "@/components/ui/date-picker";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Progress } from "@/components/ui/progress";
+    MultiSelectFilter,
+    multiSelectToParam,
+    parseMultiSelectParam,
+} from '@/components/multi-select-filter';
+import { PageHeader } from '@/components/PageHeader';
+import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -48,31 +16,114 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { AlertCircle, TrendingUp, Users, Eye, Award, RefreshCw, CheckCircle, XCircle, FileText, Download, Check, ChevronsUpDown, Search, Plus, Pencil, Trash2, Loader2, Play, Pause, Settings, RotateCcw, AlertTriangle, ClipboardList, BellOff, ChevronDown, ChevronRight, Wrench, HelpCircle } from "lucide-react";
-import { LoadingOverlay } from "@/components/LoadingOverlay";
+} from '@/components/ui/alert-dialog';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
-    index as attendancePointsIndex,
-    show as attendancePointsShow,
-    store as attendancePointsStore,
-    update as attendancePointsUpdate,
-    destroy as attendancePointsDestroy,
-    rescan as attendancePointsRescan,
-    startExportAllExcel as attendancePointsStartExportAllExcel,
-    excuse as attendancePointsExcuse,
-    unexcuse as attendancePointsUnexcuse,
-    recalculateGbro as attendancePointsRecalculateGbro,
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from '@/components/ui/command';
+import { DatePicker } from '@/components/ui/date-picker';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
+import { Progress } from '@/components/ui/progress';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table';
+import { Textarea } from '@/components/ui/textarea';
+import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
+import AppLayout from '@/layouts/app-layout';
+import { formatDateShort, formatDateTime } from '@/lib/utils';
+import {
     bulkCreate as attendancePointsBulkCreate,
-} from "@/routes/attendance-points";
-import exportAllExcelRoutes from "@/routes/attendance-points/export-all-excel";
-import managementRoutes from "@/routes/attendance-points/management";
+    destroy as attendancePointsDestroy,
+    excuse as attendancePointsExcuse,
+    index as attendancePointsIndex,
+    recalculateGbro as attendancePointsRecalculateGbro,
+    rescan as attendancePointsRescan,
+    show as attendancePointsShow,
+    startExportAllExcel as attendancePointsStartExportAllExcel,
+    store as attendancePointsStore,
+    unexcuse as attendancePointsUnexcuse,
+    update as attendancePointsUpdate,
+} from '@/routes/attendance-points';
+import exportAllExcelRoutes from '@/routes/attendance-points/export-all-excel';
+import managementRoutes from '@/routes/attendance-points/management';
+import type { SharedData, UserRole } from '@/types';
+import { Head, router } from '@inertiajs/react';
+import {
+    AlertCircle,
+    AlertTriangle,
+    Award,
+    BellOff,
+    Check,
+    CheckCircle,
+    ChevronDown,
+    ChevronRight,
+    ChevronsUpDown,
+    ClipboardList,
+    Download,
+    Eye,
+    FileText,
+    HelpCircle,
+    Loader2,
+    Pause,
+    Pencil,
+    Play,
+    Plus,
+    RefreshCw,
+    RotateCcw,
+    Search,
+    Settings,
+    Trash2,
+    TrendingUp,
+    Users,
+    Wrench,
+    XCircle,
+} from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 
-const defaultTitle = "Attendance Points";
+const defaultTitle = 'Attendance Points';
 
 interface User {
     id: number;
@@ -89,7 +140,10 @@ interface Campaign {
 }
 
 // Helper function to format user name as "Last Name, First Name M."
-const formatUserName = (user: User | { first_name: string; last_name: string; middle_name?: string }): string => {
+const formatUserName = (
+    user:
+        User | { first_name: string; last_name: string; middle_name?: string },
+): string => {
     const middleInitial = user.middle_name ? ` ${user.middle_name}.` : '';
     return `${user.last_name}, ${user.first_name}${middleInitial}`;
 };
@@ -108,7 +162,12 @@ interface AttendancePoint {
     id: number;
     user: User;
     shift_date: string;
-    point_type: 'whole_day_absence' | 'half_day_absence' | 'undertime' | 'undertime_more_than_hour' | 'tardy';
+    point_type:
+        | 'whole_day_absence'
+        | 'half_day_absence'
+        | 'undertime'
+        | 'undertime_more_than_hour'
+        | 'tardy';
     points: number;
     status: string | null;
     is_advised: boolean;
@@ -209,7 +268,9 @@ const getDaysRemaining = (expiresAt: string): number => {
     expDate.setHours(0, 0, 0, 0); // Start of expiration day
     const now = new Date();
     now.setHours(0, 0, 0, 0); // Start of today
-    return Math.round((expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    return Math.round(
+        (expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
+    );
 };
 
 /**
@@ -221,78 +282,132 @@ const isActuallyExpired = (expiresAt: string): boolean => {
 
 const getPointTypeBadge = (type: string) => {
     const variants = {
-        whole_day_absence: { className: 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900 dark:text-red-100', label: 'Whole Day Absence' },
-        half_day_absence: { className: 'bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-900 dark:text-orange-100', label: 'Half-Day Absence' },
-        undertime: { className: 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900 dark:text-yellow-100', label: 'Undertime' },
-        undertime_more_than_hour: { className: 'bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-900 dark:text-orange-100', label: 'Undertime (>1hr)' },
-        tardy: { className: 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900 dark:text-yellow-100', label: 'Tardy' },
+        whole_day_absence: {
+            className:
+                'bg-red-100 text-red-800 border-red-200 dark:bg-red-900 dark:text-red-100',
+            label: 'Whole Day Absence',
+        },
+        half_day_absence: {
+            className:
+                'bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-900 dark:text-orange-100',
+            label: 'Half-Day Absence',
+        },
+        undertime: {
+            className:
+                'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900 dark:text-yellow-100',
+            label: 'Undertime',
+        },
+        undertime_more_than_hour: {
+            className:
+                'bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-900 dark:text-orange-100',
+            label: 'Undertime (>1hr)',
+        },
+        tardy: {
+            className:
+                'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900 dark:text-yellow-100',
+            label: 'Tardy',
+        },
     };
 
-    const variant = variants[type as keyof typeof variants] || { className: 'bg-gray-100 text-gray-800 border-gray-200', label: type };
+    const variant = variants[type as keyof typeof variants] || {
+        className: 'bg-gray-100 text-gray-800 border-gray-200',
+        label: type,
+    };
 
     return (
-        <Badge className={`${variant.className} border`}>
-            {variant.label}
-        </Badge>
+        <Badge className={`${variant.className} border`}>{variant.label}</Badge>
     );
 };
 
-export default function AttendancePointsIndex({ points, users, campaigns, stats, filters, auth, teamLeadCampaignIds }: PageProps) {
+export default function AttendancePointsIndex({
+    points,
+    users,
+    campaigns,
+    stats,
+    filters,
+    auth,
+    teamLeadCampaignIds,
+}: PageProps) {
     useFlashMessage();
     const { title, breadcrumbs } = usePageMeta({
         title: defaultTitle,
-        breadcrumbs: [{ title: defaultTitle, href: attendancePointsIndex().url }],
+        breadcrumbs: [
+            { title: defaultTitle, href: attendancePointsIndex().url },
+        ],
     });
     const isPageLoading = usePageLoading();
 
     // Roles that should only see their own attendance points
     const restrictedRoles: UserRole[] = ['Agent', 'IT', 'Utility'];
-    const isRestrictedUser = auth.user.role && restrictedRoles.includes(auth.user.role);
+    const isRestrictedUser =
+        auth.user.role && restrictedRoles.includes(auth.user.role);
 
-    const [selectedUserIds, setSelectedUserIds] = useState<string[]>(parseMultiSelectParam(filters?.user_id));
-    const [selectedCampaignIds, setSelectedCampaignIds] = useState<string[]>(parseMultiSelectParam(filters?.campaign_id));
-    const [selectedPointTypes, setSelectedPointTypes] = useState<string[]>(parseMultiSelectParam(filters?.point_type));
-    const [selectedStatuses, setSelectedStatuses] = useState<string[]>(parseMultiSelectParam(filters?.status));
-    const [filterExpiringSoon, setFilterExpiringSoon] = useState(filters?.expiring_soon === 'true' || false);
-    const [filterGbroEligible, setFilterGbroEligible] = useState(filters?.gbro_eligible === 'true' || false);
+    const [selectedUserIds, setSelectedUserIds] = useState<string[]>(
+        parseMultiSelectParam(filters?.user_id),
+    );
+    const [selectedCampaignIds, setSelectedCampaignIds] = useState<string[]>(
+        parseMultiSelectParam(filters?.campaign_id),
+    );
+    const [selectedPointTypes, setSelectedPointTypes] = useState<string[]>(
+        parseMultiSelectParam(filters?.point_type),
+    );
+    const [selectedStatuses, setSelectedStatuses] = useState<string[]>(
+        parseMultiSelectParam(filters?.status),
+    );
+    const [filterExpiringSoon, setFilterExpiringSoon] = useState(
+        filters?.expiring_soon === 'true' || false,
+    );
+    const [filterGbroEligible, setFilterGbroEligible] = useState(
+        filters?.gbro_eligible === 'true' || false,
+    );
     const [isRescanOpen, setIsRescanOpen] = useState(false);
-    const [rescanDateFrom, setRescanDateFrom] = useState("");
-    const [rescanDateTo, setRescanDateTo] = useState("");
+    const [rescanDateFrom, setRescanDateFrom] = useState('');
+    const [rescanDateTo, setRescanDateTo] = useState('');
     const [isRescanning, setIsRescanning] = useState(false);
     const [isExcuseDialogOpen, setIsExcuseDialogOpen] = useState(false);
-    const [selectedPoint, setSelectedPoint] = useState<AttendancePoint | null>(null);
-    const [excuseReason, setExcuseReason] = useState("");
-    const [notes, setNotes] = useState("");
+    const [selectedPoint, setSelectedPoint] = useState<AttendancePoint | null>(
+        null,
+    );
+    const [excuseReason, setExcuseReason] = useState('');
+    const [notes, setNotes] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isUnexcuseDialogOpen, setIsUnexcuseDialogOpen] = useState(false);
     const [pointToUnexcuse, setPointToUnexcuse] = useState<number | null>(null);
     const [isViolationDetailsOpen, setIsViolationDetailsOpen] = useState(false);
-    const [selectedViolationPoint, setSelectedViolationPoint] = useState<AttendancePoint | null>(null);
+    const [selectedViolationPoint, setSelectedViolationPoint] =
+        useState<AttendancePoint | null>(null);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
 
     // Manual entry state
     const [isManualEntryOpen, setIsManualEntryOpen] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
-    const [editingPoint, setEditingPoint] = useState<AttendancePoint | null>(null);
-    const [manualEntryUserId, setManualEntryUserId] = useState("");
-    const [isManualUserPopoverOpen, setIsManualUserPopoverOpen] = useState(false);
-    const [manualUserSearchQuery, setManualUserSearchQuery] = useState("");
-    const [manualShiftDate, setManualShiftDate] = useState("");
-    const [manualPointType, setManualPointType] = useState<string>("");
+    const [editingPoint, setEditingPoint] = useState<AttendancePoint | null>(
+        null,
+    );
+    const [manualEntryUserId, setManualEntryUserId] = useState('');
+    const [isManualUserPopoverOpen, setIsManualUserPopoverOpen] =
+        useState(false);
+    const [manualUserSearchQuery, setManualUserSearchQuery] = useState('');
+    const [manualShiftDate, setManualShiftDate] = useState('');
+    const [manualPointType, setManualPointType] = useState<string>('');
     const [manualIsAdvised, setManualIsAdvised] = useState(false);
-    const [manualViolationDetails, setManualViolationDetails] = useState("");
-    const [manualNotes, setManualNotes] = useState("");
-    const [manualTardyMinutes, setManualTardyMinutes] = useState<string>("");
-    const [manualUndertimeMinutes, setManualUndertimeMinutes] = useState<string>("");
+    const [manualViolationDetails, setManualViolationDetails] = useState('');
+    const [manualNotes, setManualNotes] = useState('');
+    const [manualTardyMinutes, setManualTardyMinutes] = useState<string>('');
+    const [manualUndertimeMinutes, setManualUndertimeMinutes] =
+        useState<string>('');
     const [isManualSubmitting, setIsManualSubmitting] = useState(false);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-    const [pointToDelete, setPointToDelete] = useState<AttendancePoint | null>(null);
+    const [pointToDelete, setPointToDelete] = useState<AttendancePoint | null>(
+        null,
+    );
     const [manualIsCriticalDay, setManualIsCriticalDay] = useState(false);
 
     // High points employees dialog state
     const [isHighPointsDialogOpen, setIsHighPointsDialogOpen] = useState(false);
-    const [selectedHighPointsEmployee, setSelectedHighPointsEmployee] = useState<HighPointsEmployee | null>(null);
+    const [selectedHighPointsEmployee, setSelectedHighPointsEmployee] =
+        useState<HighPointsEmployee | null>(null);
 
     // Export progress state
     const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
@@ -300,7 +415,9 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
     const [exportStatus, setExportStatus] = useState('');
     const [, setExportJobId] = useState<string | null>(null);
     const [exportError, setExportError] = useState(false);
-    const [exportDownloadUrl, setExportDownloadUrl] = useState<string | null>(null);
+    const [exportDownloadUrl, setExportDownloadUrl] = useState<string | null>(
+        null,
+    );
     const exportPollingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Management state
@@ -311,16 +428,53 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
         pending_expirations_count: number;
         expired_count: number;
         missing_points_count: number;
-        duplicate_users: { user_id: number; name: string; records: { shift_date: string; point_type: string; count: number }[] }[];
-        pending_expiration_users: { user_id: number; name: string; records: { shift_date: string; point_type: string; points: number; expires_at: string }[] }[];
-        missing_points_users: { user_id: number; name: string; records: { shift_date: string; status: string }[] }[];
+        duplicate_users: {
+            user_id: number;
+            name: string;
+            records: {
+                shift_date: string;
+                point_type: string;
+                count: number;
+            }[];
+        }[];
+        pending_expiration_users: {
+            user_id: number;
+            name: string;
+            records: {
+                shift_date: string;
+                point_type: string;
+                points: number;
+                expires_at: string;
+            }[];
+        }[];
+        missing_points_users: {
+            user_id: number;
+            name: string;
+            records: { shift_date: string; status: string }[];
+        }[];
         gbro_anomaly_count: number;
-        gbro_anomaly_users: { user_id: number; name: string; records: { shift_date: string; point_type: string; anomaly: string }[] }[];
+        gbro_anomaly_users: {
+            user_id: number;
+            name: string;
+            records: {
+                shift_date: string;
+                point_type: string;
+                anomaly: string;
+            }[];
+        }[];
     } | null>(null);
     const [isLoadingStats, setIsLoadingStats] = useState(false);
     const [isManagementAction, setIsManagementAction] = useState(false);
-    const [expandedStatSections, setExpandedStatSections] = useState<Record<string, boolean>>({});
-    const [confirmAction, setConfirmAction] = useState<'remove-duplicates' | 'expire-all' | 'regenerate' | 'recalculate-gbro' | null>(null);
+    const [expandedStatSections, setExpandedStatSections] = useState<
+        Record<string, boolean>
+    >({});
+    const [confirmAction, setConfirmAction] = useState<
+        | 'remove-duplicates'
+        | 'expire-all'
+        | 'regenerate'
+        | 'recalculate-gbro'
+        | null
+    >(null);
 
     // Management filters for regenerate and reset-expired
     const [mgmtDateFrom, setMgmtDateFrom] = useState('');
@@ -331,10 +485,13 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
     const [mgmtUserSearchQuery, setMgmtUserSearchQuery] = useState('');
 
     // Expiration type selection for expire-all
-    const [expirationType, setExpirationType] = useState<'both' | 'sro' | 'gbro'>('both');
+    const [expirationType, setExpirationType] = useState<
+        'both' | 'sro' | 'gbro'
+    >('both');
 
     // Recalculate GBRO - all employees toggle
-    const [recalculateAllEmployees, setRecalculateAllEmployees] = useState(false);
+    const [recalculateAllEmployees, setRecalculateAllEmployees] =
+        useState(false);
 
     // Cleanup polling on unmount
     useEffect(() => {
@@ -354,30 +511,37 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
             per_page: points?.per_page ?? 50,
             total: points?.total ?? 0,
             from: points?.from ?? 0,
-            to: points?.to ?? 0
-        }
+            to: points?.to ?? 0,
+        },
     };
 
     const buildFilterQuery = useCallback(() => {
         const query: Record<string, string> = {};
-        if (selectedUserIds.length > 0) query.user_id = multiSelectToParam(selectedUserIds);
-        if (selectedCampaignIds.length > 0) query.campaign_id = multiSelectToParam(selectedCampaignIds);
-        if (selectedPointTypes.length > 0) query.point_type = multiSelectToParam(selectedPointTypes);
-        if (selectedStatuses.length > 0) query.status = multiSelectToParam(selectedStatuses);
+        if (selectedUserIds.length > 0)
+            query.user_id = multiSelectToParam(selectedUserIds);
+        if (selectedCampaignIds.length > 0)
+            query.campaign_id = multiSelectToParam(selectedCampaignIds);
+        if (selectedPointTypes.length > 0)
+            query.point_type = multiSelectToParam(selectedPointTypes);
+        if (selectedStatuses.length > 0)
+            query.status = multiSelectToParam(selectedStatuses);
         if (filterExpiringSoon) query.expiring_soon = 'true';
         if (filterGbroEligible) query.gbro_eligible = 'true';
         return query;
-    }, [selectedUserIds, selectedCampaignIds, selectedPointTypes, selectedStatuses, filterExpiringSoon, filterGbroEligible]);
+    }, [
+        selectedUserIds,
+        selectedCampaignIds,
+        selectedPointTypes,
+        selectedStatuses,
+        filterExpiringSoon,
+        filterGbroEligible,
+    ]);
 
     const handleFilter = () => {
-        router.get(
-            attendancePointsIndex().url,
-            buildFilterQuery(),
-            {
-                preserveState: true,
-                onSuccess: () => setLastRefresh(new Date())
-            }
-        );
+        router.get(attendancePointsIndex().url, buildFilterQuery(), {
+            preserveState: true,
+            onSuccess: () => setLastRefresh(new Date()),
+        });
     };
 
     const handleManualRefresh = () => {
@@ -388,17 +552,13 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
     useEffect(() => {
         if (!autoRefreshEnabled) return;
         const interval = setInterval(() => {
-            router.get(
-                attendancePointsIndex().url,
-                buildFilterQuery(),
-                {
-                    preserveState: true,
-                    preserveScroll: true,
-                    replace: true,
-                    only: ['points', 'stats'],
-                    onSuccess: () => setLastRefresh(new Date())
-                }
-            );
+            router.get(attendancePointsIndex().url, buildFilterQuery(), {
+                preserveState: true,
+                preserveScroll: true,
+                replace: true,
+                only: ['points', 'stats'],
+                onSuccess: () => setLastRefresh(new Date()),
+            });
         }, 30000);
 
         return () => clearInterval(interval);
@@ -413,15 +573,19 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
         setFilterGbroEligible(false);
 
         // Trigger reload with cleared filters
-        router.get(attendancePointsIndex().url, {}, {
-            preserveState: true,
-            onSuccess: () => setLastRefresh(new Date())
-        });
+        router.get(
+            attendancePointsIndex().url,
+            {},
+            {
+                preserveState: true,
+                onSuccess: () => setLastRefresh(new Date()),
+            },
+        );
     };
 
     const handleRescan = () => {
         if (!rescanDateFrom || !rescanDateTo) {
-            toast.error("Please select both start and end dates");
+            toast.error('Please select both start and end dates');
             return;
         }
 
@@ -430,22 +594,22 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
             attendancePointsRescan().url,
             {
                 date_from: rescanDateFrom,
-                date_to: rescanDateTo
+                date_to: rescanDateTo,
             },
             {
                 onSuccess: () => {
-                    toast.success("Attendance points rescanned successfully");
+                    toast.success('Attendance points rescanned successfully');
                 },
                 onError: () => {
-                    toast.error("Failed to rescan attendance points");
+                    toast.error('Failed to rescan attendance points');
                 },
                 onFinish: () => {
                     setIsRescanning(false);
                     setIsRescanOpen(false);
-                    setRescanDateFrom("");
-                    setRescanDateTo("");
-                }
-            }
+                    setRescanDateFrom('');
+                    setRescanDateTo('');
+                },
+            },
         );
     };
 
@@ -459,17 +623,23 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
 
         try {
             // Start the export job
-            const response = await fetch(attendancePointsStartExportAllExcel().url, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-                    'X-Requested-With': 'XMLHttpRequest',
+            const response = await fetch(
+                attendancePointsStartExportAllExcel().url,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN':
+                            document
+                                .querySelector('meta[name="csrf-token"]')
+                                ?.getAttribute('content') || '',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify(buildFilterQuery()),
                 },
-                credentials: 'same-origin',
-                body: JSON.stringify(buildFilterQuery()),
-            });
+            );
 
             const data = await response.json();
 
@@ -480,7 +650,9 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
             setExportJobId(data.jobId);
 
             // Immediately check status (job may have completed synchronously)
-            const immediateStatus = await fetch(exportAllExcelRoutes.status({ jobId: data.jobId }).url);
+            const immediateStatus = await fetch(
+                exportAllExcelRoutes.status({ jobId: data.jobId }).url,
+            );
             const immediateData = await immediateStatus.json();
 
             if (immediateData.finished && immediateData.downloadUrl) {
@@ -503,7 +675,9 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
             // Start polling for status (for async queue)
             exportPollingRef.current = setInterval(async () => {
                 try {
-                    const statusResponse = await fetch(exportAllExcelRoutes.status({ jobId: data.jobId }).url);
+                    const statusResponse = await fetch(
+                        exportAllExcelRoutes.status({ jobId: data.jobId }).url,
+                    );
                     const statusData = await statusResponse.json();
 
                     setExportProgress(statusData.percent || 0);
@@ -566,7 +740,9 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                 setExportDownloadUrl(null);
             } catch {
                 setExportError(true);
-                setExportStatus('Download failed. Please try generating a new export.');
+                setExportStatus(
+                    'Download failed. Please try generating a new export.',
+                );
             }
         }
     };
@@ -593,8 +769,11 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
             const response = await fetch(statsUrl, {
                 method: 'GET',
                 headers: {
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN':
+                        document
+                            .querySelector('meta[name="csrf-token"]')
+                            ?.getAttribute('content') || '',
                     'X-Requested-With': 'XMLHttpRequest',
                 },
                 credentials: 'same-origin',
@@ -607,9 +786,14 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                     const errorData = JSON.parse(errorText);
                     if (errorData?.message) errorMessage = errorData.message;
                 } catch {
-                    if (errorText.length < 200) errorMessage += `: ${errorText}`;
+                    if (errorText.length < 200)
+                        errorMessage += `: ${errorText}`;
                 }
-                console.error('Management stats error:', { status: response.status, url: statsUrl, errorText: errorText.substring(0, 500) });
+                console.error('Management stats error:', {
+                    status: response.status,
+                    url: statsUrl,
+                    errorText: errorText.substring(0, 500),
+                });
                 toast.error(errorMessage);
                 return;
             }
@@ -618,7 +802,9 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
             setManagementStats(data);
         } catch (err) {
             console.error('Management stats fetch exception:', err);
-            toast.error(`Failed to fetch management stats: ${err instanceof Error ? err.message : 'Unknown error'}`);
+            toast.error(
+                `Failed to fetch management stats: ${err instanceof Error ? err.message : 'Unknown error'}`,
+            );
         } finally {
             setIsLoadingStats(false);
         }
@@ -636,7 +822,13 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
         fetchManagementStats();
     };
 
-    const handleManagementAction = async (action: 'remove-duplicates' | 'expire-all' | 'regenerate' | 'recalculate-gbro') => {
+    const handleManagementAction = async (
+        action:
+            | 'remove-duplicates'
+            | 'expire-all'
+            | 'regenerate'
+            | 'recalculate-gbro',
+    ) => {
         setIsManagementAction(true);
         try {
             // Special handling for recalculate-gbro (per-user action)
@@ -646,10 +838,12 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
 
                 if (recalculateAllEmployees) {
                     // Get all users who have GBRO-eligible points
-                    userIdsToProcess = users?.map(u => String(u.id)) || [];
+                    userIdsToProcess = users?.map((u) => String(u.id)) || [];
                 } else {
                     if (mgmtUserIds.length === 0) {
-                        toast.error('Please select at least one employee or choose "All Employees"');
+                        toast.error(
+                            'Please select at least one employee or choose "All Employees"',
+                        );
                         setIsManagementAction(false);
                         return;
                     }
@@ -663,7 +857,9 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                     try {
                         await new Promise<void>((resolve) => {
                             router.post(
-                                attendancePointsRecalculateGbro({ user: parseInt(userId) }).url,
+                                attendancePointsRecalculateGbro({
+                                    user: parseInt(userId),
+                                }).url,
                                 {},
                                 {
                                     preserveScroll: true,
@@ -676,7 +872,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                         errorCount++;
                                         resolve();
                                     },
-                                }
+                                },
                             );
                         });
                     } catch {
@@ -685,7 +881,9 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                 }
 
                 if (successCount > 0) {
-                    toast.success(`Recalculated GBRO for ${successCount} employee(s)`);
+                    toast.success(
+                        `Recalculated GBRO for ${successCount} employee(s)`,
+                    );
                 }
                 if (errorCount > 0) {
                     toast.error(`Failed for ${errorCount} employee(s)`);
@@ -702,7 +900,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
             const routeMap: Record<string, { url: string }> = {
                 'remove-duplicates': managementRoutes.removeDuplicates(),
                 'expire-all': managementRoutes.expireAll(),
-                'regenerate': managementRoutes.regenerate(),
+                regenerate: managementRoutes.regenerate(),
             };
 
             // Build request body with filters per action
@@ -721,8 +919,11 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN':
+                        document
+                            .querySelector('meta[name="csrf-token"]')
+                            ?.getAttribute('content') || '',
                     'X-Requested-With': 'XMLHttpRequest',
                 },
                 credentials: 'same-origin',
@@ -751,8 +952,12 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
     const viewUserDetails = (userId: number, shiftDate: string) => {
         // Calculate a date range around the shift date (1 month before and after)
         const date = new Date(shiftDate);
-        const dateFrom = new Date(date.getFullYear(), date.getMonth(), 1).toISOString().split('T')[0];
-        const dateTo = new Date(date.getFullYear(), date.getMonth() + 1, 0).toISOString().split('T')[0];
+        const dateFrom = new Date(date.getFullYear(), date.getMonth(), 1)
+            .toISOString()
+            .split('T')[0];
+        const dateTo = new Date(date.getFullYear(), date.getMonth() + 1, 0)
+            .toISOString()
+            .split('T')[0];
 
         router.get(attendancePointsShow({ user: userId }).url, {
             date_from: dateFrom,
@@ -762,14 +967,14 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
 
     const openExcuseDialog = (point: AttendancePoint) => {
         setSelectedPoint(point);
-        setExcuseReason(point.excuse_reason || "");
-        setNotes(point.notes || "");
+        setExcuseReason(point.excuse_reason || '');
+        setNotes(point.notes || '');
         setIsExcuseDialogOpen(true);
     };
 
     const handleExcuse = () => {
         if (!selectedPoint || !excuseReason) {
-            toast.error("Please provide a reason for excusing this point");
+            toast.error('Please provide a reason for excusing this point');
             return;
         }
 
@@ -782,19 +987,19 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
             },
             {
                 onSuccess: () => {
-                    toast.success("Attendance point excused successfully");
+                    toast.success('Attendance point excused successfully');
                 },
                 onError: () => {
-                    toast.error("Failed to excuse attendance point");
+                    toast.error('Failed to excuse attendance point');
                 },
                 onFinish: () => {
                     setIsSubmitting(false);
                     setIsExcuseDialogOpen(false);
                     setSelectedPoint(null);
-                    setExcuseReason("");
-                    setNotes("");
-                }
-            }
+                    setExcuseReason('');
+                    setNotes('');
+                },
+            },
         );
     };
 
@@ -811,30 +1016,30 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
             {},
             {
                 onSuccess: () => {
-                    toast.success("Excuse removed successfully");
+                    toast.success('Excuse removed successfully');
                 },
                 onError: () => {
-                    toast.error("Failed to remove excuse");
+                    toast.error('Failed to remove excuse');
                 },
                 onFinish: () => {
                     setIsUnexcuseDialogOpen(false);
                     setPointToUnexcuse(null);
-                }
-            }
+                },
+            },
         );
     };
 
     // Manual Entry Handlers
     const resetManualEntryForm = () => {
-        setManualEntryUserId("");
-        setManualUserSearchQuery("");
-        setManualShiftDate("");
-        setManualPointType("");
+        setManualEntryUserId('');
+        setManualUserSearchQuery('');
+        setManualShiftDate('');
+        setManualPointType('');
         setManualIsAdvised(false);
-        setManualViolationDetails("");
-        setManualNotes("");
-        setManualTardyMinutes("");
-        setManualUndertimeMinutes("");
+        setManualViolationDetails('');
+        setManualNotes('');
+        setManualTardyMinutes('');
+        setManualUndertimeMinutes('');
         setManualIsCriticalDay(false);
         setIsEditMode(false);
         setEditingPoint(null);
@@ -857,29 +1062,42 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
         setManualPointType(point.point_type);
         setManualIsAdvised(point.is_advised);
         setManualIsCriticalDay(point.is_critical_day);
-        setManualViolationDetails(point.violation_details || "");
-        setManualNotes(point.notes || "");
-        setManualTardyMinutes(point.tardy_minutes ? String(point.tardy_minutes) : "");
-        setManualUndertimeMinutes(point.undertime_minutes ? String(point.undertime_minutes) : "");
+        setManualViolationDetails(point.violation_details || '');
+        setManualNotes(point.notes || '');
+        setManualTardyMinutes(
+            point.tardy_minutes ? String(point.tardy_minutes) : '',
+        );
+        setManualUndertimeMinutes(
+            point.undertime_minutes ? String(point.undertime_minutes) : '',
+        );
         setIsManualEntryOpen(true);
     };
 
     const handleManualEntrySubmit = () => {
         if (!manualEntryUserId || !manualShiftDate || !manualPointType) {
-            toast.error("Please fill in all required fields");
+            toast.error('Please fill in all required fields');
             return;
         }
 
         // Validate undertime minutes based on selected type
-        const undertimeMinutesValue = manualUndertimeMinutes ? parseInt(manualUndertimeMinutes) : 0;
+        const undertimeMinutesValue = manualUndertimeMinutes
+            ? parseInt(manualUndertimeMinutes)
+            : 0;
 
         if (manualPointType === 'undertime' && undertimeMinutesValue > 60) {
-            toast.error("Undertime (Hour) should be 60 minutes or less. Use 'Undertime - More Than Hour' for 61+ minutes.");
+            toast.error(
+                "Undertime (Hour) should be 60 minutes or less. Use 'Undertime - More Than Hour' for 61+ minutes.",
+            );
             return;
         }
 
-        if (manualPointType === 'undertime_more_than_hour' && undertimeMinutesValue < 61) {
-            toast.error("Undertime (More Than Hour) should be at least 61 minutes. Use 'Undertime - Hour' for 60 minutes or less.");
+        if (
+            manualPointType === 'undertime_more_than_hour' &&
+            undertimeMinutesValue < 61
+        ) {
+            toast.error(
+                "Undertime (More Than Hour) should be at least 61 minutes. Use 'Undertime - Hour' for 60 minutes or less.",
+            );
             return;
         }
 
@@ -893,8 +1111,12 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
             is_critical_day: manualIsCriticalDay,
             violation_details: manualViolationDetails || null,
             notes: manualNotes || null,
-            tardy_minutes: manualTardyMinutes ? parseInt(manualTardyMinutes) : null,
-            undertime_minutes: manualUndertimeMinutes ? parseInt(manualUndertimeMinutes) : null,
+            tardy_minutes: manualTardyMinutes
+                ? parseInt(manualTardyMinutes)
+                : null,
+            undertime_minutes: manualUndertimeMinutes
+                ? parseInt(manualUndertimeMinutes)
+                : null,
         };
 
         if (isEditMode && editingPoint) {
@@ -903,38 +1125,42 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                 payload,
                 {
                     onSuccess: () => {
-                        toast.success("Manual attendance point updated successfully");
+                        toast.success(
+                            'Manual attendance point updated successfully',
+                        );
                     },
                     onError: (errors) => {
-                        const errorMessage = Object.values(errors).flat().join(', ') || "Failed to update attendance point";
+                        const errorMessage =
+                            Object.values(errors).flat().join(', ') ||
+                            'Failed to update attendance point';
                         toast.error(errorMessage);
                     },
                     onFinish: () => {
                         setIsManualSubmitting(false);
                         setIsManualEntryOpen(false);
                         resetManualEntryForm();
-                    }
-                }
+                    },
+                },
             );
         } else {
-            router.post(
-                attendancePointsStore().url,
-                payload,
-                {
-                    onSuccess: () => {
-                        toast.success("Manual attendance point created successfully");
-                    },
-                    onError: (errors) => {
-                        const errorMessage = Object.values(errors).flat().join(', ') || "Failed to create attendance point";
-                        toast.error(errorMessage);
-                    },
-                    onFinish: () => {
-                        setIsManualSubmitting(false);
-                        setIsManualEntryOpen(false);
-                        resetManualEntryForm();
-                    }
-                }
-            );
+            router.post(attendancePointsStore().url, payload, {
+                onSuccess: () => {
+                    toast.success(
+                        'Manual attendance point created successfully',
+                    );
+                },
+                onError: (errors) => {
+                    const errorMessage =
+                        Object.values(errors).flat().join(', ') ||
+                        'Failed to create attendance point';
+                    toast.error(errorMessage);
+                },
+                onFinish: () => {
+                    setIsManualSubmitting(false);
+                    setIsManualEntryOpen(false);
+                    resetManualEntryForm();
+                },
+            });
         }
     };
 
@@ -952,8 +1178,8 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                 onFinish: () => {
                     setIsDeleteDialogOpen(false);
                     setPointToDelete(null);
-                }
-            }
+                },
+            },
         );
     };
 
@@ -963,7 +1189,13 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
         // Points are already loaded from the backend, no need to fetch
     };
 
-    const showClearFilters = selectedUserIds.length > 0 || selectedCampaignIds.length > 0 || selectedPointTypes.length > 0 || selectedStatuses.length > 0 || filterExpiringSoon || filterGbroEligible;
+    const showClearFilters =
+        selectedUserIds.length > 0 ||
+        selectedCampaignIds.length > 0 ||
+        selectedPointTypes.length > 0 ||
+        selectedStatuses.length > 0 ||
+        filterExpiringSoon ||
+        filterGbroEligible;
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -979,12 +1211,16 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                 <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-4">
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium">Active Points</CardTitle>
+                            <CardTitle className="text-sm font-medium">
+                                Active Points
+                            </CardTitle>
                             <Award className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
                             <div className="text-2xl font-bold text-red-600 dark:text-red-400">
-                                {stats?.total_points ? Number(stats.total_points).toFixed(2) : '0.00'}
+                                {stats?.total_points
+                                    ? Number(stats.total_points).toFixed(2)
+                                    : '0.00'}
                             </div>
                             <p className="text-xs text-muted-foreground">
                                 {stats?.total_violations || 0} violations
@@ -994,77 +1230,112 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
 
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium">Whole Day Absence</CardTitle>
+                            <CardTitle className="text-sm font-medium">
+                                Whole Day Absence
+                            </CardTitle>
                             <AlertCircle className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
                             <div className="text-2xl font-bold text-red-600 dark:text-red-400">
-                                {stats?.by_type.whole_day_absence ? Number(stats.by_type.whole_day_absence).toFixed(2) : '0.00'}
+                                {stats?.by_type.whole_day_absence
+                                    ? Number(
+                                          stats.by_type.whole_day_absence,
+                                      ).toFixed(2)
+                                    : '0.00'}
                             </div>
-                            <p className="text-xs text-muted-foreground">1.0 pt each</p>
+                            <p className="text-xs text-muted-foreground">
+                                1.0 pt each
+                            </p>
                         </CardContent>
                     </Card>
 
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium">Half-Day Absence</CardTitle>
+                            <CardTitle className="text-sm font-medium">
+                                Half-Day Absence
+                            </CardTitle>
                             <AlertCircle className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
                             <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">
-                                {stats?.by_type.half_day_absence ? Number(stats.by_type.half_day_absence).toFixed(2) : '0.00'}
+                                {stats?.by_type.half_day_absence
+                                    ? Number(
+                                          stats.by_type.half_day_absence,
+                                      ).toFixed(2)
+                                    : '0.00'}
                             </div>
-                            <p className="text-xs text-muted-foreground">0.5 pt each</p>
+                            <p className="text-xs text-muted-foreground">
+                                0.5 pt each
+                            </p>
                         </CardContent>
                     </Card>
 
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium">Tardy</CardTitle>
+                            <CardTitle className="text-sm font-medium">
+                                Tardy
+                            </CardTitle>
                             <TrendingUp className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
                             <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
                                 {Number(stats?.by_type.tardy || 0).toFixed(2)}
                             </div>
-                            <p className="text-xs text-muted-foreground">0.25 pt each</p>
+                            <p className="text-xs text-muted-foreground">
+                                0.25 pt each
+                            </p>
                         </CardContent>
                     </Card>
 
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium">Undertime (Hour)</CardTitle>
+                            <CardTitle className="text-sm font-medium">
+                                Undertime (Hour)
+                            </CardTitle>
                             <TrendingUp className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
                             <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
-                                {Number(stats?.by_type.undertime || 0).toFixed(2)}
+                                {Number(stats?.by_type.undertime || 0).toFixed(
+                                    2,
+                                )}
                             </div>
-                            <p className="text-xs text-muted-foreground">0.25 pt each</p>
+                            <p className="text-xs text-muted-foreground">
+                                0.25 pt each
+                            </p>
                         </CardContent>
                     </Card>
 
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium">Undertime (&gt;Hour)</CardTitle>
+                            <CardTitle className="text-sm font-medium">
+                                Undertime (&gt;Hour)
+                            </CardTitle>
                             <TrendingUp className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
                             <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">
-                                {Number(stats?.by_type.undertime_more_than_hour || 0).toFixed(2)}
+                                {Number(
+                                    stats?.by_type.undertime_more_than_hour ||
+                                        0,
+                                ).toFixed(2)}
                             </div>
-                            <p className="text-xs text-muted-foreground">0.5 pt each</p>
+                            <p className="text-xs text-muted-foreground">
+                                0.5 pt each
+                            </p>
                         </CardContent>
                     </Card>
 
                     {/* High Points Employees Card - Only show for non-restricted users */}
                     {!isRestrictedUser && (
                         <Card
-                            className="cursor-pointer hover:bg-accent/50 transition-colors border-red-200 dark:border-red-800"
+                            className="cursor-pointer border-red-200 transition-colors hover:bg-accent/50 dark:border-red-800"
                             onClick={() => setIsHighPointsDialogOpen(true)}
                         >
                             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium">High Risk Employees</CardTitle>
+                                <CardTitle className="text-sm font-medium">
+                                    High Risk Employees
+                                </CardTitle>
                                 <Users className="h-4 w-4 text-red-500" />
                             </CardHeader>
                             <CardContent>
@@ -1086,8 +1357,12 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                         {!isRestrictedUser && (
                             <div className="flex items-center gap-2">
                                 <Can permission="attendance_points.export">
-                                    <Button variant="outline" size="sm" onClick={handleExportAllExcel}>
-                                        <Download className="h-4 w-4 mr-2" />
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={handleExportAllExcel}
+                                    >
+                                        <Download className="mr-2 h-4 w-4" />
                                         Export
                                     </Button>
                                 </Can>
@@ -1104,7 +1379,12 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                 <Can permission="attendance_points.create">
                                     <Button
                                         variant="outline"
-                                        onClick={() => router.visit(attendancePointsBulkCreate().url)}
+                                        onClick={() =>
+                                            router.visit(
+                                                attendancePointsBulkCreate()
+                                                    .url,
+                                            )
+                                        }
                                         className="gap-2"
                                     >
                                         <Users className="h-4 w-4" />
@@ -1121,41 +1401,82 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                 <HasRole role={['IT', 'Super Admin']}>
                                     <DropdownMenu>
                                         <DropdownMenuTrigger asChild>
-                                            <Button variant="outline" className="gap-2">
+                                            <Button
+                                                variant="outline"
+                                                className="gap-2"
+                                            >
                                                 <Settings className="h-4 w-4" />
                                                 Manage
                                             </Button>
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent align="end">
-                                            <DropdownMenuItem onClick={() => setIsGuideOpen(true)}>
-                                                <HelpCircle className="h-4 w-4 mr-2" />
+                                            <DropdownMenuItem
+                                                onClick={() =>
+                                                    setIsGuideOpen(true)
+                                                }
+                                            >
+                                                <HelpCircle className="mr-2 h-4 w-4" />
                                                 How to Use
                                             </DropdownMenuItem>
-                                            <DropdownMenuItem onClick={handleOpenManagementDialog}>
-                                                <ClipboardList className="h-4 w-4 mr-2" />
+                                            <DropdownMenuItem
+                                                onClick={
+                                                    handleOpenManagementDialog
+                                                }
+                                            >
+                                                <ClipboardList className="mr-2 h-4 w-4" />
                                                 View Statistics
                                             </DropdownMenuItem>
                                             <DropdownMenuSeparator />
-                                            <DropdownMenuItem onClick={() => setConfirmAction('regenerate')}>
-                                                <RefreshCw className="h-4 w-4 mr-2" />
+                                            <DropdownMenuItem
+                                                onClick={() =>
+                                                    setConfirmAction(
+                                                        'regenerate',
+                                                    )
+                                                }
+                                            >
+                                                <RefreshCw className="mr-2 h-4 w-4" />
                                                 Regenerate Points
                                             </DropdownMenuItem>
-                                            <DropdownMenuItem onClick={() => setConfirmAction('remove-duplicates')}>
-                                                <Trash2 className="h-4 w-4 mr-2" />
+                                            <DropdownMenuItem
+                                                onClick={() =>
+                                                    setConfirmAction(
+                                                        'remove-duplicates',
+                                                    )
+                                                }
+                                            >
+                                                <Trash2 className="mr-2 h-4 w-4" />
                                                 Remove Duplicates
                                             </DropdownMenuItem>
-                                            <DropdownMenuItem onClick={() => setConfirmAction('expire-all')}>
-                                                <AlertTriangle className="h-4 w-4 mr-2" />
+                                            <DropdownMenuItem
+                                                onClick={() =>
+                                                    setConfirmAction(
+                                                        'expire-all',
+                                                    )
+                                                }
+                                            >
+                                                <AlertTriangle className="mr-2 h-4 w-4" />
                                                 Expire All Pending
                                             </DropdownMenuItem>
                                             <DropdownMenuSeparator />
-                                            <DropdownMenuItem onClick={() => setConfirmAction('recalculate-gbro')}>
-                                                <RotateCcw className="h-4 w-4 mr-2" />
+                                            <DropdownMenuItem
+                                                onClick={() =>
+                                                    setConfirmAction(
+                                                        'recalculate-gbro',
+                                                    )
+                                                }
+                                            >
+                                                <RotateCcw className="mr-2 h-4 w-4" />
                                                 Recalculate GBRO Dates
                                             </DropdownMenuItem>
                                             <DropdownMenuSeparator />
-                                            <DropdownMenuItem onClick={() => router.visit('/attendance-points/management/anomaly-logs')}>
-                                                <FileText className="h-4 w-4 mr-2" />
+                                            <DropdownMenuItem
+                                                onClick={() =>
+                                                    router.visit(
+                                                        '/attendance-points/management/anomaly-logs',
+                                                    )
+                                                }
+                                            >
+                                                <FileText className="mr-2 h-4 w-4" />
                                                 View Anomaly Logs
                                             </DropdownMenuItem>
                                         </DropdownMenuContent>
@@ -1165,76 +1486,110 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                         )}
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
                         {!isRestrictedUser && (
                             <MultiSelectFilter
-                                options={(users ?? []).map(u => ({ label: formatUserName(u), value: String(u.id) }))}
+                                options={(users ?? []).map((u) => ({
+                                    label: formatUserName(u),
+                                    value: String(u.id),
+                                }))}
                                 value={selectedUserIds}
                                 onChange={setSelectedUserIds}
                                 placeholder="All Employees"
                                 emptyMessage="No employee found."
-                                className="w-full min-h-9"
-                                multipleSelectionLabel={(n) => `${n} employees selected`}
+                                className="min-h-9 w-full"
+                                multipleSelectionLabel={(n) =>
+                                    `${n} employees selected`
+                                }
                             />
                         )}
 
                         {!isRestrictedUser && (
                             <MultiSelectFilter
-                                options={(teamLeadCampaignIds?.length ? campaigns?.filter(c => teamLeadCampaignIds.includes(c.id)) : campaigns)?.map(campaign => ({
-                                    label: campaign.name,
-                                    value: String(campaign.id),
-                                })) ?? []}
+                                options={
+                                    (teamLeadCampaignIds?.length
+                                        ? campaigns?.filter((c) =>
+                                              teamLeadCampaignIds.includes(
+                                                  c.id,
+                                              ),
+                                          )
+                                        : campaigns
+                                    )?.map((campaign) => ({
+                                        label: campaign.name,
+                                        value: String(campaign.id),
+                                    })) ?? []
+                                }
                                 value={selectedCampaignIds}
                                 onChange={setSelectedCampaignIds}
                                 placeholder="All Campaigns"
                                 emptyMessage="No campaign found."
-                                className="w-full min-h-9"
-                                multipleSelectionLabel={(n) => `${n} campaigns selected`}
+                                className="min-h-9 w-full"
+                                multipleSelectionLabel={(n) =>
+                                    `${n} campaigns selected`
+                                }
                             />
                         )}
 
                         <MultiSelectFilter
                             options={[
-                                { label: "Whole Day Absence", value: "whole_day_absence" },
-                                { label: "Half-Day Absence", value: "half_day_absence" },
-                                { label: "Undertime (Hour)", value: "undertime" },
-                                { label: "Undertime (More than Hour)", value: "undertime_more_than_hour" },
-                                { label: "Tardy", value: "tardy" },
+                                {
+                                    label: 'Whole Day Absence',
+                                    value: 'whole_day_absence',
+                                },
+                                {
+                                    label: 'Half-Day Absence',
+                                    value: 'half_day_absence',
+                                },
+                                {
+                                    label: 'Undertime (Hour)',
+                                    value: 'undertime',
+                                },
+                                {
+                                    label: 'Undertime (More than Hour)',
+                                    value: 'undertime_more_than_hour',
+                                },
+                                { label: 'Tardy', value: 'tardy' },
                             ]}
                             value={selectedPointTypes}
                             onChange={setSelectedPointTypes}
                             placeholder="All Types"
                             emptyMessage="No type found."
-                            className="w-full min-h-9"
-                            multipleSelectionLabel={(n) => `${n} types selected`}
+                            className="min-h-9 w-full"
+                            multipleSelectionLabel={(n) =>
+                                `${n} types selected`
+                            }
                         />
 
                         <MultiSelectFilter
                             options={[
-                                { label: "Active", value: "active" },
-                                { label: "Excused", value: "excused" },
-                                { label: "Expired", value: "expired" },
+                                { label: 'Active', value: 'active' },
+                                { label: 'Excused', value: 'excused' },
+                                { label: 'Expired', value: 'expired' },
                             ]}
                             value={selectedStatuses}
                             onChange={setSelectedStatuses}
                             placeholder="All Status"
                             emptyMessage="No status found."
-                            className="w-full min-h-9"
+                            className="min-h-9 w-full"
                         />
                     </div>
 
                     {/* Additional Filters Row */}
-                    <div className="flex flex-wrap gap-4 items-center justify-between">
-                        <div className="flex flex-wrap gap-4 items-center">
+                    <div className="flex flex-wrap items-center justify-between gap-4">
+                        <div className="flex flex-wrap items-center gap-4">
                             <div className="flex items-center space-x-2">
                                 <Checkbox
                                     id="expiring-soon"
                                     checked={filterExpiringSoon}
-                                    onCheckedChange={(checked) => setFilterExpiringSoon(checked as boolean)}
+                                    onCheckedChange={(checked) =>
+                                        setFilterExpiringSoon(
+                                            checked as boolean,
+                                        )
+                                    }
                                 />
                                 <label
                                     htmlFor="expiring-soon"
-                                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                                    className="cursor-pointer text-sm leading-none font-medium peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                                 >
                                     Expiring within 30 days
                                 </label>
@@ -1244,11 +1599,15 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                 <Checkbox
                                     id="gbro-eligible"
                                     checked={filterGbroEligible}
-                                    onCheckedChange={(checked) => setFilterGbroEligible(checked as boolean)}
+                                    onCheckedChange={(checked) =>
+                                        setFilterGbroEligible(
+                                            checked as boolean,
+                                        )
+                                    }
                                 />
                                 <label
                                     htmlFor="gbro-eligible"
-                                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                                    className="cursor-pointer text-sm leading-none font-medium peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                                 >
                                     GBRO Eligible Only
                                 </label>
@@ -1256,39 +1615,67 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                         </div>
 
                         <div className="flex flex-wrap gap-3 sm:flex-row sm:items-center sm:justify-end">
-                            <Button variant="default" onClick={handleFilter} className="flex-1 sm:flex-none">
+                            <Button
+                                variant="default"
+                                onClick={handleFilter}
+                                className="flex-1 sm:flex-none"
+                            >
                                 <Search className="mr-2 h-4 w-4" />
                                 Apply Filters
                             </Button>
 
                             {showClearFilters && (
-                                <Button variant="outline" onClick={handleReset} className="flex-1 sm:flex-none">
+                                <Button
+                                    variant="outline"
+                                    onClick={handleReset}
+                                    className="flex-1 sm:flex-none"
+                                >
                                     Clear Filters
                                 </Button>
                             )}
 
                             <div className="flex gap-2">
-                                <Button variant="ghost" size="icon" onClick={handleManualRefresh} title="Refresh">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={handleManualRefresh}
+                                    title="Refresh"
+                                >
                                     <RefreshCw className="h-4 w-4" />
                                 </Button>
                                 <Button
-                                    variant={autoRefreshEnabled ? "default" : "ghost"}
+                                    variant={
+                                        autoRefreshEnabled ? 'default' : 'ghost'
+                                    }
                                     size="icon"
-                                    onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
-                                    title={autoRefreshEnabled ? "Disable auto-refresh" : "Enable auto-refresh (30s)"}
+                                    onClick={() =>
+                                        setAutoRefreshEnabled(
+                                            !autoRefreshEnabled,
+                                        )
+                                    }
+                                    title={
+                                        autoRefreshEnabled
+                                            ? 'Disable auto-refresh'
+                                            : 'Enable auto-refresh (30s)'
+                                    }
                                 >
-                                    {autoRefreshEnabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                                    {autoRefreshEnabled ? (
+                                        <Pause className="h-4 w-4" />
+                                    ) : (
+                                        <Play className="h-4 w-4" />
+                                    )}
                                 </Button>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div className="flex justify-between items-center text-sm">
+                <div className="flex items-center justify-between text-sm">
                     <div className="text-muted-foreground">
-                        Showing {pointsData.meta.from} to {pointsData.meta.to} of {pointsData.meta.total} point
-                        {pointsData.meta.total === 1 ? "" : "s"}
-                        {showClearFilters ? " (filtered)" : ""}
+                        Showing {pointsData.meta.from} to {pointsData.meta.to}{' '}
+                        of {pointsData.meta.total} point
+                        {pointsData.meta.total === 1 ? '' : 's'}
+                        {showClearFilters ? ' (filtered)' : ''}
                     </div>
                     <div className="text-xs">
                         Last updated: {lastRefresh.toLocaleTimeString()}
@@ -1296,7 +1683,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                 </div>
 
                 {/* Desktop Table */}
-                <div className="hidden md:block shadow rounded-md overflow-hidden">
+                <div className="hidden overflow-hidden rounded-md shadow md:block">
                     <div className="overflow-x-auto">
                         <Table>
                             <TableHeader>
@@ -1304,49 +1691,85 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                     <TableHead>Employee</TableHead>
                                     <TableHead>Date</TableHead>
                                     <TableHead>Type</TableHead>
-                                    <TableHead className="text-right">Points</TableHead>
+                                    <TableHead className="text-right">
+                                        Points
+                                    </TableHead>
                                     <TableHead>Status</TableHead>
                                     <TableHead>Violation Details</TableHead>
                                     <TableHead>Expires</TableHead>
-                                    <TableHead className="text-right">Actions</TableHead>
+                                    <TableHead className="text-right">
+                                        Actions
+                                    </TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {pointsData.data.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                                        <TableCell
+                                            colSpan={8}
+                                            className="py-8 text-center text-muted-foreground"
+                                        >
                                             No attendance points found
                                         </TableCell>
                                     </TableRow>
                                 ) : (
                                     pointsData.data.map((point) => (
-                                        <TableRow key={point.id} className={`hover:bg-muted/50 ${point.is_expired || point.is_excused ? 'opacity-60' : ''}`}>
+                                        <TableRow
+                                            key={point.id}
+                                            className={`hover:bg-muted/50 ${point.is_expired || point.is_excused ? 'opacity-60' : ''}`}
+                                        >
                                             <TableCell>
                                                 <div className="flex items-center gap-2">
                                                     <Avatar className="h-7 w-7 shrink-0">
-                                                        <AvatarImage loading="lazy" src={point.user.avatar_url ?? undefined} alt={formatUserName(point.user)} />
+                                                        <AvatarImage
+                                                            loading="lazy"
+                                                            src={
+                                                                point.user
+                                                                    .avatar_url ??
+                                                                undefined
+                                                            }
+                                                            alt={formatUserName(
+                                                                point.user,
+                                                            )}
+                                                        />
                                                         <AvatarFallback className="text-xs">
                                                             {`${point.user.first_name[0]}${point.user.last_name[0]}`}
                                                         </AvatarFallback>
                                                     </Avatar>
-                                                    <span className="font-medium">{formatUserName(point.user)}</span>
+                                                    <span className="font-medium">
+                                                        {formatUserName(
+                                                            point.user,
+                                                        )}
+                                                    </span>
                                                 </div>
                                             </TableCell>
                                             <TableCell>
                                                 <div className="flex items-center gap-2">
-                                                    <span>{formatDate(point.shift_date)}</span>
-                                                    {point.point_type === 'whole_day_absence' && !point.is_advised && (
-                                                        <Badge className="bg-purple-600 text-white text-xs border-0">
-                                                            NCNS
-                                                        </Badge>
-                                                    )}
+                                                    <span>
+                                                        {formatDate(
+                                                            point.shift_date,
+                                                        )}
+                                                    </span>
+                                                    {point.point_type ===
+                                                        'whole_day_absence' &&
+                                                        !point.is_advised && (
+                                                            <Badge className="border-0 bg-purple-600 text-xs text-white">
+                                                                NCNS
+                                                            </Badge>
+                                                        )}
                                                 </div>
                                             </TableCell>
-                                            <TableCell>{getPointTypeBadge(point.point_type)}</TableCell>
+                                            <TableCell>
+                                                {getPointTypeBadge(
+                                                    point.point_type,
+                                                )}
+                                            </TableCell>
                                             <TableCell className="text-right font-bold text-red-600 dark:text-red-400">
-                                                {Number(point.points).toFixed(2)}
+                                                {Number(point.points).toFixed(
+                                                    2,
+                                                )}
                                                 {point.is_critical_day && (
-                                                    <Badge className="ml-1 bg-purple-100 text-purple-800 border-purple-200 text-xs">
+                                                    <Badge className="ml-1 border-purple-200 bg-purple-100 text-xs text-purple-800">
                                                         ×2
                                                     </Badge>
                                                 )}
@@ -1354,20 +1777,23 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                             <TableCell>
                                                 <div className="flex flex-col gap-1">
                                                     {point.is_expired ? (
-                                                        <Badge className="bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-900 dark:text-gray-100 border w-fit">
-                                                            {point.expiration_type === 'gbro' ? 'Expired (GBRO)' : 'Expired (SRO)'}
+                                                        <Badge className="w-fit border border-gray-200 bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-100">
+                                                            {point.expiration_type ===
+                                                            'gbro'
+                                                                ? 'Expired (GBRO)'
+                                                                : 'Expired (SRO)'}
                                                         </Badge>
                                                     ) : point.is_excused ? (
-                                                        <Badge className="bg-green-100 text-green-800 border-green-200 dark:bg-green-900 dark:text-green-100 border w-fit">
+                                                        <Badge className="w-fit border border-green-200 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100">
                                                             Excused
                                                         </Badge>
                                                     ) : (
-                                                        <Badge className="bg-red-100 text-red-800 border-red-200 dark:bg-red-900 dark:text-red-100 border w-fit">
+                                                        <Badge className="w-fit border border-red-200 bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100">
                                                             Active
                                                         </Badge>
                                                     )}
                                                     {point.is_manual && (
-                                                        <Badge className="bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-900 dark:text-purple-100 border w-fit text-xs">
+                                                        <Badge className="w-fit border border-purple-200 bg-purple-100 text-xs text-purple-800 dark:bg-purple-900 dark:text-purple-100">
                                                             Manual
                                                         </Badge>
                                                     )}
@@ -1380,65 +1806,129 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                                         size="sm"
                                                         className="h-8 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
                                                         onClick={() => {
-                                                            setSelectedViolationPoint(point);
-                                                            setIsViolationDetailsOpen(true);
+                                                            setSelectedViolationPoint(
+                                                                point,
+                                                            );
+                                                            setIsViolationDetailsOpen(
+                                                                true,
+                                                            );
                                                         }}
                                                     >
-                                                        <FileText className="h-4 w-4 mr-1" />
+                                                        <FileText className="mr-1 h-4 w-4" />
                                                         View Details
                                                     </Button>
                                                 ) : (
-                                                    <span className="text-muted-foreground text-sm">-</span>
+                                                    <span className="text-sm text-muted-foreground">
+                                                        -
+                                                    </span>
                                                 )}
                                             </TableCell>
                                             <TableCell>
                                                 {point.is_excused ? (
                                                     <div className="text-sm">
-                                                        <div className="text-muted-foreground italic">Excused (Won't Expire)</div>
+                                                        <div className="text-muted-foreground italic">
+                                                            Excused (Won't
+                                                            Expire)
+                                                        </div>
                                                     </div>
                                                 ) : point.is_expired ? (
-                                                    <div className="text-xs space-y-0.5">
+                                                    <div className="space-y-0.5 text-xs">
                                                         {point.expires_at && (
                                                             <div className="flex items-center gap-1">
-                                                                <span className={`font-semibold ${point.expiration_type === 'sro' ? 'text-blue-600 dark:text-blue-400' : 'text-muted-foreground'}`}>SRO:</span>
-                                                                <span className={`${point.expiration_type === 'sro' ? 'font-medium' : 'text-muted-foreground line-through'}`}>{formatDate(point.expires_at)}</span>
+                                                                <span
+                                                                    className={`font-semibold ${point.expiration_type === 'sro' ? 'text-blue-600 dark:text-blue-400' : 'text-muted-foreground'}`}
+                                                                >
+                                                                    SRO:
+                                                                </span>
+                                                                <span
+                                                                    className={`${point.expiration_type === 'sro' ? 'font-medium' : 'text-muted-foreground line-through'}`}
+                                                                >
+                                                                    {formatDate(
+                                                                        point.expires_at,
+                                                                    )}
+                                                                </span>
                                                             </div>
                                                         )}
                                                         {point.gbro_expires_at && (
                                                             <div className="flex items-center gap-1">
-                                                                <span className={`font-semibold ${point.expiration_type === 'gbro' ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>GBRO:</span>
-                                                                <span className={`${point.expiration_type === 'gbro' ? 'font-medium' : 'text-muted-foreground line-through'}`}>{formatDate(point.gbro_expires_at)}</span>
+                                                                <span
+                                                                    className={`font-semibold ${point.expiration_type === 'gbro' ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}
+                                                                >
+                                                                    GBRO:
+                                                                </span>
+                                                                <span
+                                                                    className={`${point.expiration_type === 'gbro' ? 'font-medium' : 'text-muted-foreground line-through'}`}
+                                                                >
+                                                                    {formatDate(
+                                                                        point.gbro_expires_at,
+                                                                    )}
+                                                                </span>
                                                             </div>
                                                         )}
                                                     </div>
                                                 ) : point.expires_at ? (
-                                                    <div className="text-xs space-y-0.5">
+                                                    <div className="space-y-0.5 text-xs">
                                                         {/* SRO Expiration */}
                                                         <div className="flex items-center gap-1">
-                                                            <span className={!point.eligible_for_gbro ? 'font-semibold text-blue-600 dark:text-blue-400' : 'text-muted-foreground'}>SRO:</span>
-                                                            <span className={!point.eligible_for_gbro ? 'font-medium' : 'text-muted-foreground'}>{formatDate(point.expires_at)}</span>
+                                                            <span
+                                                                className={
+                                                                    !point.eligible_for_gbro
+                                                                        ? 'font-semibold text-blue-600 dark:text-blue-400'
+                                                                        : 'text-muted-foreground'
+                                                                }
+                                                            >
+                                                                SRO:
+                                                            </span>
+                                                            <span
+                                                                className={
+                                                                    !point.eligible_for_gbro
+                                                                        ? 'font-medium'
+                                                                        : 'text-muted-foreground'
+                                                                }
+                                                            >
+                                                                {formatDate(
+                                                                    point.expires_at,
+                                                                )}
+                                                            </span>
                                                         </div>
                                                         {/* GBRO Expiration (if eligible) */}
-                                                        {point.eligible_for_gbro && point.gbro_expires_at && (
-                                                            <div className="flex items-center gap-1">
-                                                                <span className="font-semibold text-green-600 dark:text-green-400">GBRO:</span>
-                                                                <span className="font-medium text-green-600 dark:text-green-400">{formatDate(point.gbro_expires_at)}</span>
-                                                            </div>
-                                                        )}
+                                                        {point.eligible_for_gbro &&
+                                                            point.gbro_expires_at && (
+                                                                <div className="flex items-center gap-1">
+                                                                    <span className="font-semibold text-green-600 dark:text-green-400">
+                                                                        GBRO:
+                                                                    </span>
+                                                                    <span className="font-medium text-green-600 dark:text-green-400">
+                                                                        {formatDate(
+                                                                            point.gbro_expires_at,
+                                                                        )}
+                                                                    </span>
+                                                                </div>
+                                                            )}
                                                         {/* Days remaining or pending status */}
-                                                        {!isActuallyExpired(point.expires_at) && (
+                                                        {!isActuallyExpired(
+                                                            point.expires_at,
+                                                        ) && (
                                                             <div className="text-xs text-muted-foreground">
-                                                                {getDaysRemaining(point.expires_at)} days left (SRO)
+                                                                {getDaysRemaining(
+                                                                    point.expires_at,
+                                                                )}{' '}
+                                                                days left (SRO)
                                                             </div>
                                                         )}
-                                                        {isActuallyExpired(point.expires_at) && (
+                                                        {isActuallyExpired(
+                                                            point.expires_at,
+                                                        ) && (
                                                             <div className="text-xs text-orange-600 dark:text-orange-400">
-                                                                Pending expiration
+                                                                Pending
+                                                                expiration
                                                             </div>
                                                         )}
                                                     </div>
                                                 ) : (
-                                                    <span className="text-muted-foreground text-sm">-</span>
+                                                    <span className="text-sm text-muted-foreground">
+                                                        -
+                                                    </span>
                                                 )}
                                             </TableCell>
                                             <TableCell className="text-right">
@@ -1446,8 +1936,13 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                                     <Button
                                                         variant="outline"
                                                         size="icon"
-                                                        className="h-8 w-8 text-blue-600 hover:text-blue-700 border-blue-300"
-                                                        onClick={() => viewUserDetails(point.user.id, point.shift_date)}
+                                                        className="h-8 w-8 border-blue-300 text-blue-600 hover:text-blue-700"
+                                                        onClick={() =>
+                                                            viewUserDetails(
+                                                                point.user.id,
+                                                                point.shift_date,
+                                                            )
+                                                        }
                                                         title="View User Details"
                                                     >
                                                         <Eye className="h-4 w-4" />
@@ -1459,7 +1954,11 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                                                     variant="outline"
                                                                     size="icon"
                                                                     className="h-8 w-8"
-                                                                    onClick={() => openEditDialog(point)}
+                                                                    onClick={() =>
+                                                                        openEditDialog(
+                                                                            point,
+                                                                        )
+                                                                    }
                                                                     title="Edit"
                                                                 >
                                                                     <Pencil className="h-4 w-4" />
@@ -1469,8 +1968,12 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                                                 <Button
                                                                     variant="outline"
                                                                     size="icon"
-                                                                    className="h-8 w-8 text-red-600 hover:text-red-700 border-red-300"
-                                                                    onClick={() => openDeleteDialog(point)}
+                                                                    className="h-8 w-8 border-red-300 text-red-600 hover:text-red-700"
+                                                                    onClick={() =>
+                                                                        openDeleteDialog(
+                                                                            point,
+                                                                        )
+                                                                    }
                                                                     title="Delete"
                                                                 >
                                                                     <Trash2 className="h-4 w-4" />
@@ -1478,32 +1981,42 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                                             </Can>
                                                         </>
                                                     )}
-                                                    {!point.is_expired && !point.is_excused && (
-                                                        <Can permission="attendance_points.excuse">
-                                                            <Button
-                                                                variant="outline"
-                                                                size="icon"
-                                                                className="h-8 w-8 text-green-600 hover:text-green-700 border-green-300"
-                                                                onClick={() => openExcuseDialog(point)}
-                                                                title="Excuse"
-                                                            >
-                                                                <CheckCircle className="h-4 w-4" />
-                                                            </Button>
-                                                        </Can>
-                                                    )}
-                                                    {!point.is_expired && point.is_excused && (
-                                                        <Can permission="attendance_points.excuse">
-                                                            <Button
-                                                                variant="outline"
-                                                                size="icon"
-                                                                className="h-8 w-8 text-red-600 hover:text-red-700 border-red-300"
-                                                                onClick={() => handleUnexcuse(point.id)}
-                                                                title="Remove Excuse"
-                                                            >
-                                                                <XCircle className="h-4 w-4" />
-                                                            </Button>
-                                                        </Can>
-                                                    )}
+                                                    {!point.is_expired &&
+                                                        !point.is_excused && (
+                                                            <Can permission="attendance_points.excuse">
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="icon"
+                                                                    className="h-8 w-8 border-green-300 text-green-600 hover:text-green-700"
+                                                                    onClick={() =>
+                                                                        openExcuseDialog(
+                                                                            point,
+                                                                        )
+                                                                    }
+                                                                    title="Excuse"
+                                                                >
+                                                                    <CheckCircle className="h-4 w-4" />
+                                                                </Button>
+                                                            </Can>
+                                                        )}
+                                                    {!point.is_expired &&
+                                                        point.is_excused && (
+                                                            <Can permission="attendance_points.excuse">
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="icon"
+                                                                    className="h-8 w-8 border-red-300 text-red-600 hover:text-red-700"
+                                                                    onClick={() =>
+                                                                        handleUnexcuse(
+                                                                            point.id,
+                                                                        )
+                                                                    }
+                                                                    title="Remove Excuse"
+                                                                >
+                                                                    <XCircle className="h-4 w-4" />
+                                                                </Button>
+                                                            </Can>
+                                                        )}
                                                 </div>
                                             </TableCell>
                                         </TableRow>
@@ -1515,43 +2028,55 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                 </div>
 
                 {/* Mobile Cards */}
-                <div className="md:hidden space-y-4">
+                <div className="space-y-4 md:hidden">
                     {pointsData.data.length === 0 ? (
-                        <div className="py-12 text-center text-muted-foreground border rounded-lg bg-card">
+                        <div className="rounded-lg border bg-card py-12 text-center text-muted-foreground">
                             No attendance points found
                         </div>
                     ) : (
                         pointsData.data.map((point) => (
                             <div
                                 key={point.id}
-                                className={`bg-card border rounded-lg p-4 shadow-sm space-y-3${point.is_expired || point.is_excused ? ' opacity-60' : ''}`}
+                                className={`rounded-lg border bg-card p-4 shadow-sm space-y-3${point.is_expired || point.is_excused ? 'opacity-60' : ''}`}
                             >
                                 <div className="flex items-start justify-between">
-                                    <div className="flex items-center gap-2 flex-1">
+                                    <div className="flex flex-1 items-center gap-2">
                                         <Avatar className="h-8 w-8 shrink-0">
-                                            <AvatarImage loading="lazy" src={point.user.avatar_url ?? undefined} alt={formatUserName(point.user)} />
+                                            <AvatarImage
+                                                loading="lazy"
+                                                src={
+                                                    point.user.avatar_url ??
+                                                    undefined
+                                                }
+                                                alt={formatUserName(point.user)}
+                                            />
                                             <AvatarFallback className="text-xs">
                                                 {`${point.user.first_name[0]}${point.user.last_name[0]}`}
                                             </AvatarFallback>
                                         </Avatar>
-                                        <span className="font-medium text-sm">{formatUserName(point.user)}</span>
+                                        <span className="text-sm font-medium">
+                                            {formatUserName(point.user)}
+                                        </span>
                                     </div>
                                     <div className="flex flex-col items-end gap-1">
                                         {point.is_expired ? (
-                                            <Badge className="bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-900 dark:text-gray-100 border text-xs">
-                                                {point.expiration_type === 'gbro' ? 'GBRO' : 'Expired'}
+                                            <Badge className="border border-gray-200 bg-gray-100 text-xs text-gray-800 dark:bg-gray-900 dark:text-gray-100">
+                                                {point.expiration_type ===
+                                                'gbro'
+                                                    ? 'GBRO'
+                                                    : 'Expired'}
                                             </Badge>
                                         ) : point.is_excused ? (
-                                            <Badge className="bg-green-100 text-green-800 border-green-200 dark:bg-green-900 dark:text-green-100 border text-xs">
+                                            <Badge className="border border-green-200 bg-green-100 text-xs text-green-800 dark:bg-green-900 dark:text-green-100">
                                                 Excused
                                             </Badge>
                                         ) : (
-                                            <Badge className="bg-red-100 text-red-800 border-red-200 dark:bg-red-900 dark:text-red-100 border text-xs">
+                                            <Badge className="border border-red-200 bg-red-100 text-xs text-red-800 dark:bg-red-900 dark:text-red-100">
                                                 Active
                                             </Badge>
                                         )}
                                         {point.is_manual && (
-                                            <Badge className="bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-900 dark:text-purple-100 border text-xs">
+                                            <Badge className="border border-purple-200 bg-purple-100 text-xs text-purple-800 dark:bg-purple-900 dark:text-purple-100">
                                                 Manual
                                             </Badge>
                                         )}
@@ -1560,22 +2085,30 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
 
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>
-                                        <span className="text-muted-foreground text-sm">Date:</span>
+                                        <span className="text-sm text-muted-foreground">
+                                            Date:
+                                        </span>
                                         <div className="flex items-center gap-2">
-                                            <p className="font-medium">{formatDate(point.shift_date)}</p>
-                                            {point.point_type === 'whole_day_absence' && !point.is_advised && (
-                                                <Badge className="bg-purple-600 text-white text-xs border-0">
-                                                    NCNS
-                                                </Badge>
-                                            )}
+                                            <p className="font-medium">
+                                                {formatDate(point.shift_date)}
+                                            </p>
+                                            {point.point_type ===
+                                                'whole_day_absence' &&
+                                                !point.is_advised && (
+                                                    <Badge className="border-0 bg-purple-600 text-xs text-white">
+                                                        NCNS
+                                                    </Badge>
+                                                )}
                                         </div>
                                     </div>
                                     <div>
-                                        <span className="text-muted-foreground">Points:</span>
+                                        <span className="text-muted-foreground">
+                                            Points:
+                                        </span>
                                         <p className="font-bold text-red-600 dark:text-red-400">
                                             {Number(point.points).toFixed(2)}
                                             {point.is_critical_day && (
-                                                <Badge className="ml-1 bg-purple-100 text-purple-800 border-purple-200 text-xs">
+                                                <Badge className="ml-1 border-purple-200 bg-purple-100 text-xs text-purple-800">
                                                     ×2
                                                 </Badge>
                                             )}
@@ -1584,98 +2117,175 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                 </div>
 
                                 <div>
-                                    <span className="text-muted-foreground text-sm">Type:</span>
-                                    <div className="mt-1">{getPointTypeBadge(point.point_type)}</div>
+                                    <span className="text-sm text-muted-foreground">
+                                        Type:
+                                    </span>
+                                    <div className="mt-1">
+                                        {getPointTypeBadge(point.point_type)}
+                                    </div>
                                 </div>
 
                                 {point.violation_details && (
                                     <div>
-                                        <span className="text-muted-foreground text-sm">Violation:</span>
+                                        <span className="text-sm text-muted-foreground">
+                                            Violation:
+                                        </span>
                                         <Button
                                             variant="outline"
                                             size="sm"
-                                            className="w-full mt-1 justify-start text-left"
+                                            className="mt-1 w-full justify-start text-left"
                                             onClick={() => {
-                                                setSelectedViolationPoint(point);
+                                                setSelectedViolationPoint(
+                                                    point,
+                                                );
                                                 setIsViolationDetailsOpen(true);
                                             }}
                                         >
-                                            <FileText className="h-4 w-4 mr-2 shrink-0" />
-                                            <span className="line-clamp-1">{point.violation_details}</span>
+                                            <FileText className="mr-2 h-4 w-4 shrink-0" />
+                                            <span className="line-clamp-1">
+                                                {point.violation_details}
+                                            </span>
                                         </Button>
                                     </div>
                                 )}
 
                                 {point.is_excused ? (
                                     <div>
-                                        <span className="text-muted-foreground text-sm">Expiration:</span>
-                                        <div className="text-sm mt-1">
-                                            <p className="text-muted-foreground italic">Excused (Won't Expire)</p>
+                                        <span className="text-sm text-muted-foreground">
+                                            Expiration:
+                                        </span>
+                                        <div className="mt-1 text-sm">
+                                            <p className="text-muted-foreground italic">
+                                                Excused (Won't Expire)
+                                            </p>
                                         </div>
                                     </div>
                                 ) : point.is_expired ? (
                                     <div>
-                                        <span className="text-muted-foreground text-sm">Expiration:</span>
-                                        <div className="text-xs mt-1 space-y-0.5">
+                                        <span className="text-sm text-muted-foreground">
+                                            Expiration:
+                                        </span>
+                                        <div className="mt-1 space-y-0.5 text-xs">
                                             {point.expires_at && (
                                                 <div className="flex items-center gap-1">
-                                                    <span className={`font-semibold ${point.expiration_type === 'sro' ? 'text-blue-600 dark:text-blue-400' : 'text-muted-foreground'}`}>SRO:</span>
-                                                    <span className={`${point.expiration_type === 'sro' ? 'font-medium' : 'text-muted-foreground line-through'}`}>{formatDate(point.expires_at)}</span>
+                                                    <span
+                                                        className={`font-semibold ${point.expiration_type === 'sro' ? 'text-blue-600 dark:text-blue-400' : 'text-muted-foreground'}`}
+                                                    >
+                                                        SRO:
+                                                    </span>
+                                                    <span
+                                                        className={`${point.expiration_type === 'sro' ? 'font-medium' : 'text-muted-foreground line-through'}`}
+                                                    >
+                                                        {formatDate(
+                                                            point.expires_at,
+                                                        )}
+                                                    </span>
                                                 </div>
                                             )}
                                             {point.gbro_expires_at && (
                                                 <div className="flex items-center gap-1">
-                                                    <span className={`font-semibold ${point.expiration_type === 'gbro' ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>GBRO:</span>
-                                                    <span className={`${point.expiration_type === 'gbro' ? 'font-medium' : 'text-muted-foreground line-through'}`}>{formatDate(point.gbro_expires_at)}</span>
+                                                    <span
+                                                        className={`font-semibold ${point.expiration_type === 'gbro' ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}
+                                                    >
+                                                        GBRO:
+                                                    </span>
+                                                    <span
+                                                        className={`${point.expiration_type === 'gbro' ? 'font-medium' : 'text-muted-foreground line-through'}`}
+                                                    >
+                                                        {formatDate(
+                                                            point.gbro_expires_at,
+                                                        )}
+                                                    </span>
                                                 </div>
                                             )}
                                         </div>
                                     </div>
-                                ) : point.expires_at && (
-                                    <div>
-                                        <span className="text-muted-foreground text-sm">Expiration:</span>
-                                        <div className="text-xs mt-1 space-y-0.5">
-                                            {/* SRO Expiration */}
-                                            <div className="flex items-center gap-1">
-                                                <span className={!point.eligible_for_gbro ? 'font-semibold text-blue-600 dark:text-blue-400' : 'text-muted-foreground'}>SRO:</span>
-                                                <span className={!point.eligible_for_gbro ? 'font-medium' : 'text-muted-foreground'}>{formatDate(point.expires_at)}</span>
-                                            </div>
-                                            {/* GBRO Expiration (if eligible) */}
-                                            {point.eligible_for_gbro && point.gbro_expires_at && (
+                                ) : (
+                                    point.expires_at && (
+                                        <div>
+                                            <span className="text-sm text-muted-foreground">
+                                                Expiration:
+                                            </span>
+                                            <div className="mt-1 space-y-0.5 text-xs">
+                                                {/* SRO Expiration */}
                                                 <div className="flex items-center gap-1">
-                                                    <span className="font-semibold text-green-600 dark:text-green-400">GBRO:</span>
-                                                    <span className="font-medium text-green-600 dark:text-green-400">{formatDate(point.gbro_expires_at)}</span>
+                                                    <span
+                                                        className={
+                                                            !point.eligible_for_gbro
+                                                                ? 'font-semibold text-blue-600 dark:text-blue-400'
+                                                                : 'text-muted-foreground'
+                                                        }
+                                                    >
+                                                        SRO:
+                                                    </span>
+                                                    <span
+                                                        className={
+                                                            !point.eligible_for_gbro
+                                                                ? 'font-medium'
+                                                                : 'text-muted-foreground'
+                                                        }
+                                                    >
+                                                        {formatDate(
+                                                            point.expires_at,
+                                                        )}
+                                                    </span>
                                                 </div>
-                                            )}
-                                            {/* Days remaining or pending status */}
-                                            {!isActuallyExpired(point.expires_at) && (
-                                                <p className="text-xs text-muted-foreground">
-                                                    {getDaysRemaining(point.expires_at)} days left (SRO)
-                                                </p>
-                                            )}
-                                            {isActuallyExpired(point.expires_at) && (
-                                                <p className="text-xs text-orange-600 dark:text-orange-400">
-                                                    Pending expiration
-                                                </p>
-                                            )}
+                                                {/* GBRO Expiration (if eligible) */}
+                                                {point.eligible_for_gbro &&
+                                                    point.gbro_expires_at && (
+                                                        <div className="flex items-center gap-1">
+                                                            <span className="font-semibold text-green-600 dark:text-green-400">
+                                                                GBRO:
+                                                            </span>
+                                                            <span className="font-medium text-green-600 dark:text-green-400">
+                                                                {formatDate(
+                                                                    point.gbro_expires_at,
+                                                                )}
+                                                            </span>
+                                                        </div>
+                                                    )}
+                                                {/* Days remaining or pending status */}
+                                                {!isActuallyExpired(
+                                                    point.expires_at,
+                                                ) && (
+                                                    <p className="text-xs text-muted-foreground">
+                                                        {getDaysRemaining(
+                                                            point.expires_at,
+                                                        )}{' '}
+                                                        days left (SRO)
+                                                    </p>
+                                                )}
+                                                {isActuallyExpired(
+                                                    point.expires_at,
+                                                ) && (
+                                                    <p className="text-xs text-orange-600 dark:text-orange-400">
+                                                        Pending expiration
+                                                    </p>
+                                                )}
+                                            </div>
                                         </div>
-                                    </div>
+                                    )
                                 )}
 
                                 {point.is_excused && point.excused_by && (
-                                    <div className="text-xs text-muted-foreground pt-2 border-t">
+                                    <div className="border-t pt-2 text-xs text-muted-foreground">
                                         Excused by: {point.excused_by.name}
                                     </div>
                                 )}
 
-                                <div className="flex flex-wrap gap-2 pt-2 border-t">
+                                <div className="flex flex-wrap gap-2 border-t pt-2">
                                     <Button
                                         variant="outline"
                                         size="sm"
                                         className="flex-1"
-                                        onClick={() => viewUserDetails(point.user.id, point.shift_date)}
+                                        onClick={() =>
+                                            viewUserDetails(
+                                                point.user.id,
+                                                point.shift_date,
+                                            )
+                                        }
                                     >
-                                        <Eye className="h-4 w-4 mr-2" />
+                                        <Eye className="mr-2 h-4 w-4" />
                                         View
                                     </Button>
                                     {point.is_manual && (
@@ -1690,7 +2300,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                                         openEditDialog(point);
                                                     }}
                                                 >
-                                                    <Pencil className="h-4 w-4 mr-2" />
+                                                    <Pencil className="mr-2 h-4 w-4" />
                                                     Edit
                                                 </Button>
                                             </Can>
@@ -1698,13 +2308,13 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                                 <Button
                                                     variant="outline"
                                                     size="sm"
-                                                    className="flex-1 text-red-600 hover:text-red-700 border-red-300"
+                                                    className="flex-1 border-red-300 text-red-600 hover:text-red-700"
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         openDeleteDialog(point);
                                                     }}
                                                 >
-                                                    <Trash2 className="h-4 w-4 mr-2" />
+                                                    <Trash2 className="mr-2 h-4 w-4" />
                                                     Delete
                                                 </Button>
                                             </Can>
@@ -1715,13 +2325,13 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                             <Button
                                                 variant="outline"
                                                 size="sm"
-                                                className="flex-1 text-green-600 hover:text-green-700 border-green-300"
+                                                className="flex-1 border-green-300 text-green-600 hover:text-green-700"
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     openExcuseDialog(point);
                                                 }}
                                             >
-                                                <CheckCircle className="h-4 w-4 mr-2" />
+                                                <CheckCircle className="mr-2 h-4 w-4" />
                                                 Excuse
                                             </Button>
                                         </Can>
@@ -1731,13 +2341,13 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                             <Button
                                                 variant="outline"
                                                 size="sm"
-                                                className="flex-1 text-red-600 hover:text-red-700 border-red-300"
+                                                className="flex-1 border-red-300 text-red-600 hover:text-red-700"
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     handleUnexcuse(point.id);
                                                 }}
                                             >
-                                                <XCircle className="h-4 w-4 mr-2" />
+                                                <XCircle className="mr-2 h-4 w-4" />
                                                 Remove
                                             </Button>
                                         </Can>
@@ -1748,7 +2358,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                     )}
                 </div>
 
-                <div className="flex justify-center mt-4">
+                <div className="mt-4 flex justify-center">
                     {pointsData.links && pointsData.links.length > 0 && (
                         <PaginationNav links={pointsData.links} />
                     )}
@@ -1761,8 +2371,10 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                     <DialogHeader>
                         <DialogTitle>Rescan Attendance Points</DialogTitle>
                         <DialogDescription>
-                            This will scan attendance records within the selected date range and create attendance points
-                            for any violations found. Existing points will not be duplicated.
+                            This will scan attendance records within the
+                            selected date range and create attendance points for
+                            any violations found. Existing points will not be
+                            duplicated.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
@@ -1788,8 +2400,8 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                             variant="outline"
                             onClick={() => {
                                 setIsRescanOpen(false);
-                                setRescanDateFrom("");
-                                setRescanDateTo("");
+                                setRescanDateFrom('');
+                                setRescanDateTo('');
                             }}
                             disabled={isRescanning}
                         >
@@ -1797,7 +2409,9 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                         </Button>
                         <Button
                             onClick={handleRescan}
-                            disabled={!rescanDateFrom || !rescanDateTo || isRescanning}
+                            disabled={
+                                !rescanDateFrom || !rescanDateTo || isRescanning
+                            }
                         >
                             {isRescanning ? (
                                 <>
@@ -1816,11 +2430,16 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
             </Dialog>
 
             {/* Excuse Point Dialog */}
-            <Dialog open={isExcuseDialogOpen} onOpenChange={setIsExcuseDialogOpen}>
+            <Dialog
+                open={isExcuseDialogOpen}
+                onOpenChange={setIsExcuseDialogOpen}
+            >
                 <DialogContent className="sm:max-w-125">
                     <DialogHeader>
                         <DialogTitle>
-                            {selectedPoint?.is_excused ? 'Point Details' : 'Excuse Attendance Point'}
+                            {selectedPoint?.is_excused
+                                ? 'Point Details'
+                                : 'Excuse Attendance Point'}
                         </DialogTitle>
                         <DialogDescription>
                             {selectedPoint?.is_excused
@@ -1830,35 +2449,58 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                         {selectedPoint && (
-                            <div className="space-y-2 p-3 bg-muted rounded-md">
+                            <div className="space-y-2 rounded-md bg-muted p-3">
                                 <div className="flex justify-between text-sm">
-                                    <span className="text-muted-foreground">Employee:</span>
-                                    <span className="font-medium">{formatUserName(selectedPoint.user)}</span>
+                                    <span className="text-muted-foreground">
+                                        Employee:
+                                    </span>
+                                    <span className="font-medium">
+                                        {formatUserName(selectedPoint.user)}
+                                    </span>
                                 </div>
                                 <div className="flex justify-between text-sm">
-                                    <span className="text-muted-foreground">Date:</span>
-                                    <span className="font-medium">{formatDate(selectedPoint.shift_date)}</span>
+                                    <span className="text-muted-foreground">
+                                        Date:
+                                    </span>
+                                    <span className="font-medium">
+                                        {formatDate(selectedPoint.shift_date)}
+                                    </span>
                                 </div>
                                 <div className="flex justify-between text-sm">
-                                    <span className="text-muted-foreground">Type:</span>
-                                    <span>{getPointTypeBadge(selectedPoint.point_type)}</span>
+                                    <span className="text-muted-foreground">
+                                        Type:
+                                    </span>
+                                    <span>
+                                        {getPointTypeBadge(
+                                            selectedPoint.point_type,
+                                        )}
+                                    </span>
                                 </div>
                                 <div className="flex justify-between text-sm">
-                                    <span className="text-muted-foreground">Points:</span>
-                                    <span className="font-bold text-red-600">{Number(selectedPoint.points).toFixed(2)}</span>
+                                    <span className="text-muted-foreground">
+                                        Points:
+                                    </span>
+                                    <span className="font-bold text-red-600">
+                                        {Number(selectedPoint.points).toFixed(
+                                            2,
+                                        )}
+                                    </span>
                                 </div>
                             </div>
                         )}
 
                         <div className="grid gap-2">
                             <Label htmlFor="excuse_reason">
-                                Excuse Reason <span className="text-red-500">*</span>
+                                Excuse Reason{' '}
+                                <span className="text-red-500">*</span>
                             </Label>
                             <Textarea
                                 id="excuse_reason"
                                 placeholder="Enter reason for excusing this point..."
                                 value={excuseReason}
-                                onChange={(e) => setExcuseReason(e.target.value)}
+                                onChange={(e) =>
+                                    setExcuseReason(e.target.value)
+                                }
                                 rows={3}
                                 disabled={selectedPoint?.is_excused}
                                 className="resize-none"
@@ -1866,7 +2508,9 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                         </div>
 
                         <div className="grid gap-2">
-                            <Label htmlFor="notes">Additional Notes (Optional)</Label>
+                            <Label htmlFor="notes">
+                                Additional Notes (Optional)
+                            </Label>
                             <Textarea
                                 id="notes"
                                 placeholder="Add any additional notes..."
@@ -1878,14 +2522,27 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                             />
                         </div>
 
-                        {selectedPoint?.is_excused && selectedPoint.excused_by && (
-                            <div className="text-xs text-muted-foreground p-3 bg-muted rounded-md">
-                                <p>Excused by: <span className="font-medium">{selectedPoint.excused_by.name}</span></p>
-                                {selectedPoint.excused_at && (
-                                    <p>On: <span className="font-medium">{formatDateTime(selectedPoint.excused_at)}</span></p>
-                                )}
-                            </div>
-                        )}
+                        {selectedPoint?.is_excused &&
+                            selectedPoint.excused_by && (
+                                <div className="rounded-md bg-muted p-3 text-xs text-muted-foreground">
+                                    <p>
+                                        Excused by:{' '}
+                                        <span className="font-medium">
+                                            {selectedPoint.excused_by.name}
+                                        </span>
+                                    </p>
+                                    {selectedPoint.excused_at && (
+                                        <p>
+                                            On:{' '}
+                                            <span className="font-medium">
+                                                {formatDateTime(
+                                                    selectedPoint.excused_at,
+                                                )}
+                                            </span>
+                                        </p>
+                                    )}
+                                </div>
+                            )}
                     </div>
                     <DialogFooter>
                         <Button
@@ -1893,8 +2550,8 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                             onClick={() => {
                                 setIsExcuseDialogOpen(false);
                                 setSelectedPoint(null);
-                                setExcuseReason("");
-                                setNotes("");
+                                setExcuseReason('');
+                                setNotes('');
                             }}
                             disabled={isSubmitting}
                         >
@@ -1923,17 +2580,23 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
             </Dialog>
 
             {/* Unexcuse Confirmation Dialog */}
-            <AlertDialog open={isUnexcuseDialogOpen} onOpenChange={setIsUnexcuseDialogOpen}>
+            <AlertDialog
+                open={isUnexcuseDialogOpen}
+                onOpenChange={setIsUnexcuseDialogOpen}
+            >
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>Remove Excuse</AlertDialogTitle>
                         <AlertDialogDescription>
-                            Are you sure you want to remove the excuse for this attendance point?
-                            This will restore the point to active status.
+                            Are you sure you want to remove the excuse for this
+                            attendance point? This will restore the point to
+                            active status.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                        <AlertDialogCancel onClick={() => setPointToUnexcuse(null)}>
+                        <AlertDialogCancel
+                            onClick={() => setPointToUnexcuse(null)}
+                        >
                             Cancel
                         </AlertDialogCancel>
                         <AlertDialogAction onClick={confirmUnexcuse}>
@@ -1944,7 +2607,10 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
             </AlertDialog>
 
             {/* Violation Details Dialog */}
-            <Dialog open={isViolationDetailsOpen} onOpenChange={setIsViolationDetailsOpen}>
+            <Dialog
+                open={isViolationDetailsOpen}
+                onOpenChange={setIsViolationDetailsOpen}
+            >
                 <DialogContent className="sm:max-w-150">
                     <DialogHeader>
                         <DialogTitle>Violation Details</DialogTitle>
@@ -1957,165 +2623,294 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                         <div className="space-y-4">
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <Label className="text-sm font-medium text-muted-foreground">Employee</Label>
-                                    <p className="text-sm font-medium mt-1">{formatUserName(selectedViolationPoint.user)}</p>
+                                    <Label className="text-sm font-medium text-muted-foreground">
+                                        Employee
+                                    </Label>
+                                    <p className="mt-1 text-sm font-medium">
+                                        {formatUserName(
+                                            selectedViolationPoint.user,
+                                        )}
+                                    </p>
                                 </div>
                                 <div>
-                                    <Label className="text-sm font-medium text-muted-foreground">Date</Label>
-                                    <p className="text-sm font-medium mt-1">{formatDate(selectedViolationPoint.shift_date)}</p>
+                                    <Label className="text-sm font-medium text-muted-foreground">
+                                        Date
+                                    </Label>
+                                    <p className="mt-1 text-sm font-medium">
+                                        {formatDate(
+                                            selectedViolationPoint.shift_date,
+                                        )}
+                                    </p>
                                 </div>
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <Label className="text-sm font-medium text-muted-foreground">Type</Label>
-                                    <div className="mt-1">{getPointTypeBadge(selectedViolationPoint.point_type)}</div>
+                                    <Label className="text-sm font-medium text-muted-foreground">
+                                        Type
+                                    </Label>
+                                    <div className="mt-1">
+                                        {getPointTypeBadge(
+                                            selectedViolationPoint.point_type,
+                                        )}
+                                    </div>
                                 </div>
                                 <div>
-                                    <Label className="text-sm font-medium text-muted-foreground">Points</Label>
-                                    <p className="text-lg font-bold text-red-600 dark:text-red-400 mt-1">
-                                        {Number(selectedViolationPoint.points).toFixed(2)}
+                                    <Label className="text-sm font-medium text-muted-foreground">
+                                        Points
+                                    </Label>
+                                    <p className="mt-1 text-lg font-bold text-red-600 dark:text-red-400">
+                                        {Number(
+                                            selectedViolationPoint.points,
+                                        ).toFixed(2)}
                                     </p>
                                 </div>
                             </div>
 
                             <div>
-                                <Label className="text-sm font-medium text-muted-foreground">Violation Details</Label>
-                                <div className="mt-2 p-3 bg-muted rounded-md">
-                                    <p className="text-sm">{selectedViolationPoint.violation_details}</p>
+                                <Label className="text-sm font-medium text-muted-foreground">
+                                    Violation Details
+                                </Label>
+                                <div className="mt-2 rounded-md bg-muted p-3">
+                                    <p className="text-sm">
+                                        {
+                                            selectedViolationPoint.violation_details
+                                        }
+                                    </p>
                                 </div>
                             </div>
 
-                            {(selectedViolationPoint.notes || selectedViolationPoint.attendance?.notes) && (
+                            {(selectedViolationPoint.notes ||
+                                selectedViolationPoint.attendance?.notes) && (
                                 <div>
-                                    <Label className="text-sm font-medium text-muted-foreground">Notes</Label>
-                                    <div className="mt-2 p-3 bg-muted rounded-md">
-                                        <p className="text-sm whitespace-pre-wrap">{selectedViolationPoint.notes || selectedViolationPoint.attendance?.notes}</p>
+                                    <Label className="text-sm font-medium text-muted-foreground">
+                                        Notes
+                                    </Label>
+                                    <div className="mt-2 rounded-md bg-muted p-3">
+                                        <p className="text-sm whitespace-pre-wrap">
+                                            {selectedViolationPoint.notes ||
+                                                selectedViolationPoint
+                                                    .attendance?.notes}
+                                        </p>
                                     </div>
                                 </div>
                             )}
 
                             {selectedViolationPoint.tardy_minutes && (
                                 <div>
-                                    <Label className="text-sm font-medium text-muted-foreground">Tardy Duration</Label>
-                                    <p className="text-sm mt-1">{selectedViolationPoint.tardy_minutes} minutes</p>
+                                    <Label className="text-sm font-medium text-muted-foreground">
+                                        Tardy Duration
+                                    </Label>
+                                    <p className="mt-1 text-sm">
+                                        {selectedViolationPoint.tardy_minutes}{' '}
+                                        minutes
+                                    </p>
                                 </div>
                             )}
 
                             {selectedViolationPoint.undertime_minutes && (
                                 <div>
-                                    <Label className="text-sm font-medium text-muted-foreground">Undertime Duration</Label>
-                                    <p className="text-sm mt-1">{selectedViolationPoint.undertime_minutes} minutes</p>
+                                    <Label className="text-sm font-medium text-muted-foreground">
+                                        Undertime Duration
+                                    </Label>
+                                    <p className="mt-1 text-sm">
+                                        {
+                                            selectedViolationPoint.undertime_minutes
+                                        }{' '}
+                                        minutes
+                                    </p>
                                 </div>
                             )}
 
                             {selectedViolationPoint.is_excused ? (
-                                <div className="grid grid-cols-2 gap-4 pt-4 border-t">
+                                <div className="grid grid-cols-2 gap-4 border-t pt-4">
                                     <div>
-                                        <Label className="text-sm font-medium text-muted-foreground">Expiration Date</Label>
-                                        <p className="text-sm text-muted-foreground italic mt-1">N/A (Excused)</p>
+                                        <Label className="text-sm font-medium text-muted-foreground">
+                                            Expiration Date
+                                        </Label>
+                                        <p className="mt-1 text-sm text-muted-foreground italic">
+                                            N/A (Excused)
+                                        </p>
                                     </div>
                                     <div>
-                                        <Label className="text-sm font-medium text-muted-foreground">Status</Label>
+                                        <Label className="text-sm font-medium text-muted-foreground">
+                                            Status
+                                        </Label>
                                         <div className="mt-1">
-                                            <Badge className="bg-green-100 text-green-800 border-green-200 dark:bg-green-900 dark:text-green-100 border">
+                                            <Badge className="border border-green-200 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100">
                                                 Excused
                                             </Badge>
                                         </div>
                                     </div>
                                 </div>
-                            ) : selectedViolationPoint.expires_at && (
-                                <div className="grid grid-cols-2 gap-4 pt-4 border-t">
-                                    <div>
-                                        <Label className="text-sm font-medium text-muted-foreground">Expiration Date</Label>
-                                        <p className="text-sm font-medium mt-1">{formatDate(selectedViolationPoint.expires_at)}</p>
-                                        {!selectedViolationPoint.is_expired && !isActuallyExpired(selectedViolationPoint.expires_at) && (
-                                            <p className="text-xs text-muted-foreground mt-1">
-                                                {getDaysRemaining(selectedViolationPoint.expires_at)} days remaining
+                            ) : (
+                                selectedViolationPoint.expires_at && (
+                                    <div className="grid grid-cols-2 gap-4 border-t pt-4">
+                                        <div>
+                                            <Label className="text-sm font-medium text-muted-foreground">
+                                                Expiration Date
+                                            </Label>
+                                            <p className="mt-1 text-sm font-medium">
+                                                {formatDate(
+                                                    selectedViolationPoint.expires_at,
+                                                )}
                                             </p>
-                                        )}
-                                        {!selectedViolationPoint.is_expired && isActuallyExpired(selectedViolationPoint.expires_at) && (
-                                            <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
-                                                Pending expiration
-                                            </p>
-                                        )}
-                                    </div>
-                                    <div>
-                                        <Label className="text-sm font-medium text-muted-foreground">Status</Label>
-                                        <div className="mt-1">
-                                            {selectedViolationPoint.is_expired ? (
-                                                <Badge className="bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-900 dark:text-gray-100 border">
-                                                    {selectedViolationPoint.expiration_type === 'gbro' ? 'Expired (GBRO)' : 'Expired (SRO)'}
-                                                </Badge>
-                                            ) : (
-                                                <Badge className="bg-red-100 text-red-800 border-red-200 dark:bg-red-900 dark:text-red-100 border">
-                                                    Active
-                                                </Badge>
-                                            )}
+                                            {!selectedViolationPoint.is_expired &&
+                                                !isActuallyExpired(
+                                                    selectedViolationPoint.expires_at,
+                                                ) && (
+                                                    <p className="mt-1 text-xs text-muted-foreground">
+                                                        {getDaysRemaining(
+                                                            selectedViolationPoint.expires_at,
+                                                        )}{' '}
+                                                        days remaining
+                                                    </p>
+                                                )}
+                                            {!selectedViolationPoint.is_expired &&
+                                                isActuallyExpired(
+                                                    selectedViolationPoint.expires_at,
+                                                ) && (
+                                                    <p className="mt-1 text-xs text-orange-600 dark:text-orange-400">
+                                                        Pending expiration
+                                                    </p>
+                                                )}
+                                        </div>
+                                        <div>
+                                            <Label className="text-sm font-medium text-muted-foreground">
+                                                Status
+                                            </Label>
+                                            <div className="mt-1">
+                                                {selectedViolationPoint.is_expired ? (
+                                                    <Badge className="border border-gray-200 bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-100">
+                                                        {selectedViolationPoint.expiration_type ===
+                                                        'gbro'
+                                                            ? 'Expired (GBRO)'
+                                                            : 'Expired (SRO)'}
+                                                    </Badge>
+                                                ) : (
+                                                    <Badge className="border border-red-200 bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100">
+                                                        Active
+                                                    </Badge>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
+                                )
                             )}
 
-                            {selectedViolationPoint.is_expired && selectedViolationPoint.expired_at && (
-                                <div>
-                                    <Label className="text-sm font-medium text-muted-foreground">Expired On</Label>
-                                    <p className="text-sm mt-1">{formatDate(selectedViolationPoint.expired_at)}</p>
-                                </div>
-                            )}
+                            {selectedViolationPoint.is_expired &&
+                                selectedViolationPoint.expired_at && (
+                                    <div>
+                                        <Label className="text-sm font-medium text-muted-foreground">
+                                            Expired On
+                                        </Label>
+                                        <p className="mt-1 text-sm">
+                                            {formatDate(
+                                                selectedViolationPoint.expired_at,
+                                            )}
+                                        </p>
+                                    </div>
+                                )}
 
                             {/* GBRO Eligibility Info */}
-                            {selectedViolationPoint && !selectedViolationPoint.is_expired && !selectedViolationPoint.is_excused && selectedViolationPoint.eligible_for_gbro && (
-                                <div className="pt-4 border-t">
-                                    <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-950 p-4">
-                                        <div className="flex items-start gap-3">
-                                            <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5 shrink-0" />
-                                            <div>
-                                                <p className="font-semibold text-green-800 dark:text-green-200">
-                                                    GBRO Eligible Point
-                                                </p>
-                                                <p className="text-sm text-green-700 dark:text-green-300 mt-1">
-                                                    This point is eligible for Good Behavior Roll Off (GBRO).
-                                                    After <strong>60 consecutive days</strong> without new violations,
-                                                    the <strong>last 2 eligible points</strong> will be automatically removed from the employee's record.
-                                                </p>
+                            {selectedViolationPoint &&
+                                !selectedViolationPoint.is_expired &&
+                                !selectedViolationPoint.is_excused &&
+                                selectedViolationPoint.eligible_for_gbro && (
+                                    <div className="border-t pt-4">
+                                        <div className="rounded-lg border border-green-200 bg-green-50 p-4 dark:bg-green-950">
+                                            <div className="flex items-start gap-3">
+                                                <CheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-green-600 dark:text-green-400" />
+                                                <div>
+                                                    <p className="font-semibold text-green-800 dark:text-green-200">
+                                                        GBRO Eligible Point
+                                                    </p>
+                                                    <p className="mt-1 text-sm text-green-700 dark:text-green-300">
+                                                        This point is eligible
+                                                        for Good Behavior Roll
+                                                        Off (GBRO). After{' '}
+                                                        <strong>
+                                                            60 consecutive days
+                                                        </strong>{' '}
+                                                        without new violations,
+                                                        the{' '}
+                                                        <strong>
+                                                            last 2 eligible
+                                                            points
+                                                        </strong>{' '}
+                                                        will be automatically
+                                                        removed from the
+                                                        employee's record.
+                                                    </p>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
-                                </div>
-                            )}
+                                )}
 
-                            {selectedViolationPoint && !selectedViolationPoint.eligible_for_gbro && !selectedViolationPoint.is_expired && !selectedViolationPoint.is_excused && (
-                                <div className="pt-4 border-t">
-                                    <div className="rounded-lg border border-orange-200 bg-orange-50 dark:bg-orange-950 p-4">
-                                        <div className="flex items-start gap-3">
-                                            <AlertCircle className="h-5 w-5 text-orange-600 dark:text-orange-400 mt-0.5 shrink-0" />
-                                            <div>
-                                                <p className="font-semibold text-orange-800 dark:text-orange-200">
-                                                    Not Eligible for GBRO
-                                                </p>
-                                                <p className="text-sm text-orange-700 dark:text-orange-300 mt-1">
-                                                    This point type (likely NCNS or FTN) requires a <strong>1-year expiration period</strong>
-                                                    and cannot be removed through Good Behavior Roll Off.
-                                                    It will expire automatically after {selectedViolationPoint.expires_at ? formatDate(selectedViolationPoint.expires_at) : '1 year'}.
-                                                </p>
+                            {selectedViolationPoint &&
+                                !selectedViolationPoint.eligible_for_gbro &&
+                                !selectedViolationPoint.is_expired &&
+                                !selectedViolationPoint.is_excused && (
+                                    <div className="border-t pt-4">
+                                        <div className="rounded-lg border border-orange-200 bg-orange-50 p-4 dark:bg-orange-950">
+                                            <div className="flex items-start gap-3">
+                                                <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-orange-600 dark:text-orange-400" />
+                                                <div>
+                                                    <p className="font-semibold text-orange-800 dark:text-orange-200">
+                                                        Not Eligible for GBRO
+                                                    </p>
+                                                    <p className="mt-1 text-sm text-orange-700 dark:text-orange-300">
+                                                        This point type (likely
+                                                        NCNS or FTN) requires a{' '}
+                                                        <strong>
+                                                            1-year expiration
+                                                            period
+                                                        </strong>
+                                                        and cannot be removed
+                                                        through Good Behavior
+                                                        Roll Off. It will expire
+                                                        automatically after{' '}
+                                                        {selectedViolationPoint.expires_at
+                                                            ? formatDate(
+                                                                  selectedViolationPoint.expires_at,
+                                                              )
+                                                            : '1 year'}
+                                                        .
+                                                    </p>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
-                                </div>
-                            )}
+                                )}
 
-                            {selectedViolationPoint.is_excused && selectedViolationPoint.excuse_reason && (
-                                <div className="pt-4 border-t">
-                                    <Label className="text-sm font-medium text-muted-foreground">Excuse Reason</Label>
-                                    <p className="text-sm mt-1">{selectedViolationPoint.excuse_reason}</p>
-                                    {selectedViolationPoint.excused_by && selectedViolationPoint.excused_at && (
-                                        <p className="text-xs text-muted-foreground mt-1">
-                                            Excused by: {selectedViolationPoint.excused_by.name} on {formatDateTime(selectedViolationPoint.excused_at)}
+                            {selectedViolationPoint.is_excused &&
+                                selectedViolationPoint.excuse_reason && (
+                                    <div className="border-t pt-4">
+                                        <Label className="text-sm font-medium text-muted-foreground">
+                                            Excuse Reason
+                                        </Label>
+                                        <p className="mt-1 text-sm">
+                                            {
+                                                selectedViolationPoint.excuse_reason
+                                            }
                                         </p>
-                                    )}
-                                </div>
-                            )}
+                                        {selectedViolationPoint.excused_by &&
+                                            selectedViolationPoint.excused_at && (
+                                                <p className="mt-1 text-xs text-muted-foreground">
+                                                    Excused by:{' '}
+                                                    {
+                                                        selectedViolationPoint
+                                                            .excused_by.name
+                                                    }{' '}
+                                                    on{' '}
+                                                    {formatDateTime(
+                                                        selectedViolationPoint.excused_at,
+                                                    )}
+                                                </p>
+                                            )}
+                                    </div>
+                                )}
                         </div>
                     )}
 
@@ -2134,14 +2929,19 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
             </Dialog>
 
             {/* Manual Entry Dialog */}
-            <Dialog open={isManualEntryOpen} onOpenChange={(open) => {
-                if (!open) resetManualEntryForm();
-                setIsManualEntryOpen(open);
-            }}>
-                <DialogContent className="sm:max-w-150 max-h-[90vh] overflow-y-auto">
+            <Dialog
+                open={isManualEntryOpen}
+                onOpenChange={(open) => {
+                    if (!open) resetManualEntryForm();
+                    setIsManualEntryOpen(open);
+                }}
+            >
+                <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-150">
                     <DialogHeader>
                         <DialogTitle>
-                            {isEditMode ? 'Edit Manual Attendance Point' : 'Add Manual Attendance Point'}
+                            {isEditMode
+                                ? 'Edit Manual Attendance Point'
+                                : 'Add Manual Attendance Point'}
                         </DialogTitle>
                         <DialogDescription>
                             {isEditMode
@@ -2156,7 +2956,10 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                             <Label htmlFor="manual_user">
                                 Employee <span className="text-red-500">*</span>
                             </Label>
-                            <Popover open={isManualUserPopoverOpen} onOpenChange={setIsManualUserPopoverOpen}>
+                            <Popover
+                                open={isManualUserPopoverOpen}
+                                onOpenChange={setIsManualUserPopoverOpen}
+                            >
                                 <PopoverTrigger asChild>
                                     <Button
                                         variant="outline"
@@ -2168,50 +2971,94 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                         <span className="truncate">
                                             {manualEntryUserId
                                                 ? (() => {
-                                                    const user = users?.find(u => String(u.id) === manualEntryUserId);
-                                                    return user ? formatUserName(user) : "Select employee...";
-                                                })()
-                                                : "Select employee..."}
+                                                      const user = users?.find(
+                                                          (u) =>
+                                                              String(u.id) ===
+                                                              manualEntryUserId,
+                                                      );
+                                                      return user
+                                                          ? formatUserName(user)
+                                                          : 'Select employee...';
+                                                  })()
+                                                : 'Select employee...'}
                                         </span>
                                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                     </Button>
                                 </PopoverTrigger>
-                                <PopoverContent className="w-full p-0" align="start">
+                                <PopoverContent
+                                    className="w-full p-0"
+                                    align="start"
+                                >
                                     <Command shouldFilter={false}>
                                         <CommandInput
                                             placeholder="Search employee..."
                                             value={manualUserSearchQuery}
-                                            onValueChange={setManualUserSearchQuery}
+                                            onValueChange={
+                                                setManualUserSearchQuery
+                                            }
                                         />
                                         <CommandList>
-                                            <CommandEmpty>No employee found.</CommandEmpty>
+                                            <CommandEmpty>
+                                                No employee found.
+                                            </CommandEmpty>
                                             <CommandGroup>
                                                 {users
-                                                    ?.filter(user => {
-                                                        if (!manualUserSearchQuery) return true;
-                                                        const query = manualUserSearchQuery.toLowerCase();
-                                                        const formattedName = formatUserName(user).toLowerCase();
-                                                        const regularName = user.name.toLowerCase();
-                                                        return formattedName.includes(query) || regularName.includes(query);
+                                                    ?.filter((user) => {
+                                                        if (
+                                                            !manualUserSearchQuery
+                                                        )
+                                                            return true;
+                                                        const query =
+                                                            manualUserSearchQuery.toLowerCase();
+                                                        const formattedName =
+                                                            formatUserName(
+                                                                user,
+                                                            ).toLowerCase();
+                                                        const regularName =
+                                                            user.name.toLowerCase();
+                                                        return (
+                                                            formattedName.includes(
+                                                                query,
+                                                            ) ||
+                                                            regularName.includes(
+                                                                query,
+                                                            )
+                                                        );
                                                     })
                                                     .map((user) => (
                                                         <CommandItem
                                                             key={user.id}
-                                                            value={formatUserName(user)}
+                                                            value={formatUserName(
+                                                                user,
+                                                            )}
                                                             onSelect={() => {
-                                                                setManualEntryUserId(String(user.id));
-                                                                setIsManualUserPopoverOpen(false);
-                                                                setManualUserSearchQuery("");
+                                                                setManualEntryUserId(
+                                                                    String(
+                                                                        user.id,
+                                                                    ),
+                                                                );
+                                                                setIsManualUserPopoverOpen(
+                                                                    false,
+                                                                );
+                                                                setManualUserSearchQuery(
+                                                                    '',
+                                                                );
                                                             }}
                                                             className="cursor-pointer"
                                                         >
                                                             <Check
-                                                                className={`mr-2 h-4 w-4 ${manualEntryUserId === String(user.id)
-                                                                    ? "opacity-100"
-                                                                    : "opacity-0"
-                                                                    }`}
+                                                                className={`mr-2 h-4 w-4 ${
+                                                                    manualEntryUserId ===
+                                                                    String(
+                                                                        user.id,
+                                                                    )
+                                                                        ? 'opacity-100'
+                                                                        : 'opacity-0'
+                                                                }`}
                                                             />
-                                                            {formatUserName(user)}
+                                                            {formatUserName(
+                                                                user,
+                                                            )}
                                                         </CommandItem>
                                                     ))}
                                             </CommandGroup>
@@ -2224,7 +3071,8 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                         {/* Violation Date */}
                         <div className="grid gap-2">
                             <Label htmlFor="manual_shift_date">
-                                Violation Date <span className="text-red-500">*</span>
+                                Violation Date{' '}
+                                <span className="text-red-500">*</span>
                             </Label>
                             <DatePicker
                                 value={manualShiftDate}
@@ -2237,7 +3085,8 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                         {/* Violation Type */}
                         <div className="grid gap-2">
                             <Label htmlFor="manual_point_type">
-                                Violation Type <span className="text-red-500">*</span>
+                                Violation Type{' '}
+                                <span className="text-red-500">*</span>
                             </Label>
                             <Select
                                 value={manualPointType}
@@ -2248,11 +3097,21 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                     <SelectValue placeholder="Select violation type" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="whole_day_absence">Whole Day Absence (1.0 pt)</SelectItem>
-                                    <SelectItem value="half_day_absence">Half-Day Absence (0.5 pt)</SelectItem>
-                                    <SelectItem value="tardy">Tardy (0.25 pt)</SelectItem>
-                                    <SelectItem value="undertime">Undertime - Hour (0.25 pt)</SelectItem>
-                                    <SelectItem value="undertime_more_than_hour">Undertime - More Than Hour (0.5 pt)</SelectItem>
+                                    <SelectItem value="whole_day_absence">
+                                        Whole Day Absence (1.0 pt)
+                                    </SelectItem>
+                                    <SelectItem value="half_day_absence">
+                                        Half-Day Absence (0.5 pt)
+                                    </SelectItem>
+                                    <SelectItem value="tardy">
+                                        Tardy (0.25 pt)
+                                    </SelectItem>
+                                    <SelectItem value="undertime">
+                                        Undertime - Hour (0.25 pt)
+                                    </SelectItem>
+                                    <SelectItem value="undertime_more_than_hour">
+                                        Undertime - More Than Hour (0.5 pt)
+                                    </SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -2263,12 +3122,14 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                 <Checkbox
                                     id="manual_is_advised"
                                     checked={manualIsAdvised}
-                                    onCheckedChange={(checked) => setManualIsAdvised(checked as boolean)}
+                                    onCheckedChange={(checked) =>
+                                        setManualIsAdvised(checked as boolean)
+                                    }
                                     disabled={isManualSubmitting}
                                 />
                                 <label
                                     htmlFor="manual_is_advised"
-                                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                                    className="cursor-pointer text-sm leading-none font-medium peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                                 >
                                     Advised absence
                                 </label>
@@ -2280,12 +3141,14 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                             <Checkbox
                                 id="manual_is_critical"
                                 checked={manualIsCriticalDay}
-                                onCheckedChange={(checked) => setManualIsCriticalDay(checked as boolean)}
+                                onCheckedChange={(checked) =>
+                                    setManualIsCriticalDay(checked as boolean)
+                                }
                                 disabled={isManualSubmitting}
                             />
                             <label
                                 htmlFor="manual_is_critical"
-                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                                className="cursor-pointer text-sm leading-none font-medium peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                             >
                                 Critical Working Day (×2 points)
                             </label>
@@ -2294,36 +3157,62 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                         {/* Tardy Minutes (only for tardy type) */}
                         {manualPointType === 'tardy' && (
                             <div className="grid gap-2">
-                                <Label htmlFor="manual_tardy_minutes">Tardy Minutes</Label>
+                                <Label htmlFor="manual_tardy_minutes">
+                                    Tardy Minutes
+                                </Label>
                                 <Input
                                     id="manual_tardy_minutes"
                                     type="number"
                                     min="0"
                                     placeholder="Enter minutes late"
                                     value={manualTardyMinutes}
-                                    onChange={(e) => setManualTardyMinutes(e.target.value)}
+                                    onChange={(e) =>
+                                        setManualTardyMinutes(e.target.value)
+                                    }
                                     disabled={isManualSubmitting}
                                 />
                             </div>
                         )}
 
                         {/* Undertime Minutes (for undertime types) */}
-                        {(manualPointType === 'undertime' || manualPointType === 'undertime_more_than_hour') && (
+                        {(manualPointType === 'undertime' ||
+                            manualPointType === 'undertime_more_than_hour') && (
                             <div className="grid gap-2">
                                 <Label htmlFor="manual_undertime_minutes">
                                     Undertime Minutes
-                                    <span className="text-xs text-muted-foreground ml-2">
-                                        ({manualPointType === 'undertime' ? '1-60 mins' : '61+ mins'})
+                                    <span className="ml-2 text-xs text-muted-foreground">
+                                        (
+                                        {manualPointType === 'undertime'
+                                            ? '1-60 mins'
+                                            : '61+ mins'}
+                                        )
                                     </span>
                                 </Label>
                                 <Input
                                     id="manual_undertime_minutes"
                                     type="number"
-                                    min={manualPointType === 'undertime_more_than_hour' ? "61" : "1"}
-                                    max={manualPointType === 'undertime' ? "60" : undefined}
-                                    placeholder={manualPointType === 'undertime' ? "Enter minutes (1-60)" : "Enter minutes (61+)"}
+                                    min={
+                                        manualPointType ===
+                                        'undertime_more_than_hour'
+                                            ? '61'
+                                            : '1'
+                                    }
+                                    max={
+                                        manualPointType === 'undertime'
+                                            ? '60'
+                                            : undefined
+                                    }
+                                    placeholder={
+                                        manualPointType === 'undertime'
+                                            ? 'Enter minutes (1-60)'
+                                            : 'Enter minutes (61+)'
+                                    }
                                     value={manualUndertimeMinutes}
-                                    onChange={(e) => setManualUndertimeMinutes(e.target.value)}
+                                    onChange={(e) =>
+                                        setManualUndertimeMinutes(
+                                            e.target.value,
+                                        )
+                                    }
                                     disabled={isManualSubmitting}
                                 />
                                 <p className="text-xs text-muted-foreground">
@@ -2336,12 +3225,16 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
 
                         {/* Violation Details */}
                         <div className="grid gap-2">
-                            <Label htmlFor="manual_violation_details">Violation Details</Label>
+                            <Label htmlFor="manual_violation_details">
+                                Violation Details
+                            </Label>
                             <Textarea
                                 id="manual_violation_details"
                                 placeholder="Enter violation details (optional - auto-generated if empty)"
                                 value={manualViolationDetails}
-                                onChange={(e) => setManualViolationDetails(e.target.value)}
+                                onChange={(e) =>
+                                    setManualViolationDetails(e.target.value)
+                                }
                                 rows={3}
                                 disabled={isManualSubmitting}
                                 className="resize-none"
@@ -2350,7 +3243,9 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
 
                         {/* Notes */}
                         <div className="grid gap-2">
-                            <Label htmlFor="manual_notes">Additional Notes</Label>
+                            <Label htmlFor="manual_notes">
+                                Additional Notes
+                            </Label>
                             <Textarea
                                 id="manual_notes"
                                 placeholder="Add any additional notes..."
@@ -2366,32 +3261,53 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                         {manualPointType && (
                             <div className="rounded-lg border bg-muted/50 p-4">
                                 <div className="flex items-center justify-between">
-                                    <span className="text-sm text-muted-foreground">Point Value:</span>
+                                    <span className="text-sm text-muted-foreground">
+                                        Point Value:
+                                    </span>
                                     <span className="text-lg font-bold text-red-600 dark:text-red-400">
                                         {(() => {
-                                            const base = manualPointType === 'whole_day_absence' ? 1.00 :
-                                                (manualPointType === 'half_day_absence' || manualPointType === 'undertime_more_than_hour') ? 0.50 : 0.25;
-                                            return manualIsCriticalDay ? (base * 2).toFixed(2) : base.toFixed(2);
-                                        })()} pts
+                                            const base =
+                                                manualPointType ===
+                                                'whole_day_absence'
+                                                    ? 1.0
+                                                    : manualPointType ===
+                                                            'half_day_absence' ||
+                                                        manualPointType ===
+                                                            'undertime_more_than_hour'
+                                                      ? 0.5
+                                                      : 0.25;
+                                            return manualIsCriticalDay
+                                                ? (base * 2).toFixed(2)
+                                                : base.toFixed(2);
+                                        })()}{' '}
+                                        pts
                                         {manualIsCriticalDay && (
-                                            <Badge className="ml-2 bg-purple-100 text-purple-800 border-purple-200 text-xs">
+                                            <Badge className="ml-2 border-purple-200 bg-purple-100 text-xs text-purple-800">
                                                 ×2 Critical Day
                                             </Badge>
                                         )}
                                     </span>
                                 </div>
-                                <div className="flex items-center justify-between mt-2">
-                                    <span className="text-sm text-muted-foreground">Expiration:</span>
+                                <div className="mt-2 flex items-center justify-between">
+                                    <span className="text-sm text-muted-foreground">
+                                        Expiration:
+                                    </span>
                                     <span className="text-sm font-medium">
-                                        {manualPointType === 'whole_day_absence' && !manualIsAdvised
+                                        {manualPointType ===
+                                            'whole_day_absence' &&
+                                        !manualIsAdvised
                                             ? '1 year (NCNS)'
                                             : '6 months (Standard)'}
                                     </span>
                                 </div>
-                                <div className="flex items-center justify-between mt-2">
-                                    <span className="text-sm text-muted-foreground">GBRO Eligible:</span>
+                                <div className="mt-2 flex items-center justify-between">
+                                    <span className="text-sm text-muted-foreground">
+                                        GBRO Eligible:
+                                    </span>
                                     <span className="text-sm font-medium">
-                                        {manualPointType === 'whole_day_absence' && !manualIsAdvised
+                                        {manualPointType ===
+                                            'whole_day_absence' &&
+                                        !manualIsAdvised
                                             ? 'No'
                                             : 'Yes'}
                                     </span>
@@ -2413,7 +3329,12 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                         </Button>
                         <Button
                             onClick={handleManualEntrySubmit}
-                            disabled={!manualEntryUserId || !manualShiftDate || !manualPointType || isManualSubmitting}
+                            disabled={
+                                !manualEntryUserId ||
+                                !manualShiftDate ||
+                                !manualPointType ||
+                                isManualSubmitting
+                            }
                         >
                             {isManualSubmitting ? (
                                 <>
@@ -2441,25 +3362,49 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
             </Dialog>
 
             {/* Delete Confirmation Dialog */}
-            <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+            <AlertDialog
+                open={isDeleteDialogOpen}
+                onOpenChange={setIsDeleteDialogOpen}
+            >
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Delete Manual Attendance Point</AlertDialogTitle>
+                        <AlertDialogTitle>
+                            Delete Manual Attendance Point
+                        </AlertDialogTitle>
                         <AlertDialogDescription>
-                            Are you sure you want to delete this manual attendance point?
-                            This action cannot be undone.
+                            Are you sure you want to delete this manual
+                            attendance point? This action cannot be undone.
                             {pointToDelete && (
-                                <div className="mt-3 p-3 bg-muted rounded-md">
-                                    <p className="text-sm"><strong>Employee:</strong> {formatUserName(pointToDelete.user)}</p>
-                                    <p className="text-sm"><strong>Date:</strong> {formatDate(pointToDelete.shift_date)}</p>
-                                    <p className="text-sm"><strong>Type:</strong> {pointToDelete.point_type.replace(/_/g, ' ')}</p>
-                                    <p className="text-sm"><strong>Points:</strong> {Number(pointToDelete.points).toFixed(2)}</p>
+                                <div className="mt-3 rounded-md bg-muted p-3">
+                                    <p className="text-sm">
+                                        <strong>Employee:</strong>{' '}
+                                        {formatUserName(pointToDelete.user)}
+                                    </p>
+                                    <p className="text-sm">
+                                        <strong>Date:</strong>{' '}
+                                        {formatDate(pointToDelete.shift_date)}
+                                    </p>
+                                    <p className="text-sm">
+                                        <strong>Type:</strong>{' '}
+                                        {pointToDelete.point_type.replace(
+                                            /_/g,
+                                            ' ',
+                                        )}
+                                    </p>
+                                    <p className="text-sm">
+                                        <strong>Points:</strong>{' '}
+                                        {Number(pointToDelete.points).toFixed(
+                                            2,
+                                        )}
+                                    </p>
                                 </div>
                             )}
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                        <AlertDialogCancel onClick={() => setPointToDelete(null)}>
+                        <AlertDialogCancel
+                            onClick={() => setPointToDelete(null)}
+                        >
                             Cancel
                         </AlertDialogCancel>
                         <AlertDialogAction
@@ -2473,7 +3418,10 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
             </AlertDialog>
 
             {/* Export Progress Dialog */}
-            <Dialog open={isExportDialogOpen} onOpenChange={(open) => !open && handleCloseExportDialog()}>
+            <Dialog
+                open={isExportDialogOpen}
+                onOpenChange={(open) => !open && handleCloseExportDialog()}
+            >
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle>Exporting Attendance Points</DialogTitle>
@@ -2488,8 +3436,9 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                 <div className="rounded-full bg-red-100 p-3">
                                     <XCircle className="h-8 w-8 text-red-600" />
                                 </div>
-                                <p className="text-sm text-muted-foreground text-center">
-                                    {exportStatus || 'Export failed. Please try again.'}
+                                <p className="text-center text-sm text-muted-foreground">
+                                    {exportStatus ||
+                                        'Export failed. Please try again.'}
                                 </p>
                             </div>
                         ) : exportDownloadUrl ? (
@@ -2497,8 +3446,9 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                 <div className="rounded-full bg-green-100 p-3">
                                     <CheckCircle className="h-8 w-8 text-green-600" />
                                 </div>
-                                <p className="text-sm text-muted-foreground text-center">
-                                    Export complete! Click download to get your file.
+                                <p className="text-center text-sm text-muted-foreground">
+                                    Export complete! Click download to get your
+                                    file.
                                 </p>
                             </div>
                         ) : (
@@ -2506,9 +3456,13 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                 <div className="flex items-center justify-center py-2">
                                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
                                 </div>
-                                <Progress value={exportProgress} className="w-full" />
-                                <p className="text-sm text-muted-foreground text-center">
-                                    {exportStatus || 'Processing...'} ({Math.round(exportProgress)}%)
+                                <Progress
+                                    value={exportProgress}
+                                    className="w-full"
+                                />
+                                <p className="text-center text-sm text-muted-foreground">
+                                    {exportStatus || 'Processing...'} (
+                                    {Math.round(exportProgress)}%)
                                 </p>
                             </>
                         )}
@@ -2517,20 +3471,29 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                     <DialogFooter>
                         {exportDownloadUrl ? (
                             <>
-                                <Button variant="outline" onClick={handleCloseExportDialog}>
+                                <Button
+                                    variant="outline"
+                                    onClick={handleCloseExportDialog}
+                                >
                                     Close
                                 </Button>
                                 <Button onClick={handleDownloadExport}>
-                                    <Download className="h-4 w-4 mr-2" />
+                                    <Download className="mr-2 h-4 w-4" />
                                     Download
                                 </Button>
                             </>
                         ) : exportError ? (
-                            <Button variant="outline" onClick={handleCloseExportDialog}>
+                            <Button
+                                variant="outline"
+                                onClick={handleCloseExportDialog}
+                            >
                                 Close
                             </Button>
                         ) : (
-                            <Button variant="outline" onClick={handleCloseExportDialog}>
+                            <Button
+                                variant="outline"
+                                onClick={handleCloseExportDialog}
+                            >
                                 Cancel
                             </Button>
                         )}
@@ -2539,13 +3502,16 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
             </Dialog>
 
             {/* High Points Employees Dialog */}
-            <Dialog open={isHighPointsDialogOpen} onOpenChange={(open) => {
-                setIsHighPointsDialogOpen(open);
-                if (!open) {
-                    setSelectedHighPointsEmployee(null);
-                }
-            }}>
-                <DialogContent className="sm:max-w-175 max-h-[85vh] overflow-hidden flex flex-col">
+            <Dialog
+                open={isHighPointsDialogOpen}
+                onOpenChange={(open) => {
+                    setIsHighPointsDialogOpen(open);
+                    if (!open) {
+                        setSelectedHighPointsEmployee(null);
+                    }
+                }}
+            >
+                <DialogContent className="flex max-h-[85vh] flex-col overflow-hidden sm:max-w-175">
                     <DialogHeader>
                         <DialogTitle>
                             {selectedHighPointsEmployee
@@ -2574,54 +3540,83 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                     ← Back to list
                                 </Button>
 
-                                {selectedHighPointsEmployee.points.length === 0 ? (
-                                    <div className="text-center py-8 text-muted-foreground">
+                                {selectedHighPointsEmployee.points.length ===
+                                0 ? (
+                                    <div className="py-8 text-center text-muted-foreground">
                                         No active attendance points found
                                     </div>
                                 ) : (
                                     <div className="space-y-2">
-                                        {selectedHighPointsEmployee.points.map((point) => (
-                                            <div
-                                                key={point.id}
-                                                className="p-3 border rounded-lg bg-card hover:bg-accent/50 transition-colors"
-                                            >
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-3">
-                                                        <Badge className={getPointTypeBadge(point.point_type).props.className}>
-                                                            {getPointTypeBadge(point.point_type).props.children}
-                                                        </Badge>
-                                                        <span className="text-sm text-muted-foreground">
-                                                            {formatDate(point.shift_date)}
+                                        {selectedHighPointsEmployee.points.map(
+                                            (point) => (
+                                                <div
+                                                    key={point.id}
+                                                    className="rounded-lg border bg-card p-3 transition-colors hover:bg-accent/50"
+                                                >
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-3">
+                                                            <Badge
+                                                                className={
+                                                                    getPointTypeBadge(
+                                                                        point.point_type,
+                                                                    ).props
+                                                                        .className
+                                                                }
+                                                            >
+                                                                {
+                                                                    getPointTypeBadge(
+                                                                        point.point_type,
+                                                                    ).props
+                                                                        .children
+                                                                }
+                                                            </Badge>
+                                                            <span className="text-sm text-muted-foreground">
+                                                                {formatDate(
+                                                                    point.shift_date,
+                                                                )}
+                                                            </span>
+                                                        </div>
+                                                        <span className="font-bold text-red-600 dark:text-red-400">
+                                                            {Number(
+                                                                point.points,
+                                                            ).toFixed(2)}{' '}
+                                                            pts
                                                         </span>
                                                     </div>
-                                                    <span className="font-bold text-red-600 dark:text-red-400">
-                                                        {Number(point.points).toFixed(2)} pts
-                                                    </span>
+                                                    {point.violation_details && (
+                                                        <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">
+                                                            {
+                                                                point.violation_details
+                                                            }
+                                                        </p>
+                                                    )}
+                                                    {point.expires_at && (
+                                                        <p className="mt-1 text-xs text-muted-foreground">
+                                                            Expires:{' '}
+                                                            {formatDate(
+                                                                point.expires_at,
+                                                            )}
+                                                        </p>
+                                                    )}
                                                 </div>
-                                                {point.violation_details && (
-                                                    <p className="text-xs text-muted-foreground mt-2 line-clamp-2">
-                                                        {point.violation_details}
-                                                    </p>
-                                                )}
-                                                {point.expires_at && (
-                                                    <p className="text-xs text-muted-foreground mt-1">
-                                                        Expires: {formatDate(point.expires_at)}
-                                                    </p>
-                                                )}
-                                            </div>
-                                        ))}
+                                            ),
+                                        )}
                                     </div>
                                 )}
 
-                                <div className="pt-4 border-t">
+                                <div className="border-t pt-4">
                                     <Button
                                         variant="outline"
                                         className="w-full"
                                         onClick={() => {
-                                            router.visit(attendancePointsShow({ user: selectedHighPointsEmployee.user_id }).url + '?show_all=1');
+                                            router.visit(
+                                                attendancePointsShow({
+                                                    user: selectedHighPointsEmployee.user_id,
+                                                }).url + '?show_all=1',
+                                            );
                                         }}
                                     >
-                                        <Eye className="h-4 w-4 mr-2" />
+                                        <Eye className="mr-2 h-4 w-4" />
                                         View Full Details
                                     </Button>
                                 </div>
@@ -2629,53 +3624,98 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                         ) : (
                             // Show list of high points employees
                             <div className="space-y-2">
-                                {!stats?.high_points_employees || stats.high_points_employees.length === 0 ? (
-                                    <div className="text-center py-8 text-muted-foreground">
-                                        <CheckCircle className="h-12 w-12 mx-auto mb-3 text-green-500" />
-                                        <p>No employees with 6 or more points</p>
-                                        <p className="text-sm mt-1">All employees are within acceptable limits</p>
+                                {!stats?.high_points_employees ||
+                                stats.high_points_employees.length === 0 ? (
+                                    <div className="py-8 text-center text-muted-foreground">
+                                        <CheckCircle className="mx-auto mb-3 h-12 w-12 text-green-500" />
+                                        <p>
+                                            No employees with 6 or more points
+                                        </p>
+                                        <p className="mt-1 text-sm">
+                                            All employees are within acceptable
+                                            limits
+                                        </p>
                                     </div>
                                 ) : (
-                                    stats.high_points_employees.map((employee) => (
-                                        <div
-                                            key={employee.user_id}
-                                            className="p-4 border rounded-lg hover:bg-accent cursor-pointer transition-colors"
-                                            onClick={() => handleViewHighPointsEmployee(employee)}
-                                        >
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-3">
-                                                    <Avatar className="h-9 w-9 shrink-0">
-                                                        <AvatarImage src={employee.avatar_url ?? undefined} alt={employee.user_name} />
-                                                        <AvatarFallback className="text-xs">
-                                                            {employee.user_name.split(',').map((p) => p.trim()[0]).reverse().join('')}
-                                                        </AvatarFallback>
-                                                    </Avatar>
-                                                    <div>
-                                                        <p className="font-medium">{employee.user_name}</p>
-                                                        <p className="text-sm text-muted-foreground">
-                                                            {employee.violations_count} violation{employee.violations_count !== 1 ? 's' : ''}
+                                    stats.high_points_employees.map(
+                                        (employee) => (
+                                            <div
+                                                key={employee.user_id}
+                                                className="cursor-pointer rounded-lg border p-4 transition-colors hover:bg-accent"
+                                                onClick={() =>
+                                                    handleViewHighPointsEmployee(
+                                                        employee,
+                                                    )
+                                                }
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-3">
+                                                        <Avatar className="h-9 w-9 shrink-0">
+                                                            <AvatarImage
+                                                                src={
+                                                                    employee.avatar_url ??
+                                                                    undefined
+                                                                }
+                                                                alt={
+                                                                    employee.user_name
+                                                                }
+                                                            />
+                                                            <AvatarFallback className="text-xs">
+                                                                {employee.user_name
+                                                                    .split(',')
+                                                                    .map(
+                                                                        (p) =>
+                                                                            p.trim()[0],
+                                                                    )
+                                                                    .reverse()
+                                                                    .join('')}
+                                                            </AvatarFallback>
+                                                        </Avatar>
+                                                        <div>
+                                                            <p className="font-medium">
+                                                                {
+                                                                    employee.user_name
+                                                                }
+                                                            </p>
+                                                            <p className="text-sm text-muted-foreground">
+                                                                {
+                                                                    employee.violations_count
+                                                                }{' '}
+                                                                violation
+                                                                {employee.violations_count !==
+                                                                1
+                                                                    ? 's'
+                                                                    : ''}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className="text-xl font-bold text-red-600 dark:text-red-400">
+                                                            {employee.total_points.toFixed(
+                                                                2,
+                                                            )}
+                                                        </p>
+                                                        <p className="text-xs text-muted-foreground">
+                                                            points
                                                         </p>
                                                     </div>
                                                 </div>
-                                                <div className="text-right">
-                                                    <p className="text-xl font-bold text-red-600 dark:text-red-400">
-                                                        {employee.total_points.toFixed(2)}
-                                                    </p>
-                                                    <p className="text-xs text-muted-foreground">points</p>
-                                                </div>
                                             </div>
-                                        </div>
-                                    ))
+                                        ),
+                                    )
                                 )}
                             </div>
                         )}
                     </div>
 
                     <DialogFooter className="mt-4">
-                        <Button variant="outline" onClick={() => {
-                            setIsHighPointsDialogOpen(false);
-                            setSelectedHighPointsEmployee(null);
-                        }}>
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                setIsHighPointsDialogOpen(false);
+                                setSelectedHighPointsEmployee(null);
+                            }}
+                        >
                             Close
                         </Button>
                     </DialogFooter>
@@ -2685,79 +3725,113 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
             {/* Management Statistics Dialog */}
             {/* Guide Dialog */}
             <Dialog open={isGuideOpen} onOpenChange={setIsGuideOpen}>
-                <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+                <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <HelpCircle className="h-5 w-5 text-primary" />
                             Attendance Points Management Guide
                         </DialogTitle>
                         <DialogDescription>
-                            Reference guide for each management action — what it does and when to use it.
+                            Reference guide for each management action — what it
+                            does and when to use it.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 py-2">
-                        <div className="rounded-lg border bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800 p-3">
+                        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-950">
                             <p className="text-sm text-blue-800 dark:text-blue-200">
-                                <strong>Tip:</strong> Open <em>View Statistics</em> first to see a health snapshot before running any bulk action.
+                                <strong>Tip:</strong> Open{' '}
+                                <em>View Statistics</em> first to see a health
+                                snapshot before running any bulk action.
                             </p>
                         </div>
 
                         {[
                             {
-                                icon: <RefreshCw className="h-4 w-4 text-green-600" />,
+                                icon: (
+                                    <RefreshCw className="h-4 w-4 text-green-600" />
+                                ),
                                 name: 'Regenerate Points',
                                 what: 'Creates missing attendance point records for verified attendance rows that currently have no points.',
                                 when: 'Biometric sync ran but points were not generated — e.g. after a system downtime, a failed cron job, or a bulk attendance import.',
                             },
                             {
-                                icon: <Trash2 className="h-4 w-4 text-yellow-600" />,
+                                icon: (
+                                    <Trash2 className="h-4 w-4 text-yellow-600" />
+                                ),
                                 name: 'Remove Duplicates',
                                 what: 'Deletes extra point entries where the same employee has multiple records for the same date and violation type.',
                                 when: "The same violation appears twice in an employee's history, usually caused by a double-import or re-processing run.",
                             },
                             {
-                                icon: <AlertTriangle className="h-4 w-4 text-orange-600" />,
+                                icon: (
+                                    <AlertTriangle className="h-4 w-4 text-orange-600" />
+                                ),
                                 name: 'Expire All Pending',
                                 what: 'Marks all points whose expiration date has already passed as expired.',
                                 when: 'Points are still showing as active even though their expiration date is in the past. Run after a missed scheduled expiration job, or manually at end-of-month.',
                             },
                             {
-                                icon: <RotateCcw className="h-4 w-4 text-violet-600" />,
+                                icon: (
+                                    <RotateCcw className="h-4 w-4 text-violet-600" />
+                                ),
                                 name: 'Recalculate GBRO Dates',
                                 what: 'Performs a full cascade recalculation of all GBRO dates for all (or selected) employees by re-simulating the entire violation timeline.',
                                 when: 'Backdated point entries were added, edited, or deleted, causing GBRO dates to be out of sync across the timeline.',
                             },
                             {
-                                icon: <FileText className="h-4 w-4 text-sky-600" />,
+                                icon: (
+                                    <FileText className="h-4 w-4 text-sky-600" />
+                                ),
                                 name: 'View Anomaly Logs',
                                 what: 'Opens the GBRO Anomaly Log dashboard showing every detected drift — stale GBRO/SRO dates, orphan dates, eligibility mismatches, and overflow — along with their repair status and which trigger fired the check.',
                                 when: 'You want to audit what the system automatically detected and repaired, investigate a specific batch run, or review pending anomalies that were detected but not yet repaired (dry-run mode).',
                             },
                         ].map((item) => (
-                            <div key={item.name} className="flex gap-3 p-3 rounded-lg border bg-card">
-                                <div className="mt-0.5 shrink-0">{item.icon}</div>
+                            <div
+                                key={item.name}
+                                className="flex gap-3 rounded-lg border bg-card p-3"
+                            >
+                                <div className="mt-0.5 shrink-0">
+                                    {item.icon}
+                                </div>
                                 <div className="space-y-1">
-                                    <p className="text-sm font-semibold">{item.name}</p>
-                                    <p className="text-sm text-muted-foreground">{item.what}</p>
+                                    <p className="text-sm font-semibold">
+                                        {item.name}
+                                    </p>
+                                    <p className="text-sm text-muted-foreground">
+                                        {item.what}
+                                    </p>
                                     <p className="text-xs text-muted-foreground">
-                                        <span className="font-medium text-foreground">Use when:</span> {item.when}
+                                        <span className="font-medium text-foreground">
+                                            Use when:
+                                        </span>{' '}
+                                        {item.when}
                                     </p>
                                 </div>
                             </div>
                         ))}
                     </div>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsGuideOpen(false)}>Close</Button>
+                        <Button
+                            variant="outline"
+                            onClick={() => setIsGuideOpen(false)}
+                        >
+                            Close
+                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
 
-            <Dialog open={isManagementDialogOpen} onOpenChange={setIsManagementDialogOpen}>
-                <DialogContent className="sm:max-w-137.5 max-h-[85vh] overflow-y-auto">
+            <Dialog
+                open={isManagementDialogOpen}
+                onOpenChange={setIsManagementDialogOpen}
+            >
+                <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-137.5">
                     <DialogHeader>
                         <DialogTitle>Attendance Points Management</DialogTitle>
                         <DialogDescription>
-                            View statistics and perform bulk management actions on attendance points.
+                            View statistics and perform bulk management actions
+                            on attendance points.
                         </DialogDescription>
                     </DialogHeader>
 
@@ -2769,142 +3843,324 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                         ) : managementStats ? (
                             <div className="grid gap-3">
                                 {/* Missing Points */}
-                                <div className="border rounded-lg">
+                                <div className="rounded-lg border">
                                     <button
                                         type="button"
-                                        className="flex items-center justify-between w-full p-3 hover:bg-muted/50 transition-colors"
-                                        onClick={() => setExpandedStatSections(prev => ({ ...prev, missing: !prev.missing }))}
-                                        disabled={managementStats.missing_points_count === 0}
+                                        className="flex w-full items-center justify-between p-3 transition-colors hover:bg-muted/50"
+                                        onClick={() =>
+                                            setExpandedStatSections((prev) => ({
+                                                ...prev,
+                                                missing: !prev.missing,
+                                            }))
+                                        }
+                                        disabled={
+                                            managementStats.missing_points_count ===
+                                            0
+                                        }
                                     >
                                         <div className="flex items-center gap-3">
                                             <RefreshCw className="h-5 w-5 text-green-600" />
                                             <div className="text-left">
-                                                <p className="font-medium">Missing Points</p>
+                                                <p className="font-medium">
+                                                    Missing Points
+                                                </p>
                                                 <p className="text-sm text-muted-foreground">
-                                                    Verified records without points
+                                                    Verified records without
+                                                    points
                                                 </p>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                            <Badge variant={managementStats.missing_points_count > 0 ? "destructive" : "secondary"}>
-                                                {managementStats.missing_points_count}
+                                            <Badge
+                                                variant={
+                                                    managementStats.missing_points_count >
+                                                    0
+                                                        ? 'destructive'
+                                                        : 'secondary'
+                                                }
+                                            >
+                                                {
+                                                    managementStats.missing_points_count
+                                                }
                                             </Badge>
-                                            {managementStats.missing_points_count > 0 && (
-                                                expandedStatSections.missing ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                                            )}
+                                            {managementStats.missing_points_count >
+                                                0 &&
+                                                (expandedStatSections.missing ? (
+                                                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                                ) : (
+                                                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                                ))}
                                         </div>
                                     </button>
-                                    {expandedStatSections.missing && managementStats.missing_points_users.length > 0 && (
-                                        <div className="border-t px-3 pb-3 pt-2 space-y-2 max-h-48 overflow-y-auto">
-                                            {managementStats.missing_points_users.map((u) => (
-                                                <div key={u.user_id} className="text-sm">
-                                                    <p className="font-medium">{u.name} <span className="text-muted-foreground font-normal">({u.records.length})</span></p>
-                                                    <div className="flex flex-wrap gap-1 mt-1">
-                                                        {u.records.map((r, i) => (
-                                                            <Badge key={i} variant="outline" className="text-xs capitalize">
-                                                                {r.shift_date} · {r.status.replace(/_/g, ' ')}
-                                                            </Badge>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
+                                    {expandedStatSections.missing &&
+                                        managementStats.missing_points_users
+                                            .length > 0 && (
+                                            <div className="max-h-48 space-y-2 overflow-y-auto border-t px-3 pt-2 pb-3">
+                                                {managementStats.missing_points_users.map(
+                                                    (u) => (
+                                                        <div
+                                                            key={u.user_id}
+                                                            className="text-sm"
+                                                        >
+                                                            <p className="font-medium">
+                                                                {u.name}{' '}
+                                                                <span className="font-normal text-muted-foreground">
+                                                                    (
+                                                                    {
+                                                                        u
+                                                                            .records
+                                                                            .length
+                                                                    }
+                                                                    )
+                                                                </span>
+                                                            </p>
+                                                            <div className="mt-1 flex flex-wrap gap-1">
+                                                                {u.records.map(
+                                                                    (r, i) => (
+                                                                        <Badge
+                                                                            key={
+                                                                                i
+                                                                            }
+                                                                            variant="outline"
+                                                                            className="text-xs capitalize"
+                                                                        >
+                                                                            {
+                                                                                r.shift_date
+                                                                            }{' '}
+                                                                            ·{' '}
+                                                                            {r.status.replace(
+                                                                                /_/g,
+                                                                                ' ',
+                                                                            )}
+                                                                        </Badge>
+                                                                    ),
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    ),
+                                                )}
+                                            </div>
+                                        )}
                                 </div>
 
                                 {/* Duplicate Points */}
-                                <div className="border rounded-lg">
+                                <div className="rounded-lg border">
                                     <button
                                         type="button"
-                                        className="flex items-center justify-between w-full p-3 hover:bg-muted/50 transition-colors"
-                                        onClick={() => setExpandedStatSections(prev => ({ ...prev, duplicates: !prev.duplicates }))}
-                                        disabled={managementStats.duplicates_count === 0}
+                                        className="flex w-full items-center justify-between p-3 transition-colors hover:bg-muted/50"
+                                        onClick={() =>
+                                            setExpandedStatSections((prev) => ({
+                                                ...prev,
+                                                duplicates: !prev.duplicates,
+                                            }))
+                                        }
+                                        disabled={
+                                            managementStats.duplicates_count ===
+                                            0
+                                        }
                                     >
                                         <div className="flex items-center gap-3">
                                             <Trash2 className="h-5 w-5 text-yellow-600" />
                                             <div className="text-left">
-                                                <p className="font-medium">Duplicate Points</p>
+                                                <p className="font-medium">
+                                                    Duplicate Points
+                                                </p>
                                                 <p className="text-sm text-muted-foreground">
-                                                    Same user, date, and type entries
+                                                    Same user, date, and type
+                                                    entries
                                                 </p>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                            <Badge variant={managementStats.duplicates_count > 0 ? "destructive" : "secondary"}>
-                                                {managementStats.duplicates_count}
+                                            <Badge
+                                                variant={
+                                                    managementStats.duplicates_count >
+                                                    0
+                                                        ? 'destructive'
+                                                        : 'secondary'
+                                                }
+                                            >
+                                                {
+                                                    managementStats.duplicates_count
+                                                }
                                             </Badge>
-                                            {managementStats.duplicates_count > 0 && (
-                                                expandedStatSections.duplicates ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                                            )}
+                                            {managementStats.duplicates_count >
+                                                0 &&
+                                                (expandedStatSections.duplicates ? (
+                                                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                                ) : (
+                                                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                                ))}
                                         </div>
                                     </button>
-                                    {expandedStatSections.duplicates && managementStats.duplicate_users.length > 0 && (
-                                        <div className="border-t px-3 pb-3 pt-2 space-y-2 max-h-48 overflow-y-auto">
-                                            {managementStats.duplicate_users.map((u) => (
-                                                <div key={u.user_id} className="text-sm">
-                                                    <p className="font-medium">{u.name} <span className="text-muted-foreground font-normal">({u.records.length})</span></p>
-                                                    <div className="flex flex-wrap gap-1 mt-1">
-                                                        {u.records.map((r, i) => (
-                                                            <Badge key={i} variant="outline" className="text-xs capitalize">
-                                                                {r.shift_date} · {r.point_type.replace(/_/g, ' ')} · ×{r.count}
-                                                            </Badge>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
+                                    {expandedStatSections.duplicates &&
+                                        managementStats.duplicate_users.length >
+                                            0 && (
+                                            <div className="max-h-48 space-y-2 overflow-y-auto border-t px-3 pt-2 pb-3">
+                                                {managementStats.duplicate_users.map(
+                                                    (u) => (
+                                                        <div
+                                                            key={u.user_id}
+                                                            className="text-sm"
+                                                        >
+                                                            <p className="font-medium">
+                                                                {u.name}{' '}
+                                                                <span className="font-normal text-muted-foreground">
+                                                                    (
+                                                                    {
+                                                                        u
+                                                                            .records
+                                                                            .length
+                                                                    }
+                                                                    )
+                                                                </span>
+                                                            </p>
+                                                            <div className="mt-1 flex flex-wrap gap-1">
+                                                                {u.records.map(
+                                                                    (r, i) => (
+                                                                        <Badge
+                                                                            key={
+                                                                                i
+                                                                            }
+                                                                            variant="outline"
+                                                                            className="text-xs capitalize"
+                                                                        >
+                                                                            {
+                                                                                r.shift_date
+                                                                            }{' '}
+                                                                            ·{' '}
+                                                                            {r.point_type.replace(
+                                                                                /_/g,
+                                                                                ' ',
+                                                                            )}{' '}
+                                                                            · ×
+                                                                            {
+                                                                                r.count
+                                                                            }
+                                                                        </Badge>
+                                                                    ),
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    ),
+                                                )}
+                                            </div>
+                                        )}
                                 </div>
 
                                 {/* Pending Expirations */}
-                                <div className="border rounded-lg">
+                                <div className="rounded-lg border">
                                     <button
                                         type="button"
-                                        className="flex items-center justify-between w-full p-3 hover:bg-muted/50 transition-colors"
-                                        onClick={() => setExpandedStatSections(prev => ({ ...prev, pending: !prev.pending }))}
-                                        disabled={managementStats.pending_expirations_count === 0}
+                                        className="flex w-full items-center justify-between p-3 transition-colors hover:bg-muted/50"
+                                        onClick={() =>
+                                            setExpandedStatSections((prev) => ({
+                                                ...prev,
+                                                pending: !prev.pending,
+                                            }))
+                                        }
+                                        disabled={
+                                            managementStats.pending_expirations_count ===
+                                            0
+                                        }
                                     >
                                         <div className="flex items-center gap-3">
                                             <AlertTriangle className="h-5 w-5 text-orange-600" />
                                             <div className="text-left">
-                                                <p className="font-medium">Pending Expirations</p>
+                                                <p className="font-medium">
+                                                    Pending Expirations
+                                                </p>
                                                 <p className="text-sm text-muted-foreground">
-                                                    Should be expired but not marked
+                                                    Should be expired but not
+                                                    marked
                                                 </p>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                            <Badge variant={managementStats.pending_expirations_count > 0 ? "destructive" : "secondary"}>
-                                                {managementStats.pending_expirations_count}
+                                            <Badge
+                                                variant={
+                                                    managementStats.pending_expirations_count >
+                                                    0
+                                                        ? 'destructive'
+                                                        : 'secondary'
+                                                }
+                                            >
+                                                {
+                                                    managementStats.pending_expirations_count
+                                                }
                                             </Badge>
-                                            {managementStats.pending_expirations_count > 0 && (
-                                                expandedStatSections.pending ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                                            )}
+                                            {managementStats.pending_expirations_count >
+                                                0 &&
+                                                (expandedStatSections.pending ? (
+                                                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                                ) : (
+                                                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                                ))}
                                         </div>
                                     </button>
-                                    {expandedStatSections.pending && managementStats.pending_expiration_users.length > 0 && (
-                                        <div className="border-t px-3 pb-3 pt-2 space-y-2 max-h-48 overflow-y-auto">
-                                            {managementStats.pending_expiration_users.map((u) => (
-                                                <div key={u.user_id} className="text-sm">
-                                                    <p className="font-medium">{u.name} <span className="text-muted-foreground font-normal">({u.records.length})</span></p>
-                                                    <div className="flex flex-wrap gap-1 mt-1">
-                                                        {u.records.map((r, i) => (
-                                                            <Badge key={i} variant="outline" className="text-xs capitalize">
-                                                                {r.shift_date} · {r.point_type.replace(/_/g, ' ')} · exp {r.expires_at}
-                                                            </Badge>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
+                                    {expandedStatSections.pending &&
+                                        managementStats.pending_expiration_users
+                                            .length > 0 && (
+                                            <div className="max-h-48 space-y-2 overflow-y-auto border-t px-3 pt-2 pb-3">
+                                                {managementStats.pending_expiration_users.map(
+                                                    (u) => (
+                                                        <div
+                                                            key={u.user_id}
+                                                            className="text-sm"
+                                                        >
+                                                            <p className="font-medium">
+                                                                {u.name}{' '}
+                                                                <span className="font-normal text-muted-foreground">
+                                                                    (
+                                                                    {
+                                                                        u
+                                                                            .records
+                                                                            .length
+                                                                    }
+                                                                    )
+                                                                </span>
+                                                            </p>
+                                                            <div className="mt-1 flex flex-wrap gap-1">
+                                                                {u.records.map(
+                                                                    (r, i) => (
+                                                                        <Badge
+                                                                            key={
+                                                                                i
+                                                                            }
+                                                                            variant="outline"
+                                                                            className="text-xs capitalize"
+                                                                        >
+                                                                            {
+                                                                                r.shift_date
+                                                                            }{' '}
+                                                                            ·{' '}
+                                                                            {r.point_type.replace(
+                                                                                /_/g,
+                                                                                ' ',
+                                                                            )}{' '}
+                                                                            ·
+                                                                            exp{' '}
+                                                                            {
+                                                                                r.expires_at
+                                                                            }
+                                                                        </Badge>
+                                                                    ),
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    ),
+                                                )}
+                                            </div>
+                                        )}
                                 </div>
 
-                                <div className="flex items-center justify-between p-3 border rounded-lg">
+                                <div className="flex items-center justify-between rounded-lg border p-3">
                                     <div className="flex items-center gap-3">
                                         <RotateCcw className="h-5 w-5 text-blue-600" />
                                         <div>
-                                            <p className="font-medium">Expired Points</p>
+                                            <p className="font-medium">
+                                                Expired Points
+                                            </p>
                                             <p className="text-sm text-muted-foreground">
                                                 Can be reset (excused excluded)
                                             </p>
@@ -2916,54 +4172,118 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                 </div>
 
                                 {/* GBRO Date Anomalies */}
-                                <div className="border rounded-lg">
+                                <div className="rounded-lg border">
                                     <button
                                         type="button"
-                                        className="flex items-center justify-between w-full p-3 hover:bg-muted/50 transition-colors"
-                                        onClick={() => setExpandedStatSections(prev => ({ ...prev, gbroAnomaly: !prev.gbroAnomaly }))}
-                                        disabled={managementStats.gbro_anomaly_count === 0}
+                                        className="flex w-full items-center justify-between p-3 transition-colors hover:bg-muted/50"
+                                        onClick={() =>
+                                            setExpandedStatSections((prev) => ({
+                                                ...prev,
+                                                gbroAnomaly: !prev.gbroAnomaly,
+                                            }))
+                                        }
+                                        disabled={
+                                            managementStats.gbro_anomaly_count ===
+                                            0
+                                        }
                                     >
                                         <div className="flex items-center gap-3">
                                             <Wrench className="h-5 w-5 text-purple-600" />
                                             <div className="text-left">
-                                                <p className="font-medium">GBRO Date Anomalies</p>
+                                                <p className="font-medium">
+                                                    GBRO Date Anomalies
+                                                </p>
                                                 <p className="text-sm text-muted-foreground">
-                                                    Wrong eligibility flags or stale GBRO dates
+                                                    Wrong eligibility flags or
+                                                    stale GBRO dates
                                                 </p>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                            <Badge variant={managementStats.gbro_anomaly_count > 0 ? "destructive" : "secondary"}>
-                                                {managementStats.gbro_anomaly_count}
+                                            <Badge
+                                                variant={
+                                                    managementStats.gbro_anomaly_count >
+                                                    0
+                                                        ? 'destructive'
+                                                        : 'secondary'
+                                                }
+                                            >
+                                                {
+                                                    managementStats.gbro_anomaly_count
+                                                }
                                             </Badge>
-                                            {managementStats.gbro_anomaly_count > 0 && (
-                                                expandedStatSections.gbroAnomaly ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                                            )}
+                                            {managementStats.gbro_anomaly_count >
+                                                0 &&
+                                                (expandedStatSections.gbroAnomaly ? (
+                                                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                                ) : (
+                                                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                                ))}
                                         </div>
                                     </button>
-                                    {expandedStatSections.gbroAnomaly && managementStats.gbro_anomaly_users.length > 0 && (
-                                        <div className="border-t px-3 pb-3 pt-2 space-y-2 max-h-48 overflow-y-auto">
-                                            {managementStats.gbro_anomaly_users.map((u) => (
-                                                <div key={u.user_id} className="text-sm">
-                                                    <p className="font-medium">{u.name} <span className="text-muted-foreground font-normal">({u.records.length})</span></p>
-                                                    <div className="flex flex-wrap gap-1 mt-1">
-                                                        {u.records.map((r, i) => {
-                                                            const anomalyLabel = r.anomaly === 'stale_gbro_date'
-                                                                ? 'stale GBRO date'
-                                                                : r.anomaly === 'wrong_not_eligible'
-                                                                    ? 'should be GBRO eligible'
-                                                                    : 'should not be GBRO eligible';
-                                                            return (
-                                                                <Badge key={i} variant="outline" className="text-xs capitalize">
-                                                                    {r.shift_date} · {r.point_type.replace(/_/g, ' ')} · {anomalyLabel}
-                                                                </Badge>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
+                                    {expandedStatSections.gbroAnomaly &&
+                                        managementStats.gbro_anomaly_users
+                                            .length > 0 && (
+                                            <div className="max-h-48 space-y-2 overflow-y-auto border-t px-3 pt-2 pb-3">
+                                                {managementStats.gbro_anomaly_users.map(
+                                                    (u) => (
+                                                        <div
+                                                            key={u.user_id}
+                                                            className="text-sm"
+                                                        >
+                                                            <p className="font-medium">
+                                                                {u.name}{' '}
+                                                                <span className="font-normal text-muted-foreground">
+                                                                    (
+                                                                    {
+                                                                        u
+                                                                            .records
+                                                                            .length
+                                                                    }
+                                                                    )
+                                                                </span>
+                                                            </p>
+                                                            <div className="mt-1 flex flex-wrap gap-1">
+                                                                {u.records.map(
+                                                                    (r, i) => {
+                                                                        const anomalyLabel =
+                                                                            r.anomaly ===
+                                                                            'stale_gbro_date'
+                                                                                ? 'stale GBRO date'
+                                                                                : r.anomaly ===
+                                                                                    'wrong_not_eligible'
+                                                                                  ? 'should be GBRO eligible'
+                                                                                  : 'should not be GBRO eligible';
+                                                                        return (
+                                                                            <Badge
+                                                                                key={
+                                                                                    i
+                                                                                }
+                                                                                variant="outline"
+                                                                                className="text-xs capitalize"
+                                                                            >
+                                                                                {
+                                                                                    r.shift_date
+                                                                                }{' '}
+                                                                                ·{' '}
+                                                                                {r.point_type.replace(
+                                                                                    /_/g,
+                                                                                    ' ',
+                                                                                )}{' '}
+                                                                                ·{' '}
+                                                                                {
+                                                                                    anomalyLabel
+                                                                                }
+                                                                            </Badge>
+                                                                        );
+                                                                    },
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    ),
+                                                )}
+                                            </div>
+                                        )}
                                 </div>
                             </div>
                         ) : (
@@ -2973,75 +4293,127 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                         )}
 
                         {/* No Notification Notice */}
-                        <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg">
-                            <BellOff className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" />
+                        <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950">
+                            <BellOff className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
                             <p className="text-sm text-amber-700 dark:text-amber-300">
-                                <strong>Note:</strong> All management actions are performed silently. Agents will NOT receive any notifications.
+                                <strong>Note:</strong> All management actions
+                                are performed silently. Agents will NOT receive
+                                any notifications.
                             </p>
                         </div>
 
                         <div className="border-t pt-4">
-                            <h4 className="text-sm font-medium mb-3">Quick Actions</h4>
+                            <h4 className="mb-3 text-sm font-medium">
+                                Quick Actions
+                            </h4>
                             <div className="grid gap-2">
                                 <Button
                                     variant="outline"
                                     className="justify-start"
-                                    disabled={!managementStats || managementStats.missing_points_count === 0 || isManagementAction}
-                                    onClick={() => setConfirmAction('regenerate')}
+                                    disabled={
+                                        !managementStats ||
+                                        managementStats.missing_points_count ===
+                                            0 ||
+                                        isManagementAction
+                                    }
+                                    onClick={() =>
+                                        setConfirmAction('regenerate')
+                                    }
                                 >
-                                    <RefreshCw className="h-4 w-4 mr-2" />
+                                    <RefreshCw className="mr-2 h-4 w-4" />
                                     Regenerate Points
-                                    {managementStats && managementStats.missing_points_count > 0 && (
-                                        <Badge variant="destructive" className="ml-auto">
-                                            {managementStats.missing_points_count}
-                                        </Badge>
-                                    )}
+                                    {managementStats &&
+                                        managementStats.missing_points_count >
+                                            0 && (
+                                            <Badge
+                                                variant="destructive"
+                                                className="ml-auto"
+                                            >
+                                                {
+                                                    managementStats.missing_points_count
+                                                }
+                                            </Badge>
+                                        )}
                                 </Button>
                                 <Button
                                     variant="outline"
                                     className="justify-start"
-                                    disabled={!managementStats || managementStats.duplicates_count === 0 || isManagementAction}
-                                    onClick={() => setConfirmAction('remove-duplicates')}
+                                    disabled={
+                                        !managementStats ||
+                                        managementStats.duplicates_count ===
+                                            0 ||
+                                        isManagementAction
+                                    }
+                                    onClick={() =>
+                                        setConfirmAction('remove-duplicates')
+                                    }
                                 >
-                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    <Trash2 className="mr-2 h-4 w-4" />
                                     Remove Duplicates
-                                    {managementStats && managementStats.duplicates_count > 0 && (
-                                        <Badge variant="destructive" className="ml-auto">
-                                            {managementStats.duplicates_count}
-                                        </Badge>
-                                    )}
+                                    {managementStats &&
+                                        managementStats.duplicates_count >
+                                            0 && (
+                                            <Badge
+                                                variant="destructive"
+                                                className="ml-auto"
+                                            >
+                                                {
+                                                    managementStats.duplicates_count
+                                                }
+                                            </Badge>
+                                        )}
                                 </Button>
                                 <Button
                                     variant="outline"
                                     className="justify-start"
-                                    disabled={!managementStats || managementStats.pending_expirations_count === 0 || isManagementAction}
-                                    onClick={() => setConfirmAction('expire-all')}
+                                    disabled={
+                                        !managementStats ||
+                                        managementStats.pending_expirations_count ===
+                                            0 ||
+                                        isManagementAction
+                                    }
+                                    onClick={() =>
+                                        setConfirmAction('expire-all')
+                                    }
                                 >
-                                    <AlertTriangle className="h-4 w-4 mr-2" />
+                                    <AlertTriangle className="mr-2 h-4 w-4" />
                                     Expire All Pending
-                                    {managementStats && managementStats.pending_expirations_count > 0 && (
-                                        <Badge variant="destructive" className="ml-auto">
-                                            {managementStats.pending_expirations_count}
-                                        </Badge>
-                                    )}
+                                    {managementStats &&
+                                        managementStats.pending_expirations_count >
+                                            0 && (
+                                            <Badge
+                                                variant="destructive"
+                                                className="ml-auto"
+                                            >
+                                                {
+                                                    managementStats.pending_expirations_count
+                                                }
+                                            </Badge>
+                                        )}
                                 </Button>
                             </div>
                         </div>
                     </div>
 
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsManagementDialogOpen(false)}>
+                        <Button
+                            variant="outline"
+                            onClick={() => setIsManagementDialogOpen(false)}
+                        >
                             Close
                         </Button>
-                        <Button onClick={fetchManagementStats} disabled={isLoadingStats}>
+                        <Button
+                            onClick={fetchManagementStats}
+                            disabled={isLoadingStats}
+                        >
                             {isLoadingStats ? (
                                 <>
-                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                     Refreshing...
                                 </>
                             ) : (
                                 <>
-                                    <RefreshCw className="h-4 w-4 mr-2" />
+                                    <RefreshCw className="mr-2 h-4 w-4" />
                                     Refresh
                                 </>
                             )}
@@ -3051,117 +4423,236 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
             </Dialog>
 
             {/* Management Action Confirmation Dialog */}
-            <AlertDialog open={!!confirmAction} onOpenChange={(open) => {
-                if (!open) {
-                    setConfirmAction(null);
-                    // Reset filters when closing
-                    setMgmtDateFrom('');
-                    setMgmtDateTo('');
-                    setMgmtUserId('');
-                    setMgmtUserIds([]);
-                    setExpirationType('both');
-                }
-            }}>
+            <AlertDialog
+                open={!!confirmAction}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setConfirmAction(null);
+                        // Reset filters when closing
+                        setMgmtDateFrom('');
+                        setMgmtDateTo('');
+                        setMgmtUserId('');
+                        setMgmtUserIds([]);
+                        setExpirationType('both');
+                    }
+                }}
+            >
                 <AlertDialogContent className="sm:max-w-125">
                     <AlertDialogHeader>
                         <AlertDialogTitle>
-                            {confirmAction === 'regenerate' && 'Regenerate Attendance Points'}
-                            {confirmAction === 'remove-duplicates' && 'Remove Duplicate Points'}
-                            {confirmAction === 'expire-all' && 'Expire All Pending Points'}
-                            {confirmAction === 'recalculate-gbro' && 'Recalculate GBRO Dates'}
+                            {confirmAction === 'regenerate' &&
+                                'Regenerate Attendance Points'}
+                            {confirmAction === 'remove-duplicates' &&
+                                'Remove Duplicate Points'}
+                            {confirmAction === 'expire-all' &&
+                                'Expire All Pending Points'}
+                            {confirmAction === 'recalculate-gbro' &&
+                                'Recalculate GBRO Dates'}
                         </AlertDialogTitle>
                         <AlertDialogDescription asChild>
                             <div>
                                 {confirmAction === 'regenerate' && (
                                     <>
                                         <p className="mb-3">
-                                            This will regenerate attendance points from verified attendance records that don't have corresponding points.
+                                            This will regenerate attendance
+                                            points from verified attendance
+                                            records that don't have
+                                            corresponding points.
                                         </p>
 
                                         {/* Filters for regenerate */}
-                                        <div className="space-y-3 p-3 border rounded-lg bg-muted/50 mb-3">
-                                            <p className="text-sm font-medium text-foreground">Filter Options (optional):</p>
+                                        <div className="mb-3 space-y-3 rounded-lg border bg-muted/50 p-3">
+                                            <p className="text-sm font-medium text-foreground">
+                                                Filter Options (optional):
+                                            </p>
                                             <div className="grid grid-cols-2 gap-2">
                                                 <div>
-                                                    <Label htmlFor="mgmt_date_from" className="text-xs">From Date</Label>
+                                                    <Label
+                                                        htmlFor="mgmt_date_from"
+                                                        className="text-xs"
+                                                    >
+                                                        From Date
+                                                    </Label>
                                                     <DatePicker
                                                         value={mgmtDateFrom}
-                                                        onChange={(value) => setMgmtDateFrom(value)}
+                                                        onChange={(value) =>
+                                                            setMgmtDateFrom(
+                                                                value,
+                                                            )
+                                                        }
                                                         placeholder="Start date"
                                                         className="h-8 text-sm"
                                                     />
                                                 </div>
                                                 <div>
-                                                    <Label htmlFor="mgmt_date_to" className="text-xs">To Date</Label>
+                                                    <Label
+                                                        htmlFor="mgmt_date_to"
+                                                        className="text-xs"
+                                                    >
+                                                        To Date
+                                                    </Label>
                                                     <DatePicker
                                                         value={mgmtDateTo}
-                                                        onChange={(value) => setMgmtDateTo(value)}
+                                                        onChange={(value) =>
+                                                            setMgmtDateTo(value)
+                                                        }
                                                         placeholder="End date"
                                                         className="h-8 text-sm"
                                                     />
                                                 </div>
                                             </div>
                                             <div>
-                                                <Label htmlFor="mgmt_user" className="text-xs">Employee (optional)</Label>
-                                                <Popover open={isMgmtUserPopoverOpen} onOpenChange={setIsMgmtUserPopoverOpen}>
+                                                <Label
+                                                    htmlFor="mgmt_user"
+                                                    className="text-xs"
+                                                >
+                                                    Employee (optional)
+                                                </Label>
+                                                <Popover
+                                                    open={isMgmtUserPopoverOpen}
+                                                    onOpenChange={
+                                                        setIsMgmtUserPopoverOpen
+                                                    }
+                                                >
                                                     <PopoverTrigger asChild>
                                                         <Button
                                                             variant="outline"
                                                             role="combobox"
-                                                            className="w-full justify-between h-8 text-sm font-normal"
+                                                            className="h-8 w-full justify-between text-sm font-normal"
                                                         >
                                                             <span className="truncate">
                                                                 {mgmtUserId
                                                                     ? (() => {
-                                                                        const user = users?.find(u => String(u.id) === mgmtUserId);
-                                                                        return user ? formatUserName(user) : "Select employee...";
-                                                                    })()
-                                                                    : "All Employees"}
+                                                                          const user =
+                                                                              users?.find(
+                                                                                  (
+                                                                                      u,
+                                                                                  ) =>
+                                                                                      String(
+                                                                                          u.id,
+                                                                                      ) ===
+                                                                                      mgmtUserId,
+                                                                              );
+                                                                          return user
+                                                                              ? formatUserName(
+                                                                                    user,
+                                                                                )
+                                                                              : 'Select employee...';
+                                                                      })()
+                                                                    : 'All Employees'}
                                                             </span>
                                                             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                                         </Button>
                                                     </PopoverTrigger>
-                                                    <PopoverContent className="w-full p-0" align="start">
-                                                        <Command shouldFilter={false}>
+                                                    <PopoverContent
+                                                        className="w-full p-0"
+                                                        align="start"
+                                                    >
+                                                        <Command
+                                                            shouldFilter={false}
+                                                        >
                                                             <CommandInput
                                                                 placeholder="Search employee..."
-                                                                value={mgmtUserSearchQuery}
-                                                                onValueChange={setMgmtUserSearchQuery}
+                                                                value={
+                                                                    mgmtUserSearchQuery
+                                                                }
+                                                                onValueChange={
+                                                                    setMgmtUserSearchQuery
+                                                                }
                                                             />
                                                             <CommandList>
-                                                                <CommandEmpty>No employee found.</CommandEmpty>
+                                                                <CommandEmpty>
+                                                                    No employee
+                                                                    found.
+                                                                </CommandEmpty>
                                                                 <CommandGroup>
                                                                     <CommandItem
                                                                         value="all"
                                                                         onSelect={() => {
-                                                                            setMgmtUserId('');
-                                                                            setIsMgmtUserPopoverOpen(false);
-                                                                            setMgmtUserSearchQuery('');
+                                                                            setMgmtUserId(
+                                                                                '',
+                                                                            );
+                                                                            setIsMgmtUserPopoverOpen(
+                                                                                false,
+                                                                            );
+                                                                            setMgmtUserSearchQuery(
+                                                                                '',
+                                                                            );
                                                                         }}
                                                                         className="cursor-pointer"
                                                                     >
-                                                                        <Check className={`mr-2 h-4 w-4 ${!mgmtUserId ? "opacity-100" : "opacity-0"}`} />
-                                                                        All Employees
+                                                                        <Check
+                                                                            className={`mr-2 h-4 w-4 ${!mgmtUserId ? 'opacity-100' : 'opacity-0'}`}
+                                                                        />
+                                                                        All
+                                                                        Employees
                                                                     </CommandItem>
-                                                                    {users?.filter(user => {
-                                                                        if (!mgmtUserSearchQuery) return true;
-                                                                        const query = mgmtUserSearchQuery.toLowerCase();
-                                                                        return formatUserName(user).toLowerCase().includes(query) || user.name.toLowerCase().includes(query);
-                                                                    }).slice(0, 50).map((user) => (
-                                                                        <CommandItem
-                                                                            key={user.id}
-                                                                            value={formatUserName(user)}
-                                                                            onSelect={() => {
-                                                                                setMgmtUserId(String(user.id));
-                                                                                setIsMgmtUserPopoverOpen(false);
-                                                                                setMgmtUserSearchQuery('');
-                                                                            }}
-                                                                            className="cursor-pointer"
-                                                                        >
-                                                                            <Check className={`mr-2 h-4 w-4 ${mgmtUserId === String(user.id) ? "opacity-100" : "opacity-0"}`} />
-                                                                            {formatUserName(user)}
-                                                                        </CommandItem>
-                                                                    ))}
+                                                                    {users
+                                                                        ?.filter(
+                                                                            (
+                                                                                user,
+                                                                            ) => {
+                                                                                if (
+                                                                                    !mgmtUserSearchQuery
+                                                                                )
+                                                                                    return true;
+                                                                                const query =
+                                                                                    mgmtUserSearchQuery.toLowerCase();
+                                                                                return (
+                                                                                    formatUserName(
+                                                                                        user,
+                                                                                    )
+                                                                                        .toLowerCase()
+                                                                                        .includes(
+                                                                                            query,
+                                                                                        ) ||
+                                                                                    user.name
+                                                                                        .toLowerCase()
+                                                                                        .includes(
+                                                                                            query,
+                                                                                        )
+                                                                                );
+                                                                            },
+                                                                        )
+                                                                        .slice(
+                                                                            0,
+                                                                            50,
+                                                                        )
+                                                                        .map(
+                                                                            (
+                                                                                user,
+                                                                            ) => (
+                                                                                <CommandItem
+                                                                                    key={
+                                                                                        user.id
+                                                                                    }
+                                                                                    value={formatUserName(
+                                                                                        user,
+                                                                                    )}
+                                                                                    onSelect={() => {
+                                                                                        setMgmtUserId(
+                                                                                            String(
+                                                                                                user.id,
+                                                                                            ),
+                                                                                        );
+                                                                                        setIsMgmtUserPopoverOpen(
+                                                                                            false,
+                                                                                        );
+                                                                                        setMgmtUserSearchQuery(
+                                                                                            '',
+                                                                                        );
+                                                                                    }}
+                                                                                    className="cursor-pointer"
+                                                                                >
+                                                                                    <Check
+                                                                                        className={`mr-2 h-4 w-4 ${mgmtUserId === String(user.id) ? 'opacity-100' : 'opacity-0'}`}
+                                                                                    />
+                                                                                    {formatUserName(
+                                                                                        user,
+                                                                                    )}
+                                                                                </CommandItem>
+                                                                            ),
+                                                                        )}
                                                                 </CommandGroup>
                                                             </CommandList>
                                                         </Command>
@@ -3171,294 +4662,645 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                         </div>
 
                                         <span className="flex items-center gap-1 text-amber-600">
-                                            <BellOff className="h-4 w-4 inline" />
-                                            <strong>No notifications will be sent.</strong>
+                                            <BellOff className="inline h-4 w-4" />
+                                            <strong>
+                                                No notifications will be sent.
+                                            </strong>
                                         </span>
                                     </>
                                 )}
                                 {confirmAction === 'remove-duplicates' && (
                                     <>
-                                        This will remove all duplicate attendance point entries (same user, date, and type).
-                                        <br /><br />
-                                        <strong className="text-green-600">Excused points will be preserved.</strong> If duplicates exist and one is excused, the excused entry will be kept.
-                                        <br /><br />
+                                        This will remove all duplicate
+                                        attendance point entries (same user,
+                                        date, and type).
+                                        <br />
+                                        <br />
+                                        <strong className="text-green-600">
+                                            Excused points will be preserved.
+                                        </strong>{' '}
+                                        If duplicates exist and one is excused,
+                                        the excused entry will be kept.
+                                        <br />
+                                        <br />
                                         <span className="flex items-center gap-1 text-amber-600">
-                                            <BellOff className="h-4 w-4 inline" />
-                                            <strong>No notifications will be sent.</strong>
+                                            <BellOff className="inline h-4 w-4" />
+                                            <strong>
+                                                No notifications will be sent.
+                                            </strong>
                                         </span>
                                         <br />
-                                        <strong className="text-yellow-600">This action cannot be undone.</strong>
+                                        <strong className="text-yellow-600">
+                                            This action cannot be undone.
+                                        </strong>
                                     </>
                                 )}
                                 {confirmAction === 'expire-all' && (
                                     <>
                                         <p className="mb-3">
-                                            This will mark pending expiration points as expired immediately.
-                                            Points that have passed their expiration date but not yet marked will be updated.
+                                            This will mark pending expiration
+                                            points as expired immediately.
+                                            Points that have passed their
+                                            expiration date but not yet marked
+                                            will be updated.
                                         </p>
 
                                         {/* Expiration Type Selection */}
-                                        <div className="space-y-3 p-3 border rounded-lg bg-muted/50 mb-3">
-                                            <p className="text-sm font-medium text-foreground">Expiration Type:</p>
+                                        <div className="mb-3 space-y-3 rounded-lg border bg-muted/50 p-3">
+                                            <p className="text-sm font-medium text-foreground">
+                                                Expiration Type:
+                                            </p>
                                             <div className="flex flex-col gap-2">
-                                                <label className="flex items-center gap-2 cursor-pointer">
+                                                <label className="flex cursor-pointer items-center gap-2">
                                                     <input
                                                         type="radio"
                                                         name="expirationType"
                                                         value="both"
-                                                        checked={expirationType === 'both'}
-                                                        onChange={() => setExpirationType('both')}
-                                                        className="w-4 h-4"
+                                                        checked={
+                                                            expirationType ===
+                                                            'both'
+                                                        }
+                                                        onChange={() =>
+                                                            setExpirationType(
+                                                                'both',
+                                                            )
+                                                        }
+                                                        className="h-4 w-4"
                                                     />
-                                                    <span className="text-sm">Both SRO + GBRO (default)</span>
+                                                    <span className="text-sm">
+                                                        Both SRO + GBRO
+                                                        (default)
+                                                    </span>
                                                 </label>
-                                                <label className="flex items-center gap-2 cursor-pointer">
+                                                <label className="flex cursor-pointer items-center gap-2">
                                                     <input
                                                         type="radio"
                                                         name="expirationType"
                                                         value="sro"
-                                                        checked={expirationType === 'sro'}
-                                                        onChange={() => setExpirationType('sro')}
-                                                        className="w-4 h-4"
+                                                        checked={
+                                                            expirationType ===
+                                                            'sro'
+                                                        }
+                                                        onChange={() =>
+                                                            setExpirationType(
+                                                                'sro',
+                                                            )
+                                                        }
+                                                        className="h-4 w-4"
                                                     />
-                                                    <span className="text-sm">SRO only (Standard Roll Off - 6 months)</span>
+                                                    <span className="text-sm">
+                                                        SRO only (Standard Roll
+                                                        Off - 6 months)
+                                                    </span>
                                                 </label>
-                                                <label className="flex items-center gap-2 cursor-pointer">
+                                                <label className="flex cursor-pointer items-center gap-2">
                                                     <input
                                                         type="radio"
                                                         name="expirationType"
                                                         value="gbro"
-                                                        checked={expirationType === 'gbro'}
-                                                        onChange={() => setExpirationType('gbro')}
-                                                        className="w-4 h-4"
+                                                        checked={
+                                                            expirationType ===
+                                                            'gbro'
+                                                        }
+                                                        onChange={() =>
+                                                            setExpirationType(
+                                                                'gbro',
+                                                            )
+                                                        }
+                                                        className="h-4 w-4"
                                                     />
-                                                    <span className="text-sm">GBRO only (Good Behavior Roll Off - 60 days)</span>
+                                                    <span className="text-sm">
+                                                        GBRO only (Good Behavior
+                                                        Roll Off - 60 days)
+                                                    </span>
                                                 </label>
                                             </div>
                                         </div>
 
                                         {/* User Filter - Multi-select */}
-                                        <div className="space-y-3 p-3 border rounded-lg bg-muted/50 mb-3">
-                                            <p className="text-sm font-medium text-foreground">Filter by Employees (optional):</p>
+                                        <div className="mb-3 space-y-3 rounded-lg border bg-muted/50 p-3">
+                                            <p className="text-sm font-medium text-foreground">
+                                                Filter by Employees (optional):
+                                            </p>
                                             <div>
-                                                <Label htmlFor="expire_all_users" className="text-xs">Select Employees</Label>
-                                                <Popover open={isMgmtUserPopoverOpen} onOpenChange={setIsMgmtUserPopoverOpen}>
+                                                <Label
+                                                    htmlFor="expire_all_users"
+                                                    className="text-xs"
+                                                >
+                                                    Select Employees
+                                                </Label>
+                                                <Popover
+                                                    open={isMgmtUserPopoverOpen}
+                                                    onOpenChange={
+                                                        setIsMgmtUserPopoverOpen
+                                                    }
+                                                >
                                                     <PopoverTrigger asChild>
                                                         <Button
                                                             variant="outline"
                                                             role="combobox"
-                                                            className="w-full justify-between h-auto min-h-8 text-sm font-normal"
+                                                            className="h-auto min-h-8 w-full justify-between text-sm font-normal"
                                                         >
                                                             <span className="truncate text-left">
-                                                                {mgmtUserIds.length === 0
-                                                                    ? "All Employees"
-                                                                    : mgmtUserIds.length === 1
-                                                                        ? (() => {
-                                                                            const user = users?.find(u => String(u.id) === mgmtUserIds[0]);
-                                                                            return user ? formatUserName(user) : "1 employee selected";
+                                                                {mgmtUserIds.length ===
+                                                                0
+                                                                    ? 'All Employees'
+                                                                    : mgmtUserIds.length ===
+                                                                        1
+                                                                      ? (() => {
+                                                                            const user =
+                                                                                users?.find(
+                                                                                    (
+                                                                                        u,
+                                                                                    ) =>
+                                                                                        String(
+                                                                                            u.id,
+                                                                                        ) ===
+                                                                                        mgmtUserIds[0],
+                                                                                );
+                                                                            return user
+                                                                                ? formatUserName(
+                                                                                      user,
+                                                                                  )
+                                                                                : '1 employee selected';
                                                                         })()
-                                                                        : `${mgmtUserIds.length} employees selected`}
+                                                                      : `${mgmtUserIds.length} employees selected`}
                                                             </span>
                                                             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                                         </Button>
                                                     </PopoverTrigger>
-                                                    <PopoverContent className="w-full p-0" align="start">
-                                                        <Command shouldFilter={false}>
+                                                    <PopoverContent
+                                                        className="w-full p-0"
+                                                        align="start"
+                                                    >
+                                                        <Command
+                                                            shouldFilter={false}
+                                                        >
                                                             <CommandInput
                                                                 placeholder="Search employee..."
-                                                                value={mgmtUserSearchQuery}
-                                                                onValueChange={setMgmtUserSearchQuery}
+                                                                value={
+                                                                    mgmtUserSearchQuery
+                                                                }
+                                                                onValueChange={
+                                                                    setMgmtUserSearchQuery
+                                                                }
                                                             />
                                                             <CommandList>
-                                                                <CommandEmpty>No employee found.</CommandEmpty>
+                                                                <CommandEmpty>
+                                                                    No employee
+                                                                    found.
+                                                                </CommandEmpty>
                                                                 <CommandGroup>
                                                                     <CommandItem
                                                                         value="clear-all"
                                                                         onSelect={() => {
-                                                                            setMgmtUserIds([]);
-                                                                            setMgmtUserSearchQuery('');
+                                                                            setMgmtUserIds(
+                                                                                [],
+                                                                            );
+                                                                            setMgmtUserSearchQuery(
+                                                                                '',
+                                                                            );
                                                                         }}
                                                                         className="cursor-pointer"
                                                                     >
-                                                                        <Check className={`mr-2 h-4 w-4 ${mgmtUserIds.length === 0 ? "opacity-100" : "opacity-0"}`} />
-                                                                        All Employees (clear selection)
+                                                                        <Check
+                                                                            className={`mr-2 h-4 w-4 ${mgmtUserIds.length === 0 ? 'opacity-100' : 'opacity-0'}`}
+                                                                        />
+                                                                        All
+                                                                        Employees
+                                                                        (clear
+                                                                        selection)
                                                                     </CommandItem>
-                                                                    {users?.filter(user => {
-                                                                        if (!mgmtUserSearchQuery) return true;
-                                                                        const query = mgmtUserSearchQuery.toLowerCase();
-                                                                        return formatUserName(user).toLowerCase().includes(query) || user.name.toLowerCase().includes(query);
-                                                                    }).slice(0, 50).map((user) => {
-                                                                        const isSelected = mgmtUserIds.includes(String(user.id));
-                                                                        return (
-                                                                            <CommandItem
-                                                                                key={user.id}
-                                                                                value={formatUserName(user)}
-                                                                                onSelect={() => {
-                                                                                    if (isSelected) {
-                                                                                        setMgmtUserIds(mgmtUserIds.filter(id => id !== String(user.id)));
-                                                                                    } else {
-                                                                                        setMgmtUserIds([...mgmtUserIds, String(user.id)]);
-                                                                                    }
-                                                                                }}
-                                                                                className="cursor-pointer"
-                                                                            >
-                                                                                <Check className={`mr-2 h-4 w-4 ${isSelected ? "opacity-100" : "opacity-0"}`} />
-                                                                                {formatUserName(user)}
-                                                                            </CommandItem>
-                                                                        );
-                                                                    })}
+                                                                    {users
+                                                                        ?.filter(
+                                                                            (
+                                                                                user,
+                                                                            ) => {
+                                                                                if (
+                                                                                    !mgmtUserSearchQuery
+                                                                                )
+                                                                                    return true;
+                                                                                const query =
+                                                                                    mgmtUserSearchQuery.toLowerCase();
+                                                                                return (
+                                                                                    formatUserName(
+                                                                                        user,
+                                                                                    )
+                                                                                        .toLowerCase()
+                                                                                        .includes(
+                                                                                            query,
+                                                                                        ) ||
+                                                                                    user.name
+                                                                                        .toLowerCase()
+                                                                                        .includes(
+                                                                                            query,
+                                                                                        )
+                                                                                );
+                                                                            },
+                                                                        )
+                                                                        .slice(
+                                                                            0,
+                                                                            50,
+                                                                        )
+                                                                        .map(
+                                                                            (
+                                                                                user,
+                                                                            ) => {
+                                                                                const isSelected =
+                                                                                    mgmtUserIds.includes(
+                                                                                        String(
+                                                                                            user.id,
+                                                                                        ),
+                                                                                    );
+                                                                                return (
+                                                                                    <CommandItem
+                                                                                        key={
+                                                                                            user.id
+                                                                                        }
+                                                                                        value={formatUserName(
+                                                                                            user,
+                                                                                        )}
+                                                                                        onSelect={() => {
+                                                                                            if (
+                                                                                                isSelected
+                                                                                            ) {
+                                                                                                setMgmtUserIds(
+                                                                                                    mgmtUserIds.filter(
+                                                                                                        (
+                                                                                                            id,
+                                                                                                        ) =>
+                                                                                                            id !==
+                                                                                                            String(
+                                                                                                                user.id,
+                                                                                                            ),
+                                                                                                    ),
+                                                                                                );
+                                                                                            } else {
+                                                                                                setMgmtUserIds(
+                                                                                                    [
+                                                                                                        ...mgmtUserIds,
+                                                                                                        String(
+                                                                                                            user.id,
+                                                                                                        ),
+                                                                                                    ],
+                                                                                                );
+                                                                                            }
+                                                                                        }}
+                                                                                        className="cursor-pointer"
+                                                                                    >
+                                                                                        <Check
+                                                                                            className={`mr-2 h-4 w-4 ${isSelected ? 'opacity-100' : 'opacity-0'}`}
+                                                                                        />
+                                                                                        {formatUserName(
+                                                                                            user,
+                                                                                        )}
+                                                                                    </CommandItem>
+                                                                                );
+                                                                            },
+                                                                        )}
                                                                 </CommandGroup>
                                                             </CommandList>
                                                         </Command>
                                                     </PopoverContent>
                                                 </Popover>
                                                 {mgmtUserIds.length > 0 && (
-                                                    <div className="flex flex-wrap gap-1 mt-2">
-                                                        {mgmtUserIds.map(id => {
-                                                            const user = users?.find(u => String(u.id) === id);
-                                                            return user ? (
-                                                                <Badge key={id} variant="secondary" className="text-xs">
-                                                                    {formatUserName(user)}
-                                                                    <button
-                                                                        type="button"
-                                                                        className="ml-1 hover:text-destructive"
-                                                                        onClick={() => setMgmtUserIds(mgmtUserIds.filter(uid => uid !== id))}
+                                                    <div className="mt-2 flex flex-wrap gap-1">
+                                                        {mgmtUserIds.map(
+                                                            (id) => {
+                                                                const user =
+                                                                    users?.find(
+                                                                        (u) =>
+                                                                            String(
+                                                                                u.id,
+                                                                            ) ===
+                                                                            id,
+                                                                    );
+                                                                return user ? (
+                                                                    <Badge
+                                                                        key={id}
+                                                                        variant="secondary"
+                                                                        className="text-xs"
                                                                     >
-                                                                        ×
-                                                                    </button>
-                                                                </Badge>
-                                                            ) : null;
-                                                        })}
+                                                                        {formatUserName(
+                                                                            user,
+                                                                        )}
+                                                                        <button
+                                                                            type="button"
+                                                                            className="ml-1 hover:text-destructive"
+                                                                            onClick={() =>
+                                                                                setMgmtUserIds(
+                                                                                    mgmtUserIds.filter(
+                                                                                        (
+                                                                                            uid,
+                                                                                        ) =>
+                                                                                            uid !==
+                                                                                            id,
+                                                                                    ),
+                                                                                )
+                                                                            }
+                                                                        >
+                                                                            ×
+                                                                        </button>
+                                                                    </Badge>
+                                                                ) : null;
+                                                            },
+                                                        )}
                                                     </div>
                                                 )}
                                             </div>
                                         </div>
 
                                         <span className="flex items-center gap-1 text-amber-600">
-                                            <BellOff className="h-4 w-4 inline" />
-                                            <strong>No notifications will be sent to agents.</strong>
+                                            <BellOff className="inline h-4 w-4" />
+                                            <strong>
+                                                No notifications will be sent to
+                                                agents.
+                                            </strong>
                                         </span>
                                     </>
                                 )}
                                 {confirmAction === 'recalculate-gbro' && (
                                     <>
                                         <p className="mb-3">
-                                            This performs a <strong>full cascade recalculation</strong> of all GBRO dates.
-                                            It resets all GBRO states and re-simulates the entire timeline chronologically.
+                                            This performs a{' '}
+                                            <strong>
+                                                full cascade recalculation
+                                            </strong>{' '}
+                                            of all GBRO dates. It resets all
+                                            GBRO states and re-simulates the
+                                            entire timeline chronologically.
                                         </p>
 
                                         {/* All employees toggle */}
-                                        <div className="space-y-3 p-3 border rounded-lg bg-muted/50 mb-3">
+                                        <div className="mb-3 space-y-3 rounded-lg border bg-muted/50 p-3">
                                             <div className="flex items-center space-x-2">
                                                 <Checkbox
                                                     id="recalculate-all"
-                                                    checked={recalculateAllEmployees}
-                                                    onCheckedChange={(checked) => {
-                                                        setRecalculateAllEmployees(checked === true);
+                                                    checked={
+                                                        recalculateAllEmployees
+                                                    }
+                                                    onCheckedChange={(
+                                                        checked,
+                                                    ) => {
+                                                        setRecalculateAllEmployees(
+                                                            checked === true,
+                                                        );
                                                         if (checked) {
                                                             setMgmtUserIds([]);
                                                         }
                                                     }}
                                                 />
-                                                <Label htmlFor="recalculate-all" className="text-sm font-medium cursor-pointer">
-                                                    Recalculate for All Employees
+                                                <Label
+                                                    htmlFor="recalculate-all"
+                                                    className="cursor-pointer text-sm font-medium"
+                                                >
+                                                    Recalculate for All
+                                                    Employees
                                                 </Label>
                                             </div>
 
                                             {!recalculateAllEmployees && (
                                                 <div className="mt-3">
-                                                    <Label htmlFor="gbro_recalc_users" className="text-xs">Or Select Specific Employees</Label>
-                                                    <Popover open={isMgmtUserPopoverOpen} onOpenChange={setIsMgmtUserPopoverOpen}>
+                                                    <Label
+                                                        htmlFor="gbro_recalc_users"
+                                                        className="text-xs"
+                                                    >
+                                                        Or Select Specific
+                                                        Employees
+                                                    </Label>
+                                                    <Popover
+                                                        open={
+                                                            isMgmtUserPopoverOpen
+                                                        }
+                                                        onOpenChange={
+                                                            setIsMgmtUserPopoverOpen
+                                                        }
+                                                    >
                                                         <PopoverTrigger asChild>
                                                             <Button
                                                                 variant="outline"
                                                                 role="combobox"
-                                                                className="w-full justify-between h-auto min-h-8 text-sm font-normal mt-1"
+                                                                className="mt-1 h-auto min-h-8 w-full justify-between text-sm font-normal"
                                                             >
                                                                 <span className="truncate text-left">
-                                                                    {mgmtUserIds.length === 0
-                                                                        ? "Select employees..."
-                                                                        : mgmtUserIds.length === 1
-                                                                            ? (() => {
-                                                                                const user = users?.find(u => String(u.id) === mgmtUserIds[0]);
-                                                                                return user ? formatUserName(user) : "1 employee selected";
+                                                                    {mgmtUserIds.length ===
+                                                                    0
+                                                                        ? 'Select employees...'
+                                                                        : mgmtUserIds.length ===
+                                                                            1
+                                                                          ? (() => {
+                                                                                const user =
+                                                                                    users?.find(
+                                                                                        (
+                                                                                            u,
+                                                                                        ) =>
+                                                                                            String(
+                                                                                                u.id,
+                                                                                            ) ===
+                                                                                            mgmtUserIds[0],
+                                                                                    );
+                                                                                return user
+                                                                                    ? formatUserName(
+                                                                                          user,
+                                                                                      )
+                                                                                    : '1 employee selected';
                                                                             })()
-                                                                            : `${mgmtUserIds.length} employees selected`}
+                                                                          : `${mgmtUserIds.length} employees selected`}
                                                                 </span>
                                                                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                                             </Button>
                                                         </PopoverTrigger>
-                                                        <PopoverContent className="w-full p-0" align="start">
-                                                            <Command shouldFilter={false}>
+                                                        <PopoverContent
+                                                            className="w-full p-0"
+                                                            align="start"
+                                                        >
+                                                            <Command
+                                                                shouldFilter={
+                                                                    false
+                                                                }
+                                                            >
                                                                 <CommandInput
                                                                     placeholder="Search employee..."
-                                                                    value={mgmtUserSearchQuery}
-                                                                    onValueChange={setMgmtUserSearchQuery}
+                                                                    value={
+                                                                        mgmtUserSearchQuery
+                                                                    }
+                                                                    onValueChange={
+                                                                        setMgmtUserSearchQuery
+                                                                    }
                                                                 />
                                                                 <CommandList>
-                                                                    <CommandEmpty>No employee found.</CommandEmpty>
+                                                                    <CommandEmpty>
+                                                                        No
+                                                                        employee
+                                                                        found.
+                                                                    </CommandEmpty>
                                                                     <CommandGroup>
-                                                                        {users?.filter(user => {
-                                                                            if (!mgmtUserSearchQuery) return true;
-                                                                            const query = mgmtUserSearchQuery.toLowerCase();
-                                                                            return formatUserName(user).toLowerCase().includes(query) || user.name.toLowerCase().includes(query);
-                                                                        }).slice(0, 50).map((user) => {
-                                                                            const isSelected = mgmtUserIds.includes(String(user.id));
-                                                                            return (
-                                                                                <CommandItem
-                                                                                    key={user.id}
-                                                                                    value={formatUserName(user)}
-                                                                                    onSelect={() => {
-                                                                                        if (isSelected) {
-                                                                                            setMgmtUserIds(mgmtUserIds.filter(id => id !== String(user.id)));
-                                                                                        } else {
-                                                                                            setMgmtUserIds([...mgmtUserIds, String(user.id)]);
-                                                                                        }
-                                                                                    }}
-                                                                                    className="cursor-pointer"
-                                                                                >
-                                                                                    <Check className={`mr-2 h-4 w-4 ${isSelected ? "opacity-100" : "opacity-0"}`} />
-                                                                                    {formatUserName(user)}
-                                                                                </CommandItem>
-                                                                            );
-                                                                        })}
+                                                                        {users
+                                                                            ?.filter(
+                                                                                (
+                                                                                    user,
+                                                                                ) => {
+                                                                                    if (
+                                                                                        !mgmtUserSearchQuery
+                                                                                    )
+                                                                                        return true;
+                                                                                    const query =
+                                                                                        mgmtUserSearchQuery.toLowerCase();
+                                                                                    return (
+                                                                                        formatUserName(
+                                                                                            user,
+                                                                                        )
+                                                                                            .toLowerCase()
+                                                                                            .includes(
+                                                                                                query,
+                                                                                            ) ||
+                                                                                        user.name
+                                                                                            .toLowerCase()
+                                                                                            .includes(
+                                                                                                query,
+                                                                                            )
+                                                                                    );
+                                                                                },
+                                                                            )
+                                                                            .slice(
+                                                                                0,
+                                                                                50,
+                                                                            )
+                                                                            .map(
+                                                                                (
+                                                                                    user,
+                                                                                ) => {
+                                                                                    const isSelected =
+                                                                                        mgmtUserIds.includes(
+                                                                                            String(
+                                                                                                user.id,
+                                                                                            ),
+                                                                                        );
+                                                                                    return (
+                                                                                        <CommandItem
+                                                                                            key={
+                                                                                                user.id
+                                                                                            }
+                                                                                            value={formatUserName(
+                                                                                                user,
+                                                                                            )}
+                                                                                            onSelect={() => {
+                                                                                                if (
+                                                                                                    isSelected
+                                                                                                ) {
+                                                                                                    setMgmtUserIds(
+                                                                                                        mgmtUserIds.filter(
+                                                                                                            (
+                                                                                                                id,
+                                                                                                            ) =>
+                                                                                                                id !==
+                                                                                                                String(
+                                                                                                                    user.id,
+                                                                                                                ),
+                                                                                                        ),
+                                                                                                    );
+                                                                                                } else {
+                                                                                                    setMgmtUserIds(
+                                                                                                        [
+                                                                                                            ...mgmtUserIds,
+                                                                                                            String(
+                                                                                                                user.id,
+                                                                                                            ),
+                                                                                                        ],
+                                                                                                    );
+                                                                                                }
+                                                                                            }}
+                                                                                            className="cursor-pointer"
+                                                                                        >
+                                                                                            <Check
+                                                                                                className={`mr-2 h-4 w-4 ${isSelected ? 'opacity-100' : 'opacity-0'}`}
+                                                                                            />
+                                                                                            {formatUserName(
+                                                                                                user,
+                                                                                            )}
+                                                                                        </CommandItem>
+                                                                                    );
+                                                                                },
+                                                                            )}
                                                                     </CommandGroup>
                                                                 </CommandList>
                                                             </Command>
                                                         </PopoverContent>
                                                     </Popover>
                                                     {mgmtUserIds.length > 0 && (
-                                                        <div className="flex flex-wrap gap-1 mt-2">
-                                                            {mgmtUserIds.map(id => {
-                                                                const user = users?.find(u => String(u.id) === id);
-                                                                return user ? (
-                                                                    <Badge key={id} variant="secondary" className="text-xs">
-                                                                        {formatUserName(user)}
-                                                                        <button
-                                                                            type="button"
-                                                                            className="ml-1 hover:text-destructive"
-                                                                            onClick={() => setMgmtUserIds(mgmtUserIds.filter(uid => uid !== id))}
+                                                        <div className="mt-2 flex flex-wrap gap-1">
+                                                            {mgmtUserIds.map(
+                                                                (id) => {
+                                                                    const user =
+                                                                        users?.find(
+                                                                            (
+                                                                                u,
+                                                                            ) =>
+                                                                                String(
+                                                                                    u.id,
+                                                                                ) ===
+                                                                                id,
+                                                                        );
+                                                                    return user ? (
+                                                                        <Badge
+                                                                            key={
+                                                                                id
+                                                                            }
+                                                                            variant="secondary"
+                                                                            className="text-xs"
                                                                         >
-                                                                            ×
-                                                                        </button>
-                                                                    </Badge>
-                                                                ) : null;
-                                                            })}
+                                                                            {formatUserName(
+                                                                                user,
+                                                                            )}
+                                                                            <button
+                                                                                type="button"
+                                                                                className="ml-1 hover:text-destructive"
+                                                                                onClick={() =>
+                                                                                    setMgmtUserIds(
+                                                                                        mgmtUserIds.filter(
+                                                                                            (
+                                                                                                uid,
+                                                                                            ) =>
+                                                                                                uid !==
+                                                                                                id,
+                                                                                        ),
+                                                                                    )
+                                                                                }
+                                                                            >
+                                                                                ×
+                                                                            </button>
+                                                                        </Badge>
+                                                                    ) : null;
+                                                                },
+                                                            )}
                                                         </div>
                                                     )}
                                                 </div>
                                             )}
                                         </div>
 
-                                        <p className="text-sm mb-3"><strong>Use this when:</strong></p>
-                                        <ul className="list-disc list-inside space-y-1 text-sm mb-3">
-                                            <li>Backdated points were added, edited, or deleted</li>
-                                            <li>GBRO dates appear incorrect after data changes</li>
-                                            <li>Points expired in wrong order</li>
+                                        <p className="mb-3 text-sm">
+                                            <strong>Use this when:</strong>
+                                        </p>
+                                        <ul className="mb-3 list-inside list-disc space-y-1 text-sm">
+                                            <li>
+                                                Backdated points were added,
+                                                edited, or deleted
+                                            </li>
+                                            <li>
+                                                GBRO dates appear incorrect
+                                                after data changes
+                                            </li>
+                                            <li>
+                                                Points expired in wrong order
+                                            </li>
                                         </ul>
                                         {recalculateAllEmployees && (
-                                            <span className="text-orange-600 text-sm">
-                                                <strong>Warning:</strong> This will process all {users?.length || 0} employees. This may take a while.
+                                            <span className="text-sm text-orange-600">
+                                                <strong>Warning:</strong> This
+                                                will process all{' '}
+                                                {users?.length || 0} employees.
+                                                This may take a while.
                                             </span>
                                         )}
                                     </>
@@ -3467,29 +5309,42 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                        <AlertDialogCancel disabled={isManagementAction}>Cancel</AlertDialogCancel>
+                        <AlertDialogCancel disabled={isManagementAction}>
+                            Cancel
+                        </AlertDialogCancel>
                         <AlertDialogAction
                             disabled={isManagementAction}
-                            onClick={() => confirmAction && handleManagementAction(confirmAction)}
+                            onClick={() =>
+                                confirmAction &&
+                                handleManagementAction(confirmAction)
+                            }
                             className={
-                                confirmAction === 'regenerate' ? 'bg-green-600 hover:bg-green-700' :
-                                    confirmAction === 'remove-duplicates' ? 'bg-yellow-600 hover:bg-yellow-700' :
-                                        confirmAction === 'expire-all' ? 'bg-orange-600 hover:bg-orange-700' :
-                                            confirmAction === 'recalculate-gbro' ? 'bg-indigo-600 hover:bg-indigo-700' :
-                                                'bg-blue-600 hover:bg-blue-700'
+                                confirmAction === 'regenerate'
+                                    ? 'bg-green-600 hover:bg-green-700'
+                                    : confirmAction === 'remove-duplicates'
+                                      ? 'bg-yellow-600 hover:bg-yellow-700'
+                                      : confirmAction === 'expire-all'
+                                        ? 'bg-orange-600 hover:bg-orange-700'
+                                        : confirmAction === 'recalculate-gbro'
+                                          ? 'bg-indigo-600 hover:bg-indigo-700'
+                                          : 'bg-blue-600 hover:bg-blue-700'
                             }
                         >
                             {isManagementAction ? (
                                 <>
-                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                     Processing...
                                 </>
                             ) : (
                                 <>
-                                    {confirmAction === 'regenerate' && 'Regenerate Points'}
-                                    {confirmAction === 'remove-duplicates' && 'Remove Duplicates'}
-                                    {confirmAction === 'expire-all' && 'Expire All'}
-                                    {confirmAction === 'recalculate-gbro' && 'Recalculate GBRO'}
+                                    {confirmAction === 'regenerate' &&
+                                        'Regenerate Points'}
+                                    {confirmAction === 'remove-duplicates' &&
+                                        'Remove Duplicates'}
+                                    {confirmAction === 'expire-all' &&
+                                        'Expire All'}
+                                    {confirmAction === 'recalculate-gbro' &&
+                                        'Recalculate GBRO'}
                                 </>
                             )}
                         </AlertDialogAction>

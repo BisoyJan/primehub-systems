@@ -1,24 +1,54 @@
-import { Head, usePage } from '@inertiajs/react';
-import React, { useState, useMemo, useEffect } from 'react';
-import { Download, Loader2, FileSpreadsheet, Check, ChevronsUpDown, AlertCircle } from 'lucide-react';
-import AppLayout from '@/layouts/app-layout';
-import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
-import { PageHeader } from '@/components/PageHeader';
+import { Can } from '@/components/authorization';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { DatePicker } from '@/components/ui/date-picker';
+import { PageHeader } from '@/components/PageHeader';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Can } from '@/components/authorization';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Button } from '@/components/ui/button';
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from '@/components/ui/card';
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from '@/components/ui/command';
+import { DatePicker } from '@/components/ui/date-picker';
+import { Label } from '@/components/ui/label';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
 import { Progress } from '@/components/ui/progress';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { toast } from 'sonner';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
+import AppLayout from '@/layouts/app-layout';
 import { index as attendanceIndex } from '@/routes/attendance';
 import { index as biometricExportIndex } from '@/routes/biometric-export';
+import { Head, usePage } from '@inertiajs/react';
+import {
+    AlertCircle,
+    Check,
+    ChevronsUpDown,
+    Download,
+    FileSpreadsheet,
+    Loader2,
+} from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 
 interface User {
     id: number;
@@ -65,7 +95,8 @@ interface PageProps {
 }
 
 export default function Export() {
-    const { users, sites, campaigns, pointsUsers, pointTypes, pointStatuses } = usePage<PageProps>().props;
+    const { users, sites, campaigns, pointsUsers, pointTypes, pointStatuses } =
+        usePage<PageProps>().props;
 
     const { title, breadcrumbs } = usePageMeta({
         title: 'Export Attendance Records',
@@ -88,7 +119,9 @@ export default function Export() {
     const [exportProgress, setExportProgress] = useState(0);
     const [exportStatus, setExportStatus] = useState<string>('');
     const [exportJobId, setExportJobId] = useState<string | null>(null);
-    const exportIntervalRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+    const exportIntervalRef = React.useRef<ReturnType<
+        typeof setTimeout
+    > | null>(null);
     const [isEmployeePopoverOpen, setIsEmployeePopoverOpen] = useState(false);
     const [isSitePopoverOpen, setIsSitePopoverOpen] = useState(false);
     const [isCampaignPopoverOpen, setIsCampaignPopoverOpen] = useState(false);
@@ -99,17 +132,25 @@ export default function Export() {
     // Attendance Points Export State
     const [pointsStartDate, setPointsStartDate] = useState('');
     const [pointsEndDate, setPointsEndDate] = useState('');
-    const [selectedPointsUsers, setSelectedPointsUsers] = useState<number[]>([]);
+    const [selectedPointsUsers, setSelectedPointsUsers] = useState<number[]>(
+        [],
+    );
     const [selectedPointType, setSelectedPointType] = useState<string>('');
     const [selectedPointStatus, setSelectedPointStatus] = useState<string>('');
     const [isPointsExporting, setIsPointsExporting] = useState(false);
     const [pointsExportProgress, setPointsExportProgress] = useState(0);
     const [pointsExportStatus, setPointsExportStatus] = useState<string>('');
-    const [pointsExportJobId, setPointsExportJobId] = useState<string | null>(null);
-    const pointsExportIntervalRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+    const [pointsExportJobId, setPointsExportJobId] = useState<string | null>(
+        null,
+    );
+    const pointsExportIntervalRef = React.useRef<ReturnType<
+        typeof setTimeout
+    > | null>(null);
     const pointsDownloadStartedRef = React.useRef<boolean>(false);
-    const [isPointsEmployeePopoverOpen, setIsPointsEmployeePopoverOpen] = useState(false);
-    const [pointsEmployeeSearchQuery, setPointsEmployeeSearchQuery] = useState('');
+    const [isPointsEmployeePopoverOpen, setIsPointsEmployeePopoverOpen] =
+        useState(false);
+    const [pointsEmployeeSearchQuery, setPointsEmployeeSearchQuery] =
+        useState('');
 
     // Filter employees based on search query and selected campaigns
     const filteredEmployees = useMemo(() => {
@@ -118,16 +159,23 @@ export default function Export() {
 
         // Filter by selected campaigns first
         if (selectedCampaigns.length > 0) {
-            filtered = filtered.filter(user =>
-                user.campaign_ids.some(campaignId => selectedCampaigns.includes(campaignId))
+            filtered = filtered.filter((user) =>
+                user.campaign_ids.some((campaignId) =>
+                    selectedCampaigns.includes(campaignId),
+                ),
             );
         }
 
         // Then filter by search query
         if (employeeSearchQuery) {
-            filtered = filtered.filter(user =>
-                user.name.toLowerCase().includes(employeeSearchQuery.toLowerCase()) ||
-                user.employee_number.toLowerCase().includes(employeeSearchQuery.toLowerCase())
+            filtered = filtered.filter(
+                (user) =>
+                    user.name
+                        .toLowerCase()
+                        .includes(employeeSearchQuery.toLowerCase()) ||
+                    user.employee_number
+                        .toLowerCase()
+                        .includes(employeeSearchQuery.toLowerCase()),
             );
         }
 
@@ -141,15 +189,17 @@ export default function Export() {
 
         // Filter by selected campaigns first
         if (selectedCampaigns.length > 0) {
-            filtered = filtered.filter(site =>
-                site.campaign_ids.some(campaignId => selectedCampaigns.includes(campaignId))
+            filtered = filtered.filter((site) =>
+                site.campaign_ids.some((campaignId) =>
+                    selectedCampaigns.includes(campaignId),
+                ),
             );
         }
 
         // Then filter by search query
         if (siteSearchQuery) {
-            filtered = filtered.filter(site =>
-                site.name.toLowerCase().includes(siteSearchQuery.toLowerCase())
+            filtered = filtered.filter((site) =>
+                site.name.toLowerCase().includes(siteSearchQuery.toLowerCase()),
             );
         }
 
@@ -160,13 +210,17 @@ export default function Export() {
     const filteredCampaigns = useMemo(() => {
         if (!campaigns) return [];
         if (!campaignSearchQuery) return campaigns;
-        return campaigns.filter(campaign =>
-            campaign.name.toLowerCase().includes(campaignSearchQuery.toLowerCase())
+        return campaigns.filter((campaign) =>
+            campaign.name
+                .toLowerCase()
+                .includes(campaignSearchQuery.toLowerCase()),
         );
     }, [campaigns, campaignSearchQuery]);
 
     const handleExport = () => {
-        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        const csrfToken = document
+            .querySelector('meta[name="csrf-token"]')
+            ?.getAttribute('content');
         if (!csrfToken) {
             toast.error('CSRF token not found');
             return;
@@ -194,12 +248,12 @@ export default function Export() {
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRF-TOKEN': csrfToken,
-                'Accept': 'application/json',
+                Accept: 'application/json',
             },
             credentials: 'same-origin',
             body: JSON.stringify(body),
         })
-            .then(async res => {
+            .then(async (res) => {
                 const data = await res.json();
                 if (!res.ok) {
                     // Handle validation error (no records found)
@@ -210,7 +264,7 @@ export default function Export() {
                 }
                 return data;
             })
-            .then(data => {
+            .then((data) => {
                 if (data.jobId) {
                     setExportJobId(data.jobId);
                 } else {
@@ -218,12 +272,19 @@ export default function Export() {
                     setIsExporting(false);
                 }
             })
-            .catch(err => {
+            .catch((err) => {
                 console.error('Export start error:', err);
                 if (err.message.includes('419')) {
-                    toast.error('Session expired. Please refresh the page and try again.');
-                } else if (err.message.includes('401') || err.message.includes('403')) {
-                    toast.error('You are not authorized to perform this action. Please login again.');
+                    toast.error(
+                        'Session expired. Please refresh the page and try again.',
+                    );
+                } else if (
+                    err.message.includes('401') ||
+                    err.message.includes('403')
+                ) {
+                    toast.error(
+                        'You are not authorized to perform this action. Please login again.',
+                    );
                 } else if (err.message.includes('No attendance records')) {
                     toast.warning(err.message);
                 } else {
@@ -245,14 +306,15 @@ export default function Export() {
                 fetch(`/biometric-export/progress/${exportJobId}`, {
                     credentials: 'same-origin',
                     headers: {
-                        'Accept': 'application/json',
+                        Accept: 'application/json',
                     },
                 })
-                    .then(res => {
-                        if (!res.ok) throw new Error('Failed to fetch progress');
+                    .then((res) => {
+                        if (!res.ok)
+                            throw new Error('Failed to fetch progress');
                         return res.json();
                     })
-                    .then(data => {
+                    .then((data) => {
                         setExportProgress(data.percent || 0);
                         setExportStatus(data.status || 'Processing...');
 
@@ -281,14 +343,15 @@ export default function Export() {
                                     method: 'GET',
                                     credentials: 'same-origin',
                                 })
-                                    .then(response => {
+                                    .then((response) => {
                                         if (!response.ok) {
                                             throw new Error('Download failed');
                                         }
                                         return response.blob();
                                     })
-                                    .then(blob => {
-                                        const url = window.URL.createObjectURL(blob);
+                                    .then((blob) => {
+                                        const url =
+                                            window.URL.createObjectURL(blob);
                                         const a = document.createElement('a');
                                         a.href = url;
                                         a.download = `attendance-export-${new Date().toISOString().split('T')[0]}.xlsx`;
@@ -296,10 +359,14 @@ export default function Export() {
                                         a.click();
                                         window.URL.revokeObjectURL(url);
                                         document.body.removeChild(a);
-                                        toast.success('Export complete! Download started.');
+                                        toast.success(
+                                            'Export complete! Download started.',
+                                        );
                                     })
                                     .catch(() => {
-                                        toast.error('Download failed. Please try generating a new export.');
+                                        toast.error(
+                                            'Download failed. Please try generating a new export.',
+                                        );
                                     })
                                     .finally(() => {
                                         setIsExporting(false);
@@ -310,7 +377,7 @@ export default function Export() {
                             }
                         }
                     })
-                    .catch(err => {
+                    .catch((err) => {
                         console.error('Progress fetch error:', err);
                     });
             };
@@ -330,25 +397,25 @@ export default function Export() {
     }, [isExporting, exportJobId]);
 
     const toggleUser = (userId: number) => {
-        setSelectedUsers(prev =>
+        setSelectedUsers((prev) =>
             prev.includes(userId)
-                ? prev.filter(id => id !== userId)
-                : [...prev, userId]
+                ? prev.filter((id) => id !== userId)
+                : [...prev, userId],
         );
     };
 
     const toggleSite = (siteId: number) => {
-        setSelectedSites(prev =>
+        setSelectedSites((prev) =>
             prev.includes(siteId)
-                ? prev.filter(id => id !== siteId)
-                : [...prev, siteId]
+                ? prev.filter((id) => id !== siteId)
+                : [...prev, siteId],
         );
     };
 
     const toggleCampaign = (campaignId: number) => {
-        setSelectedCampaigns(prev => {
+        setSelectedCampaigns((prev) => {
             const newSelection = prev.includes(campaignId)
-                ? prev.filter(id => id !== campaignId)
+                ? prev.filter((id) => id !== campaignId)
                 : [...prev, campaignId];
 
             // Clear employee and site selections when campaign filter changes
@@ -362,22 +429,43 @@ export default function Export() {
 
     const selectAllUsers = () => {
         // Use filtered employees based on campaign selection
-        const availableEmployees = selectedCampaigns.length > 0
-            ? users.filter(user => user.campaign_ids.some(cid => selectedCampaigns.includes(cid)))
-            : users;
-        setSelectedUsers(selectedUsers.length === availableEmployees.length ? [] : availableEmployees.map(u => u.id));
+        const availableEmployees =
+            selectedCampaigns.length > 0
+                ? users.filter((user) =>
+                      user.campaign_ids.some((cid) =>
+                          selectedCampaigns.includes(cid),
+                      ),
+                  )
+                : users;
+        setSelectedUsers(
+            selectedUsers.length === availableEmployees.length
+                ? []
+                : availableEmployees.map((u) => u.id),
+        );
     };
 
     const selectAllSites = () => {
         // Use filtered sites based on campaign selection
-        const availableSites = selectedCampaigns.length > 0
-            ? sites.filter(site => site.campaign_ids.some(cid => selectedCampaigns.includes(cid)))
-            : sites;
-        setSelectedSites(selectedSites.length === availableSites.length ? [] : availableSites.map(s => s.id));
+        const availableSites =
+            selectedCampaigns.length > 0
+                ? sites.filter((site) =>
+                      site.campaign_ids.some((cid) =>
+                          selectedCampaigns.includes(cid),
+                      ),
+                  )
+                : sites;
+        setSelectedSites(
+            selectedSites.length === availableSites.length
+                ? []
+                : availableSites.map((s) => s.id),
+        );
     };
 
     const selectAllCampaigns = () => {
-        const newSelection = selectedCampaigns.length === campaigns.length ? [] : campaigns.map(c => c.id);
+        const newSelection =
+            selectedCampaigns.length === campaigns.length
+                ? []
+                : campaigns.map((c) => c.id);
         setSelectedCampaigns(newSelection);
         // Clear employee and site selections when campaign filter changes
         setSelectedUsers([]);
@@ -390,14 +478,22 @@ export default function Export() {
         setSelectedCampaigns([]);
     };
 
-    const showClearFilters = selectedUsers.length > 0 || selectedSites.length > 0 || selectedCampaigns.length > 0;
+    const showClearFilters =
+        selectedUsers.length > 0 ||
+        selectedSites.length > 0 ||
+        selectedCampaigns.length > 0;
 
     // Get display text for selected employees
     const selectedEmployeesText = useMemo(() => {
         // Get the available employees (filtered by campaign if any selected)
-        const availableEmployees = selectedCampaigns.length > 0
-            ? users.filter(user => user.campaign_ids.some(cid => selectedCampaigns.includes(cid)))
-            : users;
+        const availableEmployees =
+            selectedCampaigns.length > 0
+                ? users.filter((user) =>
+                      user.campaign_ids.some((cid) =>
+                          selectedCampaigns.includes(cid),
+                      ),
+                  )
+                : users;
 
         if (selectedUsers.length === 0) {
             return selectedCampaigns.length > 0
@@ -405,7 +501,7 @@ export default function Export() {
                 : 'All Employees';
         }
         if (selectedUsers.length === 1) {
-            const user = users.find(u => u.id === selectedUsers[0]);
+            const user = users.find((u) => u.id === selectedUsers[0]);
             return user?.name || '1 selected';
         }
         return `${selectedUsers.length} employees selected`;
@@ -414,9 +510,14 @@ export default function Export() {
     // Get display text for selected sites
     const selectedSitesText = useMemo(() => {
         // Get the available sites (filtered by campaign if any selected)
-        const availableSites = selectedCampaigns.length > 0
-            ? sites.filter(site => site.campaign_ids.some(cid => selectedCampaigns.includes(cid)))
-            : sites;
+        const availableSites =
+            selectedCampaigns.length > 0
+                ? sites.filter((site) =>
+                      site.campaign_ids.some((cid) =>
+                          selectedCampaigns.includes(cid),
+                      ),
+                  )
+                : sites;
 
         if (selectedSites.length === 0) {
             return selectedCampaigns.length > 0
@@ -424,7 +525,7 @@ export default function Export() {
                 : 'All Sites';
         }
         if (selectedSites.length === 1) {
-            const site = sites.find(s => s.id === selectedSites[0]);
+            const site = sites.find((s) => s.id === selectedSites[0]);
             return site?.name || '1 selected';
         }
         return `${selectedSites.length} sites selected`;
@@ -434,7 +535,9 @@ export default function Export() {
     const selectedCampaignsText = useMemo(() => {
         if (selectedCampaigns.length === 0) return 'All Campaigns';
         if (selectedCampaigns.length === 1) {
-            const campaign = campaigns.find(c => c.id === selectedCampaigns[0]);
+            const campaign = campaigns.find(
+                (c) => c.id === selectedCampaigns[0],
+            );
             return campaign?.name || '1 selected';
         }
         return `${selectedCampaigns.length} campaigns selected`;
@@ -446,24 +549,28 @@ export default function Export() {
     const filteredPointsUsers = useMemo(() => {
         if (!pointsUsers) return [];
         if (!pointsEmployeeSearchQuery) return pointsUsers;
-        return pointsUsers.filter(user =>
-            user.name.toLowerCase().includes(pointsEmployeeSearchQuery.toLowerCase())
+        return pointsUsers.filter((user) =>
+            user.name
+                .toLowerCase()
+                .includes(pointsEmployeeSearchQuery.toLowerCase()),
         );
     }, [pointsUsers, pointsEmployeeSearchQuery]);
 
     // Toggle points user selection
     const togglePointsUser = (userId: number) => {
-        setSelectedPointsUsers(prev =>
+        setSelectedPointsUsers((prev) =>
             prev.includes(userId)
-                ? prev.filter(id => id !== userId)
-                : [...prev, userId]
+                ? prev.filter((id) => id !== userId)
+                : [...prev, userId],
         );
     };
 
     // Select all points users
     const selectAllPointsUsers = () => {
         setSelectedPointsUsers(
-            selectedPointsUsers.length === pointsUsers.length ? [] : pointsUsers.map(u => u.id)
+            selectedPointsUsers.length === pointsUsers.length
+                ? []
+                : pointsUsers.map((u) => u.id),
         );
     };
 
@@ -474,13 +581,18 @@ export default function Export() {
         setSelectedPointStatus('');
     };
 
-    const showClearPointsFilters = selectedPointsUsers.length > 0 || selectedPointType !== '' || selectedPointStatus !== '';
+    const showClearPointsFilters =
+        selectedPointsUsers.length > 0 ||
+        selectedPointType !== '' ||
+        selectedPointStatus !== '';
 
     // Get display text for selected points employees
     const selectedPointsEmployeesText = useMemo(() => {
         if (selectedPointsUsers.length === 0) return 'All Employees';
         if (selectedPointsUsers.length === 1) {
-            const user = pointsUsers.find(u => u.id === selectedPointsUsers[0]);
+            const user = pointsUsers.find(
+                (u) => u.id === selectedPointsUsers[0],
+            );
             return user?.name || '1 selected';
         }
         return `${selectedPointsUsers.length} employees selected`;
@@ -488,7 +600,9 @@ export default function Export() {
 
     // Handle attendance points export
     const handlePointsExport = () => {
-        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        const csrfToken = document
+            .querySelector('meta[name="csrf-token"]')
+            ?.getAttribute('content');
         if (!csrfToken) {
             toast.error('CSRF token not found');
             return;
@@ -521,20 +635,24 @@ export default function Export() {
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRF-TOKEN': csrfToken,
-                'Accept': 'application/json',
+                Accept: 'application/json',
             },
             credentials: 'same-origin',
             body: JSON.stringify(body),
         })
-            .then(async res => {
+            .then(async (res) => {
                 // Check response status before parsing JSON
                 if (!res.ok) {
                     // Handle specific HTTP status codes
                     if (res.status === 419) {
-                        throw new Error('Session expired. Please refresh the page and try again.');
+                        throw new Error(
+                            'Session expired. Please refresh the page and try again.',
+                        );
                     }
                     if (res.status === 401 || res.status === 403) {
-                        throw new Error('You are not authorized to perform this action.');
+                        throw new Error(
+                            'You are not authorized to perform this action.',
+                        );
                     }
                     // Try to parse error message from JSON response
                     try {
@@ -549,7 +667,7 @@ export default function Export() {
                 }
                 return res.json();
             })
-            .then(data => {
+            .then((data) => {
                 if (data.jobId) {
                     setPointsExportJobId(data.jobId);
                 } else {
@@ -557,12 +675,15 @@ export default function Export() {
                     setIsPointsExporting(false);
                 }
             })
-            .catch(err => {
+            .catch((err) => {
                 console.error('Points export start error:', err);
                 if (err.message.includes('No attendance points')) {
                     toast.warning(err.message);
                 } else {
-                    toast.error(err.message || 'Failed to start export. Please try again.');
+                    toast.error(
+                        err.message ||
+                            'Failed to start export. Please try again.',
+                    );
                 }
                 setIsPointsExporting(false);
             });
@@ -583,19 +704,23 @@ export default function Export() {
                 // Skip if download already started
                 if (pointsDownloadStartedRef.current) return;
 
-                fetch(`/attendance-points/export-all-excel/status/${pointsExportJobId}`, {
-                    credentials: 'same-origin',
-                    headers: {
-                        'Accept': 'application/json',
+                fetch(
+                    `/attendance-points/export-all-excel/status/${pointsExportJobId}`,
+                    {
+                        credentials: 'same-origin',
+                        headers: {
+                            Accept: 'application/json',
+                        },
                     },
-                })
-                    .then(res => {
+                )
+                    .then((res) => {
                         // Skip if download already started
                         if (pointsDownloadStartedRef.current) return null;
-                        if (!res.ok) throw new Error('Failed to fetch progress');
+                        if (!res.ok)
+                            throw new Error('Failed to fetch progress');
                         return res.json();
                     })
-                    .then(data => {
+                    .then((data) => {
                         // Skip if download already started or no data
                         if (pointsDownloadStartedRef.current || !data) return;
 
@@ -615,27 +740,32 @@ export default function Export() {
 
                                 // Clear interval
                                 if (pointsExportIntervalRef.current) {
-                                    clearInterval(pointsExportIntervalRef.current);
+                                    clearInterval(
+                                        pointsExportIntervalRef.current,
+                                    );
                                     pointsExportIntervalRef.current = null;
                                 }
 
                                 // Store the download URL and filename
                                 const downloadUrl = data.downloadUrl;
-                                const filename = data.filename || `attendance-points-export-${new Date().toISOString().split('T')[0]}.xlsx`;
+                                const filename =
+                                    data.filename ||
+                                    `attendance-points-export-${new Date().toISOString().split('T')[0]}.xlsx`;
 
                                 // Use fetch to download with proper error handling
                                 fetch(downloadUrl, {
                                     method: 'GET',
                                     credentials: 'same-origin',
                                 })
-                                    .then(response => {
+                                    .then((response) => {
                                         if (!response.ok) {
                                             throw new Error('Download failed');
                                         }
                                         return response.blob();
                                     })
-                                    .then(blob => {
-                                        const url = window.URL.createObjectURL(blob);
+                                    .then((blob) => {
+                                        const url =
+                                            window.URL.createObjectURL(blob);
                                         const a = document.createElement('a');
                                         a.href = url;
                                         a.download = filename;
@@ -643,10 +773,14 @@ export default function Export() {
                                         a.click();
                                         window.URL.revokeObjectURL(url);
                                         document.body.removeChild(a);
-                                        toast.success('Export complete! Download started.');
+                                        toast.success(
+                                            'Export complete! Download started.',
+                                        );
                                     })
                                     .catch(() => {
-                                        toast.error('Download failed. Please try generating a new export.');
+                                        toast.error(
+                                            'Download failed. Please try generating a new export.',
+                                        );
                                     })
                                     .finally(() => {
                                         setIsPointsExporting(false);
@@ -662,7 +796,7 @@ export default function Export() {
                             }
                         }
                     })
-                    .catch(err => {
+                    .catch((err) => {
                         // Only log if download hasn't started
                         if (!pointsDownloadStartedRef.current) {
                             console.error('Points progress fetch error:', err);
@@ -695,7 +829,7 @@ export default function Export() {
                     description="Export attendance records and attendance points to Excel format"
                 />
 
-                <div className="max-w-2xl mx-auto w-full">
+                <div className="mx-auto w-full max-w-2xl">
                     <Card>
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
@@ -703,38 +837,55 @@ export default function Export() {
                                 Export Configuration
                             </CardTitle>
                             <CardDescription>
-                                Select date range and optional filters to export attendance records
+                                Select date range and optional filters to export
+                                attendance records
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-6">
                             <Alert>
                                 <FileSpreadsheet className="h-4 w-4" />
                                 <AlertDescription>
-                                    <strong>Export includes:</strong> Employee details, Campaign, Shift Date, Scheduled &amp; Actual Time In/Out,
-                                    Sites, Status, Tardy/Undertime/Overtime minutes, Verification status, and Notes.
+                                    <strong>Export includes:</strong> Employee
+                                    details, Campaign, Shift Date, Scheduled
+                                    &amp; Actual Time In/Out, Sites, Status,
+                                    Tardy/Undertime/Overtime minutes,
+                                    Verification status, and Notes.
                                     <br />
-                                    <strong>Statistics section:</strong> Status breakdown, Time statistics, and Attendance percentages are included on the right side of the Excel file.
+                                    <strong>Statistics section:</strong> Status
+                                    breakdown, Time statistics, and Attendance
+                                    percentages are included on the right side
+                                    of the Excel file.
                                 </AlertDescription>
                             </Alert>
 
                             {/* Date Range Selection */}
                             <div className="flex flex-col gap-3">
-                                <Label className="text-sm font-medium">Date Range (Optional)</Label>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <Label className="text-sm font-medium">
+                                    Date Range (Optional)
+                                </Label>
+                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                     <div className="flex items-center gap-2 text-sm">
-                                        <span className="text-muted-foreground text-xs whitespace-nowrap">From:</span>
+                                        <span className="text-xs whitespace-nowrap text-muted-foreground">
+                                            From:
+                                        </span>
                                         <DatePicker
                                             value={startDate}
-                                            onChange={(value) => setStartDate(value)}
+                                            onChange={(value) =>
+                                                setStartDate(value)
+                                            }
                                             placeholder="Start date"
                                             className="w-full"
                                         />
                                     </div>
                                     <div className="flex items-center gap-2 text-sm">
-                                        <span className="text-muted-foreground text-xs whitespace-nowrap">To:</span>
+                                        <span className="text-xs whitespace-nowrap text-muted-foreground">
+                                            To:
+                                        </span>
                                         <DatePicker
                                             value={endDate}
-                                            onChange={(value) => setEndDate(value)}
+                                            onChange={(value) =>
+                                                setEndDate(value)
+                                            }
                                             placeholder="End date"
                                             className="w-full"
                                         />
@@ -744,53 +895,87 @@ export default function Export() {
 
                             {/* Filters */}
                             <div className="flex flex-col gap-3">
-                                <Label className="text-sm font-medium">Filters (Optional)</Label>
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <Label className="text-sm font-medium">
+                                    Filters (Optional)
+                                </Label>
+                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                                     {/* Campaign Filter */}
-                                    <Popover open={isCampaignPopoverOpen} onOpenChange={setIsCampaignPopoverOpen}>
+                                    <Popover
+                                        open={isCampaignPopoverOpen}
+                                        onOpenChange={setIsCampaignPopoverOpen}
+                                    >
                                         <PopoverTrigger asChild>
                                             <Button
                                                 variant="outline"
                                                 role="combobox"
-                                                aria-expanded={isCampaignPopoverOpen}
+                                                aria-expanded={
+                                                    isCampaignPopoverOpen
+                                                }
                                                 className="w-full justify-between font-normal"
                                             >
-                                                <span className="truncate">{selectedCampaignsText}</span>
+                                                <span className="truncate">
+                                                    {selectedCampaignsText}
+                                                </span>
                                                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                             </Button>
                                         </PopoverTrigger>
-                                        <PopoverContent className="w-full p-0" align="start">
+                                        <PopoverContent
+                                            className="w-full p-0"
+                                            align="start"
+                                        >
                                             <Command shouldFilter={false}>
                                                 <CommandInput
                                                     placeholder="Search campaign..."
                                                     value={campaignSearchQuery}
-                                                    onValueChange={setCampaignSearchQuery}
+                                                    onValueChange={
+                                                        setCampaignSearchQuery
+                                                    }
                                                 />
                                                 <CommandList>
-                                                    <CommandEmpty>No campaign found.</CommandEmpty>
+                                                    <CommandEmpty>
+                                                        No campaign found.
+                                                    </CommandEmpty>
                                                     <CommandGroup>
                                                         <CommandItem
-                                                            onSelect={selectAllCampaigns}
+                                                            onSelect={
+                                                                selectAllCampaigns
+                                                            }
                                                             className="cursor-pointer"
                                                         >
                                                             <Check
                                                                 className={`mr-2 h-4 w-4 ${selectedCampaigns.length === campaigns.length && campaigns.length > 0 ? 'opacity-100' : 'opacity-0'}`}
                                                             />
-                                                            {selectedCampaigns.length === campaigns.length && campaigns.length > 0 ? 'Deselect All' : 'Select All'}
+                                                            {selectedCampaigns.length ===
+                                                                campaigns.length &&
+                                                            campaigns.length > 0
+                                                                ? 'Deselect All'
+                                                                : 'Select All'}
                                                         </CommandItem>
-                                                        {filteredCampaigns.map((campaign) => (
-                                                            <CommandItem
-                                                                key={campaign.id}
-                                                                value={campaign.name}
-                                                                onSelect={() => toggleCampaign(campaign.id)}
-                                                                className="cursor-pointer"
-                                                            >
-                                                                <Check
-                                                                    className={`mr-2 h-4 w-4 ${selectedCampaigns.includes(campaign.id) ? 'opacity-100' : 'opacity-0'}`}
-                                                                />
-                                                                {campaign.name}
-                                                            </CommandItem>
-                                                        ))}
+                                                        {filteredCampaigns.map(
+                                                            (campaign) => (
+                                                                <CommandItem
+                                                                    key={
+                                                                        campaign.id
+                                                                    }
+                                                                    value={
+                                                                        campaign.name
+                                                                    }
+                                                                    onSelect={() =>
+                                                                        toggleCampaign(
+                                                                            campaign.id,
+                                                                        )
+                                                                    }
+                                                                    className="cursor-pointer"
+                                                                >
+                                                                    <Check
+                                                                        className={`mr-2 h-4 w-4 ${selectedCampaigns.includes(campaign.id) ? 'opacity-100' : 'opacity-0'}`}
+                                                                    />
+                                                                    {
+                                                                        campaign.name
+                                                                    }
+                                                                </CommandItem>
+                                                            ),
+                                                        )}
                                                     </CommandGroup>
                                                 </CommandList>
                                             </Command>
@@ -798,50 +983,86 @@ export default function Export() {
                                     </Popover>
 
                                     {/* Employee Filter */}
-                                    <Popover open={isEmployeePopoverOpen} onOpenChange={setIsEmployeePopoverOpen}>
+                                    <Popover
+                                        open={isEmployeePopoverOpen}
+                                        onOpenChange={setIsEmployeePopoverOpen}
+                                    >
                                         <PopoverTrigger asChild>
                                             <Button
                                                 variant="outline"
                                                 role="combobox"
-                                                aria-expanded={isEmployeePopoverOpen}
+                                                aria-expanded={
+                                                    isEmployeePopoverOpen
+                                                }
                                                 className="w-full justify-between font-normal"
                                             >
-                                                <span className="truncate">{selectedEmployeesText}</span>
+                                                <span className="truncate">
+                                                    {selectedEmployeesText}
+                                                </span>
                                                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                             </Button>
                                         </PopoverTrigger>
-                                        <PopoverContent className="w-full p-0" align="start">
+                                        <PopoverContent
+                                            className="w-full p-0"
+                                            align="start"
+                                        >
                                             <Command shouldFilter={false}>
                                                 <CommandInput
                                                     placeholder="Search employee..."
                                                     value={employeeSearchQuery}
-                                                    onValueChange={setEmployeeSearchQuery}
+                                                    onValueChange={
+                                                        setEmployeeSearchQuery
+                                                    }
                                                 />
                                                 <CommandList>
-                                                    <CommandEmpty>No employee found.</CommandEmpty>
+                                                    <CommandEmpty>
+                                                        No employee found.
+                                                    </CommandEmpty>
                                                     <CommandGroup>
                                                         <CommandItem
-                                                            onSelect={selectAllUsers}
+                                                            onSelect={
+                                                                selectAllUsers
+                                                            }
                                                             className="cursor-pointer"
                                                         >
                                                             <Check
                                                                 className={`mr-2 h-4 w-4 ${selectedUsers.length === filteredEmployees.length && filteredEmployees.length > 0 ? 'opacity-100' : 'opacity-0'}`}
                                                             />
-                                                            {selectedUsers.length === filteredEmployees.length && filteredEmployees.length > 0 ? 'Deselect All' : `Select All (${filteredEmployees.length})`}
+                                                            {selectedUsers.length ===
+                                                                filteredEmployees.length &&
+                                                            filteredEmployees.length >
+                                                                0
+                                                                ? 'Deselect All'
+                                                                : `Select All (${filteredEmployees.length})`}
                                                         </CommandItem>
-                                                        {filteredEmployees.map((user) => (
-                                                            <CommandItem
-                                                                key={user.id}
-                                                                value={user.name}
-                                                                onSelect={() => toggleUser(user.id)}
-                                                                className="cursor-pointer"
-                                                            >
-                                                                <Check
-                                                                    className={`mr-2 h-4 w-4 ${selectedUsers.includes(user.id) ? 'opacity-100' : 'opacity-0'}`}
-                                                                />
-                                                                {user.name} ({user.employee_number})
-                                                            </CommandItem>
-                                                        ))}
+                                                        {filteredEmployees.map(
+                                                            (user) => (
+                                                                <CommandItem
+                                                                    key={
+                                                                        user.id
+                                                                    }
+                                                                    value={
+                                                                        user.name
+                                                                    }
+                                                                    onSelect={() =>
+                                                                        toggleUser(
+                                                                            user.id,
+                                                                        )
+                                                                    }
+                                                                    className="cursor-pointer"
+                                                                >
+                                                                    <Check
+                                                                        className={`mr-2 h-4 w-4 ${selectedUsers.includes(user.id) ? 'opacity-100' : 'opacity-0'}`}
+                                                                    />
+                                                                    {user.name}{' '}
+                                                                    (
+                                                                    {
+                                                                        user.employee_number
+                                                                    }
+                                                                    )
+                                                                </CommandItem>
+                                                            ),
+                                                        )}
                                                     </CommandGroup>
                                                 </CommandList>
                                             </Command>
@@ -849,50 +1070,81 @@ export default function Export() {
                                     </Popover>
 
                                     {/* Site Filter */}
-                                    <Popover open={isSitePopoverOpen} onOpenChange={setIsSitePopoverOpen}>
+                                    <Popover
+                                        open={isSitePopoverOpen}
+                                        onOpenChange={setIsSitePopoverOpen}
+                                    >
                                         <PopoverTrigger asChild>
                                             <Button
                                                 variant="outline"
                                                 role="combobox"
-                                                aria-expanded={isSitePopoverOpen}
+                                                aria-expanded={
+                                                    isSitePopoverOpen
+                                                }
                                                 className="w-full justify-between font-normal"
                                             >
-                                                <span className="truncate">{selectedSitesText}</span>
+                                                <span className="truncate">
+                                                    {selectedSitesText}
+                                                </span>
                                                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                             </Button>
                                         </PopoverTrigger>
-                                        <PopoverContent className="w-full p-0" align="start">
+                                        <PopoverContent
+                                            className="w-full p-0"
+                                            align="start"
+                                        >
                                             <Command shouldFilter={false}>
                                                 <CommandInput
                                                     placeholder="Search site..."
                                                     value={siteSearchQuery}
-                                                    onValueChange={setSiteSearchQuery}
+                                                    onValueChange={
+                                                        setSiteSearchQuery
+                                                    }
                                                 />
                                                 <CommandList>
-                                                    <CommandEmpty>No site found.</CommandEmpty>
+                                                    <CommandEmpty>
+                                                        No site found.
+                                                    </CommandEmpty>
                                                     <CommandGroup>
                                                         <CommandItem
-                                                            onSelect={selectAllSites}
+                                                            onSelect={
+                                                                selectAllSites
+                                                            }
                                                             className="cursor-pointer"
                                                         >
                                                             <Check
                                                                 className={`mr-2 h-4 w-4 ${selectedSites.length === filteredSites.length && filteredSites.length > 0 ? 'opacity-100' : 'opacity-0'}`}
                                                             />
-                                                            {selectedSites.length === filteredSites.length && filteredSites.length > 0 ? 'Deselect All' : `Select All (${filteredSites.length})`}
+                                                            {selectedSites.length ===
+                                                                filteredSites.length &&
+                                                            filteredSites.length >
+                                                                0
+                                                                ? 'Deselect All'
+                                                                : `Select All (${filteredSites.length})`}
                                                         </CommandItem>
-                                                        {filteredSites.map((site) => (
-                                                            <CommandItem
-                                                                key={site.id}
-                                                                value={site.name}
-                                                                onSelect={() => toggleSite(site.id)}
-                                                                className="cursor-pointer"
-                                                            >
-                                                                <Check
-                                                                    className={`mr-2 h-4 w-4 ${selectedSites.includes(site.id) ? 'opacity-100' : 'opacity-0'}`}
-                                                                />
-                                                                {site.name}
-                                                            </CommandItem>
-                                                        ))}
+                                                        {filteredSites.map(
+                                                            (site) => (
+                                                                <CommandItem
+                                                                    key={
+                                                                        site.id
+                                                                    }
+                                                                    value={
+                                                                        site.name
+                                                                    }
+                                                                    onSelect={() =>
+                                                                        toggleSite(
+                                                                            site.id,
+                                                                        )
+                                                                    }
+                                                                    className="cursor-pointer"
+                                                                >
+                                                                    <Check
+                                                                        className={`mr-2 h-4 w-4 ${selectedSites.includes(site.id) ? 'opacity-100' : 'opacity-0'}`}
+                                                                    />
+                                                                    {site.name}
+                                                                </CommandItem>
+                                                            ),
+                                                        )}
                                                     </CommandGroup>
                                                 </CommandList>
                                             </Command>
@@ -903,21 +1155,41 @@ export default function Export() {
 
                             {/* Selected Filters Summary */}
                             {showClearFilters && (
-                                <div className="flex flex-wrap gap-2 items-center">
-                                    <span className="text-sm text-muted-foreground">Selected filters:</span>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <span className="text-sm text-muted-foreground">
+                                        Selected filters:
+                                    </span>
                                     {selectedCampaigns.length > 0 && (
-                                        <Badge variant="secondary" className="font-normal">
-                                            {selectedCampaigns.length} campaign{selectedCampaigns.length === 1 ? '' : 's'}
+                                        <Badge
+                                            variant="secondary"
+                                            className="font-normal"
+                                        >
+                                            {selectedCampaigns.length} campaign
+                                            {selectedCampaigns.length === 1
+                                                ? ''
+                                                : 's'}
                                         </Badge>
                                     )}
                                     {selectedUsers.length > 0 && (
-                                        <Badge variant="secondary" className="font-normal">
-                                            {selectedUsers.length} employee{selectedUsers.length === 1 ? '' : 's'}
+                                        <Badge
+                                            variant="secondary"
+                                            className="font-normal"
+                                        >
+                                            {selectedUsers.length} employee
+                                            {selectedUsers.length === 1
+                                                ? ''
+                                                : 's'}
                                         </Badge>
                                     )}
                                     {selectedSites.length > 0 && (
-                                        <Badge variant="secondary" className="font-normal">
-                                            {selectedSites.length} site{selectedSites.length === 1 ? '' : 's'}
+                                        <Badge
+                                            variant="secondary"
+                                            className="font-normal"
+                                        >
+                                            {selectedSites.length} site
+                                            {selectedSites.length === 1
+                                                ? ''
+                                                : 's'}
                                         </Badge>
                                     )}
                                     <Button
@@ -936,10 +1208,17 @@ export default function Export() {
                                 {isExporting && (
                                     <div className="space-y-2">
                                         <div className="flex items-center justify-between text-sm">
-                                            <span className="text-muted-foreground">{exportStatus}</span>
-                                            <span className="font-medium">{exportProgress}%</span>
+                                            <span className="text-muted-foreground">
+                                                {exportStatus}
+                                            </span>
+                                            <span className="font-medium">
+                                                {exportProgress}%
+                                            </span>
                                         </div>
-                                        <Progress value={exportProgress} className="h-2" />
+                                        <Progress
+                                            value={exportProgress}
+                                            className="h-2"
+                                        />
                                     </div>
                                 )}
                                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
@@ -975,35 +1254,50 @@ export default function Export() {
                                 Export Attendance Points
                             </CardTitle>
                             <CardDescription>
-                                Export attendance points/violations to Excel format with filters
+                                Export attendance points/violations to Excel
+                                format with filters
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-6">
                             <Alert>
                                 <AlertCircle className="h-4 w-4" />
                                 <AlertDescription>
-                                    <strong>Export includes:</strong> Employee details, Shift Date, Point Type, Points Value, Status (Active/Excused/Expired), Violation Details, Expiration Date, and GBRO Eligibility.
+                                    <strong>Export includes:</strong> Employee
+                                    details, Shift Date, Point Type, Points
+                                    Value, Status (Active/Excused/Expired),
+                                    Violation Details, Expiration Date, and GBRO
+                                    Eligibility.
                                 </AlertDescription>
                             </Alert>
 
                             {/* Date Range Selection */}
                             <div className="flex flex-col gap-3">
-                                <Label className="text-sm font-medium">Date Range (Optional)</Label>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <Label className="text-sm font-medium">
+                                    Date Range (Optional)
+                                </Label>
+                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                     <div className="flex items-center gap-2 text-sm">
-                                        <span className="text-muted-foreground text-xs whitespace-nowrap">From:</span>
+                                        <span className="text-xs whitespace-nowrap text-muted-foreground">
+                                            From:
+                                        </span>
                                         <DatePicker
                                             value={pointsStartDate}
-                                            onChange={(value) => setPointsStartDate(value)}
+                                            onChange={(value) =>
+                                                setPointsStartDate(value)
+                                            }
                                             placeholder="Start date"
                                             className="w-full"
                                         />
                                     </div>
                                     <div className="flex items-center gap-2 text-sm">
-                                        <span className="text-muted-foreground text-xs whitespace-nowrap">To:</span>
+                                        <span className="text-xs whitespace-nowrap text-muted-foreground">
+                                            To:
+                                        </span>
                                         <DatePicker
                                             value={pointsEndDate}
-                                            onChange={(value) => setPointsEndDate(value)}
+                                            onChange={(value) =>
+                                                setPointsEndDate(value)
+                                            }
                                             placeholder="End date"
                                             className="w-full"
                                         />
@@ -1013,53 +1307,92 @@ export default function Export() {
 
                             {/* Filters */}
                             <div className="flex flex-col gap-3">
-                                <Label className="text-sm font-medium">Filters (Optional)</Label>
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <Label className="text-sm font-medium">
+                                    Filters (Optional)
+                                </Label>
+                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                                     {/* Employee Filter */}
-                                    <Popover open={isPointsEmployeePopoverOpen} onOpenChange={setIsPointsEmployeePopoverOpen}>
+                                    <Popover
+                                        open={isPointsEmployeePopoverOpen}
+                                        onOpenChange={
+                                            setIsPointsEmployeePopoverOpen
+                                        }
+                                    >
                                         <PopoverTrigger asChild>
                                             <Button
                                                 variant="outline"
                                                 role="combobox"
-                                                aria-expanded={isPointsEmployeePopoverOpen}
+                                                aria-expanded={
+                                                    isPointsEmployeePopoverOpen
+                                                }
                                                 className="w-full justify-between font-normal"
                                             >
-                                                <span className="truncate">{selectedPointsEmployeesText}</span>
+                                                <span className="truncate">
+                                                    {
+                                                        selectedPointsEmployeesText
+                                                    }
+                                                </span>
                                                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                             </Button>
                                         </PopoverTrigger>
-                                        <PopoverContent className="w-full p-0" align="start">
+                                        <PopoverContent
+                                            className="w-full p-0"
+                                            align="start"
+                                        >
                                             <Command shouldFilter={false}>
                                                 <CommandInput
                                                     placeholder="Search employee..."
-                                                    value={pointsEmployeeSearchQuery}
-                                                    onValueChange={setPointsEmployeeSearchQuery}
+                                                    value={
+                                                        pointsEmployeeSearchQuery
+                                                    }
+                                                    onValueChange={
+                                                        setPointsEmployeeSearchQuery
+                                                    }
                                                 />
                                                 <CommandList>
-                                                    <CommandEmpty>No employee found.</CommandEmpty>
+                                                    <CommandEmpty>
+                                                        No employee found.
+                                                    </CommandEmpty>
                                                     <CommandGroup>
                                                         <CommandItem
-                                                            onSelect={selectAllPointsUsers}
+                                                            onSelect={
+                                                                selectAllPointsUsers
+                                                            }
                                                             className="cursor-pointer"
                                                         >
                                                             <Check
                                                                 className={`mr-2 h-4 w-4 ${selectedPointsUsers.length === pointsUsers.length && pointsUsers.length > 0 ? 'opacity-100' : 'opacity-0'}`}
                                                             />
-                                                            {selectedPointsUsers.length === pointsUsers.length && pointsUsers.length > 0 ? 'Deselect All' : `Select All (${pointsUsers.length})`}
+                                                            {selectedPointsUsers.length ===
+                                                                pointsUsers.length &&
+                                                            pointsUsers.length >
+                                                                0
+                                                                ? 'Deselect All'
+                                                                : `Select All (${pointsUsers.length})`}
                                                         </CommandItem>
-                                                        {filteredPointsUsers.map((user) => (
-                                                            <CommandItem
-                                                                key={user.id}
-                                                                value={user.name}
-                                                                onSelect={() => togglePointsUser(user.id)}
-                                                                className="cursor-pointer"
-                                                            >
-                                                                <Check
-                                                                    className={`mr-2 h-4 w-4 ${selectedPointsUsers.includes(user.id) ? 'opacity-100' : 'opacity-0'}`}
-                                                                />
-                                                                {user.name}
-                                                            </CommandItem>
-                                                        ))}
+                                                        {filteredPointsUsers.map(
+                                                            (user) => (
+                                                                <CommandItem
+                                                                    key={
+                                                                        user.id
+                                                                    }
+                                                                    value={
+                                                                        user.name
+                                                                    }
+                                                                    onSelect={() =>
+                                                                        togglePointsUser(
+                                                                            user.id,
+                                                                        )
+                                                                    }
+                                                                    className="cursor-pointer"
+                                                                >
+                                                                    <Check
+                                                                        className={`mr-2 h-4 w-4 ${selectedPointsUsers.includes(user.id) ? 'opacity-100' : 'opacity-0'}`}
+                                                                    />
+                                                                    {user.name}
+                                                                </CommandItem>
+                                                            ),
+                                                        )}
                                                     </CommandGroup>
                                                 </CommandList>
                                             </Command>
@@ -1067,14 +1400,22 @@ export default function Export() {
                                     </Popover>
 
                                     {/* Point Type Filter */}
-                                    <Select value={selectedPointType} onValueChange={setSelectedPointType}>
+                                    <Select
+                                        value={selectedPointType}
+                                        onValueChange={setSelectedPointType}
+                                    >
                                         <SelectTrigger className="w-full">
                                             <SelectValue placeholder="All Point Types" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="all">All Point Types</SelectItem>
+                                            <SelectItem value="all">
+                                                All Point Types
+                                            </SelectItem>
                                             {pointTypes.map((type) => (
-                                                <SelectItem key={type.value} value={type.value}>
+                                                <SelectItem
+                                                    key={type.value}
+                                                    value={type.value}
+                                                >
                                                     {type.label}
                                                 </SelectItem>
                                             ))}
@@ -1082,14 +1423,22 @@ export default function Export() {
                                     </Select>
 
                                     {/* Status Filter */}
-                                    <Select value={selectedPointStatus} onValueChange={setSelectedPointStatus}>
+                                    <Select
+                                        value={selectedPointStatus}
+                                        onValueChange={setSelectedPointStatus}
+                                    >
                                         <SelectTrigger className="w-full">
                                             <SelectValue placeholder="All Statuses" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="all">All Statuses</SelectItem>
+                                            <SelectItem value="all">
+                                                All Statuses
+                                            </SelectItem>
                                             {pointStatuses.map((status) => (
-                                                <SelectItem key={status.value} value={status.value}>
+                                                <SelectItem
+                                                    key={status.value}
+                                                    value={status.value}
+                                                >
                                                     {status.label}
                                                 </SelectItem>
                                             ))}
@@ -1100,23 +1449,48 @@ export default function Export() {
 
                             {/* Selected Filters Summary */}
                             {showClearPointsFilters && (
-                                <div className="flex flex-wrap gap-2 items-center">
-                                    <span className="text-sm text-muted-foreground">Selected filters:</span>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <span className="text-sm text-muted-foreground">
+                                        Selected filters:
+                                    </span>
                                     {selectedPointsUsers.length > 0 && (
-                                        <Badge variant="secondary" className="font-normal">
-                                            {selectedPointsUsers.length} employee{selectedPointsUsers.length === 1 ? '' : 's'}
+                                        <Badge
+                                            variant="secondary"
+                                            className="font-normal"
+                                        >
+                                            {selectedPointsUsers.length}{' '}
+                                            employee
+                                            {selectedPointsUsers.length === 1
+                                                ? ''
+                                                : 's'}
                                         </Badge>
                                     )}
-                                    {selectedPointType && selectedPointType !== 'all' && (
-                                        <Badge variant="secondary" className="font-normal">
-                                            {pointTypes.find(t => t.value === selectedPointType)?.label || selectedPointType}
-                                        </Badge>
-                                    )}
-                                    {selectedPointStatus && selectedPointStatus !== 'all' && (
-                                        <Badge variant="secondary" className="font-normal">
-                                            {pointStatuses.find(s => s.value === selectedPointStatus)?.label || selectedPointStatus}
-                                        </Badge>
-                                    )}
+                                    {selectedPointType &&
+                                        selectedPointType !== 'all' && (
+                                            <Badge
+                                                variant="secondary"
+                                                className="font-normal"
+                                            >
+                                                {pointTypes.find(
+                                                    (t) =>
+                                                        t.value ===
+                                                        selectedPointType,
+                                                )?.label || selectedPointType}
+                                            </Badge>
+                                        )}
+                                    {selectedPointStatus &&
+                                        selectedPointStatus !== 'all' && (
+                                            <Badge
+                                                variant="secondary"
+                                                className="font-normal"
+                                            >
+                                                {pointStatuses.find(
+                                                    (s) =>
+                                                        s.value ===
+                                                        selectedPointStatus,
+                                                )?.label || selectedPointStatus}
+                                            </Badge>
+                                        )}
                                     <Button
                                         variant="ghost"
                                         size="sm"
@@ -1133,10 +1507,17 @@ export default function Export() {
                                 {isPointsExporting && (
                                     <div className="space-y-2">
                                         <div className="flex items-center justify-between text-sm">
-                                            <span className="text-muted-foreground">{pointsExportStatus}</span>
-                                            <span className="font-medium">{pointsExportProgress}%</span>
+                                            <span className="text-muted-foreground">
+                                                {pointsExportStatus}
+                                            </span>
+                                            <span className="font-medium">
+                                                {pointsExportProgress}%
+                                            </span>
                                         </div>
-                                        <Progress value={pointsExportProgress} className="h-2" />
+                                        <Progress
+                                            value={pointsExportProgress}
+                                            className="h-2"
+                                        />
                                     </div>
                                 )}
                                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">

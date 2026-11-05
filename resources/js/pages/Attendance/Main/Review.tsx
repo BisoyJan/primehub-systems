@@ -1,51 +1,80 @@
-import React, { useState, useEffect } from "react";
-import { Head, router, useForm, usePage } from "@inertiajs/react";
-import AppLayout from "@/layouts/app-layout";
-import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
-import { usePermission } from "@/hooks/use-permission";
-import { PageHeader } from "@/components/PageHeader";
-import { LoadingOverlay } from "@/components/LoadingOverlay";
-import { type SharedData } from "@/types";
-import { formatDateTime, formatDate, formatTime, formatWorkDuration, formatTimeAdjustment } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { DatePicker } from "@/components/ui/date-picker";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { MultiSelectFilter, parseMultiSelectParam, multiSelectToParam } from "@/components/multi-select-filter";
+import { getShiftTypeBadge, getStatusBadges } from '@/components/attendance';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
+import {
+    MultiSelectFilter,
+    multiSelectToParam,
+    parseMultiSelectParam,
+} from '@/components/multi-select-filter';
+import { PageHeader } from '@/components/PageHeader';
+import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+    Collapsible,
+    CollapsibleContent,
+    CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import { DatePicker } from '@/components/ui/date-picker';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import {
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
-    SelectValue
-} from "@/components/ui/select";
+    SelectValue,
+} from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-    DialogFooter,
-} from "@/components/ui/dialog";
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table';
+import { Textarea } from '@/components/ui/textarea';
+import { TimeInput } from '@/components/ui/time-input';
 import {
-    Card,
-    CardContent,
-} from "@/components/ui/card";
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
+import { usePermission } from '@/hooks/use-permission';
+import AppLayout from '@/layouts/app-layout';
 import {
-    Collapsible,
-    CollapsibleContent,
-    CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { getStatusBadges, getShiftTypeBadge } from "@/components/attendance";
-import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { AlertCircle, Check, CheckCircle, ChevronDown, Clock, Edit, Moon, Search, UserCheck, X } from "lucide-react";
-import { TimeInput } from "@/components/ui/time-input";
-import { Switch } from "@/components/ui/switch";
-
+    formatDate,
+    formatDateTime,
+    formatTime,
+    formatTimeAdjustment,
+    formatWorkDuration,
+} from '@/lib/utils';
+import { type SharedData } from '@/types';
+import { Head, router, useForm, usePage } from '@inertiajs/react';
+import {
+    AlertCircle,
+    Check,
+    CheckCircle,
+    ChevronDown,
+    Clock,
+    Edit,
+    Moon,
+    Search,
+    UserCheck,
+    X,
+} from 'lucide-react';
+import React, { useEffect, useState } from 'react';
 
 interface Site {
     id: number;
@@ -112,12 +141,18 @@ interface AttendanceRecord {
     is_partially_verified?: boolean;
     verification_notes?: string;
     notes?: string;
-    warnings?: { type: string; message: string; severity: string; raised_at: string }[];
+    warnings?: {
+        type: string;
+        message: string;
+        severity: string;
+        raised_at: string;
+    }[];
     is_set_home?: boolean;
     is_critical_day?: boolean;
     // Undertime approval fields
     undertime_approval_status?: 'pending' | 'approved' | 'rejected' | null;
-    undertime_approval_reason?: 'generate_points' | 'skip_points' | 'lunch_used' | null;
+    undertime_approval_reason?:
+        'generate_points' | 'skip_points' | 'lunch_used' | null;
     undertime_approval_notes?: string;
 }
 
@@ -177,12 +212,12 @@ const DEFAULT_META: Meta = {
  */
 // failed_bio_in / failed_bio_out are flag-only statuses — no points generated.
 const POINT_VALUES: Record<string, number> = {
-    whole_day_absence: 1.00,
-    half_day_absence: 0.50,
+    whole_day_absence: 1.0,
+    half_day_absence: 0.5,
     undertime: 0.25,
-    undertime_more_than_hour: 0.50,
+    undertime_more_than_hour: 0.5,
     tardy: 0.25,
-    ncns: 1.00,
+    ncns: 1.0,
 };
 
 const getPointValue = (status: string): number => POINT_VALUES[status] ?? 0;
@@ -206,7 +241,7 @@ const calculateSuggestedStatus = (
     schedule: EmployeeSchedule | undefined,
     shiftDate: string,
     actualTimeIn: string,
-    actualTimeOut: string
+    actualTimeOut: string,
 ): {
     status: string;
     secondaryStatus?: string;
@@ -221,20 +256,36 @@ const calculateSuggestedStatus = (
 
     // No bio at all
     if (!hasBioIn && !hasBioOut) {
-        return { status: 'ncns', reason: 'No time in or time out recorded', violations: ['ncns'] };
+        return {
+            status: 'ncns',
+            reason: 'No time in or time out recorded',
+            violations: ['ncns'],
+        };
     }
 
     // Has time out but no time in (flag only — no points)
     if (!hasBioIn && hasBioOut) {
-        return { status: 'failed_bio_in', reason: 'Missing time in record', violations: [] };
+        return {
+            status: 'failed_bio_in',
+            reason: 'Missing time in record',
+            violations: [],
+        };
     }
 
     // No schedule - can't calculate status accurately
     if (!schedule) {
         if (hasBioIn && !hasBioOut) {
-            return { status: 'failed_bio_out', reason: 'No schedule found, missing time out', violations: [] };
+            return {
+                status: 'failed_bio_out',
+                reason: 'No schedule found, missing time out',
+                violations: [],
+            };
         }
-        return { status: 'on_time', reason: 'No schedule found, defaulting to on time', violations: [] };
+        return {
+            status: 'on_time',
+            reason: 'No schedule found, defaulting to on time',
+            violations: [],
+        };
     }
 
     // Parse dates and times
@@ -243,18 +294,24 @@ const calculateSuggestedStatus = (
     const shiftDateObj = new Date(shiftDate + 'T00:00:00');
 
     // Build scheduled time in (on shift date)
-    const [schedInHour, schedInMin] = schedule.scheduled_time_in.split(':').map(Number);
+    const [schedInHour, schedInMin] = schedule.scheduled_time_in
+        .split(':')
+        .map(Number);
     const scheduledTimeIn = new Date(shiftDateObj);
     scheduledTimeIn.setHours(schedInHour, schedInMin, 0, 0);
 
     // Build scheduled time out (may be next day for night shift)
-    const [schedOutHour, schedOutMin] = schedule.scheduled_time_out.split(':').map(Number);
+    const [schedOutHour, schedOutMin] = schedule.scheduled_time_out
+        .split(':')
+        .map(Number);
     const scheduledTimeOut = new Date(shiftDateObj);
     scheduledTimeOut.setHours(schedOutHour, schedOutMin, 0, 0);
 
     // Check if it's a night shift (time out is next day)
-    const isNightShift = schedule.shift_type === 'night_shift' ||
-        (schedOutHour < schedInHour || (schedOutHour === schedInHour && schedOutMin <= schedInMin));
+    const isNightShift =
+        schedule.shift_type === 'night_shift' ||
+        schedOutHour < schedInHour ||
+        (schedOutHour === schedInHour && schedOutMin <= schedInMin);
     if (isNightShift) {
         scheduledTimeOut.setDate(scheduledTimeOut.getDate() + 1);
     }
@@ -270,10 +327,14 @@ const calculateSuggestedStatus = (
     // Calculate tardiness (late arrival)
     if (timeInDate) {
         const scheduledWithGrace = new Date(scheduledTimeIn);
-        scheduledWithGrace.setMinutes(scheduledWithGrace.getMinutes() + gracePeriodMinutes);
+        scheduledWithGrace.setMinutes(
+            scheduledWithGrace.getMinutes() + gracePeriodMinutes,
+        );
 
         // Calculate how many minutes late
-        const diffMinutes = Math.floor((timeInDate.getTime() - scheduledTimeIn.getTime()) / (1000 * 60));
+        const diffMinutes = Math.floor(
+            (timeInDate.getTime() - scheduledTimeIn.getTime()) / (1000 * 60),
+        );
 
         if (diffMinutes > gracePeriodMinutes) {
             // More than grace period = half day absence
@@ -288,7 +349,9 @@ const calculateSuggestedStatus = (
 
     // Calculate undertime (early leave) and overtime (late leave)
     if (timeOutDate) {
-        const diffFromScheduledOut = Math.floor((timeOutDate.getTime() - scheduledTimeOut.getTime()) / (1000 * 60));
+        const diffFromScheduledOut = Math.floor(
+            (timeOutDate.getTime() - scheduledTimeOut.getTime()) / (1000 * 60),
+        );
 
         if (diffFromScheduledOut < -60) {
             // Left more than 60 minutes early = undertime_more_than_hour
@@ -310,7 +373,8 @@ const calculateSuggestedStatus = (
     let reason: string;
 
     // Build the violations list (matches DailyRoster logic)
-    const hasUndertimeMoreThanHour = hasUndertime && !!undertimeMinutes && undertimeMinutes > 60;
+    const hasUndertimeMoreThanHour =
+        hasUndertime && !!undertimeMinutes && undertimeMinutes > 60;
     const violations: string[] = [];
     // failed_bio_* are flag-only statuses — excluded from violations (no points)
     if (isHalfDay) violations.push('half_day_absence');
@@ -335,7 +399,10 @@ const calculateSuggestedStatus = (
     } else if (isHalfDay && hasUndertime) {
         status = 'half_day_absence';
         // Determine undertime status based on minutes
-        secondaryStatus = undertimeMinutes && undertimeMinutes > 60 ? 'undertime_more_than_hour' : 'undertime';
+        secondaryStatus =
+            undertimeMinutes && undertimeMinutes > 60
+                ? 'undertime_more_than_hour'
+                : 'undertime';
         reason = `Arrived ${tardyMinutes} minutes late AND left ${undertimeMinutes} minutes early`;
     } else if (isHalfDay) {
         status = 'half_day_absence';
@@ -343,25 +410,52 @@ const calculateSuggestedStatus = (
     } else if (isTardy && hasUndertime) {
         status = 'tardy';
         // Determine undertime status based on minutes
-        secondaryStatus = undertimeMinutes && undertimeMinutes > 60 ? 'undertime_more_than_hour' : 'undertime';
+        secondaryStatus =
+            undertimeMinutes && undertimeMinutes > 60
+                ? 'undertime_more_than_hour'
+                : 'undertime';
         reason = `Arrived ${tardyMinutes} minutes late AND left ${undertimeMinutes} minutes early`;
     } else if (isTardy) {
         status = 'tardy';
         reason = `Arrived ${tardyMinutes} minutes late`;
     } else if (hasUndertime) {
         // Determine undertime status based on minutes
-        status = undertimeMinutes && undertimeMinutes > 60 ? 'undertime_more_than_hour' : 'undertime';
+        status =
+            undertimeMinutes && undertimeMinutes > 60
+                ? 'undertime_more_than_hour'
+                : 'undertime';
         reason = `Left ${undertimeMinutes} minutes early`;
     } else {
         status = 'on_time';
         reason = 'Arrived on time';
     }
 
-    return { status, secondaryStatus, tardyMinutes, undertimeMinutes, overtimeMinutes, reason, violations };
+    return {
+        status,
+        secondaryStatus,
+        tardyMinutes,
+        undertimeMinutes,
+        overtimeMinutes,
+        reason,
+        violations,
+    };
 };
 
 export default function AttendanceReview() {
-    const { attendances, employees, sites = [], campaigns = [], teamLeadCampaignIds, verifyAttendanceId, filters, auth, leaveConflictCount, partiallyVerifiedCount, statusCounts = {}, verificationCounts } = usePage<PageProps>().props;
+    const {
+        attendances,
+        employees,
+        sites = [],
+        campaigns = [],
+        teamLeadCampaignIds,
+        verifyAttendanceId,
+        filters,
+        auth,
+        leaveConflictCount,
+        partiallyVerifiedCount,
+        statusCounts = {},
+        verificationCounts,
+    } = usePage<PageProps>().props;
     const attendanceData = {
         data: attendances?.data ?? [],
         links: attendances?.links ?? [],
@@ -372,21 +466,30 @@ export default function AttendanceReview() {
     const isTeamLead = userRole === 'Team Lead';
 
     // Multi-select filter state
-    const [selectedUserIds, setSelectedUserIds] = useState<string[]>(() => parseMultiSelectParam(filters?.user_id));
-    const [selectedStatuses, setSelectedStatuses] = useState<string[]>(() => parseMultiSelectParam(filters?.status));
-    const [selectedCampaignIds, setSelectedCampaignIds] = useState<string[]>(() => {
-        const fromFilter = parseMultiSelectParam(filters?.campaign_id);
-        if (fromFilter.length > 0) return fromFilter;
-        if (isTeamLead && teamLeadCampaignIds?.length) return teamLeadCampaignIds.map(String);
-        return [];
-    });
-    const [selectedSiteId, setSelectedSiteId] = useState(filters?.site_id || "");
+    const [selectedUserIds, setSelectedUserIds] = useState<string[]>(() =>
+        parseMultiSelectParam(filters?.user_id),
+    );
+    const [selectedStatuses, setSelectedStatuses] = useState<string[]>(() =>
+        parseMultiSelectParam(filters?.status),
+    );
+    const [selectedCampaignIds, setSelectedCampaignIds] = useState<string[]>(
+        () => {
+            const fromFilter = parseMultiSelectParam(filters?.campaign_id);
+            if (fromFilter.length > 0) return fromFilter;
+            if (isTeamLead && teamLeadCampaignIds?.length)
+                return teamLeadCampaignIds.map(String);
+            return [];
+        },
+    );
+    const [selectedSiteId, setSelectedSiteId] = useState(
+        filters?.site_id || '',
+    );
 
     const { title, breadcrumbs } = usePageMeta({
-        title: "Review Flagged Records",
+        title: 'Review Flagged Records',
         breadcrumbs: [
-            { title: "Attendance", href: "/attendance" },
-            { title: "Review" },
+            { title: 'Attendance', href: '/attendance' },
+            { title: 'Review' },
         ],
     });
 
@@ -397,24 +500,45 @@ export default function AttendanceReview() {
     // Check if user can approve undertime (includes Super Admin, Admin, HR)
     const canApproveUndertime = can('attendance.approve_undertime');
     // Check if user can request undertime approval (includes Team Lead)
-    const canRequestUndertimeApproval = can('attendance.request_undertime_approval');
+    const canRequestUndertimeApproval = can(
+        'attendance.request_undertime_approval',
+    );
 
-    const [selectedRecord, setSelectedRecord] = useState<AttendanceRecord | null>(null);
+    const [selectedRecord, setSelectedRecord] =
+        useState<AttendanceRecord | null>(null);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [isBatchDialogOpen, setIsBatchDialogOpen] = useState(false);
-    const [selectedRecords, setSelectedRecords] = useState<Set<number>>(new Set());
+    const [selectedRecords, setSelectedRecords] = useState<Set<number>>(
+        new Set(),
+    );
     const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
-    const [selectedSecondaryStatus, setSelectedSecondaryStatus] = useState<string | null | undefined>(null);
-    const [warningsDialogRecord, setWarningsDialogRecord] = useState<AttendanceRecord | null>(null);
+    const [selectedSecondaryStatus, setSelectedSecondaryStatus] = useState<
+        string | null | undefined
+    >(null);
+    const [warningsDialogRecord, setWarningsDialogRecord] =
+        useState<AttendanceRecord | null>(null);
     const [isWarningsDialogOpen, setIsWarningsDialogOpen] = useState(false);
-    const [highlightedRecordId, setHighlightedRecordId] = useState<number | null>(null);
-    const highlightedRowRef = React.useRef<HTMLTableRowElement | HTMLDivElement>(null);
+    const [highlightedRecordId, setHighlightedRecordId] = useState<
+        number | null
+    >(null);
+    const highlightedRowRef = React.useRef<
+        HTMLTableRowElement | HTMLDivElement
+    >(null);
     const [noteDialogOpen, setNoteDialogOpen] = useState(false);
-    const [selectedNoteRecord, setSelectedNoteRecord] = useState<AttendanceRecord | null>(null);
+    const [selectedNoteRecord, setSelectedNoteRecord] =
+        useState<AttendanceRecord | null>(null);
     // Pre-select suggested reason when dialog opens with pending approval
     React.useEffect(() => {
-        if (selectedRecord && selectedRecord.undertime_approval_status === 'pending' && selectedRecord.undertime_approval_reason) {
-            setData('undertime_approval_reason', selectedRecord.undertime_approval_reason as 'generate_points' | 'skip_points' | 'lunch_used');
+        if (
+            selectedRecord &&
+            selectedRecord.undertime_approval_status === 'pending' &&
+            selectedRecord.undertime_approval_reason
+        ) {
+            setData(
+                'undertime_approval_reason',
+                selectedRecord.undertime_approval_reason as
+                    'generate_points' | 'skip_points' | 'lunch_used',
+            );
         } else {
             setData('undertime_approval_reason', 'lunch_used');
         }
@@ -436,9 +560,11 @@ export default function AttendanceReview() {
                     setSelectedNoteRecord(record);
                     setNoteDialogOpen(true);
                 }}
-                className="text-sm text-primary hover:underline cursor-pointer text-left"
+                className="cursor-pointer text-left text-sm text-primary hover:underline"
             >
-                {preview.length > 10 ? `${preview.substring(0, 10)}...` : preview}
+                {preview.length > 10
+                    ? `${preview.substring(0, 10)}...`
+                    : preview}
             </button>
         );
     };
@@ -453,33 +579,47 @@ export default function AttendanceReview() {
         tardyMinutes?: number;
         violations: string[];
     } | null>(null);
-    const [isStatusManuallyOverridden, setIsStatusManuallyOverridden] = useState(false);
+    const [isStatusManuallyOverridden, setIsStatusManuallyOverridden] =
+        useState(false);
 
     // Search state
-    const [verifiedFilter, setVerifiedFilter] = useState(filters?.verified || "all");
-    const [leaveConflictFilter, setLeaveConflictFilter] = useState(filters?.leave_conflict || "all");
-    const [dateFrom, setDateFrom] = useState(filters?.date_from || "");
-    const [dateTo, setDateTo] = useState(filters?.date_to || "");
+    const [verifiedFilter, setVerifiedFilter] = useState(
+        filters?.verified || 'all',
+    );
+    const [leaveConflictFilter, setLeaveConflictFilter] = useState(
+        filters?.leave_conflict || 'all',
+    );
+    const [dateFrom, setDateFrom] = useState(filters?.date_from || '');
+    const [dateTo, setDateTo] = useState(filters?.date_to || '');
 
     const { data, setData, post, processing, errors, reset } = useForm({
-        status: "",
-        secondary_status: "",
-        actual_time_in: "",
-        actual_time_out: "",
-        notes: "",
-        verification_notes: "",
+        status: '',
+        secondary_status: '',
+        actual_time_in: '',
+        actual_time_out: '',
+        notes: '',
+        verification_notes: '',
         overtime_approved: false,
         is_set_home: false,
         is_critical_day: false,
-        undertime_approval_action: null as 'approve' | 'reject' | 'request' | null,
-        undertime_approval_reason: 'lunch_used' as 'generate_points' | 'skip_points' | 'lunch_used',
+        undertime_approval_action: null as
+            'approve' | 'reject' | 'request' | null,
+        undertime_approval_reason: 'lunch_used' as
+            'generate_points' | 'skip_points' | 'lunch_used',
     });
 
-    const { data: batchData, setData: setBatchData, post: postBatch, processing: batchProcessing, errors: batchErrors, reset: resetBatch } = useForm({
+    const {
+        data: batchData,
+        setData: setBatchData,
+        post: postBatch,
+        processing: batchProcessing,
+        errors: batchErrors,
+        reset: resetBatch,
+    } = useForm({
         record_ids: [] as number[],
-        status: "",
-        secondary_status: "",
-        verification_notes: "",
+        status: '',
+        secondary_status: '',
+        verification_notes: '',
         overtime_approved: false,
         is_set_home: false,
         is_critical_day: false,
@@ -487,17 +627,30 @@ export default function AttendanceReview() {
 
     // Partial approval dialog state (for night shift completion)
     const [isPartialDialogOpen, setIsPartialDialogOpen] = useState(false);
-    const [partialRecord, setPartialRecord] = useState<AttendanceRecord | null>(null);
+    const [partialRecord, setPartialRecord] = useState<AttendanceRecord | null>(
+        null,
+    );
 
-    const { data: partialData, setData: setPartialData, post: postPartial, processing: partialProcessing, errors: partialErrors, reset: resetPartial } = useForm({
-        verification_notes: "",
-        status: "",
+    const {
+        data: partialData,
+        setData: setPartialData,
+        post: postPartial,
+        processing: partialProcessing,
+        errors: partialErrors,
+        reset: resetPartial,
+    } = useForm({
+        verification_notes: '',
+        status: '',
     });
 
     // Helper to check if a record is eligible for partial approval (missing time out)
     const isMissingTimeOut = (record: AttendanceRecord): boolean => {
-        const hasTimeIn = record.actual_time_in !== undefined && record.actual_time_in !== null;
-        const hasNoTimeOut = record.actual_time_out === undefined || record.actual_time_out === null;
+        const hasTimeIn =
+            record.actual_time_in !== undefined &&
+            record.actual_time_in !== null;
+        const hasNoTimeOut =
+            record.actual_time_out === undefined ||
+            record.actual_time_out === null;
         const isNotVerified = !record.admin_verified;
 
         return hasTimeIn && hasNoTimeOut && isNotVerified;
@@ -508,8 +661,8 @@ export default function AttendanceReview() {
         setPartialRecord(record);
 
         setPartialData({
-            verification_notes: "",
-            status: "",
+            verification_notes: '',
+            status: '',
         });
         setIsPartialDialogOpen(true);
     };
@@ -530,25 +683,32 @@ export default function AttendanceReview() {
     };
 
     // Batch partial approval state
-    const [isBatchPartialDialogOpen, setIsBatchPartialDialogOpen] = useState(false);
-    const { data: batchPartialData, setData: setBatchPartialData, post: postBatchPartial, processing: batchPartialProcessing, reset: resetBatchPartial } = useForm({
+    const [isBatchPartialDialogOpen, setIsBatchPartialDialogOpen] =
+        useState(false);
+    const {
+        data: batchPartialData,
+        setData: setBatchPartialData,
+        post: postBatchPartial,
+        processing: batchPartialProcessing,
+        reset: resetBatchPartial,
+    } = useForm({
         record_ids: [] as number[],
-        verification_notes: "",
+        verification_notes: '',
     });
 
     // Count of eligible records for batch partial approval (has time-in, no time-out, not verified)
-    const eligiblePartialCount = attendanceData.data.filter(r =>
-        isMissingTimeOut(r) && !r.is_partially_verified
+    const eligiblePartialCount = attendanceData.data.filter(
+        (r) => isMissingTimeOut(r) && !r.is_partially_verified,
     ).length;
 
     const openBatchPartialDialog = () => {
         const eligibleIds = attendanceData.data
-            .filter(r => isMissingTimeOut(r) && !r.is_partially_verified)
-            .map(r => r.id);
+            .filter((r) => isMissingTimeOut(r) && !r.is_partially_verified)
+            .map((r) => r.id);
 
         setBatchPartialData({
             record_ids: eligibleIds,
-            verification_notes: "",
+            verification_notes: '',
         });
         setIsBatchPartialDialogOpen(true);
     };
@@ -569,16 +729,20 @@ export default function AttendanceReview() {
     const handleSearch = () => {
         const params: Record<string, string> = {};
 
-        if (selectedUserIds.length > 0) params.user_id = multiSelectToParam(selectedUserIds);
+        if (selectedUserIds.length > 0)
+            params.user_id = multiSelectToParam(selectedUserIds);
         if (selectedSiteId) params.site_id = selectedSiteId;
-        if (selectedCampaignIds.length > 0) params.campaign_id = multiSelectToParam(selectedCampaignIds);
-        if (selectedStatuses.length > 0) params.status = multiSelectToParam(selectedStatuses);
-        if (verifiedFilter !== "all") params.verified = verifiedFilter;
-        if (leaveConflictFilter !== "all") params.leave_conflict = leaveConflictFilter;
+        if (selectedCampaignIds.length > 0)
+            params.campaign_id = multiSelectToParam(selectedCampaignIds);
+        if (selectedStatuses.length > 0)
+            params.status = multiSelectToParam(selectedStatuses);
+        if (verifiedFilter !== 'all') params.verified = verifiedFilter;
+        if (leaveConflictFilter !== 'all')
+            params.leave_conflict = leaveConflictFilter;
         if (dateFrom) params.date_from = dateFrom;
         if (dateTo) params.date_to = dateTo;
 
-        router.get("/attendance/review", params, {
+        router.get('/attendance/review', params, {
             preserveState: true,
             preserveScroll: true,
         });
@@ -596,7 +760,7 @@ export default function AttendanceReview() {
 
     const handleClearFilters = () => {
         setSelectedUserIds([]);
-        setSelectedSiteId("");
+        setSelectedSiteId('');
         setSelectedStatuses([]);
         // For Team Leads, reset to their campaign instead of empty
         if (isTeamLead && teamLeadCampaignIds?.length) {
@@ -604,18 +768,18 @@ export default function AttendanceReview() {
         } else {
             setSelectedCampaignIds([]);
         }
-        setVerifiedFilter("all");
-        setLeaveConflictFilter("all");
+        setVerifiedFilter('all');
+        setLeaveConflictFilter('all');
         setDateFrom(defaultFrom);
         setDateTo(defaultTo);
-        router.get("/attendance/review", {}, { preserveState: true });
+        router.get('/attendance/review', {}, { preserveState: true });
     };
 
     // Helper to convert UTC datetime to local datetime string for input
     const toLocalDateTimeString = (utcDateString: string | undefined) => {
-        if (!utcDateString) return "";
+        if (!utcDateString) return '';
         const date = new Date(utcDateString);
-        if (Number.isNaN(date.getTime())) return "";
+        if (Number.isNaN(date.getTime())) return '';
 
         // Get local year, month, day, hours, minutes
         const year = date.getFullYear();
@@ -634,14 +798,15 @@ export default function AttendanceReview() {
         const timeOut = toLocalDateTimeString(record.actual_time_out);
 
         // Use attendance's schedule or fallback to user's active schedule
-        const schedule = record.employee_schedule || record.user?.active_schedule;
+        const schedule =
+            record.employee_schedule || record.user?.active_schedule;
 
         // Calculate suggested status based on times and schedule
         const suggestion = calculateSuggestedStatus(
             schedule,
             record.shift_date,
             timeIn,
-            timeOut
+            timeOut,
         );
 
         setSuggestedStatus(suggestion);
@@ -649,11 +814,11 @@ export default function AttendanceReview() {
 
         setData({
             status: suggestion.status, // Start with suggested status
-            secondary_status: suggestion.secondaryStatus || "",
+            secondary_status: suggestion.secondaryStatus || '',
             actual_time_in: timeIn,
             actual_time_out: timeOut,
-            notes: record.notes || "",
-            verification_notes: record.verification_notes || "",
+            notes: record.notes || '',
+            verification_notes: record.verification_notes || '',
             overtime_approved: record.overtime_approved || false,
             is_set_home: record.is_set_home || false,
             is_critical_day: record.is_critical_day || false,
@@ -663,12 +828,21 @@ export default function AttendanceReview() {
 
     const fillFromSchedule = () => {
         if (!selectedRecord) return;
-        const schedule = selectedRecord.employee_schedule || selectedRecord.user?.active_schedule;
-        if (!schedule?.scheduled_time_in || !schedule?.scheduled_time_out) return;
+        const schedule =
+            selectedRecord.employee_schedule ||
+            selectedRecord.user?.active_schedule;
+        if (!schedule?.scheduled_time_in || !schedule?.scheduled_time_out)
+            return;
 
         // Detect night shift by shift_type OR by time comparison (same logic as calculateSuggestedStatus)
-        const [schedInHour, schedInMin] = schedule.scheduled_time_in.slice(0, 5).split(':').map(Number);
-        const [schedOutHour, schedOutMin] = schedule.scheduled_time_out.slice(0, 5).split(':').map(Number);
+        const [schedInHour, schedInMin] = schedule.scheduled_time_in
+            .slice(0, 5)
+            .split(':')
+            .map(Number);
+        const [schedOutHour, schedOutMin] = schedule.scheduled_time_out
+            .slice(0, 5)
+            .split(':')
+            .map(Number);
         const isNightShift =
             schedule.shift_type === 'night_shift' ||
             schedOutHour < schedInHour ||
@@ -683,7 +857,11 @@ export default function AttendanceReview() {
         const outDate = isNightShift ? nextDayStr : selectedRecord.shift_date;
         const timeOut = `${outDate}T${schedule.scheduled_time_out.slice(0, 5)}`;
 
-        setData((prev) => ({ ...prev, actual_time_in: timeIn, actual_time_out: timeOut }));
+        setData((prev) => ({
+            ...prev,
+            actual_time_in: timeIn,
+            actual_time_out: timeOut,
+        }));
         recalculateSuggestedStatus(timeIn, timeOut);
     };
 
@@ -692,13 +870,15 @@ export default function AttendanceReview() {
         if (!selectedRecord) return;
 
         // Use attendance's schedule or fallback to user's active schedule
-        const schedule = selectedRecord.employee_schedule || selectedRecord.user?.active_schedule;
+        const schedule =
+            selectedRecord.employee_schedule ||
+            selectedRecord.user?.active_schedule;
 
         const suggestion = calculateSuggestedStatus(
             schedule,
             selectedRecord.shift_date,
             timeIn,
-            timeOut
+            timeOut,
         );
 
         setSuggestedStatus(suggestion);
@@ -706,7 +886,7 @@ export default function AttendanceReview() {
         // Only auto-update status if user hasn't manually overridden it
         if (!isStatusManuallyOverridden) {
             setData('status', suggestion.status);
-            setData('secondary_status', suggestion.secondaryStatus || "");
+            setData('secondary_status', suggestion.secondaryStatus || '');
         }
     };
 
@@ -724,7 +904,7 @@ export default function AttendanceReview() {
     const resetToSuggestedStatus = () => {
         if (suggestedStatus) {
             setData('status', suggestedStatus.status);
-            setData('secondary_status', suggestedStatus.secondaryStatus || "");
+            setData('secondary_status', suggestedStatus.secondaryStatus || '');
             setIsStatusManuallyOverridden(false);
         }
     };
@@ -735,12 +915,20 @@ export default function AttendanceReview() {
 
         // Debounce the recalculation
         const timer = setTimeout(() => {
-            recalculateSuggestedStatus(data.actual_time_in, data.actual_time_out);
+            recalculateSuggestedStatus(
+                data.actual_time_in,
+                data.actual_time_out,
+            );
         }, 300);
 
         return () => clearTimeout(timer);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [data.actual_time_in, data.actual_time_out, selectedRecord?.id, isDialogOpen]);
+    }, [
+        data.actual_time_in,
+        data.actual_time_out,
+        selectedRecord?.id,
+        isDialogOpen,
+    ]);
 
     // Clear highlight when dialog closes
     useEffect(() => {
@@ -752,7 +940,9 @@ export default function AttendanceReview() {
     // Auto-open dialog if verifyAttendanceId is provided from backend
     useEffect(() => {
         if (verifyAttendanceId && attendanceData.data.length > 0) {
-            const recordToVerify = attendanceData.data.find(r => r.id === verifyAttendanceId);
+            const recordToVerify = attendanceData.data.find(
+                (r) => r.id === verifyAttendanceId,
+            );
 
             // Set highlighted record (will remain until dialog is closed)
             setHighlightedRecordId(verifyAttendanceId);
@@ -767,7 +957,7 @@ export default function AttendanceReview() {
                         setTimeout(() => {
                             highlightedRowRef.current?.scrollIntoView({
                                 behavior: 'smooth',
-                                block: 'center'
+                                block: 'center',
                             });
 
                             // Open dialog after scroll
@@ -779,7 +969,11 @@ export default function AttendanceReview() {
                 }, 100);
 
                 // Remove the verify parameter from URL without page reload
-                window.history.replaceState({}, '', window.location.pathname + window.location.hash);
+                window.history.replaceState(
+                    {},
+                    '',
+                    window.location.pathname + window.location.hash,
+                );
 
                 // Cleanup
                 return () => clearInterval(checkLoading);
@@ -811,21 +1005,25 @@ export default function AttendanceReview() {
             : 'Employee reported to office during approved leave.';
 
         // Use router.post to submit directly with the modified data
-        router.post(`/attendance/${selectedRecord.id}/verify`, {
-            status: 'on_time',
-            actual_time_in: data.actual_time_in,
-            actual_time_out: data.actual_time_out,
-            notes: data.notes,
-            verification_notes: verificationNote,
-            overtime_approved: data.overtime_approved,
-        }, {
-            preserveScroll: true,
-            onSuccess: () => {
-                setIsDialogOpen(false);
-                reset();
-                setSelectedRecord(null);
+        router.post(
+            `/attendance/${selectedRecord.id}/verify`,
+            {
+                status: 'on_time',
+                actual_time_in: data.actual_time_in,
+                actual_time_out: data.actual_time_out,
+                notes: data.notes,
+                verification_notes: verificationNote,
+                overtime_approved: data.overtime_approved,
             },
-        });
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setIsDialogOpen(false);
+                    reset();
+                    setSelectedRecord(null);
+                },
+            },
+        );
     };
 
     const openWarningsDialog = (record: AttendanceRecord) => {
@@ -840,14 +1038,20 @@ export default function AttendanceReview() {
 
     const hasOvertimeRecords = () => {
         return attendanceData.data
-            .filter(r => selectedRecords.has(r.id))
-            .some(record => record.overtime_minutes && record.overtime_minutes > 30);
+            .filter((r) => selectedRecords.has(r.id))
+            .some(
+                (record) =>
+                    record.overtime_minutes && record.overtime_minutes > 30,
+            );
     };
 
     const hasUndertimeRecords = () => {
         return attendanceData.data
-            .filter(r => selectedRecords.has(r.id))
-            .some(record => record.undertime_minutes && record.undertime_minutes > 30);
+            .filter((r) => selectedRecords.has(r.id))
+            .some(
+                (record) =>
+                    record.undertime_minutes && record.undertime_minutes > 30,
+            );
     };
 
     const handleSelectAll = () => {
@@ -859,18 +1063,25 @@ export default function AttendanceReview() {
             // Select all records with the exact same primary AND secondary status as the first record
             const firstRecord = attendanceData.data[0];
             if (firstRecord) {
-                const recordsWithSameStatus = attendanceData.data.filter(r =>
-                    r.status === firstRecord.status &&
-                    r.secondary_status === firstRecord.secondary_status
+                const recordsWithSameStatus = attendanceData.data.filter(
+                    (r) =>
+                        r.status === firstRecord.status &&
+                        r.secondary_status === firstRecord.secondary_status,
                 );
-                setSelectedRecords(new Set(recordsWithSameStatus.map(r => r.id)));
+                setSelectedRecords(
+                    new Set(recordsWithSameStatus.map((r) => r.id)),
+                );
                 setSelectedStatus(firstRecord.status);
                 setSelectedSecondaryStatus(firstRecord.secondary_status);
             }
         }
     };
 
-    const handleSelectRecord = (id: number, status: string, secondaryStatus?: string) => {
+    const handleSelectRecord = (
+        id: number,
+        status: string,
+        secondaryStatus?: string,
+    ) => {
         const newSelected = new Set(selectedRecords);
 
         if (newSelected.has(id)) {
@@ -888,7 +1099,10 @@ export default function AttendanceReview() {
                 newSelected.add(id);
                 setSelectedStatus(status);
                 setSelectedSecondaryStatus(secondaryStatus);
-            } else if (selectedStatus === status && selectedSecondaryStatus === secondaryStatus) {
+            } else if (
+                selectedStatus === status &&
+                selectedSecondaryStatus === secondaryStatus
+            ) {
                 // Only allow selection if BOTH primary AND secondary status match exactly
                 newSelected.add(id);
             }
@@ -900,8 +1114,8 @@ export default function AttendanceReview() {
     const openBatchVerifyDialog = () => {
         setBatchData({
             record_ids: Array.from(selectedRecords),
-            status: selectedStatus || "on_time", // Use selectedStatus if available, otherwise default to on_time
-            verification_notes: "",
+            status: selectedStatus || 'on_time', // Use selectedStatus if available, otherwise default to on_time
+            verification_notes: '',
             overtime_approved: false,
         });
         setIsBatchDialogOpen(true);
@@ -925,7 +1139,7 @@ export default function AttendanceReview() {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={title} />
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3 relative">
+            <div className="relative flex h-full flex-1 flex-col gap-4 rounded-xl p-3">
                 <LoadingOverlay isLoading={isPageLoading} />
 
                 <PageHeader
@@ -937,11 +1151,20 @@ export default function AttendanceReview() {
                 <Collapsible defaultOpen={false}>
                     <Card>
                         <CollapsibleTrigger asChild>
-                            <button className="flex w-full items-center justify-between px-6 py-4 text-left hover:bg-muted/50 transition-colors cursor-pointer">
+                            <button className="flex w-full cursor-pointer items-center justify-between px-6 py-4 text-left transition-colors hover:bg-muted/50">
                                 <div className="flex items-center gap-2">
-                                    <h3 className="text-sm font-semibold">Status Summary</h3>
-                                    <Badge variant="secondary" className="text-xs">
-                                        {Object.values(statusCounts).reduce((a, b) => a + b, 0)} total
+                                    <h3 className="text-sm font-semibold">
+                                        Status Summary
+                                    </h3>
+                                    <Badge
+                                        variant="secondary"
+                                        className="text-xs"
+                                    >
+                                        {Object.values(statusCounts).reduce(
+                                            (a, b) => a + b,
+                                            0,
+                                        )}{' '}
+                                        total
                                     </Badge>
                                 </div>
                                 <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-200 in-data-[state=open]:rotate-180" />
@@ -951,29 +1174,96 @@ export default function AttendanceReview() {
                             <CardContent className="pt-0 pb-4">
                                 {/* Attendance Status Counts */}
                                 <div className="mb-3">
-                                    <p className="text-xs text-muted-foreground mb-2 font-medium uppercase tracking-wide">By Status</p>
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+                                    <p className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                                        By Status
+                                    </p>
+                                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
                                         {[
-                                            { key: 'on_time', label: 'On Time', color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' },
-                                            { key: 'tardy', label: 'Tardy', color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' },
-                                            { key: 'half_day_absence', label: 'Half Day', color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400' },
-                                            { key: 'ncns', label: 'NCNS', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' },
-                                            { key: 'undertime', label: 'Undertime', color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400' },
-                                            { key: 'undertime_more_than_hour', label: 'Undertime >1hr', color: 'bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-400' },
-                                            { key: 'failed_bio_in', label: 'Failed Bio In', color: 'bg-slate-100 text-slate-800 dark:bg-slate-900/30 dark:text-slate-400' },
-                                            { key: 'failed_bio_out', label: 'Failed Bio Out', color: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400' },
-                                            { key: 'needs_manual_review', label: 'Needs Review', color: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400' },
-                                            { key: 'on_leave', label: 'On Leave', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' },
-                                            { key: 'present_no_bio', label: 'Present (No Bio)', color: 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400' },
-                                            { key: 'non_work_day', label: 'Non-Work Day', color: 'bg-zinc-100 text-zinc-800 dark:bg-zinc-900/30 dark:text-zinc-400' },
-                                        ].filter(s => (statusCounts[s.key] ?? 0) > 0).map(({ key, label, color }) => (
-                                            <div key={key} className={`rounded-lg px-3 py-2 ${color}`}>
-                                                <p className="text-xs font-medium opacity-80">{label}</p>
-                                                <p className="text-lg font-bold">{statusCounts[key] ?? 0}</p>
-                                            </div>
-                                        ))}
-                                        {Object.values(statusCounts).every(v => v === 0) && (
-                                            <p className="text-sm text-muted-foreground col-span-full">No records found.</p>
+                                            {
+                                                key: 'on_time',
+                                                label: 'On Time',
+                                                color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400',
+                                            },
+                                            {
+                                                key: 'tardy',
+                                                label: 'Tardy',
+                                                color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
+                                            },
+                                            {
+                                                key: 'half_day_absence',
+                                                label: 'Half Day',
+                                                color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
+                                            },
+                                            {
+                                                key: 'ncns',
+                                                label: 'NCNS',
+                                                color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+                                            },
+                                            {
+                                                key: 'undertime',
+                                                label: 'Undertime',
+                                                color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
+                                            },
+                                            {
+                                                key: 'undertime_more_than_hour',
+                                                label: 'Undertime >1hr',
+                                                color: 'bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-400',
+                                            },
+                                            {
+                                                key: 'failed_bio_in',
+                                                label: 'Failed Bio In',
+                                                color: 'bg-slate-100 text-slate-800 dark:bg-slate-900/30 dark:text-slate-400',
+                                            },
+                                            {
+                                                key: 'failed_bio_out',
+                                                label: 'Failed Bio Out',
+                                                color: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400',
+                                            },
+                                            {
+                                                key: 'needs_manual_review',
+                                                label: 'Needs Review',
+                                                color: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
+                                            },
+                                            {
+                                                key: 'on_leave',
+                                                label: 'On Leave',
+                                                color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
+                                            },
+                                            {
+                                                key: 'present_no_bio',
+                                                label: 'Present (No Bio)',
+                                                color: 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400',
+                                            },
+                                            {
+                                                key: 'non_work_day',
+                                                label: 'Non-Work Day',
+                                                color: 'bg-zinc-100 text-zinc-800 dark:bg-zinc-900/30 dark:text-zinc-400',
+                                            },
+                                        ]
+                                            .filter(
+                                                (s) =>
+                                                    (statusCounts[s.key] ?? 0) >
+                                                    0,
+                                            )
+                                            .map(({ key, label, color }) => (
+                                                <div
+                                                    key={key}
+                                                    className={`rounded-lg px-3 py-2 ${color}`}
+                                                >
+                                                    <p className="text-xs font-medium opacity-80">
+                                                        {label}
+                                                    </p>
+                                                    <p className="text-lg font-bold">
+                                                        {statusCounts[key] ?? 0}
+                                                    </p>
+                                                </div>
+                                            ))}
+                                        {Object.values(statusCounts).every(
+                                            (v) => v === 0,
+                                        ) && (
+                                            <p className="col-span-full text-sm text-muted-foreground">
+                                                No records found.
+                                            </p>
                                         )}
                                     </div>
                                 </div>
@@ -981,22 +1271,40 @@ export default function AttendanceReview() {
                                 {/* Verification Status Counts */}
                                 {verificationCounts && (
                                     <div>
-                                        <p className="text-xs text-muted-foreground mb-2 font-medium uppercase tracking-wide">By Verification</p>
-                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                            <div className="rounded-lg px-3 py-2 bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
-                                                <p className="text-xs font-medium opacity-80">Pending</p>
-                                                <p className="text-lg font-bold">{verificationCounts.pending}</p>
+                                        <p className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                                            By Verification
+                                        </p>
+                                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                                            <div className="rounded-lg bg-yellow-100 px-3 py-2 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+                                                <p className="text-xs font-medium opacity-80">
+                                                    Pending
+                                                </p>
+                                                <p className="text-lg font-bold">
+                                                    {verificationCounts.pending}
+                                                </p>
                                             </div>
-                                            <div className="rounded-lg px-3 py-2 bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400">
-                                                <p className="text-xs font-medium opacity-80">Verified</p>
-                                                <p className="text-lg font-bold">{verificationCounts.verified}</p>
+                                            <div className="rounded-lg bg-emerald-100 px-3 py-2 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400">
+                                                <p className="text-xs font-medium opacity-80">
+                                                    Verified
+                                                </p>
+                                                <p className="text-lg font-bold">
+                                                    {
+                                                        verificationCounts.verified
+                                                    }
+                                                </p>
                                             </div>
-                                            <div className="rounded-lg px-3 py-2 bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+                                            <div className="rounded-lg bg-amber-100 px-3 py-2 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
                                                 <div className="flex items-center gap-1">
                                                     <Moon className="h-3 w-3" />
-                                                    <p className="text-xs font-medium opacity-80">Partially Verified</p>
+                                                    <p className="text-xs font-medium opacity-80">
+                                                        Partially Verified
+                                                    </p>
                                                 </div>
-                                                <p className="text-lg font-bold">{verificationCounts.partially_verified}</p>
+                                                <p className="text-lg font-bold">
+                                                    {
+                                                        verificationCounts.partially_verified
+                                                    }
+                                                </p>
                                             </div>
                                         </div>
                                     </div>
@@ -1010,17 +1318,20 @@ export default function AttendanceReview() {
                 <Card>
                     <CardContent className="pt-6">
                         <div className="space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                                 {/* Employee Multi-Select */}
                                 <div className="space-y-2">
                                     <Label>Employee</Label>
                                     <MultiSelectFilter
-                                        options={(employees ?? []).map(u => ({ label: u.name, value: u.id.toString() }))}
+                                        options={(employees ?? []).map((u) => ({
+                                            label: u.name,
+                                            value: u.id.toString(),
+                                        }))}
                                         value={selectedUserIds}
                                         onChange={setSelectedUserIds}
                                         placeholder="Select employees..."
                                         emptyMessage="No employee found."
-                                        className="w-full min-h-9"
+                                        className="min-h-9 w-full"
                                     />
                                 </div>
 
@@ -1029,37 +1340,76 @@ export default function AttendanceReview() {
                                     <Label>Status</Label>
                                     <MultiSelectFilter
                                         options={[
-                                            { label: "On Time", value: "on_time" },
-                                            { label: "Tardy", value: "tardy" },
-                                            { label: "Half Day Absence", value: "half_day_absence" },
-                                            { label: "NCNS", value: "ncns" },
-                                            { label: "Undertime", value: "undertime" },
-                                            { label: "Undertime (>1hr)", value: "undertime_more_than_hour" },
-                                            { label: "Failed Bio In", value: "failed_bio_in" },
-                                            { label: "Failed Bio Out", value: "failed_bio_out" },
-                                            { label: "Present (No Bio)", value: "present_no_bio" },
-                                            { label: "Needs Review", value: "needs_manual_review" },
-                                            { label: "On Leave", value: "on_leave" },
+                                            {
+                                                label: 'On Time',
+                                                value: 'on_time',
+                                            },
+                                            { label: 'Tardy', value: 'tardy' },
+                                            {
+                                                label: 'Half Day Absence',
+                                                value: 'half_day_absence',
+                                            },
+                                            { label: 'NCNS', value: 'ncns' },
+                                            {
+                                                label: 'Undertime',
+                                                value: 'undertime',
+                                            },
+                                            {
+                                                label: 'Undertime (>1hr)',
+                                                value: 'undertime_more_than_hour',
+                                            },
+                                            {
+                                                label: 'Failed Bio In',
+                                                value: 'failed_bio_in',
+                                            },
+                                            {
+                                                label: 'Failed Bio Out',
+                                                value: 'failed_bio_out',
+                                            },
+                                            {
+                                                label: 'Present (No Bio)',
+                                                value: 'present_no_bio',
+                                            },
+                                            {
+                                                label: 'Needs Review',
+                                                value: 'needs_manual_review',
+                                            },
+                                            {
+                                                label: 'On Leave',
+                                                value: 'on_leave',
+                                            },
                                         ]}
                                         value={selectedStatuses}
                                         onChange={setSelectedStatuses}
                                         placeholder="Select status..."
                                         emptyMessage="No status found."
-                                        className="w-full min-h-9"
+                                        className="min-h-9 w-full"
                                     />
                                 </div>
 
                                 {/* Site Filter - Single Select */}
                                 <div className="space-y-2">
                                     <Label>Site</Label>
-                                    <Select value={selectedSiteId || "all"} onValueChange={(value) => setSelectedSiteId(value === "all" ? "" : value)}>
+                                    <Select
+                                        value={selectedSiteId || 'all'}
+                                        onValueChange={(value) =>
+                                            setSelectedSiteId(
+                                                value === 'all' ? '' : value,
+                                            )
+                                        }
+                                    >
                                         <SelectTrigger>
                                             <SelectValue placeholder="All Sites" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="all">All Sites</SelectItem>
+                                            <SelectItem value="all">
+                                                All Sites
+                                            </SelectItem>
                                             {sites.map((site) => (
-                                                <SelectItem key={site.id} value={site.id.toString()}>
+                                                <SelectItem
+                                                    key={site.id}
+                                                    value={site.id.toString()}
+                                                >
                                                     {site.name}
                                                 </SelectItem>
                                             ))}
@@ -1071,38 +1421,61 @@ export default function AttendanceReview() {
                                 <div className="space-y-2">
                                     <Label>Campaign</Label>
                                     <MultiSelectFilter
-                                        options={(teamLeadCampaignIds?.length ? campaigns.filter(c => teamLeadCampaignIds.includes(c.id)) : campaigns).map(c => ({
+                                        options={(teamLeadCampaignIds?.length
+                                            ? campaigns.filter((c) =>
+                                                  teamLeadCampaignIds.includes(
+                                                      c.id,
+                                                  ),
+                                              )
+                                            : campaigns
+                                        ).map((c) => ({
                                             label: c.name,
-                                            value: c.id.toString()
+                                            value: c.id.toString(),
                                         }))}
                                         value={selectedCampaignIds}
                                         onChange={setSelectedCampaignIds}
                                         placeholder="Select campaigns..."
                                         emptyMessage="No campaign found."
-                                        className="w-full min-h-9"
+                                        className="min-h-9 w-full"
                                     />
                                 </div>
 
                                 {/* Verified Filter - Single Select */}
                                 <div className="space-y-2">
                                     <Label>Verification Status</Label>
-                                    <Select value={verifiedFilter} onValueChange={setVerifiedFilter}>
+                                    <Select
+                                        value={verifiedFilter}
+                                        onValueChange={setVerifiedFilter}
+                                    >
                                         <SelectTrigger>
                                             <SelectValue placeholder="All Records" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="all">All Records</SelectItem>
-                                            <SelectItem value="pending">Pending Verification</SelectItem>
+                                            <SelectItem value="all">
+                                                All Records
+                                            </SelectItem>
+                                            <SelectItem value="pending">
+                                                Pending Verification
+                                            </SelectItem>
                                             <SelectItem value="partially_verified">
                                                 <span className="flex items-center gap-2">
                                                     <Moon className="h-3 w-3 text-amber-500" />
                                                     Partially Verified
-                                                    {(partiallyVerifiedCount ?? 0) > 0 && (
-                                                        <span className="text-xs text-amber-600 font-semibold">({partiallyVerifiedCount})</span>
+                                                    {(partiallyVerifiedCount ??
+                                                        0) > 0 && (
+                                                        <span className="text-xs font-semibold text-amber-600">
+                                                            (
+                                                            {
+                                                                partiallyVerifiedCount
+                                                            }
+                                                            )
+                                                        </span>
                                                     )}
                                                 </span>
                                             </SelectItem>
-                                            <SelectItem value="verified">Verified</SelectItem>
+                                            <SelectItem value="verified">
+                                                Verified
+                                            </SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -1112,17 +1485,31 @@ export default function AttendanceReview() {
                                     <Label className="flex items-center gap-2">
                                         Leave Conflicts
                                         {(leaveConflictCount ?? 0) > 0 && (
-                                            <Badge variant="destructive" className="text-xs px-1.5 py-0">
+                                            <Badge
+                                                variant="destructive"
+                                                className="px-1.5 py-0 text-xs"
+                                            >
                                                 {leaveConflictCount}
                                             </Badge>
                                         )}
                                     </Label>
-                                    <Select value={leaveConflictFilter} onValueChange={setLeaveConflictFilter}>
-                                        <SelectTrigger className={leaveConflictFilter === "yes" ? "border-amber-500 bg-amber-50 dark:bg-amber-950/20" : ""}>
+                                    <Select
+                                        value={leaveConflictFilter}
+                                        onValueChange={setLeaveConflictFilter}
+                                    >
+                                        <SelectTrigger
+                                            className={
+                                                leaveConflictFilter === 'yes'
+                                                    ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/20'
+                                                    : ''
+                                            }
+                                        >
                                             <SelectValue placeholder="All Records" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="all">All Records</SelectItem>
+                                            <SelectItem value="all">
+                                                All Records
+                                            </SelectItem>
                                             <SelectItem value="yes">
                                                 <span className="flex items-center gap-2">
                                                     <AlertCircle className="h-3 w-3 text-amber-500" />
@@ -1165,11 +1552,14 @@ export default function AttendanceReview() {
                             {/* Action Buttons */}
                             <div className="flex gap-2">
                                 <Button onClick={handleSearch}>
-                                    <Search className="h-4 w-4 mr-2" />
+                                    <Search className="mr-2 h-4 w-4" />
                                     Search
                                 </Button>
-                                <Button variant="outline" onClick={handleClearFilters}>
-                                    <X className="h-4 w-4 mr-2" />
+                                <Button
+                                    variant="outline"
+                                    onClick={handleClearFilters}
+                                >
+                                    <X className="mr-2 h-4 w-4" />
                                     Clear Filters
                                 </Button>
                             </div>
@@ -1177,10 +1567,12 @@ export default function AttendanceReview() {
                     </CardContent>
                 </Card>
 
-                <div className="flex justify-between items-center">
+                <div className="flex items-center justify-between">
                     <div className="text-sm text-muted-foreground">
-                        Showing {attendanceData.data.length} of {attendanceData.meta.total} record
-                        {attendanceData.meta.total === 1 ? "" : "s"} needing verification
+                        Showing {attendanceData.data.length} of{' '}
+                        {attendanceData.meta.total} record
+                        {attendanceData.meta.total === 1 ? '' : 's'} needing
+                        verification
                         {selectedRecords.size > 0 && (
                             <span className="ml-2 font-semibold text-primary">
                                 ({selectedRecords.size} selected)
@@ -1191,47 +1583,69 @@ export default function AttendanceReview() {
                         {eligiblePartialCount > 0 && (
                             <Button
                                 variant="outline"
-                                className="text-amber-600 border-amber-300 hover:bg-amber-50"
+                                className="border-amber-300 text-amber-600 hover:bg-amber-50"
                                 onClick={openBatchPartialDialog}
                             >
-                                <Moon className="h-4 w-4 mr-2" />
-                                Partial Approve {eligiblePartialCount} Record{eligiblePartialCount === 1 ? "" : "s"}
+                                <Moon className="mr-2 h-4 w-4" />
+                                Partial Approve {eligiblePartialCount} Record
+                                {eligiblePartialCount === 1 ? '' : 's'}
                             </Button>
                         )}
                         {selectedRecords.size > 0 && (
                             <Button onClick={openBatchVerifyDialog}>
-                                <CheckCircle className="h-4 w-4 mr-2" />
-                                Verify {selectedRecords.size} Record{selectedRecords.size === 1 ? "" : "s"}
+                                <CheckCircle className="mr-2 h-4 w-4" />
+                                Verify {selectedRecords.size} Record
+                                {selectedRecords.size === 1 ? '' : 's'}
                             </Button>
                         )}
-                        <Button variant="outline" onClick={() => router.get("/attendance")}>
+                        <Button
+                            variant="outline"
+                            onClick={() => router.get('/attendance')}
+                        >
                             Back to Attendance
                         </Button>
                     </div>
                 </div>
 
                 {attendanceData.data.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-12 border rounded-lg bg-card">
-                        <CheckCircle className="h-12 w-12 text-green-500 mb-4" />
-                        <h3 className="text-lg font-semibold mb-2">All Clear!</h3>
-                        <p className="text-muted-foreground">No attendance records need verification at this time.</p>
+                    <div className="flex flex-col items-center justify-center rounded-lg border bg-card py-12">
+                        <CheckCircle className="mb-4 h-12 w-12 text-green-500" />
+                        <h3 className="mb-2 text-lg font-semibold">
+                            All Clear!
+                        </h3>
+                        <p className="text-muted-foreground">
+                            No attendance records need verification at this
+                            time.
+                        </p>
                     </div>
                 ) : (
                     <>
-                        <div className="hidden md:block shadow rounded-md overflow-hidden">
+                        <div className="hidden overflow-hidden rounded-md shadow md:block">
                             <div className="overflow-x-auto">
                                 <Table>
                                     <TableHeader>
                                         <TableRow className="bg-muted/50">
                                             <TableHead className="w-12">
                                                 <Checkbox
-                                                    checked={selectedRecords.size === attendanceData.data.length && attendanceData.data.length > 0}
-                                                    onCheckedChange={handleSelectAll}
+                                                    checked={
+                                                        selectedRecords.size ===
+                                                            attendanceData.data
+                                                                .length &&
+                                                        attendanceData.data
+                                                            .length > 0
+                                                    }
+                                                    onCheckedChange={
+                                                        handleSelectAll
+                                                    }
                                                 />
                                             </TableHead>
                                             <TableHead>Employee</TableHead>
-                                            <TableHead>Site / Campaign</TableHead>
-                                            <TableHead>Shift Date / Type</TableHead>
+                                            <TableHead>
+                                                Site / Campaign
+                                            </TableHead>
+                                            <TableHead>
+                                                Shift Date / Type
+                                            </TableHead>
                                             <TableHead>Time In / Out</TableHead>
                                             <TableHead>Total Hours</TableHead>
                                             <TableHead>Status</TableHead>
@@ -1241,71 +1655,143 @@ export default function AttendanceReview() {
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {attendanceData.data.map(record => (
+                                        {attendanceData.data.map((record) => (
                                             <TableRow
                                                 key={record.id}
-                                                ref={highlightedRecordId === record.id ? highlightedRowRef as React.RefObject<HTMLTableRowElement> : null}
-                                                className={`transition-colors duration-300 ${highlightedRecordId === record.id
-                                                    ? 'bg-blue-100 dark:bg-blue-900/30'
-                                                    : ''
-                                                    }`}
+                                                ref={
+                                                    highlightedRecordId ===
+                                                    record.id
+                                                        ? (highlightedRowRef as React.RefObject<HTMLTableRowElement>)
+                                                        : null
+                                                }
+                                                className={`transition-colors duration-300 ${
+                                                    highlightedRecordId ===
+                                                    record.id
+                                                        ? 'bg-blue-100 dark:bg-blue-900/30'
+                                                        : ''
+                                                }`}
                                             >
                                                 <TableCell>
                                                     <Checkbox
-                                                        checked={selectedRecords.has(record.id)}
-                                                        onCheckedChange={() => handleSelectRecord(record.id, record.status, record.secondary_status)}
-                                                        disabled={selectedStatus !== null && (record.status !== selectedStatus || record.secondary_status !== selectedSecondaryStatus)}
+                                                        checked={selectedRecords.has(
+                                                            record.id,
+                                                        )}
+                                                        onCheckedChange={() =>
+                                                            handleSelectRecord(
+                                                                record.id,
+                                                                record.status,
+                                                                record.secondary_status,
+                                                            )
+                                                        }
+                                                        disabled={
+                                                            selectedStatus !==
+                                                                null &&
+                                                            (record.status !==
+                                                                selectedStatus ||
+                                                                record.secondary_status !==
+                                                                    selectedSecondaryStatus)
+                                                        }
                                                     />
                                                 </TableCell>
-                                                <TableCell className="font-medium">{record.user.name}</TableCell>
+                                                <TableCell className="font-medium">
+                                                    {record.user.name}
+                                                </TableCell>
                                                 <TableCell>
                                                     <div>
-                                                        <div className="font-medium truncate">
-                                                            {record.employee_schedule?.site?.name || record.user.active_schedule?.site?.name || 'No site'}
+                                                        <div className="truncate font-medium">
+                                                            {record
+                                                                .employee_schedule
+                                                                ?.site?.name ||
+                                                                record.user
+                                                                    .active_schedule
+                                                                    ?.site
+                                                                    ?.name ||
+                                                                'No site'}
                                                             {record.is_cross_site_bio && (
-                                                                <Badge variant="outline" className="ml-2 text-orange-600 border-orange-600">
-                                                                    Cross-Site {record.bio_in_site?.name && `@ ${record.bio_in_site.name}`}
+                                                                <Badge
+                                                                    variant="outline"
+                                                                    className="ml-2 border-orange-600 text-orange-600"
+                                                                >
+                                                                    Cross-Site{' '}
+                                                                    {record
+                                                                        .bio_in_site
+                                                                        ?.name &&
+                                                                        `@ ${record.bio_in_site.name}`}
                                                                 </Badge>
                                                             )}
                                                         </div>
-                                                        {(record.employee_schedule?.campaign?.name || record.user.active_schedule?.campaign?.name) && (
+                                                        {(record
+                                                            .employee_schedule
+                                                            ?.campaign?.name ||
+                                                            record.user
+                                                                .active_schedule
+                                                                ?.campaign
+                                                                ?.name) && (
                                                             <div className="text-xs text-muted-foreground">
-                                                                {record.employee_schedule?.campaign?.name || record.user.active_schedule?.campaign?.name}
+                                                                {record
+                                                                    .employee_schedule
+                                                                    ?.campaign
+                                                                    ?.name ||
+                                                                    record.user
+                                                                        .active_schedule
+                                                                        ?.campaign
+                                                                        ?.name}
                                                             </div>
                                                         )}
                                                     </div>
                                                 </TableCell>
                                                 <TableCell>
                                                     <div>
-                                                        <div>{formatDate(record.shift_date)}</div>
-                                                        <div className="text-xs text-muted-foreground">
-                                                            {record.employee_schedule?.shift_type ? (
-                                                                getShiftTypeBadge(record.employee_schedule.shift_type)
-                                                            ) : (
-                                                                "-"
+                                                        <div>
+                                                            {formatDate(
+                                                                record.shift_date,
                                                             )}
+                                                        </div>
+                                                        <div className="text-xs text-muted-foreground">
+                                                            {record
+                                                                .employee_schedule
+                                                                ?.shift_type
+                                                                ? getShiftTypeBadge(
+                                                                      record
+                                                                          .employee_schedule
+                                                                          .shift_type,
+                                                                  )
+                                                                : '-'}
                                                         </div>
                                                     </div>
                                                 </TableCell>
                                                 <TableCell className="text-sm">
                                                     <div>
                                                         <div>
-                                                            {formatDateTime(record.actual_time_in) || '-'}
+                                                            {formatDateTime(
+                                                                record.actual_time_in,
+                                                            ) || '-'}
                                                         </div>
                                                         <div className="text-muted-foreground">
-                                                            {formatDateTime(record.actual_time_out) || '-'}
+                                                            {formatDateTime(
+                                                                record.actual_time_out,
+                                                            ) || '-'}
                                                         </div>
                                                     </div>
                                                 </TableCell>
                                                 <TableCell className="text-sm">
-                                                    <span className="font-medium">{formatWorkDuration(record.total_minutes_worked)}</span>
+                                                    <span className="font-medium">
+                                                        {formatWorkDuration(
+                                                            record.total_minutes_worked,
+                                                        )}
+                                                    </span>
                                                 </TableCell>
                                                 <TableCell>
                                                     <div className="flex flex-wrap items-center gap-1">
-                                                        {getStatusBadges(record)}
+                                                        {getStatusBadges(
+                                                            record,
+                                                        )}
                                                         {record.is_partially_verified && (
-                                                            <Badge variant="outline" className="text-amber-600 border-amber-400 bg-amber-50 dark:bg-amber-950/20 text-xs">
-                                                                <Moon className="h-3 w-3 mr-1" />
+                                                            <Badge
+                                                                variant="outline"
+                                                                className="border-amber-400 bg-amber-50 text-xs text-amber-600 dark:bg-amber-950/20"
+                                                            >
+                                                                <Moon className="mr-1 h-3 w-3" />
                                                                 Partial
                                                             </Badge>
                                                         )}
@@ -1313,67 +1799,136 @@ export default function AttendanceReview() {
                                                 </TableCell>
                                                 <TableCell className="text-sm">
                                                     <div className="space-y-1">
-                                                        {record.tardy_minutes !== null && record.tardy_minutes !== undefined && record.tardy_minutes > 0 && (
-                                                            <div className="text-xs text-orange-600">
-                                                                +{formatTimeAdjustment(record.tardy_minutes)} T
-                                                            </div>
-                                                        )}
-                                                        {record.undertime_minutes !== null && record.undertime_minutes !== undefined && record.undertime_minutes > 0 && (
-                                                            <div className="text-xs text-orange-600">
-                                                                {formatTimeAdjustment(record.undertime_minutes)} UT
-                                                            </div>
-                                                        )}
-                                                        {(!record.tardy_minutes || record.tardy_minutes === 0) &&
-                                                            (!record.undertime_minutes || record.undertime_minutes === 0) &&
-                                                            (!record.overtime_minutes || record.overtime_minutes <= 30) && (
+                                                        {record.tardy_minutes !==
+                                                            null &&
+                                                            record.tardy_minutes !==
+                                                                undefined &&
+                                                            record.tardy_minutes >
+                                                                0 && (
+                                                                <div className="text-xs text-orange-600">
+                                                                    +
+                                                                    {formatTimeAdjustment(
+                                                                        record.tardy_minutes,
+                                                                    )}{' '}
+                                                                    T
+                                                                </div>
+                                                            )}
+                                                        {record.undertime_minutes !==
+                                                            null &&
+                                                            record.undertime_minutes !==
+                                                                undefined &&
+                                                            record.undertime_minutes >
+                                                                0 && (
+                                                                <div className="text-xs text-orange-600">
+                                                                    {formatTimeAdjustment(
+                                                                        record.undertime_minutes,
+                                                                    )}{' '}
+                                                                    UT
+                                                                </div>
+                                                            )}
+                                                        {(!record.tardy_minutes ||
+                                                            record.tardy_minutes ===
+                                                                0) &&
+                                                            (!record.undertime_minutes ||
+                                                                record.undertime_minutes ===
+                                                                    0) &&
+                                                            (!record.overtime_minutes ||
+                                                                record.overtime_minutes <=
+                                                                    30) && (
                                                                 <div>-</div>
                                                             )}
-                                                        {record.overtime_minutes !== null && record.overtime_minutes !== undefined && record.overtime_minutes > 30 && (
-                                                            <div className="text-xs flex items-center gap-1">
-                                                                <span className={record.overtime_approved ? 'text-green-600' : 'text-red-600'}>
-                                                                    +{formatTimeAdjustment(record.overtime_minutes)} OT
-                                                                </span>
-                                                                {record.overtime_approved ? (
-                                                                    <CheckCircle className="h-3 w-3 text-green-600" />
-                                                                ) : record.admin_verified ? (
-                                                                    <X className="h-3 w-3 text-red-600" />
-                                                                ) : null}
-                                                            </div>
-                                                        )}
+                                                        {record.overtime_minutes !==
+                                                            null &&
+                                                            record.overtime_minutes !==
+                                                                undefined &&
+                                                            record.overtime_minutes >
+                                                                30 && (
+                                                                <div className="flex items-center gap-1 text-xs">
+                                                                    <span
+                                                                        className={
+                                                                            record.overtime_approved
+                                                                                ? 'text-green-600'
+                                                                                : 'text-red-600'
+                                                                        }
+                                                                    >
+                                                                        +
+                                                                        {formatTimeAdjustment(
+                                                                            record.overtime_minutes,
+                                                                        )}{' '}
+                                                                        OT
+                                                                    </span>
+                                                                    {record.overtime_approved ? (
+                                                                        <CheckCircle className="h-3 w-3 text-green-600" />
+                                                                    ) : record.admin_verified ? (
+                                                                        <X className="h-3 w-3 text-red-600" />
+                                                                    ) : null}
+                                                                </div>
+                                                            )}
                                                     </div>
                                                 </TableCell>
                                                 <TableCell>
-                                                    <NotesDisplay record={record} />
+                                                    <NotesDisplay
+                                                        record={record}
+                                                    />
                                                 </TableCell>
                                                 <TableCell>
                                                     <div className="flex gap-1">
-                                                        {record.warnings && record.warnings.length > 0 && (
-                                                            <TooltipProvider>
-                                                                <Tooltip>
-                                                                    <TooltipTrigger asChild>
-                                                                        <Button
-                                                                            variant="outline"
-                                                                            size="icon"
-                                                                            className="h-8 w-8 text-amber-600 border-amber-300 hover:bg-amber-50"
-                                                                            onClick={() => openWarningsDialog(record)}
+                                                        {record.warnings &&
+                                                            record.warnings
+                                                                .length > 0 && (
+                                                                <TooltipProvider>
+                                                                    <Tooltip>
+                                                                        <TooltipTrigger
+                                                                            asChild
                                                                         >
-                                                                            <AlertCircle className="h-4 w-4" />
-                                                                        </Button>
-                                                                    </TooltipTrigger>
-                                                                    <TooltipContent>
-                                                                        {record.warnings.length} Warning{record.warnings.length > 1 ? 's' : ''} - Click to view
-                                                                    </TooltipContent>
-                                                                </Tooltip>
-                                                            </TooltipProvider>
-                                                        )}
+                                                                            <Button
+                                                                                variant="outline"
+                                                                                size="icon"
+                                                                                className="h-8 w-8 border-amber-300 text-amber-600 hover:bg-amber-50"
+                                                                                onClick={() =>
+                                                                                    openWarningsDialog(
+                                                                                        record,
+                                                                                    )
+                                                                                }
+                                                                            >
+                                                                                <AlertCircle className="h-4 w-4" />
+                                                                            </Button>
+                                                                        </TooltipTrigger>
+                                                                        <TooltipContent>
+                                                                            {
+                                                                                record
+                                                                                    .warnings
+                                                                                    .length
+                                                                            }{' '}
+                                                                            Warning
+                                                                            {record
+                                                                                .warnings
+                                                                                .length >
+                                                                            1
+                                                                                ? 's'
+                                                                                : ''}{' '}
+                                                                            -
+                                                                            Click
+                                                                            to
+                                                                            view
+                                                                        </TooltipContent>
+                                                                    </Tooltip>
+                                                                </TooltipProvider>
+                                                            )}
                                                         <TooltipProvider>
                                                             <Tooltip>
-                                                                <TooltipTrigger asChild>
+                                                                <TooltipTrigger
+                                                                    asChild
+                                                                >
                                                                     <Button
                                                                         variant="outline"
                                                                         size="icon"
-                                                                        className={`h-8 w-8 ${record.is_partially_verified ? 'text-amber-600 border-amber-400 bg-amber-50' : ''}`}
-                                                                        onClick={() => openVerifyDialog(record)}
+                                                                        className={`h-8 w-8 ${record.is_partially_verified ? 'border-amber-400 bg-amber-50 text-amber-600' : ''}`}
+                                                                        onClick={() =>
+                                                                            openVerifyDialog(
+                                                                                record,
+                                                                            )
+                                                                        }
                                                                     >
                                                                         <Edit className="h-4 w-4" />
                                                                     </Button>
@@ -1381,29 +1936,44 @@ export default function AttendanceReview() {
                                                                 <TooltipContent>
                                                                     {record.is_partially_verified
                                                                         ? 'Complete Verification (time out now available)'
-                                                                        : record.admin_verified ? 'Edit Verification' : 'Verify Attendance'}
+                                                                        : record.admin_verified
+                                                                          ? 'Edit Verification'
+                                                                          : 'Verify Attendance'}
                                                                 </TooltipContent>
                                                             </Tooltip>
                                                         </TooltipProvider>
-                                                        {isMissingTimeOut(record) && !record.is_partially_verified && (
-                                                            <TooltipProvider>
-                                                                <Tooltip>
-                                                                    <TooltipTrigger asChild>
-                                                                        <Button
-                                                                            variant="outline"
-                                                                            size="icon"
-                                                                            className="h-8 w-8 text-amber-600 border-amber-300 hover:bg-amber-50"
-                                                                            onClick={() => openPartialDialog(record)}
+                                                        {isMissingTimeOut(
+                                                            record,
+                                                        ) &&
+                                                            !record.is_partially_verified && (
+                                                                <TooltipProvider>
+                                                                    <Tooltip>
+                                                                        <TooltipTrigger
+                                                                            asChild
                                                                         >
-                                                                            <Moon className="h-4 w-4" />
-                                                                        </Button>
-                                                                    </TooltipTrigger>
-                                                                    <TooltipContent>
-                                                                        Partially approve (time out pending)
-                                                                    </TooltipContent>
-                                                                </Tooltip>
-                                                            </TooltipProvider>
-                                                        )}
+                                                                            <Button
+                                                                                variant="outline"
+                                                                                size="icon"
+                                                                                className="h-8 w-8 border-amber-300 text-amber-600 hover:bg-amber-50"
+                                                                                onClick={() =>
+                                                                                    openPartialDialog(
+                                                                                        record,
+                                                                                    )
+                                                                                }
+                                                                            >
+                                                                                <Moon className="h-4 w-4" />
+                                                                            </Button>
+                                                                        </TooltipTrigger>
+                                                                        <TooltipContent>
+                                                                            Partially
+                                                                            approve
+                                                                            (time
+                                                                            out
+                                                                            pending)
+                                                                        </TooltipContent>
+                                                                    </Tooltip>
+                                                                </TooltipProvider>
+                                                            )}
                                                     </div>
                                                 </TableCell>
                                             </TableRow>
@@ -1414,29 +1984,57 @@ export default function AttendanceReview() {
                         </div>
 
                         {/* Mobile View */}
-                        <div className="md:hidden space-y-4">
-                            {attendanceData.data.map(record => (
+                        <div className="space-y-4 md:hidden">
+                            {attendanceData.data.map((record) => (
                                 <div
                                     key={record.id}
-                                    ref={highlightedRecordId === record.id ? highlightedRowRef as React.RefObject<HTMLDivElement> : null}
-                                    className={`bg-card border rounded-lg p-4 shadow-sm space-y-3 transition-colors duration-300 ${highlightedRecordId === record.id
-                                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
-                                        : ''
-                                        }`}
+                                    ref={
+                                        highlightedRecordId === record.id
+                                            ? (highlightedRowRef as React.RefObject<HTMLDivElement>)
+                                            : null
+                                    }
+                                    className={`space-y-3 rounded-lg border bg-card p-4 shadow-sm transition-colors duration-300 ${
+                                        highlightedRecordId === record.id
+                                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+                                            : ''
+                                    }`}
                                 >
-                                    <div className="flex justify-between items-start">
+                                    <div className="flex items-start justify-between">
                                         <Checkbox
-                                            checked={selectedRecords.has(record.id)}
-                                            onCheckedChange={() => handleSelectRecord(record.id, record.status, record.secondary_status)}
-                                            disabled={selectedStatus !== null && (record.status !== selectedStatus || record.secondary_status !== selectedSecondaryStatus)}
+                                            checked={selectedRecords.has(
+                                                record.id,
+                                            )}
+                                            onCheckedChange={() =>
+                                                handleSelectRecord(
+                                                    record.id,
+                                                    record.status,
+                                                    record.secondary_status,
+                                                )
+                                            }
+                                            disabled={
+                                                selectedStatus !== null &&
+                                                (record.status !==
+                                                    selectedStatus ||
+                                                    record.secondary_status !==
+                                                        selectedSecondaryStatus)
+                                            }
                                             className="mt-1"
                                         />
-                                        <div className="flex-1 mx-3">
-                                            <div className="text-lg font-semibold">{record.user.name}</div>
-                                            <div className="text-sm text-muted-foreground flex items-center gap-2">
+                                        <div className="mx-3 flex-1">
+                                            <div className="text-lg font-semibold">
+                                                {record.user.name}
+                                            </div>
+                                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                                 {formatDate(record.shift_date)}
-                                                {record.employee_schedule?.shift_type && (
-                                                    <span>{getShiftTypeBadge(record.employee_schedule.shift_type)}</span>
+                                                {record.employee_schedule
+                                                    ?.shift_type && (
+                                                    <span>
+                                                        {getShiftTypeBadge(
+                                                            record
+                                                                .employee_schedule
+                                                                .shift_type,
+                                                        )}
+                                                    </span>
                                                 )}
                                             </div>
                                         </div>
@@ -1445,93 +2043,210 @@ export default function AttendanceReview() {
 
                                     <div className="space-y-2 text-sm">
                                         <div>
-                                            <span className="font-medium">Site / Campaign:</span>{" "}
-                                            {record.employee_schedule?.site?.name || record.user.active_schedule?.site?.name || 'No site'}
+                                            <span className="font-medium">
+                                                Site / Campaign:
+                                            </span>{' '}
+                                            {record.employee_schedule?.site
+                                                ?.name ||
+                                                record.user.active_schedule
+                                                    ?.site?.name ||
+                                                'No site'}
                                             {record.is_cross_site_bio && (
-                                                <Badge variant="outline" className="ml-2 text-orange-600 border-orange-600 text-xs">
-                                                    Cross-Site {record.bio_in_site?.name && `@ ${record.bio_in_site.name}`}
+                                                <Badge
+                                                    variant="outline"
+                                                    className="ml-2 border-orange-600 text-xs text-orange-600"
+                                                >
+                                                    Cross-Site{' '}
+                                                    {record.bio_in_site?.name &&
+                                                        `@ ${record.bio_in_site.name}`}
                                                 </Badge>
                                             )}
-                                            {(record.employee_schedule?.campaign?.name || record.user.active_schedule?.campaign?.name) && (
+                                            {(record.employee_schedule?.campaign
+                                                ?.name ||
+                                                record.user.active_schedule
+                                                    ?.campaign?.name) && (
                                                 <span className="text-muted-foreground">
-                                                    {" / "}{record.employee_schedule?.campaign?.name || record.user.active_schedule?.campaign?.name}
+                                                    {' / '}
+                                                    {record.employee_schedule
+                                                        ?.campaign?.name ||
+                                                        record.user
+                                                            .active_schedule
+                                                            ?.campaign?.name}
                                                 </span>
                                             )}
                                         </div>
                                         <div>
-                                            <span className="font-medium">Time In / Out:</span>{" "}
-                                            {formatDateTime(record.actual_time_in) || '-'}
-                                            {" → "}
-                                            {formatDateTime(record.actual_time_out) || '-'}
+                                            <span className="font-medium">
+                                                Time In / Out:
+                                            </span>{' '}
+                                            {formatDateTime(
+                                                record.actual_time_in,
+                                            ) || '-'}
+                                            {' → '}
+                                            {formatDateTime(
+                                                record.actual_time_out,
+                                            ) || '-'}
                                         </div>
                                         <div>
-                                            <span className="font-medium">Total Hours:</span>{" "}
-                                            <span className="font-medium">{formatWorkDuration(record.total_minutes_worked)}</span>
+                                            <span className="font-medium">
+                                                Total Hours:
+                                            </span>{' '}
+                                            <span className="font-medium">
+                                                {formatWorkDuration(
+                                                    record.total_minutes_worked,
+                                                )}
+                                            </span>
                                         </div>
                                         <div>
-                                            <span className="font-medium">Issues:</span>
+                                            <span className="font-medium">
+                                                Issues:
+                                            </span>
                                             <div className="mt-1 space-y-1">
-                                                {(record.status === 'failed_bio_in' || record.secondary_status === 'failed_bio_in') && (
-                                                    <span className="text-red-600 block">• No Time In</span>
+                                                {(record.status ===
+                                                    'failed_bio_in' ||
+                                                    record.secondary_status ===
+                                                        'failed_bio_in') && (
+                                                    <span className="block text-red-600">
+                                                        • No Time In
+                                                    </span>
                                                 )}
-                                                {(record.status === 'failed_bio_out' || record.secondary_status === 'failed_bio_out') && (
-                                                    <span className="text-red-600 block">• No Time Out</span>
+                                                {(record.status ===
+                                                    'failed_bio_out' ||
+                                                    record.secondary_status ===
+                                                        'failed_bio_out') && (
+                                                    <span className="block text-red-600">
+                                                        • No Time Out
+                                                    </span>
                                                 )}
-                                                {(record.status === 'ncns' || record.secondary_status === 'ncns') && (
-                                                    <span className="text-red-600 block">• No Show</span>
+                                                {(record.status === 'ncns' ||
+                                                    record.secondary_status ===
+                                                        'ncns') && (
+                                                    <span className="block text-red-600">
+                                                        • No Show
+                                                    </span>
                                                 )}
-                                                {(record.status === 'tardy' || record.secondary_status === 'tardy') && (
-                                                    <span className="text-orange-600 block">• Late Arrival</span>
+                                                {(record.status === 'tardy' ||
+                                                    record.secondary_status ===
+                                                        'tardy') && (
+                                                    <span className="block text-orange-600">
+                                                        • Late Arrival
+                                                    </span>
                                                 )}
-                                                {(record.status === 'undertime' || record.secondary_status === 'undertime') && (
-                                                    <span className="text-orange-600 block">• Early Leave</span>
+                                                {(record.status ===
+                                                    'undertime' ||
+                                                    record.secondary_status ===
+                                                        'undertime') && (
+                                                    <span className="block text-orange-600">
+                                                        • Early Leave
+                                                    </span>
                                                 )}
-                                                {(record.status === 'half_day_absence' || record.secondary_status === 'half_day_absence') && (
-                                                    <span className="text-orange-600 block">• Half Day</span>
+                                                {(record.status ===
+                                                    'half_day_absence' ||
+                                                    record.secondary_status ===
+                                                        'half_day_absence') && (
+                                                    <span className="block text-orange-600">
+                                                        • Half Day
+                                                    </span>
                                                 )}
                                             </div>
                                         </div>
-                                        {((record.tardy_minutes !== null && record.tardy_minutes !== undefined && record.tardy_minutes > 0) || (record.undertime_minutes !== null && record.undertime_minutes !== undefined && record.undertime_minutes > 0) || (record.overtime_minutes !== null && record.overtime_minutes !== undefined && record.overtime_minutes > 30)) && (
+                                        {((record.tardy_minutes !== null &&
+                                            record.tardy_minutes !==
+                                                undefined &&
+                                            record.tardy_minutes > 0) ||
+                                            (record.undertime_minutes !==
+                                                null &&
+                                                record.undertime_minutes !==
+                                                    undefined &&
+                                                record.undertime_minutes > 0) ||
+                                            (record.overtime_minutes !== null &&
+                                                record.overtime_minutes !==
+                                                    undefined &&
+                                                record.overtime_minutes >
+                                                    30)) && (
                                             <div>
-                                                <span className="font-medium">Time Adjustments:</span>
+                                                <span className="font-medium">
+                                                    Time Adjustments:
+                                                </span>
                                                 <div className="mt-1 space-y-1">
-                                                    {record.tardy_minutes !== null && record.tardy_minutes !== undefined && record.tardy_minutes > 0 && (
-                                                        <span className="text-orange-600 block">
-                                                            • Tardy: +{formatTimeAdjustment(record.tardy_minutes)} T
-                                                        </span>
-                                                    )}
-                                                    {record.undertime_minutes !== null && record.undertime_minutes !== undefined && record.undertime_minutes > 0 && (
-                                                        <span className="text-orange-600 block">
-                                                            • Undertime: {formatTimeAdjustment(record.undertime_minutes)} UT
-                                                        </span>
-                                                    )}
-                                                    {record.overtime_minutes !== null && record.overtime_minutes !== undefined && record.overtime_minutes > 30 && (
-                                                        <span className="flex items-center gap-1">
-                                                            <span className={record.overtime_approved ? 'text-green-600' : 'text-red-600'}>
-                                                                • Overtime: +{formatTimeAdjustment(record.overtime_minutes)} OT
+                                                    {record.tardy_minutes !==
+                                                        null &&
+                                                        record.tardy_minutes !==
+                                                            undefined &&
+                                                        record.tardy_minutes >
+                                                            0 && (
+                                                            <span className="block text-orange-600">
+                                                                • Tardy: +
+                                                                {formatTimeAdjustment(
+                                                                    record.tardy_minutes,
+                                                                )}{' '}
+                                                                T
                                                             </span>
-                                                            {record.overtime_approved ? (
-                                                                <CheckCircle className="h-3 w-3 text-green-600" />
-                                                            ) : record.admin_verified ? (
-                                                                <X className="h-3 w-3 text-red-600" />
-                                                            ) : null}
-                                                        </span>
-                                                    )}
+                                                        )}
+                                                    {record.undertime_minutes !==
+                                                        null &&
+                                                        record.undertime_minutes !==
+                                                            undefined &&
+                                                        record.undertime_minutes >
+                                                            0 && (
+                                                            <span className="block text-orange-600">
+                                                                • Undertime:{' '}
+                                                                {formatTimeAdjustment(
+                                                                    record.undertime_minutes,
+                                                                )}{' '}
+                                                                UT
+                                                            </span>
+                                                        )}
+                                                    {record.overtime_minutes !==
+                                                        null &&
+                                                        record.overtime_minutes !==
+                                                            undefined &&
+                                                        record.overtime_minutes >
+                                                            30 && (
+                                                            <span className="flex items-center gap-1">
+                                                                <span
+                                                                    className={
+                                                                        record.overtime_approved
+                                                                            ? 'text-green-600'
+                                                                            : 'text-red-600'
+                                                                    }
+                                                                >
+                                                                    • Overtime:
+                                                                    +
+                                                                    {formatTimeAdjustment(
+                                                                        record.overtime_minutes,
+                                                                    )}{' '}
+                                                                    OT
+                                                                </span>
+                                                                {record.overtime_approved ? (
+                                                                    <CheckCircle className="h-3 w-3 text-green-600" />
+                                                                ) : record.admin_verified ? (
+                                                                    <X className="h-3 w-3 text-red-600" />
+                                                                ) : null}
+                                                            </span>
+                                                        )}
                                                 </div>
                                             </div>
                                         )}
-                                        {(record.notes || record.verification_notes) && (
+                                        {(record.notes ||
+                                            record.verification_notes) && (
                                             <div>
-                                                <span className="font-medium">Notes:</span>{" "}
+                                                <span className="font-medium">
+                                                    Notes:
+                                                </span>{' '}
                                                 <NotesDisplay record={record} />
                                             </div>
                                         )}
                                     </div>
 
                                     {record.is_partially_verified && (
-                                        <Badge variant="outline" className="text-amber-600 border-amber-400 bg-amber-50 dark:bg-amber-950/20 text-xs">
-                                            <Moon className="h-3 w-3 mr-1" />
-                                            Partially Verified - Time Out Pending
+                                        <Badge
+                                            variant="outline"
+                                            className="border-amber-400 bg-amber-50 text-xs text-amber-600 dark:bg-amber-950/20"
+                                        >
+                                            <Moon className="mr-1 h-3 w-3" />
+                                            Partially Verified - Time Out
+                                            Pending
                                         </Badge>
                                     )}
 
@@ -1539,47 +2254,70 @@ export default function AttendanceReview() {
                                         variant="outline"
                                         size="sm"
                                         onClick={() => openVerifyDialog(record)}
-                                        className={`w-full ${record.is_partially_verified ? 'text-amber-600 border-amber-400' : ''}`}
+                                        className={`w-full ${record.is_partially_verified ? 'border-amber-400 text-amber-600' : ''}`}
                                     >
-                                        <Edit className="h-4 w-4 mr-2" />
+                                        <Edit className="mr-2 h-4 w-4" />
                                         {record.is_partially_verified
                                             ? 'Complete Verification'
-                                            : record.admin_verified ? 'Edit Record' : 'Verify Record'}
+                                            : record.admin_verified
+                                              ? 'Edit Record'
+                                              : 'Verify Record'}
                                     </Button>
-                                    {isMissingTimeOut(record) && !record.is_partially_verified && (
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => openPartialDialog(record)}
-                                            className="w-full mt-2 text-amber-600 border-amber-300 hover:bg-amber-50"
-                                        >
-                                            <Moon className="h-4 w-4 mr-2" />
-                                            Partially Approve
-                                        </Button>
-                                    )}
+                                    {isMissingTimeOut(record) &&
+                                        !record.is_partially_verified && (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() =>
+                                                    openPartialDialog(record)
+                                                }
+                                                className="mt-2 w-full border-amber-300 text-amber-600 hover:bg-amber-50"
+                                            >
+                                                <Moon className="mr-2 h-4 w-4" />
+                                                Partially Approve
+                                            </Button>
+                                        )}
                                 </div>
                             ))}
                         </div>
 
-                        <div className="flex justify-center mt-4">
-                            {attendanceData.links && attendanceData.links.length > 0 && (
-                                <PaginationNav links={attendanceData.links} only={["attendances"]} />
-                            )}
+                        <div className="mt-4 flex justify-center">
+                            {attendanceData.links &&
+                                attendanceData.links.length > 0 && (
+                                    <PaginationNav
+                                        links={attendanceData.links}
+                                        only={['attendances']}
+                                    />
+                                )}
                         </div>
                     </>
                 )}
             </div>
 
             {/* Batch Verification Dialog */}
-            <Dialog open={isBatchDialogOpen} onOpenChange={setIsBatchDialogOpen}>
-                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <Dialog
+                open={isBatchDialogOpen}
+                onOpenChange={setIsBatchDialogOpen}
+            >
+                <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
                     <DialogHeader>
-                        <DialogTitle>Batch Verify Attendance Records</DialogTitle>
+                        <DialogTitle>
+                            Batch Verify Attendance Records
+                        </DialogTitle>
                         <DialogDescription>
-                            Verify {selectedRecords.size} attendance record{selectedRecords.size === 1 ? "" : "s"} at once with common settings
+                            Verify {selectedRecords.size} attendance record
+                            {selectedRecords.size === 1 ? '' : 's'} at once with
+                            common settings
                             {selectedStatus && (
-                                <span className="block mt-1">
-                                    Current Status: <span className="font-semibold">{selectedStatus.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
+                                <span className="mt-1 block">
+                                    Current Status:{' '}
+                                    <span className="font-semibold">
+                                        {selectedStatus
+                                            .replace(/_/g, ' ')
+                                            .replace(/\b\w/g, (l) =>
+                                                l.toUpperCase(),
+                                            )}
+                                    </span>
                                 </span>
                             )}
                         </DialogDescription>
@@ -1587,14 +2325,20 @@ export default function AttendanceReview() {
 
                     <form onSubmit={handleBatchVerify} className="space-y-4">
                         {/* Selected Records Summary */}
-                        <div className="bg-muted p-4 rounded-md">
-                            <h4 className="font-semibold text-sm mb-2">Selected Records ({selectedRecords.size})</h4>
-                            <div className="max-h-32 overflow-y-auto text-sm space-y-1">
+                        <div className="rounded-md bg-muted p-4">
+                            <h4 className="mb-2 text-sm font-semibold">
+                                Selected Records ({selectedRecords.size})
+                            </h4>
+                            <div className="max-h-32 space-y-1 overflow-y-auto text-sm">
                                 {attendanceData.data
-                                    .filter(r => selectedRecords.has(r.id))
-                                    .map(record => (
-                                        <div key={record.id} className="text-muted-foreground">
-                                            • {record.user.name} - {formatDate(record.shift_date)}
+                                    .filter((r) => selectedRecords.has(r.id))
+                                    .map((record) => (
+                                        <div
+                                            key={record.id}
+                                            className="text-muted-foreground"
+                                        >
+                                            • {record.user.name} -{' '}
+                                            {formatDate(record.shift_date)}
                                         </div>
                                     ))}
                             </div>
@@ -1603,87 +2347,141 @@ export default function AttendanceReview() {
                         {/* Common Status */}
                         <div className="space-y-2">
                             <Label htmlFor="batch-status">
-                                Status (Applied to All) <span className="text-red-500">*</span>
+                                Status (Applied to All){' '}
+                                <span className="text-red-500">*</span>
                             </Label>
-                            <Select value={batchData.status} onValueChange={value => setBatchData("status", value)}>
+                            <Select
+                                value={batchData.status}
+                                onValueChange={(value) =>
+                                    setBatchData('status', value)
+                                }
+                            >
                                 <SelectTrigger id="batch-status">
                                     <SelectValue placeholder="Select status" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="on_time">On Time</SelectItem>
+                                    <SelectItem value="on_time">
+                                        On Time
+                                    </SelectItem>
                                     <SelectItem value="tardy">Tardy</SelectItem>
-                                    <SelectItem value="half_day_absence">Half Day Absence</SelectItem>
-                                    <SelectItem value="advised_absence">Advised Absence</SelectItem>
-                                    <SelectItem value="on_leave">On Leave</SelectItem>
+                                    <SelectItem value="half_day_absence">
+                                        Half Day Absence
+                                    </SelectItem>
+                                    <SelectItem value="advised_absence">
+                                        Advised Absence
+                                    </SelectItem>
+                                    <SelectItem value="on_leave">
+                                        On Leave
+                                    </SelectItem>
                                     <SelectItem value="ncns">NCNS</SelectItem>
-                                    <SelectItem value="undertime">Undertime</SelectItem>
-                                    <SelectItem value="undertime_more_than_hour">Undertime (&gt;1hr)</SelectItem>
-                                    <SelectItem value="failed_bio_in">Failed Bio In</SelectItem>
-                                    <SelectItem value="failed_bio_out">Failed Bio Out</SelectItem>
-                                    <SelectItem value="present_no_bio">Present (No Bio)</SelectItem>
-                                    <SelectItem value="non_work_day">Non-Work Day</SelectItem>
+                                    <SelectItem value="undertime">
+                                        Undertime
+                                    </SelectItem>
+                                    <SelectItem value="undertime_more_than_hour">
+                                        Undertime (&gt;1hr)
+                                    </SelectItem>
+                                    <SelectItem value="failed_bio_in">
+                                        Failed Bio In
+                                    </SelectItem>
+                                    <SelectItem value="failed_bio_out">
+                                        Failed Bio Out
+                                    </SelectItem>
+                                    <SelectItem value="present_no_bio">
+                                        Present (No Bio)
+                                    </SelectItem>
+                                    <SelectItem value="non_work_day">
+                                        Non-Work Day
+                                    </SelectItem>
                                 </SelectContent>
                             </Select>
-                            {batchErrors.status && <p className="text-sm text-red-500">{batchErrors.status}</p>}
+                            {batchErrors.status && (
+                                <p className="text-sm text-red-500">
+                                    {batchErrors.status}
+                                </p>
+                            )}
                         </div>
 
                         {/* Overtime Approval - Only show if selected records have overtime */}
                         {hasOvertimeRecords() && (
-                            <div className="space-y-2 p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                            <div className="space-y-2 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950/20">
                                 <div className="flex items-center gap-2">
                                     <Checkbox
                                         id="batch_overtime_approved"
                                         checked={batchData.overtime_approved}
-                                        onCheckedChange={(checked) => setBatchData("overtime_approved", checked === true)}
+                                        onCheckedChange={(checked) =>
+                                            setBatchData(
+                                                'overtime_approved',
+                                                checked === true,
+                                            )
+                                        }
                                     />
-                                    <Label htmlFor="batch_overtime_approved" className="text-sm font-medium cursor-pointer">
-                                        Approve Overtime for All Selected Records
+                                    <Label
+                                        htmlFor="batch_overtime_approved"
+                                        className="cursor-pointer text-sm font-medium"
+                                    >
+                                        Approve Overtime for All Selected
+                                        Records
                                     </Label>
                                 </div>
                                 <p className="text-xs text-blue-700 dark:text-blue-400">
-                                    This will approve overtime for any records that have overtime hours
+                                    This will approve overtime for any records
+                                    that have overtime hours
                                 </p>
                             </div>
                         )}
 
                         {/* Set Home Option - for undertime > 30 minutes */}
                         {hasUndertimeRecords() && (
-                            <div className="space-y-2 p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                            <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/20">
                                 <div className="flex items-center gap-2">
                                     <Switch
                                         id="batch_is_set_home"
                                         checked={batchData.is_set_home}
-                                        onCheckedChange={(checked) => setBatchData("is_set_home", checked)}
+                                        onCheckedChange={(checked) =>
+                                            setBatchData('is_set_home', checked)
+                                        }
                                     />
-                                    <Label htmlFor="batch_is_set_home" className="text-sm font-medium cursor-pointer">
-                                        Mark as "Set Home" for All Selected Records
+                                    <Label
+                                        htmlFor="batch_is_set_home"
+                                        className="cursor-pointer text-sm font-medium"
+                                    >
+                                        Mark as "Set Home" for All Selected
+                                        Records
                                     </Label>
                                 </div>
                                 <p className="text-xs text-amber-700 dark:text-amber-400">
                                     {batchData.is_set_home
-                                        ? "✓ Undertime violation points will be skipped for records with undertime > 30 min. Tardy points still apply."
-                                        : "Enable if employees were sent home early (not their fault). Skips undertime violation points."}
+                                        ? '✓ Undertime violation points will be skipped for records with undertime > 30 min. Tardy points still apply.'
+                                        : 'Enable if employees were sent home early (not their fault). Skips undertime violation points.'}
                                 </p>
                             </div>
                         )}
 
                         {/* Critical Working Day — batch mode */}
                         {hasUndertimeRecords() && (
-                            <div className="space-y-2 p-4 bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg">
+                            <div className="space-y-2 rounded-lg border border-purple-200 bg-purple-50 p-4 dark:border-purple-800 dark:bg-purple-950/20">
                                 <div className="flex items-center gap-2">
                                     <Switch
                                         id="batch_is_critical_day"
                                         checked={batchData.is_critical_day}
-                                        onCheckedChange={(checked) => setBatchData("is_critical_day", checked)}
+                                        onCheckedChange={(checked) =>
+                                            setBatchData(
+                                                'is_critical_day',
+                                                checked,
+                                            )
+                                        }
                                     />
-                                    <Label htmlFor="batch_is_critical_day" className="text-sm font-medium cursor-pointer">
+                                    <Label
+                                        htmlFor="batch_is_critical_day"
+                                        className="cursor-pointer text-sm font-medium"
+                                    >
                                         Critical Working Day
                                     </Label>
                                 </div>
                                 <p className="text-xs text-purple-700 dark:text-purple-400">
                                     {batchData.is_critical_day
-                                        ? "×2 point multiplier active — all violations doubled for selected records"
-                                        : "Enable to apply ×2 point multiplier to all violations on selected records"}
+                                        ? '×2 point multiplier active — all violations doubled for selected records'
+                                        : 'Enable to apply ×2 point multiplier to all violations on selected records'}
                                 </p>
                             </div>
                         )}
@@ -1691,14 +2489,20 @@ export default function AttendanceReview() {
                         {/* Common Verification Notes */}
                         <div className="space-y-2">
                             <Label htmlFor="batch_verification_notes">
-                                Verification Notes (Applied to All) <span className="text-red-500">*</span>
+                                Verification Notes (Applied to All){' '}
+                                <span className="text-red-500">*</span>
                             </Label>
-                            <div className="flex flex-wrap gap-2 mb-2">
+                            <div className="mb-2 flex flex-wrap gap-2">
                                 <Button
                                     type="button"
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => setBatchData("verification_notes", "Verified attendance records as accurate")}
+                                    onClick={() =>
+                                        setBatchData(
+                                            'verification_notes',
+                                            'Verified attendance records as accurate',
+                                        )
+                                    }
                                     className="h-8 text-xs"
                                 >
                                     Verified as accurate
@@ -1707,7 +2511,12 @@ export default function AttendanceReview() {
                                     type="button"
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => setBatchData("verification_notes", "Corrected time entries based on supervisor confirmation")}
+                                    onClick={() =>
+                                        setBatchData(
+                                            'verification_notes',
+                                            'Corrected time entries based on supervisor confirmation',
+                                        )
+                                    }
                                     className="h-8 text-xs"
                                 >
                                     Supervisor confirmed
@@ -1716,7 +2525,12 @@ export default function AttendanceReview() {
                                     type="button"
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => setBatchData("verification_notes", "Adjusted status per attendance policy")}
+                                    onClick={() =>
+                                        setBatchData(
+                                            'verification_notes',
+                                            'Adjusted status per attendance policy',
+                                        )
+                                    }
                                     className="h-8 text-xs"
                                 >
                                     Policy adjustment
@@ -1725,7 +2539,12 @@ export default function AttendanceReview() {
                                     type="button"
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => setBatchData("verification_notes", "Manual verification due to system anomaly")}
+                                    onClick={() =>
+                                        setBatchData(
+                                            'verification_notes',
+                                            'Manual verification due to system anomaly',
+                                        )
+                                    }
                                     className="h-8 text-xs"
                                 >
                                     System anomaly
@@ -1734,19 +2553,29 @@ export default function AttendanceReview() {
                             <Textarea
                                 id="batch_verification_notes"
                                 value={batchData.verification_notes}
-                                onChange={e => setBatchData("verification_notes", e.target.value)}
+                                onChange={(e) =>
+                                    setBatchData(
+                                        'verification_notes',
+                                        e.target.value,
+                                    )
+                                }
                                 placeholder="Explain why these records are being verified..."
                                 rows={4}
                             />
                             {batchErrors.verification_notes && (
-                                <p className="text-sm text-red-500">{batchErrors.verification_notes}</p>
+                                <p className="text-sm text-red-500">
+                                    {batchErrors.verification_notes}
+                                </p>
                             )}
                         </div>
 
-                        <div className="bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 p-3 rounded-md">
+                        <div className="rounded-md border border-yellow-200 bg-yellow-50 p-3 dark:border-yellow-800 dark:bg-yellow-950/20">
                             <p className="text-sm text-yellow-800 dark:text-yellow-400">
-                                <strong>Note:</strong> This will apply the same status and notes to all selected records.
-                                Time entries will remain as they are. Use individual verification for records needing time adjustments.
+                                <strong>Note:</strong> This will apply the same
+                                status and notes to all selected records. Time
+                                entries will remain as they are. Use individual
+                                verification for records needing time
+                                adjustments.
                             </p>
                         </div>
 
@@ -1760,7 +2589,9 @@ export default function AttendanceReview() {
                                 Cancel
                             </Button>
                             <Button type="submit" disabled={batchProcessing}>
-                                {batchProcessing ? "Verifying..." : `Verify ${selectedRecords.size} Record${selectedRecords.size === 1 ? "" : "s"}`}
+                                {batchProcessing
+                                    ? 'Verifying...'
+                                    : `Verify ${selectedRecords.size} Record${selectedRecords.size === 1 ? '' : 's'}`}
                             </Button>
                         </DialogFooter>
                     </form>
@@ -1769,45 +2600,92 @@ export default function AttendanceReview() {
 
             {/* Single Verification Dialog */}
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>Verify Attendance Record</DialogTitle>
                         <DialogDescription>
-                            Review and update attendance information for {selectedRecord?.user.name} on{" "}
-                            {selectedRecord && formatDate(selectedRecord.shift_date)}
+                            Review and update attendance information for{' '}
+                            {selectedRecord?.user.name} on{' '}
+                            {selectedRecord &&
+                                formatDate(selectedRecord.shift_date)}
                         </DialogDescription>
                     </DialogHeader>
 
                     <form onSubmit={handleVerify} className="space-y-4">
                         {/* Leave Warning - Show detailed impact */}
                         {selectedRecord?.leave_request && (
-                            <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-4 rounded-md">
+                            <div className="rounded-md border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/30">
                                 <div className="flex items-start gap-3">
-                                    <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                                    <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
                                     <div className="flex-1">
                                         <h4 className="font-semibold text-amber-800 dark:text-amber-200">
-                                            {selectedRecord.actual_time_in || selectedRecord.actual_time_out
-                                                ? "Employee Reported to Office During Leave"
-                                                : "Employee is on Approved Leave"}
+                                            {selectedRecord.actual_time_in ||
+                                            selectedRecord.actual_time_out
+                                                ? 'Employee Reported to Office During Leave'
+                                                : 'Employee is on Approved Leave'}
                                         </h4>
-                                        <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
-                                            {selectedRecord.leave_request.leave_type} Leave: {formatDate(selectedRecord.leave_request.start_date)} to {formatDate(selectedRecord.leave_request.end_date)} ({selectedRecord.leave_request.days_requested} day{selectedRecord.leave_request.days_requested !== 1 ? 's' : ''})
+                                        <p className="mt-1 text-sm text-amber-700 dark:text-amber-300">
+                                            {
+                                                selectedRecord.leave_request
+                                                    .leave_type
+                                            }{' '}
+                                            Leave:{' '}
+                                            {formatDate(
+                                                selectedRecord.leave_request
+                                                    .start_date,
+                                            )}{' '}
+                                            to{' '}
+                                            {formatDate(
+                                                selectedRecord.leave_request
+                                                    .end_date,
+                                            )}{' '}
+                                            (
+                                            {
+                                                selectedRecord.leave_request
+                                                    .days_requested
+                                            }{' '}
+                                            day
+                                            {selectedRecord.leave_request
+                                                .days_requested !== 1
+                                                ? 's'
+                                                : ''}
+                                            )
                                         </p>
-                                        {(selectedRecord.actual_time_in || selectedRecord.actual_time_out) && (
-                                            <div className="mt-2 p-2 bg-amber-100 dark:bg-amber-900/50 rounded text-xs">
-                                                <p className="font-medium text-amber-800 dark:text-amber-200 mb-1">
-                                                    If you verify this as worked (not "On Leave"):
+                                        {(selectedRecord.actual_time_in ||
+                                            selectedRecord.actual_time_out) && (
+                                            <div className="mt-2 rounded bg-amber-100 p-2 text-xs dark:bg-amber-900/50">
+                                                <p className="mb-1 font-medium text-amber-800 dark:text-amber-200">
+                                                    If you verify this as worked
+                                                    (not "On Leave"):
                                                 </p>
-                                                <ul className="list-disc list-inside text-amber-700 dark:text-amber-300 space-y-0.5">
-                                                    <li>Leave dates will be adjusted to exclude this day and any following days</li>
-                                                    <li>Unused leave credits will be automatically restored</li>
-                                                    <li>Employee will be notified of the change</li>
+                                                <ul className="list-inside list-disc space-y-0.5 text-amber-700 dark:text-amber-300">
+                                                    <li>
+                                                        Leave dates will be
+                                                        adjusted to exclude this
+                                                        day and any following
+                                                        days
+                                                    </li>
+                                                    <li>
+                                                        Unused leave credits
+                                                        will be automatically
+                                                        restored
+                                                    </li>
+                                                    <li>
+                                                        Employee will be
+                                                        notified of the change
+                                                    </li>
                                                 </ul>
                                             </div>
                                         )}
-                                        {!(selectedRecord.actual_time_in || selectedRecord.actual_time_out) && (
-                                            <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
-                                                ⚠️ Changing status from "On Leave" will adjust or cancel the leave request and restore credits.
+                                        {!(
+                                            selectedRecord.actual_time_in ||
+                                            selectedRecord.actual_time_out
+                                        ) && (
+                                            <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+                                                ⚠️ Changing status from "On
+                                                Leave" will adjust or cancel the
+                                                leave request and restore
+                                                credits.
                                             </p>
                                         )}
                                     </div>
@@ -1816,93 +2694,159 @@ export default function AttendanceReview() {
                         )}
 
                         {/* Current Info */}
-                        {selectedRecord && (() => {
-                            // Use attendance's employee_schedule or fallback to user's active_schedule
-                            const schedule = selectedRecord.employee_schedule || selectedRecord.user?.active_schedule;
-                            return (
-                                <div className="bg-muted p-4 rounded-md space-y-2 text-sm">
-                                    <h4 className="font-semibold">Current Information</h4>
-                                    {!selectedRecord.employee_schedule && selectedRecord.user?.active_schedule && (
-                                        <p className="text-xs text-amber-600 dark:text-amber-400 mb-2">
-                                            ⓘ Using employee's current active schedule (attendance record has no assigned schedule)
-                                        </p>
-                                    )}
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <div>
-                                            <span className="text-muted-foreground">Scheduled In:</span>{" "}
-                                            {formatTime(schedule?.scheduled_time_in) || "-"}
-                                        </div>
-                                        <div>
-                                            <span className="text-muted-foreground">Scheduled Out:</span>{" "}
-                                            {formatTime(schedule?.scheduled_time_out) || "-"}
-                                        </div>
-                                        <div>
-                                            <span className="text-muted-foreground">Assigned Site:</span>{" "}
-                                            {schedule?.site?.name || "-"}
-                                        </div>
-                                        <div>
-                                            <span className="text-muted-foreground">Grace Period:</span>{" "}
-                                            {schedule?.grace_period_minutes ?? 15} minutes
+                        {selectedRecord &&
+                            (() => {
+                                // Use attendance's employee_schedule or fallback to user's active_schedule
+                                const schedule =
+                                    selectedRecord.employee_schedule ||
+                                    selectedRecord.user?.active_schedule;
+                                return (
+                                    <div className="space-y-2 rounded-md bg-muted p-4 text-sm">
+                                        <h4 className="font-semibold">
+                                            Current Information
+                                        </h4>
+                                        {!selectedRecord.employee_schedule &&
+                                            selectedRecord.user
+                                                ?.active_schedule && (
+                                                <p className="mb-2 text-xs text-amber-600 dark:text-amber-400">
+                                                    ⓘ Using employee's current
+                                                    active schedule (attendance
+                                                    record has no assigned
+                                                    schedule)
+                                                </p>
+                                            )}
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div>
+                                                <span className="text-muted-foreground">
+                                                    Scheduled In:
+                                                </span>{' '}
+                                                {formatTime(
+                                                    schedule?.scheduled_time_in,
+                                                ) || '-'}
+                                            </div>
+                                            <div>
+                                                <span className="text-muted-foreground">
+                                                    Scheduled Out:
+                                                </span>{' '}
+                                                {formatTime(
+                                                    schedule?.scheduled_time_out,
+                                                ) || '-'}
+                                            </div>
+                                            <div>
+                                                <span className="text-muted-foreground">
+                                                    Assigned Site:
+                                                </span>{' '}
+                                                {schedule?.site?.name || '-'}
+                                            </div>
+                                            <div>
+                                                <span className="text-muted-foreground">
+                                                    Grace Period:
+                                                </span>{' '}
+                                                {schedule?.grace_period_minutes ??
+                                                    15}{' '}
+                                                minutes
+                                            </div>
+                                            {selectedRecord.is_cross_site_bio && (
+                                                <>
+                                                    <div>
+                                                        <span className="text-muted-foreground">
+                                                            Bio In Site:
+                                                        </span>{' '}
+                                                        {selectedRecord
+                                                            .bio_in_site
+                                                            ?.name || '-'}
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-muted-foreground">
+                                                            Bio Out Site:
+                                                        </span>{' '}
+                                                        {selectedRecord
+                                                            .bio_out_site
+                                                            ?.name || '-'}
+                                                    </div>
+                                                </>
+                                            )}
+                                            {selectedRecord.notes && (
+                                                <div className="col-span-2">
+                                                    <span className="text-muted-foreground">
+                                                        Current Notes:
+                                                    </span>{' '}
+                                                    <span className="text-foreground">
+                                                        {selectedRecord.notes}
+                                                    </span>
+                                                </div>
+                                            )}
                                         </div>
                                         {selectedRecord.is_cross_site_bio && (
-                                            <>
-                                                <div>
-                                                    <span className="text-muted-foreground">Bio In Site:</span>{" "}
-                                                    {selectedRecord.bio_in_site?.name || "-"}
-                                                </div>
-                                                <div>
-                                                    <span className="text-muted-foreground">Bio Out Site:</span>{" "}
-                                                    {selectedRecord.bio_out_site?.name || "-"}
-                                                </div>
-                                            </>
-                                        )}
-                                        {selectedRecord.notes && (
-                                            <div className="col-span-2">
-                                                <span className="text-muted-foreground">Current Notes:</span>{" "}
-                                                <span className="text-foreground">{selectedRecord.notes}</span>
+                                            <div className="mt-2 flex items-center gap-2 text-orange-600">
+                                                <AlertCircle className="h-4 w-4" />
+                                                <span className="text-xs font-medium">
+                                                    Cross-site biometric
+                                                    detected - employee bio'd at
+                                                    different location
+                                                </span>
                                             </div>
                                         )}
                                     </div>
-                                    {selectedRecord.is_cross_site_bio && (
-                                        <div className="flex items-center gap-2 mt-2 text-orange-600">
-                                            <AlertCircle className="h-4 w-4" />
-                                            <span className="text-xs font-medium">
-                                                Cross-site biometric detected - employee bio'd at different location
-                                            </span>
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })()}
+                                );
+                            })()}
 
                         {/* Detected Violations */}
-                        {suggestedStatus && suggestedStatus.violations.length > 0 && suggestedStatus.status !== 'on_time' && (
-                            <div className="p-3 rounded-lg border bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800">
-                                <div className="flex items-center gap-2 mb-2">
-                                    <AlertCircle className="h-4 w-4 text-red-600" />
-                                    <span className="text-sm font-medium text-red-800 dark:text-red-400">
-                                        Detected Violations
-                                    </span>
+                        {suggestedStatus &&
+                            suggestedStatus.violations.length > 0 &&
+                            suggestedStatus.status !== 'on_time' && (
+                                <div className="rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-800 dark:bg-red-950/20">
+                                    <div className="mb-2 flex items-center gap-2">
+                                        <AlertCircle className="h-4 w-4 text-red-600" />
+                                        <span className="text-sm font-medium text-red-800 dark:text-red-400">
+                                            Detected Violations
+                                        </span>
+                                    </div>
+                                    <div className="space-y-1">
+                                        {suggestedStatus.violations.map(
+                                            (violation, index) => (
+                                                <div
+                                                    key={violation}
+                                                    className="flex items-center justify-between text-xs"
+                                                >
+                                                    <span
+                                                        className={`${index === 0 ? 'font-medium text-red-700 dark:text-red-400' : 'text-red-600 dark:text-red-500'}`}
+                                                    >
+                                                        {index === 0
+                                                            ? '▶ '
+                                                            : '  '}
+                                                        {violation
+                                                            .replace(/_/g, ' ')
+                                                            .replace(
+                                                                /\b\w/g,
+                                                                (l) =>
+                                                                    l.toUpperCase(),
+                                                            )}
+                                                        {index === 0 &&
+                                                            ' (Primary)'}
+                                                        {index === 1 &&
+                                                            ' (Secondary)'}
+                                                    </span>
+                                                    <Badge
+                                                        variant="outline"
+                                                        className="h-5 border-red-400 text-xs text-red-600"
+                                                    >
+                                                        {getPointValue(
+                                                            violation,
+                                                        ).toFixed(2)}{' '}
+                                                        pts
+                                                    </Badge>
+                                                </div>
+                                            ),
+                                        )}
+                                    </div>
+                                    <p className="mt-2 border-t border-red-200 pt-2 text-xs text-red-600 dark:border-red-800 dark:text-red-500">
+                                        Higher point violation is selected as
+                                        primary status. Points will be generated
+                                        for both violations.
+                                    </p>
                                 </div>
-                                <div className="space-y-1">
-                                    {suggestedStatus.violations.map((violation, index) => (
-                                        <div key={violation} className="flex justify-between items-center text-xs">
-                                            <span className={`${index === 0 ? 'font-medium text-red-700 dark:text-red-400' : 'text-red-600 dark:text-red-500'}`}>
-                                                {index === 0 ? '▶ ' : '  '}{violation.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                                                {index === 0 && ' (Primary)'}
-                                                {index === 1 && ' (Secondary)'}
-                                            </span>
-                                            <Badge variant="outline" className="text-red-600 border-red-400 text-xs h-5">
-                                                {getPointValue(violation).toFixed(2)} pts
-                                            </Badge>
-                                        </div>
-                                    ))}
-                                </div>
-                                <p className="text-xs text-red-600 dark:text-red-500 mt-2 pt-2 border-t border-red-200 dark:border-red-800">
-                                    Higher point violation is selected as primary status. Points will be generated for both violations.
-                                </p>
-                            </div>
-                        )}
+                            )}
 
                         {/* Status */}
                         <div className="space-y-2">
@@ -1912,28 +2856,40 @@ export default function AttendanceReview() {
 
                             {/* Suggested Status Info */}
                             {suggestedStatus && (
-                                <div className={`p-3 rounded-lg border ${isStatusManuallyOverridden ? 'bg-amber-50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-800' : 'bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800'}`}>
+                                <div
+                                    className={`rounded-lg border p-3 ${isStatusManuallyOverridden ? 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/20' : 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/20'}`}
+                                >
                                     <div className="flex items-start justify-between gap-2">
                                         <div className="flex-1">
-                                            <div className="flex items-center gap-2 mb-1">
+                                            <div className="mb-1 flex items-center gap-2">
                                                 {isStatusManuallyOverridden ? (
                                                     <AlertCircle className="h-4 w-4 text-amber-600" />
                                                 ) : (
                                                     <CheckCircle className="h-4 w-4 text-green-600" />
                                                 )}
-                                                <span className={`text-sm font-medium ${isStatusManuallyOverridden ? 'text-amber-800 dark:text-amber-400' : 'text-green-800 dark:text-green-400'}`}>
-                                                    {isStatusManuallyOverridden ? 'Manual Override Active' : 'Auto-Suggested Status'}
+                                                <span
+                                                    className={`text-sm font-medium ${isStatusManuallyOverridden ? 'text-amber-800 dark:text-amber-400' : 'text-green-800 dark:text-green-400'}`}
+                                                >
+                                                    {isStatusManuallyOverridden
+                                                        ? 'Manual Override Active'
+                                                        : 'Auto-Suggested Status'}
                                                 </span>
                                             </div>
-                                            <p className={`text-xs ${isStatusManuallyOverridden ? 'text-amber-700 dark:text-amber-500' : 'text-green-700 dark:text-green-500'}`}>
+                                            <p
+                                                className={`text-xs ${isStatusManuallyOverridden ? 'text-amber-700 dark:text-amber-500' : 'text-green-700 dark:text-green-500'}`}
+                                            >
                                                 {isStatusManuallyOverridden
-                                                    ? `Suggested: ${suggestedStatus.status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} — ${suggestedStatus.reason}`
-                                                    : suggestedStatus.reason
-                                                }
+                                                    ? `Suggested: ${suggestedStatus.status.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())} — ${suggestedStatus.reason}`
+                                                    : suggestedStatus.reason}
                                             </p>
                                             {suggestedStatus.secondaryStatus && (
-                                                <p className="text-xs text-muted-foreground mt-1">
-                                                    Secondary: {suggestedStatus.secondaryStatus.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                                <p className="mt-1 text-xs text-muted-foreground">
+                                                    Secondary:{' '}
+                                                    {suggestedStatus.secondaryStatus
+                                                        .replace(/_/g, ' ')
+                                                        .replace(/\b\w/g, (l) =>
+                                                            l.toUpperCase(),
+                                                        )}
                                                 </p>
                                             )}
                                         </div>
@@ -1943,7 +2899,7 @@ export default function AttendanceReview() {
                                                 variant="ghost"
                                                 size="sm"
                                                 onClick={resetToSuggestedStatus}
-                                                className="h-7 text-xs text-amber-700 hover:text-amber-900 hover:bg-amber-100"
+                                                className="h-7 text-xs text-amber-700 hover:bg-amber-100 hover:text-amber-900"
                                             >
                                                 Use Suggested
                                             </Button>
@@ -1952,30 +2908,64 @@ export default function AttendanceReview() {
                                 </div>
                             )}
 
-                            <Select value={data.status} onValueChange={handleStatusChange}>
-                                <SelectTrigger className={isStatusManuallyOverridden ? 'border-amber-400' : ''}>
+                            <Select
+                                value={data.status}
+                                onValueChange={handleStatusChange}
+                            >
+                                <SelectTrigger
+                                    className={
+                                        isStatusManuallyOverridden
+                                            ? 'border-amber-400'
+                                            : ''
+                                    }
+                                >
                                     <SelectValue placeholder="Select status" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="on_time">On Time</SelectItem>
+                                    <SelectItem value="on_time">
+                                        On Time
+                                    </SelectItem>
                                     <SelectItem value="tardy">Tardy</SelectItem>
-                                    <SelectItem value="half_day_absence">Half Day Absence</SelectItem>
-                                    <SelectItem value="advised_absence">Advised Absence</SelectItem>
-                                    <SelectItem value="on_leave">On Leave</SelectItem>
+                                    <SelectItem value="half_day_absence">
+                                        Half Day Absence
+                                    </SelectItem>
+                                    <SelectItem value="advised_absence">
+                                        Advised Absence
+                                    </SelectItem>
+                                    <SelectItem value="on_leave">
+                                        On Leave
+                                    </SelectItem>
                                     <SelectItem value="ncns">NCNS</SelectItem>
-                                    <SelectItem value="undertime">Undertime</SelectItem>
-                                    <SelectItem value="undertime_more_than_hour">Undertime (&gt;1hr)</SelectItem>
-                                    <SelectItem value="failed_bio_in">Failed Bio In</SelectItem>
-                                    <SelectItem value="failed_bio_out">Failed Bio Out</SelectItem>
-                                    <SelectItem value="present_no_bio">Present (No Bio)</SelectItem>
-                                    <SelectItem value="non_work_day">Non-Work Day</SelectItem>
+                                    <SelectItem value="undertime">
+                                        Undertime
+                                    </SelectItem>
+                                    <SelectItem value="undertime_more_than_hour">
+                                        Undertime (&gt;1hr)
+                                    </SelectItem>
+                                    <SelectItem value="failed_bio_in">
+                                        Failed Bio In
+                                    </SelectItem>
+                                    <SelectItem value="failed_bio_out">
+                                        Failed Bio Out
+                                    </SelectItem>
+                                    <SelectItem value="present_no_bio">
+                                        Present (No Bio)
+                                    </SelectItem>
+                                    <SelectItem value="non_work_day">
+                                        Non-Work Day
+                                    </SelectItem>
                                 </SelectContent>
                             </Select>
-                            {errors.status && <p className="text-sm text-red-500">{errors.status}</p>}
+                            {errors.status && (
+                                <p className="text-sm text-red-500">
+                                    {errors.status}
+                                </p>
+                            )}
                         </div>
 
                         {/* Fill from Schedule button */}
-                        {(selectedRecord?.employee_schedule || selectedRecord?.user?.active_schedule) && (
+                        {(selectedRecord?.employee_schedule ||
+                            selectedRecord?.user?.active_schedule) && (
                             <Button
                                 type="button"
                                 variant="outline"
@@ -1989,14 +2979,31 @@ export default function AttendanceReview() {
 
                         {/* Time In */}
                         <div className="space-y-2">
-                            <Label htmlFor="actual_time_in">Actual Time In</Label>
+                            <Label htmlFor="actual_time_in">
+                                Actual Time In
+                            </Label>
                             <div className="grid grid-cols-2 gap-2">
                                 <div className="space-y-1">
                                     <DatePicker
-                                        value={data.actual_time_in ? data.actual_time_in.slice(0, 10) : ""}
+                                        value={
+                                            data.actual_time_in
+                                                ? data.actual_time_in.slice(
+                                                      0,
+                                                      10,
+                                                  )
+                                                : ''
+                                        }
                                         onChange={(date) => {
-                                            const time = data.actual_time_in ? data.actual_time_in.slice(11, 16) : "00:00";
-                                            setData("actual_time_in", date ? `${date}T${time}` : "");
+                                            const time = data.actual_time_in
+                                                ? data.actual_time_in.slice(
+                                                      11,
+                                                      16,
+                                                  )
+                                                : '00:00';
+                                            setData(
+                                                'actual_time_in',
+                                                date ? `${date}T${time}` : '',
+                                            );
                                         }}
                                         placeholder="Date"
                                     />
@@ -2004,29 +3011,65 @@ export default function AttendanceReview() {
                                 <div className="space-y-1">
                                     <TimeInput
                                         id="actual_time_in_time"
-                                        value={data.actual_time_in ? data.actual_time_in.slice(11, 16) : ""}
+                                        value={
+                                            data.actual_time_in
+                                                ? data.actual_time_in.slice(
+                                                      11,
+                                                      16,
+                                                  )
+                                                : ''
+                                        }
                                         onChange={(time: string) => {
-                                            const date = data.actual_time_in ? data.actual_time_in.slice(0, 10) : "";
-                                            setData("actual_time_in", date && time ? `${date}T${time}` : "");
+                                            const date = data.actual_time_in
+                                                ? data.actual_time_in.slice(
+                                                      0,
+                                                      10,
+                                                  )
+                                                : '';
+                                            setData(
+                                                'actual_time_in',
+                                                date && time
+                                                    ? `${date}T${time}`
+                                                    : '',
+                                            );
                                         }}
                                     />
                                 </div>
                             </div>
                             {errors.actual_time_in && (
-                                <p className="text-sm text-red-500">{errors.actual_time_in}</p>
+                                <p className="text-sm text-red-500">
+                                    {errors.actual_time_in}
+                                </p>
                             )}
                         </div>
 
                         {/* Time Out */}
                         <div className="space-y-2">
-                            <Label htmlFor="actual_time_out">Actual Time Out</Label>
+                            <Label htmlFor="actual_time_out">
+                                Actual Time Out
+                            </Label>
                             <div className="grid grid-cols-2 gap-2">
                                 <div className="space-y-1">
                                     <DatePicker
-                                        value={data.actual_time_out ? data.actual_time_out.slice(0, 10) : ""}
+                                        value={
+                                            data.actual_time_out
+                                                ? data.actual_time_out.slice(
+                                                      0,
+                                                      10,
+                                                  )
+                                                : ''
+                                        }
                                         onChange={(date) => {
-                                            const time = data.actual_time_out ? data.actual_time_out.slice(11, 16) : "00:00";
-                                            setData("actual_time_out", date ? `${date}T${time}` : "");
+                                            const time = data.actual_time_out
+                                                ? data.actual_time_out.slice(
+                                                      11,
+                                                      16,
+                                                  )
+                                                : '00:00';
+                                            setData(
+                                                'actual_time_out',
+                                                date ? `${date}T${time}` : '',
+                                            );
                                         }}
                                         placeholder="Date"
                                     />
@@ -2034,240 +3077,596 @@ export default function AttendanceReview() {
                                 <div className="space-y-1">
                                     <TimeInput
                                         id="actual_time_out_time"
-                                        value={data.actual_time_out ? data.actual_time_out.slice(11, 16) : ""}
+                                        value={
+                                            data.actual_time_out
+                                                ? data.actual_time_out.slice(
+                                                      11,
+                                                      16,
+                                                  )
+                                                : ''
+                                        }
                                         onChange={(time: string) => {
-                                            const date = data.actual_time_out ? data.actual_time_out.slice(0, 10) : "";
-                                            setData("actual_time_out", date && time ? `${date}T${time}` : "");
+                                            const date = data.actual_time_out
+                                                ? data.actual_time_out.slice(
+                                                      0,
+                                                      10,
+                                                  )
+                                                : '';
+                                            setData(
+                                                'actual_time_out',
+                                                date && time
+                                                    ? `${date}T${time}`
+                                                    : '',
+                                            );
                                         }}
                                     />
                                 </div>
                             </div>
                             {errors.actual_time_out && (
-                                <p className="text-sm text-red-500">{errors.actual_time_out}</p>
+                                <p className="text-sm text-red-500">
+                                    {errors.actual_time_out}
+                                </p>
                             )}
                         </div>
 
                         {/* Overtime Approval */}
-                        {selectedRecord?.overtime_minutes && selectedRecord.overtime_minutes > 30 && (
-                            <div className="space-y-2 p-4 bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 rounded-lg">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <Label className="text-sm font-semibold text-blue-900 dark:text-blue-100">
-                                            Overtime Detected: {selectedRecord.overtime_minutes} minutes
-                                        </Label>
-                                        <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
-                                            Employee worked beyond scheduled time out
-                                        </p>
+                        {selectedRecord?.overtime_minutes &&
+                            selectedRecord.overtime_minutes > 30 && (
+                                <div className="space-y-2 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950/50">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <Label className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+                                                Overtime Detected:{' '}
+                                                {
+                                                    selectedRecord.overtime_minutes
+                                                }{' '}
+                                                minutes
+                                            </Label>
+                                            <p className="mt-1 text-xs text-blue-700 dark:text-blue-300">
+                                                Employee worked beyond scheduled
+                                                time out
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <Checkbox
+                                                id="overtime_approved"
+                                                checked={data.overtime_approved}
+                                                onCheckedChange={(checked) =>
+                                                    setData(
+                                                        'overtime_approved',
+                                                        checked === true,
+                                                    )
+                                                }
+                                            />
+                                            <Label
+                                                htmlFor="overtime_approved"
+                                                className="cursor-pointer text-sm font-medium"
+                                            >
+                                                Approve Overtime
+                                            </Label>
+                                        </div>
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                        <Checkbox
-                                            id="overtime_approved"
-                                            checked={data.overtime_approved}
-                                            onCheckedChange={(checked) => setData("overtime_approved", checked === true)}
-                                        />
-                                        <Label htmlFor="overtime_approved" className="text-sm font-medium cursor-pointer">
-                                            Approve Overtime
-                                        </Label>
-                                    </div>
+                                    {selectedRecord.overtime_approved && (
+                                        <div className="mt-2 text-xs text-green-700 dark:text-green-400">
+                                            ✓ Overtime was approved
+                                            {selectedRecord.overtime_approved_at && (
+                                                <span>
+                                                    {' '}
+                                                    on{' '}
+                                                    {new Date(
+                                                        selectedRecord.overtime_approved_at,
+                                                    ).toLocaleString()}
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
-                                {selectedRecord.overtime_approved && (
-                                    <div className="text-xs text-green-700 dark:text-green-400 mt-2">
-                                        ✓ Overtime was approved
-                                        {selectedRecord.overtime_approved_at && (
-                                            <span> on {new Date(selectedRecord.overtime_approved_at).toLocaleString()}</span>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        )}
+                            )}
 
                         {/* Critical Working Day — individual record */}
-                        {selectedRecord && (() => {
-                            const pointableViolations = ['ncns', 'half_day_absence', 'tardy', 'undertime', 'undertime_more_than_hour', 'advised_absence'];
-                            const hasTardy = (selectedRecord.tardy_minutes ?? 0) > 0 || (suggestedStatus?.status === 'tardy');
-                            const hasUndertime = (selectedRecord.undertime_minutes ?? 0) > 0 || (suggestedStatus?.undertimeMinutes ?? 0) > 0;
-                            const hasStatusViolation = pointableViolations.includes(selectedRecord.status) || (suggestedStatus?.status && pointableViolations.includes(suggestedStatus.status));
-                            return (hasTardy || hasUndertime || hasStatusViolation) ? (
-                                <div className="space-y-2 p-4 bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg">
-                                    <div className="flex items-center gap-2">
-                                        <Checkbox
-                                            id="is_critical_day"
-                                            checked={data.is_critical_day}
-                                            onCheckedChange={(checked) => setData("is_critical_day", checked === true)}
-                                        />
-                                        <Label htmlFor="is_critical_day" className="text-sm font-medium cursor-pointer">
-                                            Critical Working Day
-                                        </Label>
+                        {selectedRecord &&
+                            (() => {
+                                const pointableViolations = [
+                                    'ncns',
+                                    'half_day_absence',
+                                    'tardy',
+                                    'undertime',
+                                    'undertime_more_than_hour',
+                                    'advised_absence',
+                                ];
+                                const hasTardy =
+                                    (selectedRecord.tardy_minutes ?? 0) > 0 ||
+                                    suggestedStatus?.status === 'tardy';
+                                const hasUndertime =
+                                    (selectedRecord.undertime_minutes ?? 0) >
+                                        0 ||
+                                    (suggestedStatus?.undertimeMinutes ?? 0) >
+                                        0;
+                                const hasStatusViolation =
+                                    pointableViolations.includes(
+                                        selectedRecord.status,
+                                    ) ||
+                                    (suggestedStatus?.status &&
+                                        pointableViolations.includes(
+                                            suggestedStatus.status,
+                                        ));
+                                return hasTardy ||
+                                    hasUndertime ||
+                                    hasStatusViolation ? (
+                                    <div className="space-y-2 rounded-lg border border-purple-200 bg-purple-50 p-4 dark:border-purple-800 dark:bg-purple-950/20">
+                                        <div className="flex items-center gap-2">
+                                            <Checkbox
+                                                id="is_critical_day"
+                                                checked={data.is_critical_day}
+                                                onCheckedChange={(checked) =>
+                                                    setData(
+                                                        'is_critical_day',
+                                                        checked === true,
+                                                    )
+                                                }
+                                            />
+                                            <Label
+                                                htmlFor="is_critical_day"
+                                                className="cursor-pointer text-sm font-medium"
+                                            >
+                                                Critical Working Day
+                                            </Label>
+                                        </div>
+                                        <p className="text-xs text-purple-700 dark:text-purple-400">
+                                            {data.is_critical_day
+                                                ? '×2 point multiplier active — all violations doubled'
+                                                : 'Enable to apply ×2 point multiplier to all violations'}
+                                        </p>
                                     </div>
-                                    <p className="text-xs text-purple-700 dark:text-purple-400">
-                                        {data.is_critical_day
-                                            ? "×2 point multiplier active — all violations doubled"
-                                            : "Enable to apply ×2 point multiplier to all violations"}
-                                    </p>
-                                </div>
-                            ) : null;
-                        })()}
+                                ) : null;
+                            })()}
 
                         {/* Set Home & Undertime Approval Section - for undertime > 30 minutes */}
-                        {selectedRecord && ((selectedRecord.undertime_minutes && selectedRecord.undertime_minutes > 30) || (suggestedStatus?.undertimeMinutes && suggestedStatus.undertimeMinutes > 30)) && (
-                            <div className="space-y-3 p-4 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 rounded-lg">
-                                {/* Undertime Header with Set Home toggle inline */}
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <Clock className="h-4 w-4 text-amber-600" />
-                                        <span className="text-sm font-medium text-amber-900 dark:text-amber-100">
-                                            Undertime: {selectedRecord?.undertime_minutes ?? suggestedStatus?.undertimeMinutes} min
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <Label htmlFor="is_set_home" className="text-xs text-amber-700 dark:text-amber-300 cursor-pointer">
-                                            Set Home
-                                        </Label>
-                                        <Switch
-                                            id="is_set_home"
-                                            checked={data.is_set_home}
-                                            onCheckedChange={(checked) => setData("is_set_home", checked)}
-                                        />
-                                    </div>
-                                </div>
-
-                                {data.is_set_home ? (
-                                    <p className="text-xs text-green-700 dark:text-green-400">
-                                        ✓ Employee sent home early - no undertime points
-                                    </p>
-                                ) : selectedRecord.undertime_approval_status === 'approved' ? (
-                                    canApproveUndertime ? (
-                                        <div className="space-y-2">
-                                            <p className="text-xs text-green-700 dark:text-green-400 font-medium">
-                                                ✓ Currently approved: {selectedRecord.undertime_approval_reason === 'skip_points'
-                                                    ? 'No points (Set Home)'
-                                                    : selectedRecord.undertime_approval_reason === 'lunch_used'
-                                                        ? 'Worked through lunch (+1hr credited)'
-                                                        : 'Points generated'}
-                                                {' — select new action below to update on Save'}
-                                            </p>
-                                            <div className="flex flex-wrap gap-2">
-                                                <Button type="button" size="sm" variant={data.undertime_approval_reason === 'generate_points' ? 'default' : 'outline'} onClick={() => { setData('undertime_approval_reason', 'generate_points'); setData('undertime_approval_action', 'reject'); }} className="h-7 text-xs"><Check className="h-3 w-3 mr-1" />Generate Points</Button>
-                                                <Button type="button" size="sm" variant={data.undertime_approval_reason === 'lunch_used' ? 'default' : 'outline'} onClick={() => { setData('undertime_approval_reason', 'lunch_used'); setData('undertime_approval_action', 'approve'); }} className="h-7 text-xs"><Clock className="h-3 w-3 mr-1" />Lunch Used</Button>
-                                            </div>
-                                            {data.undertime_approval_action && (
-                                                <p className="text-xs text-amber-700 dark:text-amber-300">
-                                                    {data.undertime_approval_reason === 'lunch_used' && '✓ Will approve — worked through lunch, +1hr credited to total hours'}
-                                                    {data.undertime_approval_reason === 'generate_points' && '• Will reject — points generated'}
-                                                </p>
-                                            )}
-                                        </div>
-                                    ) : (
-                                        <p className="text-xs text-green-700 dark:text-green-400">
-                                            ✓ Approved: {selectedRecord.undertime_approval_reason === 'skip_points'
-                                                ? 'No points (Set Home)'
-                                                : selectedRecord.undertime_approval_reason === 'lunch_used'
-                                                    ? 'Worked through lunch (+1hr credited)'
-                                                    : 'Points generated'}
-                                        </p>
-                                    )
-                                ) : selectedRecord.undertime_approval_status === 'rejected' ? (
-                                    canApproveUndertime ? (
-                                        <div className="space-y-2">
-                                            <p className="text-xs text-red-600 dark:text-red-400 font-medium">
-                                                ✗ Currently rejected — select action below to update on Save
-                                            </p>
-                                            <div className="flex flex-wrap gap-2">
-                                                <Button type="button" size="sm" variant={data.undertime_approval_reason === 'generate_points' ? 'default' : 'outline'} onClick={() => { setData('undertime_approval_reason', 'generate_points'); setData('undertime_approval_action', 'reject'); }} className="h-7 text-xs"><Check className="h-3 w-3 mr-1" />Generate Points</Button>
-                                                <Button type="button" size="sm" variant={data.undertime_approval_reason === 'lunch_used' ? 'default' : 'outline'} onClick={() => { setData('undertime_approval_reason', 'lunch_used'); setData('undertime_approval_action', 'approve'); }} className="h-7 text-xs"><Clock className="h-3 w-3 mr-1" />Lunch Used</Button>
-                                            </div>
-                                            {data.undertime_approval_action && (
-                                                <p className="text-xs text-amber-700 dark:text-amber-300">
-                                                    {data.undertime_approval_reason === 'lunch_used' && '✓ Will approve — worked through lunch, +1hr credited to total hours'}
-                                                    {data.undertime_approval_reason === 'generate_points' && '• Will reject — points generated'}
-                                                </p>
-                                            )}
-                                        </div>
-                                    ) : (
-                                        <p className="text-xs text-red-600 dark:text-red-400">
-                                            ✗ Rejected - points will be generated
-                                        </p>
-                                    )
-                                ) : selectedRecord.undertime_approval_status === 'pending' ? (
-                                    canApproveUndertime ? (
-                                        <div className="space-y-2">
-                                            {selectedRecord.undertime_approval_reason && (
-                                                <p className="text-xs text-blue-700 dark:text-blue-400 font-medium">
-                                                    ⭐ Team Lead suggested: {selectedRecord.undertime_approval_reason === 'skip_points'
-                                                        ? 'No points (Set Home)'
-                                                        : selectedRecord.undertime_approval_reason === 'lunch_used'
-                                                            ? 'Worked through lunch (+1hr credited)'
-                                                            : 'Generate points'}
-                                                </p>
-                                            )}
-                                            <div className="flex flex-wrap gap-2">
-                                                <Button type="button" size="sm" variant={data.undertime_approval_reason === 'generate_points' ? 'default' : 'outline'} onClick={() => { setData('undertime_approval_reason', 'generate_points'); setData('undertime_approval_action', 'reject'); }} className="h-7 text-xs"><Check className="h-3 w-3 mr-1" />Generate Points</Button>
-                                                <Button type="button" size="sm" variant={data.undertime_approval_reason === 'lunch_used' ? 'default' : 'outline'} onClick={() => { setData('undertime_approval_reason', 'lunch_used'); setData('undertime_approval_action', 'approve'); }} className="h-7 text-xs"><Clock className="h-3 w-3 mr-1" />Lunch Used</Button>
-                                            </div>
-                                            {data.undertime_approval_action && (
-                                                <p className="text-xs text-amber-700 dark:text-amber-300">
-                                                    {data.undertime_approval_reason === 'lunch_used' && '✓ Will approve — worked through lunch, +1hr credited to total hours'}
-                                                    {data.undertime_approval_reason === 'generate_points' && '• Will reject — points generated'}
-                                                </p>
-                                            )}
-                                        </div>
-                                    ) : (
+                        {selectedRecord &&
+                            ((selectedRecord.undertime_minutes &&
+                                selectedRecord.undertime_minutes > 30) ||
+                                (suggestedStatus?.undertimeMinutes &&
+                                    suggestedStatus.undertimeMinutes > 30)) && (
+                                <div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/50">
+                                    {/* Undertime Header with Set Home toggle inline */}
+                                    <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2">
-                                            <Clock className="h-3 w-3 text-yellow-600 animate-pulse" />
-                                            <p className="text-xs text-yellow-700 dark:text-yellow-400">
-                                                Pending approval from Admin/HR
-                                            </p>
+                                            <Clock className="h-4 w-4 text-amber-600" />
+                                            <span className="text-sm font-medium text-amber-900 dark:text-amber-100">
+                                                Undertime:{' '}
+                                                {selectedRecord?.undertime_minutes ??
+                                                    suggestedStatus?.undertimeMinutes}{' '}
+                                                min
+                                            </span>
                                         </div>
-                                    )
-                                ) : canApproveUndertime ? (
-                                    <div className="space-y-2">
-                                        <div className="flex flex-wrap gap-2">
-                                            <Button type="button" size="sm" variant={data.undertime_approval_reason === 'generate_points' ? 'default' : 'outline'} onClick={() => { setData('undertime_approval_reason', 'generate_points'); setData('undertime_approval_action', 'reject'); }} className="h-7 text-xs"><Check className="h-3 w-3 mr-1" />Generate Points</Button>
-                                            <Button type="button" size="sm" variant={data.undertime_approval_reason === 'lunch_used' ? 'default' : 'outline'} onClick={() => { setData('undertime_approval_reason', 'lunch_used'); setData('undertime_approval_action', 'approve'); }} className="h-7 text-xs"><Clock className="h-3 w-3 mr-1" />Lunch Used</Button>
+                                        <div className="flex items-center gap-2">
+                                            <Label
+                                                htmlFor="is_set_home"
+                                                className="cursor-pointer text-xs text-amber-700 dark:text-amber-300"
+                                            >
+                                                Set Home
+                                            </Label>
+                                            <Switch
+                                                id="is_set_home"
+                                                checked={data.is_set_home}
+                                                onCheckedChange={(checked) =>
+                                                    setData(
+                                                        'is_set_home',
+                                                        checked,
+                                                    )
+                                                }
+                                            />
                                         </div>
-                                        {data.undertime_approval_action && (
-                                            <p className="text-xs text-amber-700 dark:text-amber-300">
-                                                {data.undertime_approval_reason === 'lunch_used' && '✓ Will approve — worked through lunch, +1hr credited to total hours'}
-                                                {data.undertime_approval_reason === 'generate_points' && '• Will reject — points generated'}
-                                            </p>
-                                        )}
                                     </div>
-                                ) : canRequestUndertimeApproval ? (
-                                    <div className="space-y-2">
-                                        <div className="flex flex-wrap gap-2">
-                                            <Button type="button" size="sm" variant={data.undertime_approval_reason === 'generate_points' ? 'default' : 'outline'} onClick={() => { setData('undertime_approval_reason', 'generate_points'); setData('undertime_approval_action', 'request'); }} className="h-7 text-xs"><Check className="h-3 w-3 mr-1" />Generate Points</Button>
-                                            <Button type="button" size="sm" variant={data.undertime_approval_reason === 'lunch_used' ? 'default' : 'outline'} onClick={() => { setData('undertime_approval_reason', 'lunch_used'); setData('undertime_approval_action', 'request'); }} className="h-7 text-xs"><Clock className="h-3 w-3 mr-1" />Lunch Used</Button>
-                                        </div>
-                                        {data.undertime_approval_action && (
-                                            <p className="text-xs text-amber-700 dark:text-amber-300">
-                                                {data.undertime_approval_reason === 'lunch_used' && '• Suggesting: Worked through lunch (+1hr credited)'}
-                                                {data.undertime_approval_reason === 'generate_points' && '• Suggesting: Generate points'}
+
+                                    {data.is_set_home ? (
+                                        <p className="text-xs text-green-700 dark:text-green-400">
+                                            ✓ Employee sent home early - no
+                                            undertime points
+                                        </p>
+                                    ) : selectedRecord.undertime_approval_status ===
+                                      'approved' ? (
+                                        canApproveUndertime ? (
+                                            <div className="space-y-2">
+                                                <p className="text-xs font-medium text-green-700 dark:text-green-400">
+                                                    ✓ Currently approved:{' '}
+                                                    {selectedRecord.undertime_approval_reason ===
+                                                    'skip_points'
+                                                        ? 'No points (Set Home)'
+                                                        : selectedRecord.undertime_approval_reason ===
+                                                            'lunch_used'
+                                                          ? 'Worked through lunch (+1hr credited)'
+                                                          : 'Points generated'}
+                                                    {
+                                                        ' — select new action below to update on Save'
+                                                    }
+                                                </p>
+                                                <div className="flex flex-wrap gap-2">
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant={
+                                                            data.undertime_approval_reason ===
+                                                            'generate_points'
+                                                                ? 'default'
+                                                                : 'outline'
+                                                        }
+                                                        onClick={() => {
+                                                            setData(
+                                                                'undertime_approval_reason',
+                                                                'generate_points',
+                                                            );
+                                                            setData(
+                                                                'undertime_approval_action',
+                                                                'reject',
+                                                            );
+                                                        }}
+                                                        className="h-7 text-xs"
+                                                    >
+                                                        <Check className="mr-1 h-3 w-3" />
+                                                        Generate Points
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant={
+                                                            data.undertime_approval_reason ===
+                                                            'lunch_used'
+                                                                ? 'default'
+                                                                : 'outline'
+                                                        }
+                                                        onClick={() => {
+                                                            setData(
+                                                                'undertime_approval_reason',
+                                                                'lunch_used',
+                                                            );
+                                                            setData(
+                                                                'undertime_approval_action',
+                                                                'approve',
+                                                            );
+                                                        }}
+                                                        className="h-7 text-xs"
+                                                    >
+                                                        <Clock className="mr-1 h-3 w-3" />
+                                                        Lunch Used
+                                                    </Button>
+                                                </div>
+                                                {data.undertime_approval_action && (
+                                                    <p className="text-xs text-amber-700 dark:text-amber-300">
+                                                        {data.undertime_approval_reason ===
+                                                            'lunch_used' &&
+                                                            '✓ Will approve — worked through lunch, +1hr credited to total hours'}
+                                                        {data.undertime_approval_reason ===
+                                                            'generate_points' &&
+                                                            '• Will reject — points generated'}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <p className="text-xs text-green-700 dark:text-green-400">
+                                                ✓ Approved:{' '}
+                                                {selectedRecord.undertime_approval_reason ===
+                                                'skip_points'
+                                                    ? 'No points (Set Home)'
+                                                    : selectedRecord.undertime_approval_reason ===
+                                                        'lunch_used'
+                                                      ? 'Worked through lunch (+1hr credited)'
+                                                      : 'Points generated'}
                                             </p>
-                                        )}
-                                    </div>
-                                ) : (
-                                    <p className="text-xs text-amber-700 dark:text-amber-300">
-                                        • Undertime points will be generated
-                                    </p>
-                                )}
-                            </div>
-                        )}
+                                        )
+                                    ) : selectedRecord.undertime_approval_status ===
+                                      'rejected' ? (
+                                        canApproveUndertime ? (
+                                            <div className="space-y-2">
+                                                <p className="text-xs font-medium text-red-600 dark:text-red-400">
+                                                    ✗ Currently rejected —
+                                                    select action below to
+                                                    update on Save
+                                                </p>
+                                                <div className="flex flex-wrap gap-2">
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant={
+                                                            data.undertime_approval_reason ===
+                                                            'generate_points'
+                                                                ? 'default'
+                                                                : 'outline'
+                                                        }
+                                                        onClick={() => {
+                                                            setData(
+                                                                'undertime_approval_reason',
+                                                                'generate_points',
+                                                            );
+                                                            setData(
+                                                                'undertime_approval_action',
+                                                                'reject',
+                                                            );
+                                                        }}
+                                                        className="h-7 text-xs"
+                                                    >
+                                                        <Check className="mr-1 h-3 w-3" />
+                                                        Generate Points
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant={
+                                                            data.undertime_approval_reason ===
+                                                            'lunch_used'
+                                                                ? 'default'
+                                                                : 'outline'
+                                                        }
+                                                        onClick={() => {
+                                                            setData(
+                                                                'undertime_approval_reason',
+                                                                'lunch_used',
+                                                            );
+                                                            setData(
+                                                                'undertime_approval_action',
+                                                                'approve',
+                                                            );
+                                                        }}
+                                                        className="h-7 text-xs"
+                                                    >
+                                                        <Clock className="mr-1 h-3 w-3" />
+                                                        Lunch Used
+                                                    </Button>
+                                                </div>
+                                                {data.undertime_approval_action && (
+                                                    <p className="text-xs text-amber-700 dark:text-amber-300">
+                                                        {data.undertime_approval_reason ===
+                                                            'lunch_used' &&
+                                                            '✓ Will approve — worked through lunch, +1hr credited to total hours'}
+                                                        {data.undertime_approval_reason ===
+                                                            'generate_points' &&
+                                                            '• Will reject — points generated'}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <p className="text-xs text-red-600 dark:text-red-400">
+                                                ✗ Rejected - points will be
+                                                generated
+                                            </p>
+                                        )
+                                    ) : selectedRecord.undertime_approval_status ===
+                                      'pending' ? (
+                                        canApproveUndertime ? (
+                                            <div className="space-y-2">
+                                                {selectedRecord.undertime_approval_reason && (
+                                                    <p className="text-xs font-medium text-blue-700 dark:text-blue-400">
+                                                        ⭐ Team Lead suggested:{' '}
+                                                        {selectedRecord.undertime_approval_reason ===
+                                                        'skip_points'
+                                                            ? 'No points (Set Home)'
+                                                            : selectedRecord.undertime_approval_reason ===
+                                                                'lunch_used'
+                                                              ? 'Worked through lunch (+1hr credited)'
+                                                              : 'Generate points'}
+                                                    </p>
+                                                )}
+                                                <div className="flex flex-wrap gap-2">
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant={
+                                                            data.undertime_approval_reason ===
+                                                            'generate_points'
+                                                                ? 'default'
+                                                                : 'outline'
+                                                        }
+                                                        onClick={() => {
+                                                            setData(
+                                                                'undertime_approval_reason',
+                                                                'generate_points',
+                                                            );
+                                                            setData(
+                                                                'undertime_approval_action',
+                                                                'reject',
+                                                            );
+                                                        }}
+                                                        className="h-7 text-xs"
+                                                    >
+                                                        <Check className="mr-1 h-3 w-3" />
+                                                        Generate Points
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant={
+                                                            data.undertime_approval_reason ===
+                                                            'lunch_used'
+                                                                ? 'default'
+                                                                : 'outline'
+                                                        }
+                                                        onClick={() => {
+                                                            setData(
+                                                                'undertime_approval_reason',
+                                                                'lunch_used',
+                                                            );
+                                                            setData(
+                                                                'undertime_approval_action',
+                                                                'approve',
+                                                            );
+                                                        }}
+                                                        className="h-7 text-xs"
+                                                    >
+                                                        <Clock className="mr-1 h-3 w-3" />
+                                                        Lunch Used
+                                                    </Button>
+                                                </div>
+                                                {data.undertime_approval_action && (
+                                                    <p className="text-xs text-amber-700 dark:text-amber-300">
+                                                        {data.undertime_approval_reason ===
+                                                            'lunch_used' &&
+                                                            '✓ Will approve — worked through lunch, +1hr credited to total hours'}
+                                                        {data.undertime_approval_reason ===
+                                                            'generate_points' &&
+                                                            '• Will reject — points generated'}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center gap-2">
+                                                <Clock className="h-3 w-3 animate-pulse text-yellow-600" />
+                                                <p className="text-xs text-yellow-700 dark:text-yellow-400">
+                                                    Pending approval from
+                                                    Admin/HR
+                                                </p>
+                                            </div>
+                                        )
+                                    ) : canApproveUndertime ? (
+                                        <div className="space-y-2">
+                                            <div className="flex flex-wrap gap-2">
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant={
+                                                        data.undertime_approval_reason ===
+                                                        'generate_points'
+                                                            ? 'default'
+                                                            : 'outline'
+                                                    }
+                                                    onClick={() => {
+                                                        setData(
+                                                            'undertime_approval_reason',
+                                                            'generate_points',
+                                                        );
+                                                        setData(
+                                                            'undertime_approval_action',
+                                                            'reject',
+                                                        );
+                                                    }}
+                                                    className="h-7 text-xs"
+                                                >
+                                                    <Check className="mr-1 h-3 w-3" />
+                                                    Generate Points
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant={
+                                                        data.undertime_approval_reason ===
+                                                        'lunch_used'
+                                                            ? 'default'
+                                                            : 'outline'
+                                                    }
+                                                    onClick={() => {
+                                                        setData(
+                                                            'undertime_approval_reason',
+                                                            'lunch_used',
+                                                        );
+                                                        setData(
+                                                            'undertime_approval_action',
+                                                            'approve',
+                                                        );
+                                                    }}
+                                                    className="h-7 text-xs"
+                                                >
+                                                    <Clock className="mr-1 h-3 w-3" />
+                                                    Lunch Used
+                                                </Button>
+                                            </div>
+                                            {data.undertime_approval_action && (
+                                                <p className="text-xs text-amber-700 dark:text-amber-300">
+                                                    {data.undertime_approval_reason ===
+                                                        'lunch_used' &&
+                                                        '✓ Will approve — worked through lunch, +1hr credited to total hours'}
+                                                    {data.undertime_approval_reason ===
+                                                        'generate_points' &&
+                                                        '• Will reject — points generated'}
+                                                </p>
+                                            )}
+                                        </div>
+                                    ) : canRequestUndertimeApproval ? (
+                                        <div className="space-y-2">
+                                            <div className="flex flex-wrap gap-2">
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant={
+                                                        data.undertime_approval_reason ===
+                                                        'generate_points'
+                                                            ? 'default'
+                                                            : 'outline'
+                                                    }
+                                                    onClick={() => {
+                                                        setData(
+                                                            'undertime_approval_reason',
+                                                            'generate_points',
+                                                        );
+                                                        setData(
+                                                            'undertime_approval_action',
+                                                            'request',
+                                                        );
+                                                    }}
+                                                    className="h-7 text-xs"
+                                                >
+                                                    <Check className="mr-1 h-3 w-3" />
+                                                    Generate Points
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant={
+                                                        data.undertime_approval_reason ===
+                                                        'lunch_used'
+                                                            ? 'default'
+                                                            : 'outline'
+                                                    }
+                                                    onClick={() => {
+                                                        setData(
+                                                            'undertime_approval_reason',
+                                                            'lunch_used',
+                                                        );
+                                                        setData(
+                                                            'undertime_approval_action',
+                                                            'request',
+                                                        );
+                                                    }}
+                                                    className="h-7 text-xs"
+                                                >
+                                                    <Clock className="mr-1 h-3 w-3" />
+                                                    Lunch Used
+                                                </Button>
+                                            </div>
+                                            {data.undertime_approval_action && (
+                                                <p className="text-xs text-amber-700 dark:text-amber-300">
+                                                    {data.undertime_approval_reason ===
+                                                        'lunch_used' &&
+                                                        '• Suggesting: Worked through lunch (+1hr credited)'}
+                                                    {data.undertime_approval_reason ===
+                                                        'generate_points' &&
+                                                        '• Suggesting: Generate points'}
+                                                </p>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <p className="text-xs text-amber-700 dark:text-amber-300">
+                                            • Undertime points will be generated
+                                        </p>
+                                    )}
+                                </div>
+                            )}
 
                         {/* Notes */}
                         <div className="space-y-2">
-                            <Label htmlFor="notes">
-                                Notes (Optional)
-                            </Label>
+                            <Label htmlFor="notes">Notes (Optional)</Label>
                             <Textarea
                                 id="notes"
                                 value={data.notes}
-                                onChange={e => setData("notes", e.target.value)}
+                                onChange={(e) =>
+                                    setData('notes', e.target.value)
+                                }
                                 placeholder="Add notes about this attendance record (e.g., reason for absence, special circumstances)..."
                                 rows={3}
                                 maxLength={500}
                             />
                             {errors.notes && (
-                                <p className="text-sm text-red-500">{errors.notes}</p>
+                                <p className="text-sm text-red-500">
+                                    {errors.notes}
+                                </p>
                             )}
                             <p className="text-xs text-muted-foreground">
                                 {data.notes.length}/500 characters
@@ -2277,18 +3676,19 @@ export default function AttendanceReview() {
                         {/* Verification Notes */}
                         <div className="space-y-2">
                             <Label htmlFor="verification_notes">
-                                Verification Notes <span className="text-red-500">*</span>
+                                Verification Notes{' '}
+                                <span className="text-red-500">*</span>
                             </Label>
-                            <div className="flex flex-wrap gap-2 mb-2">
+                            <div className="mb-2 flex flex-wrap gap-2">
                                 {[
-                                    "Verified",
-                                    "Corrected",
-                                    "Manual entry",
-                                    "Bio scanner issue",
-                                    "Network delay",
-                                    "Shift adjustment",
-                                    "Approved by supervisor",
-                                    "System error",
+                                    'Verified',
+                                    'Corrected',
+                                    'Manual entry',
+                                    'Bio scanner issue',
+                                    'Network delay',
+                                    'Shift adjustment',
+                                    'Approved by supervisor',
+                                    'System error',
                                 ].map((phrase) => (
                                     <Button
                                         key={phrase}
@@ -2297,11 +3697,15 @@ export default function AttendanceReview() {
                                         size="sm"
                                         className="h-7 text-xs"
                                         onClick={() => {
-                                            const currentNotes = data.verification_notes.trim();
+                                            const currentNotes =
+                                                data.verification_notes.trim();
                                             const newNotes = currentNotes
                                                 ? `${currentNotes}${currentNotes.endsWith('.') ? '' : '.'} ${phrase}.`
                                                 : `${phrase}.`;
-                                            setData("verification_notes", newNotes);
+                                            setData(
+                                                'verification_notes',
+                                                newNotes,
+                                            );
                                         }}
                                     >
                                         {phrase}
@@ -2311,16 +3715,23 @@ export default function AttendanceReview() {
                             <Textarea
                                 id="verification_notes"
                                 value={data.verification_notes}
-                                onChange={e => setData("verification_notes", e.target.value)}
+                                onChange={(e) =>
+                                    setData(
+                                        'verification_notes',
+                                        e.target.value,
+                                    )
+                                }
                                 placeholder="Explain why this record is being verified/corrected..."
                                 rows={4}
                             />
                             {errors.verification_notes && (
-                                <p className="text-sm text-red-500">{errors.verification_notes}</p>
+                                <p className="text-sm text-red-500">
+                                    {errors.verification_notes}
+                                </p>
                             )}
                         </div>
 
-                        <DialogFooter className="flex-col sm:flex-row gap-2">
+                        <DialogFooter className="flex-col gap-2 sm:flex-row">
                             <Button
                                 type="button"
                                 variant="outline"
@@ -2330,21 +3741,30 @@ export default function AttendanceReview() {
                                 Cancel
                             </Button>
                             {/* Show "Flag as Reported" for on_leave records with biometric data - this directly saves */}
-                            {selectedRecord?.status === 'on_leave' && selectedRecord?.leave_request && (selectedRecord?.actual_time_in || selectedRecord?.actual_time_out) ? (
+                            {selectedRecord?.status === 'on_leave' &&
+                            selectedRecord?.leave_request &&
+                            (selectedRecord?.actual_time_in ||
+                                selectedRecord?.actual_time_out) ? (
                                 <Button
                                     type="button"
                                     onClick={handleFlagAsReported}
                                     disabled={processing}
-                                    className="bg-orange-500 hover:bg-orange-600 text-white"
+                                    className="bg-orange-500 text-white hover:bg-orange-600"
                                 >
-                                    <UserCheck className="h-4 w-4 mr-2" />
-                                    {processing ? "Saving..." : "Flag as Reported & Save"}
+                                    <UserCheck className="mr-2 h-4 w-4" />
+                                    {processing
+                                        ? 'Saving...'
+                                        : 'Flag as Reported & Save'}
                                 </Button>
                             ) : (
                                 <Button type="submit" disabled={processing}>
                                     {processing
-                                        ? (selectedRecord?.admin_verified ? "Saving..." : "Verifying...")
-                                        : (selectedRecord?.admin_verified ? "Edit & Save" : "Verify & Save")}
+                                        ? selectedRecord?.admin_verified
+                                            ? 'Saving...'
+                                            : 'Verifying...'
+                                        : selectedRecord?.admin_verified
+                                          ? 'Edit & Save'
+                                          : 'Verify & Save'}
                                 </Button>
                             )}
                         </DialogFooter>
@@ -2353,7 +3773,10 @@ export default function AttendanceReview() {
             </Dialog>
 
             {/* Warnings Details Dialog */}
-            <Dialog open={isWarningsDialogOpen} onOpenChange={closeWarningsDialog}>
+            <Dialog
+                open={isWarningsDialogOpen}
+                onOpenChange={closeWarningsDialog}
+            >
                 <DialogContent className="max-w-2xl">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
@@ -2363,7 +3786,10 @@ export default function AttendanceReview() {
                         <DialogDescription>
                             {warningsDialogRecord && (
                                 <span>
-                                    {warningsDialogRecord.user.name} - {formatDate(warningsDialogRecord.shift_date)}
+                                    {warningsDialogRecord.user.name} -{' '}
+                                    {formatDate(
+                                        warningsDialogRecord.shift_date,
+                                    )}
                                 </span>
                             )}
                         </DialogDescription>
@@ -2372,26 +3798,52 @@ export default function AttendanceReview() {
                     {warningsDialogRecord && (
                         <div className="space-y-4">
                             {/* Attendance Summary */}
-                            <div className="bg-muted p-4 rounded-md space-y-2">
+                            <div className="space-y-2 rounded-md bg-muted p-4">
                                 <div className="grid grid-cols-2 gap-4 text-sm">
                                     <div>
-                                        <span className="font-medium">Scheduled Shift:</span>
+                                        <span className="font-medium">
+                                            Scheduled Shift:
+                                        </span>
                                         <div className="text-muted-foreground">
-                                            {warningsDialogRecord.employee_schedule?.shift_type || 'Not Scheduled'}
+                                            {warningsDialogRecord
+                                                .employee_schedule
+                                                ?.shift_type || 'Not Scheduled'}
                                         </div>
                                         {warningsDialogRecord.employee_schedule && (
-                                            <div className="text-muted-foreground text-xs">
-                                                {warningsDialogRecord.employee_schedule.scheduled_time_in} - {warningsDialogRecord.employee_schedule.scheduled_time_out}
+                                            <div className="text-xs text-muted-foreground">
+                                                {
+                                                    warningsDialogRecord
+                                                        .employee_schedule
+                                                        .scheduled_time_in
+                                                }{' '}
+                                                -{' '}
+                                                {
+                                                    warningsDialogRecord
+                                                        .employee_schedule
+                                                        .scheduled_time_out
+                                                }
                                             </div>
                                         )}
                                     </div>
                                     <div>
-                                        <span className="font-medium">Recorded Times:</span>
+                                        <span className="font-medium">
+                                            Recorded Times:
+                                        </span>
                                         <div className="text-muted-foreground">
-                                            In: {warningsDialogRecord.actual_time_in ? formatDateTime(warningsDialogRecord.actual_time_in) : 'N/A'}
+                                            In:{' '}
+                                            {warningsDialogRecord.actual_time_in
+                                                ? formatDateTime(
+                                                      warningsDialogRecord.actual_time_in,
+                                                  )
+                                                : 'N/A'}
                                         </div>
                                         <div className="text-muted-foreground">
-                                            Out: {warningsDialogRecord.actual_time_out ? formatDateTime(warningsDialogRecord.actual_time_out) : 'N/A'}
+                                            Out:{' '}
+                                            {warningsDialogRecord.actual_time_out
+                                                ? formatDateTime(
+                                                      warningsDialogRecord.actual_time_out,
+                                                  )
+                                                : 'N/A'}
                                         </div>
                                     </div>
                                 </div>
@@ -2399,28 +3851,43 @@ export default function AttendanceReview() {
 
                             {/* Warnings List */}
                             <div className="space-y-2">
-                                <h4 className="font-semibold text-sm">Detected Issues:</h4>
+                                <h4 className="text-sm font-semibold">
+                                    Detected Issues:
+                                </h4>
                                 <div className="space-y-3">
-                                    {warningsDialogRecord.warnings?.map((warning, idx) => (
-                                        <div key={idx} className="bg-amber-50 border border-amber-200 rounded-md p-3">
-                                            <div className="flex items-start gap-2">
-                                                <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
-                                                <div className="text-sm text-amber-900">
-                                                    {typeof warning === 'string' ? warning : warning.message}
+                                    {warningsDialogRecord.warnings?.map(
+                                        (warning, idx) => (
+                                            <div
+                                                key={idx}
+                                                className="rounded-md border border-amber-200 bg-amber-50 p-3"
+                                            >
+                                                <div className="flex items-start gap-2">
+                                                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                                                    <div className="text-sm text-amber-900">
+                                                        {typeof warning ===
+                                                        'string'
+                                                            ? warning
+                                                            : warning.message}
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    ))}
+                                        ),
+                                    )}
                                 </div>
                             </div>
 
                             {/* Recommendation */}
-                            <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                            <div className="rounded-md border border-blue-200 bg-blue-50 p-3">
                                 <div className="flex items-start gap-2">
-                                    <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+                                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
                                     <div className="text-sm text-blue-900">
-                                        <span className="font-medium block mb-1">Recommended Action:</span>
-                                        Review the biometric records and employee schedule. Verify with the employee or supervisor to determine the correct attendance status.
+                                        <span className="mb-1 block font-medium">
+                                            Recommended Action:
+                                        </span>
+                                        Review the biometric records and
+                                        employee schedule. Verify with the
+                                        employee or supervisor to determine the
+                                        correct attendance status.
                                     </div>
                                 </div>
                             </div>
@@ -2432,11 +3899,13 @@ export default function AttendanceReview() {
                             Close
                         </Button>
                         {warningsDialogRecord && (
-                            <Button onClick={() => {
-                                closeWarningsDialog();
-                                openVerifyDialog(warningsDialogRecord);
-                            }}>
-                                <Edit className="h-4 w-4 mr-2" />
+                            <Button
+                                onClick={() => {
+                                    closeWarningsDialog();
+                                    openVerifyDialog(warningsDialogRecord);
+                                }}
+                            >
+                                <Edit className="mr-2 h-4 w-4" />
                                 Verify Record
                             </Button>
                         )}
@@ -2451,7 +3920,10 @@ export default function AttendanceReview() {
                         <DialogTitle>Attendance Notes</DialogTitle>
                         <DialogDescription>
                             {selectedNoteRecord && (
-                                <span>{selectedNoteRecord.user.name} - {formatDate(selectedNoteRecord.shift_date)}</span>
+                                <span>
+                                    {selectedNoteRecord.user.name} -{' '}
+                                    {formatDate(selectedNoteRecord.shift_date)}
+                                </span>
                             )}
                         </DialogDescription>
                     </DialogHeader>
@@ -2459,22 +3931,35 @@ export default function AttendanceReview() {
                         <div className="space-y-4">
                             {/* Employee Notes */}
                             <div>
-                                <h4 className="text-sm font-semibold mb-2">Employee Notes</h4>
-                                <div className="p-3 bg-muted rounded-md">
+                                <h4 className="mb-2 text-sm font-semibold">
+                                    Employee Notes
+                                </h4>
+                                <div className="rounded-md bg-muted p-3">
                                     <p className="text-sm whitespace-pre-wrap">
-                                        {selectedNoteRecord.notes || <span className="text-muted-foreground italic">No notes</span>}
+                                        {selectedNoteRecord.notes || (
+                                            <span className="text-muted-foreground italic">
+                                                No notes
+                                            </span>
+                                        )}
                                     </p>
                                 </div>
                             </div>
                             {/* Admin Verification Notes */}
                             <div>
-                                <h4 className="text-sm font-semibold mb-2">Admin Verification Notes</h4>
-                                <div className="p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-md">
+                                <h4 className="mb-2 text-sm font-semibold">
+                                    Admin Verification Notes
+                                </h4>
+                                <div className="rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-950/30">
                                     <p className="text-sm whitespace-pre-wrap">
                                         {selectedNoteRecord.verification_notes ||
-                                            selectedNoteRecord.leave_request?.admin_review_notes ||
-                                            selectedNoteRecord.leave_request?.hr_review_notes ||
-                                            <span className="text-muted-foreground italic">Not verified yet</span>}
+                                            selectedNoteRecord.leave_request
+                                                ?.admin_review_notes ||
+                                            selectedNoteRecord.leave_request
+                                                ?.hr_review_notes || (
+                                                <span className="text-muted-foreground italic">
+                                                    Not verified yet
+                                                </span>
+                                            )}
                                     </p>
                                 </div>
                             </div>
@@ -2484,7 +3969,10 @@ export default function AttendanceReview() {
             </Dialog>
 
             {/* Partial Approval Dialog (Night Shift - Time Out Pending) */}
-            <Dialog open={isPartialDialogOpen} onOpenChange={setIsPartialDialogOpen}>
+            <Dialog
+                open={isPartialDialogOpen}
+                onOpenChange={setIsPartialDialogOpen}
+            >
                 <DialogContent className="max-w-[95vw] sm:max-w-lg">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
@@ -2492,84 +3980,141 @@ export default function AttendanceReview() {
                             Partial Approval - Time Out Pending
                         </DialogTitle>
                         <DialogDescription>
-                            Approve {partialRecord?.user.name}'s time-in for{" "}
-                            {partialRecord && formatDate(partialRecord.shift_date)}.
-                            Time out will be verified later when available.
+                            Approve {partialRecord?.user.name}'s time-in for{' '}
+                            {partialRecord &&
+                                formatDate(partialRecord.shift_date)}
+                            . Time out will be verified later when available.
                         </DialogDescription>
                     </DialogHeader>
 
                     <form onSubmit={handlePartialApprove} className="space-y-4">
                         {/* Current Info */}
-                        {partialRecord && (() => {
-                            const schedule = partialRecord.employee_schedule || partialRecord.user?.active_schedule;
-                            return (
-                                <div className="bg-muted p-4 rounded-md space-y-2 text-sm">
-                                    <h4 className="font-semibold">Shift Information</h4>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <div>
-                                            <span className="text-muted-foreground">Shift Date:</span>{" "}
-                                            {formatDate(partialRecord.shift_date)}
-                                        </div>
-                                        <div>
-                                            <span className="text-muted-foreground">Shift Type:</span>{" "}
-                                            {schedule?.shift_type?.replace('_', ' ') || "N/A"}
-                                        </div>
-                                        <div>
-                                            <span className="text-muted-foreground">Scheduled In:</span>{" "}
-                                            {formatTime(schedule?.scheduled_time_in) || "-"}
-                                        </div>
-                                        <div>
-                                            <span className="text-muted-foreground">Scheduled Out:</span>{" "}
-                                            {formatTime(schedule?.scheduled_time_out) || "-"}
-                                            {schedule?.scheduled_time_out && schedule?.scheduled_time_in &&
-                                                schedule.scheduled_time_out < schedule.scheduled_time_in && " (next day)"}
-                                        </div>
-                                        <div className="col-span-2">
-                                            <span className="text-muted-foreground">Actual Time In:</span>{" "}
-                                            <span className="font-medium">{formatDateTime(partialRecord.actual_time_in)}</span>
-                                        </div>
-                                        {partialRecord.tardy_minutes && partialRecord.tardy_minutes > 0 && (
-                                            <div className="col-span-2 text-orange-600">
-                                                Tardy: {partialRecord.tardy_minutes} minutes late
+                        {partialRecord &&
+                            (() => {
+                                const schedule =
+                                    partialRecord.employee_schedule ||
+                                    partialRecord.user?.active_schedule;
+                                return (
+                                    <div className="space-y-2 rounded-md bg-muted p-4 text-sm">
+                                        <h4 className="font-semibold">
+                                            Shift Information
+                                        </h4>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div>
+                                                <span className="text-muted-foreground">
+                                                    Shift Date:
+                                                </span>{' '}
+                                                {formatDate(
+                                                    partialRecord.shift_date,
+                                                )}
                                             </div>
-                                        )}
+                                            <div>
+                                                <span className="text-muted-foreground">
+                                                    Shift Type:
+                                                </span>{' '}
+                                                {schedule?.shift_type?.replace(
+                                                    '_',
+                                                    ' ',
+                                                ) || 'N/A'}
+                                            </div>
+                                            <div>
+                                                <span className="text-muted-foreground">
+                                                    Scheduled In:
+                                                </span>{' '}
+                                                {formatTime(
+                                                    schedule?.scheduled_time_in,
+                                                ) || '-'}
+                                            </div>
+                                            <div>
+                                                <span className="text-muted-foreground">
+                                                    Scheduled Out:
+                                                </span>{' '}
+                                                {formatTime(
+                                                    schedule?.scheduled_time_out,
+                                                ) || '-'}
+                                                {schedule?.scheduled_time_out &&
+                                                    schedule?.scheduled_time_in &&
+                                                    schedule.scheduled_time_out <
+                                                        schedule.scheduled_time_in &&
+                                                    ' (next day)'}
+                                            </div>
+                                            <div className="col-span-2">
+                                                <span className="text-muted-foreground">
+                                                    Actual Time In:
+                                                </span>{' '}
+                                                <span className="font-medium">
+                                                    {formatDateTime(
+                                                        partialRecord.actual_time_in,
+                                                    )}
+                                                </span>
+                                            </div>
+                                            {partialRecord.tardy_minutes &&
+                                                partialRecord.tardy_minutes >
+                                                    0 && (
+                                                    <div className="col-span-2 text-orange-600">
+                                                        Tardy:{' '}
+                                                        {
+                                                            partialRecord.tardy_minutes
+                                                        }{' '}
+                                                        minutes late
+                                                    </div>
+                                                )}
+                                        </div>
                                     </div>
-                                </div>
-                            );
-                        })()}
+                                );
+                            })()}
 
                         {/* Status Override (Optional) */}
                         <div className="space-y-2">
                             <Label>Status Override (Optional)</Label>
                             <Select
-                                value={partialData.status || "auto"}
-                                onValueChange={value => setPartialData("status", value === "auto" ? "" : value)}
+                                value={partialData.status || 'auto'}
+                                onValueChange={(value) =>
+                                    setPartialData(
+                                        'status',
+                                        value === 'auto' ? '' : value,
+                                    )
+                                }
                             >
                                 <SelectTrigger>
                                     <SelectValue placeholder="Keep current status" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="auto">Keep current status</SelectItem>
-                                    <SelectItem value="on_time">On Time</SelectItem>
+                                    <SelectItem value="auto">
+                                        Keep current status
+                                    </SelectItem>
+                                    <SelectItem value="on_time">
+                                        On Time
+                                    </SelectItem>
                                     <SelectItem value="tardy">Tardy</SelectItem>
-                                    <SelectItem value="half_day_absence">Half Day Absence</SelectItem>
-                                    <SelectItem value="failed_bio_out">Failed Bio Out</SelectItem>
+                                    <SelectItem value="half_day_absence">
+                                        Half Day Absence
+                                    </SelectItem>
+                                    <SelectItem value="failed_bio_out">
+                                        Failed Bio Out
+                                    </SelectItem>
                                 </SelectContent>
                             </Select>
                             <p className="text-xs text-muted-foreground">
-                                Status based on time-in only. Will be recalculated when time out is verified.
+                                Status based on time-in only. Will be
+                                recalculated when time out is verified.
                             </p>
                         </div>
 
                         {/* Verification Notes */}
                         <div className="space-y-2">
                             <Label>Verification Notes</Label>
-                            <div className="flex flex-wrap gap-2 mb-2">
+                            <div className="mb-2 flex flex-wrap gap-2">
                                 <Button
                                     type="button"
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => setPartialData("verification_notes", "Partially approved - time out pending.")}
+                                    onClick={() =>
+                                        setPartialData(
+                                            'verification_notes',
+                                            'Partially approved - time out pending.',
+                                        )
+                                    }
                                     className="h-7 text-xs"
                                 >
                                     Time out pending
@@ -2578,7 +4123,12 @@ export default function AttendanceReview() {
                                     type="button"
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => setPartialData("verification_notes", "Time-in verified. Awaiting biometric for time out.")}
+                                    onClick={() =>
+                                        setPartialData(
+                                            'verification_notes',
+                                            'Time-in verified. Awaiting biometric for time out.',
+                                        )
+                                    }
                                     className="h-7 text-xs"
                                 >
                                     Awaiting biometric
@@ -2586,24 +4136,34 @@ export default function AttendanceReview() {
                             </div>
                             <Textarea
                                 value={partialData.verification_notes}
-                                onChange={e => setPartialData("verification_notes", e.target.value)}
+                                onChange={(e) =>
+                                    setPartialData(
+                                        'verification_notes',
+                                        e.target.value,
+                                    )
+                                }
                                 placeholder="Optional notes about the partial approval..."
                                 rows={3}
                             />
                             {partialErrors.verification_notes && (
-                                <p className="text-sm text-red-500">{partialErrors.verification_notes}</p>
+                                <p className="text-sm text-red-500">
+                                    {partialErrors.verification_notes}
+                                </p>
                             )}
                         </div>
 
-                        <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 p-3 rounded-md">
+                        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/20">
                             <p className="text-sm text-amber-800 dark:text-amber-400">
-                                <strong>Note:</strong> This will partially approve the attendance based on the time-in record.
-                                Attendance points will be generated if there are violations (e.g., tardy).
-                                When the time-out becomes available, use the full verification to complete the record.
+                                <strong>Note:</strong> This will partially
+                                approve the attendance based on the time-in
+                                record. Attendance points will be generated if
+                                there are violations (e.g., tardy). When the
+                                time-out becomes available, use the full
+                                verification to complete the record.
                             </p>
                         </div>
 
-                        <DialogFooter className="flex-col sm:flex-row gap-2">
+                        <DialogFooter className="flex-col gap-2 sm:flex-row">
                             <Button
                                 type="button"
                                 variant="outline"
@@ -2617,8 +4177,10 @@ export default function AttendanceReview() {
                                 disabled={partialProcessing}
                                 className="bg-amber-600 hover:bg-amber-700"
                             >
-                                <Moon className="h-4 w-4 mr-2" />
-                                {partialProcessing ? "Approving..." : "Partially Approve"}
+                                <Moon className="mr-2 h-4 w-4" />
+                                {partialProcessing
+                                    ? 'Approving...'
+                                    : 'Partially Approve'}
                             </Button>
                         </DialogFooter>
                     </form>
@@ -2626,7 +4188,10 @@ export default function AttendanceReview() {
             </Dialog>
 
             {/* Batch Partial Approval Dialog */}
-            <Dialog open={isBatchPartialDialogOpen} onOpenChange={setIsBatchPartialDialogOpen}>
+            <Dialog
+                open={isBatchPartialDialogOpen}
+                onOpenChange={setIsBatchPartialDialogOpen}
+            >
                 <DialogContent className="max-w-[95vw] sm:max-w-lg">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
@@ -2634,21 +4199,42 @@ export default function AttendanceReview() {
                             Batch Partial Approval
                         </DialogTitle>
                         <DialogDescription>
-                            Partially approve {batchPartialData.record_ids.length} attendance record{batchPartialData.record_ids.length === 1 ? "" : "s"} that have time-in but are missing time-out.
+                            Partially approve{' '}
+                            {batchPartialData.record_ids.length} attendance
+                            record
+                            {batchPartialData.record_ids.length === 1
+                                ? ''
+                                : 's'}{' '}
+                            that have time-in but are missing time-out.
                         </DialogDescription>
                     </DialogHeader>
 
-                    <form onSubmit={handleBatchPartialApprove} className="space-y-4">
+                    <form
+                        onSubmit={handleBatchPartialApprove}
+                        className="space-y-4"
+                    >
                         {/* Summary of eligible records */}
-                        <div className="bg-muted p-4 rounded-md space-y-2 text-sm max-h-48 overflow-y-auto">
-                            <h4 className="font-semibold">Records to Partially Approve ({batchPartialData.record_ids.length})</h4>
+                        <div className="max-h-48 space-y-2 overflow-y-auto rounded-md bg-muted p-4 text-sm">
+                            <h4 className="font-semibold">
+                                Records to Partially Approve (
+                                {batchPartialData.record_ids.length})
+                            </h4>
                             {attendanceData.data
-                                .filter(r => batchPartialData.record_ids.includes(r.id))
-                                .map(record => (
-                                    <div key={record.id} className="flex justify-between items-center py-1 border-b last:border-b-0">
-                                        <span>{record.user?.name || "Unknown"}</span>
-                                        <span className="text-muted-foreground text-xs">
-                                            {formatDate(record.shift_date)} &bull; {record.status?.replace('_', ' ')}
+                                .filter((r) =>
+                                    batchPartialData.record_ids.includes(r.id),
+                                )
+                                .map((record) => (
+                                    <div
+                                        key={record.id}
+                                        className="flex items-center justify-between border-b py-1 last:border-b-0"
+                                    >
+                                        <span>
+                                            {record.user?.name || 'Unknown'}
+                                        </span>
+                                        <span className="text-xs text-muted-foreground">
+                                            {formatDate(record.shift_date)}{' '}
+                                            &bull;{' '}
+                                            {record.status?.replace('_', ' ')}
                                         </span>
                                     </div>
                                 ))}
@@ -2657,12 +4243,17 @@ export default function AttendanceReview() {
                         {/* Verification Notes */}
                         <div className="space-y-2">
                             <Label>Verification Notes (applied to all)</Label>
-                            <div className="flex flex-wrap gap-2 mb-2">
+                            <div className="mb-2 flex flex-wrap gap-2">
                                 <Button
                                     type="button"
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => setBatchPartialData("verification_notes", "Batch partially approved - time out pending.")}
+                                    onClick={() =>
+                                        setBatchPartialData(
+                                            'verification_notes',
+                                            'Batch partially approved - time out pending.',
+                                        )
+                                    }
                                     className="h-7 text-xs"
                                 >
                                     Time out pending
@@ -2671,7 +4262,12 @@ export default function AttendanceReview() {
                                     type="button"
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => setBatchPartialData("verification_notes", "Time-in verified. Awaiting biometric for time out.")}
+                                    onClick={() =>
+                                        setBatchPartialData(
+                                            'verification_notes',
+                                            'Time-in verified. Awaiting biometric for time out.',
+                                        )
+                                    }
                                     className="h-7 text-xs"
                                 >
                                     Awaiting biometric
@@ -2679,37 +4275,50 @@ export default function AttendanceReview() {
                             </div>
                             <Textarea
                                 value={batchPartialData.verification_notes}
-                                onChange={e => setBatchPartialData("verification_notes", e.target.value)}
+                                onChange={(e) =>
+                                    setBatchPartialData(
+                                        'verification_notes',
+                                        e.target.value,
+                                    )
+                                }
                                 placeholder="Optional notes applied to all records..."
                                 rows={2}
                             />
                         </div>
 
-                        <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 p-3 rounded-md">
+                        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/20">
                             <p className="text-sm text-amber-800 dark:text-amber-400">
-                                <strong>Note:</strong> All eligible records will be partially approved based on their time-in data.
-                                Attendance points will be generated where applicable. Complete verification when time-out data becomes available.
+                                <strong>Note:</strong> All eligible records will
+                                be partially approved based on their time-in
+                                data. Attendance points will be generated where
+                                applicable. Complete verification when time-out
+                                data becomes available.
                             </p>
                         </div>
 
-                        <DialogFooter className="flex-col sm:flex-row gap-2">
+                        <DialogFooter className="flex-col gap-2 sm:flex-row">
                             <Button
                                 type="button"
                                 variant="outline"
-                                onClick={() => setIsBatchPartialDialogOpen(false)}
+                                onClick={() =>
+                                    setIsBatchPartialDialogOpen(false)
+                                }
                                 disabled={batchPartialProcessing}
                             >
                                 Cancel
                             </Button>
                             <Button
                                 type="submit"
-                                disabled={batchPartialProcessing || batchPartialData.record_ids.length === 0}
+                                disabled={
+                                    batchPartialProcessing ||
+                                    batchPartialData.record_ids.length === 0
+                                }
                                 className="bg-amber-600 hover:bg-amber-700"
                             >
-                                <Moon className="h-4 w-4 mr-2" />
+                                <Moon className="mr-2 h-4 w-4" />
                                 {batchPartialProcessing
-                                    ? "Approving..."
-                                    : `Partially Approve ${batchPartialData.record_ids.length} Record${batchPartialData.record_ids.length === 1 ? "" : "s"}`}
+                                    ? 'Approving...'
+                                    : `Partially Approve ${batchPartialData.record_ids.length} Record${batchPartialData.record_ids.length === 1 ? '' : 's'}`}
                             </Button>
                         </DialogFooter>
                     </form>

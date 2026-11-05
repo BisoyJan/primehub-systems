@@ -1,7 +1,3 @@
-import { useEffect } from 'react';
-import { useForm } from '@inertiajs/react';
-import { format } from 'date-fns';
-import { AlertTriangle, Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -14,6 +10,10 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { useForm } from '@inertiajs/react';
+import { format } from 'date-fns';
+import { AlertTriangle, Loader2, RefreshCw } from 'lucide-react';
+import { useEffect } from 'react';
 
 interface RecalculateCreditsDialogProps {
     open: boolean;
@@ -78,11 +78,15 @@ export default function RecalculateCreditsDialog({
         const cursorStart = isFirstReg
             ? new Date(hd.getFullYear(), hd.getMonth() + 1, 1)
             : new Date(
-                Math.max(
-                    new Date(hd.getFullYear(), hd.getMonth() + 1, 1).getTime(),
-                    new Date(currentYear, 0, 1).getTime(),
-                ),
-            );
+                  Math.max(
+                      new Date(
+                          hd.getFullYear(),
+                          hd.getMonth() + 1,
+                          1,
+                      ).getTime(),
+                      new Date(currentYear, 0, 1).getTime(),
+                  ),
+              );
         let monthsEarned = 0;
         const cursor = new Date(cursorStart);
         while (cursor <= today) {
@@ -90,9 +94,17 @@ export default function RecalculateCreditsDialog({
                 cursor.setMonth(cursor.getMonth() + 1);
                 continue;
             }
-            const daysInMonth = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
+            const daysInMonth = new Date(
+                cursor.getFullYear(),
+                cursor.getMonth() + 1,
+                0,
+            ).getDate();
             const anniversaryDay = Math.min(hd.getDate(), daysInMonth);
-            const anniversaryDate = new Date(cursor.getFullYear(), cursor.getMonth(), anniversaryDay);
+            const anniversaryDate = new Date(
+                cursor.getFullYear(),
+                cursor.getMonth(),
+                anniversaryDay,
+            );
             if (anniversaryDate <= today) monthsEarned++;
             cursor.setMonth(cursor.getMonth() + 1);
         }
@@ -111,12 +123,13 @@ export default function RecalculateCreditsDialog({
 
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
-            <DialogContent className="max-w-[90vw] sm:max-w-md max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-h-[90vh] max-w-[90vw] overflow-y-auto sm:max-w-md">
                 <DialogHeader>
                     <DialogTitle>Recalculate Leave Credits</DialogTitle>
                     <DialogDescription>
-                        Reset and recalculate all leave credits for <strong>{employeeName}</strong> based on the hire
-                        date below.
+                        Reset and recalculate all leave credits for{' '}
+                        <strong>{employeeName}</strong> based on the hire date
+                        below.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -130,18 +143,22 @@ export default function RecalculateCreditsDialog({
                             id="rcld_hired_date"
                             type="date"
                             value={form.data.hired_date}
-                            onChange={(e) => form.setData('hired_date', e.target.value)}
+                            onChange={(e) =>
+                                form.setData('hired_date', e.target.value)
+                            }
                             max={new Date().toISOString().substring(0, 10)}
                         />
                         {form.errors.hired_date && (
-                            <p className="text-sm text-red-600">{form.errors.hired_date}</p>
+                            <p className="text-sm text-red-600">
+                                {form.errors.hired_date}
+                            </p>
                         )}
                     </div>
 
                     {/* Credit preview */}
                     {previewData && (
-                        <div className="p-3 rounded-lg bg-muted/50 border text-sm space-y-2">
-                            <div className="flex items-center justify-between text-xs text-muted-foreground border-b pb-2">
+                        <div className="space-y-2 rounded-lg border bg-muted/50 p-3 text-sm">
+                            <div className="flex items-center justify-between border-b pb-2 text-xs text-muted-foreground">
                                 <span>Calculated as of</span>
                                 <span className="font-medium text-foreground">
                                     {format(previewData.today, 'MMM d, yyyy')}
@@ -149,16 +166,27 @@ export default function RecalculateCreditsDialog({
                             </div>
                             <div className="grid grid-cols-2 gap-3 pt-1">
                                 <div>
-                                    <p className="text-muted-foreground text-xs">Regularization Date</p>
-                                    <p className="font-semibold">{format(previewData.regDate, 'MMM d, yyyy')}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                        Regularization Date
+                                    </p>
+                                    <p className="font-semibold">
+                                        {format(
+                                            previewData.regDate,
+                                            'MMM d, yyyy',
+                                        )}
+                                    </p>
                                 </div>
                                 <div>
-                                    <p className="text-muted-foreground text-xs">{previewData.creditLabel}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                        {previewData.creditLabel}
+                                    </p>
                                     <p className="font-semibold text-green-600 dark:text-green-400">
-                                        {previewData.totalEarned.toFixed(2)} credits
+                                        {previewData.totalEarned.toFixed(2)}{' '}
+                                        credits
                                     </p>
                                     <p className="text-xs text-muted-foreground">
-                                        {employeeRole} · {monthlyRate.toFixed(2)}/mo
+                                        {employeeRole} ·{' '}
+                                        {monthlyRate.toFixed(2)}/mo
                                     </p>
                                 </div>
                             </div>
@@ -166,16 +194,21 @@ export default function RecalculateCreditsDialog({
                     )}
 
                     {/* Destructive warning */}
-                    <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-sm dark:bg-destructive/20 dark:border-destructive/40">
-                        <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                    <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive dark:border-destructive/40 dark:bg-destructive/20">
+                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                         <div className="space-y-1">
-                            <p className="font-medium">This action will permanently delete:</p>
-                            <ul className="list-disc list-inside space-y-0.5 text-xs">
-                                <li>All existing monthly leave credit records</li>
+                            <p className="font-medium">
+                                This action will permanently delete:
+                            </p>
+                            <ul className="list-inside list-disc space-y-0.5 text-xs">
+                                <li>
+                                    All existing monthly leave credit records
+                                </li>
                                 <li>All carryover records for this employee</li>
                             </ul>
-                            <p className="text-xs mt-1">
-                                Credits will be recalculated from scratch based on the hire date above.
+                            <p className="mt-1 text-xs">
+                                Credits will be recalculated from scratch based
+                                on the hire date above.
                             </p>
                         </div>
                     </div>
@@ -189,30 +222,44 @@ export default function RecalculateCreditsDialog({
                             id="rcld_reason"
                             placeholder="e.g. Hired date corrected from Dec 11, 2025 to Nov 11, 2025..."
                             value={form.data.reason}
-                            onChange={(e) => form.setData('reason', e.target.value)}
+                            onChange={(e) =>
+                                form.setData('reason', e.target.value)
+                            }
                             rows={3}
                         />
-                        {form.errors.reason && <p className="text-sm text-red-600">{form.errors.reason}</p>}
+                        {form.errors.reason && (
+                            <p className="text-sm text-red-600">
+                                {form.errors.reason}
+                            </p>
+                        )}
                     </div>
                 </div>
 
                 <DialogFooter>
-                    <Button variant="outline" onClick={() => onOpenChange(false)} disabled={form.processing}>
+                    <Button
+                        variant="outline"
+                        onClick={() => onOpenChange(false)}
+                        disabled={form.processing}
+                    >
                         Cancel
                     </Button>
                     <Button
                         variant="destructive"
                         onClick={submit}
-                        disabled={form.processing || !form.data.reason || !form.data.hired_date}
+                        disabled={
+                            form.processing ||
+                            !form.data.reason ||
+                            !form.data.hired_date
+                        }
                     >
                         {form.processing ? (
                             <>
-                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                 Recalculating...
                             </>
                         ) : (
                             <>
-                                <RefreshCw className="h-4 w-4 mr-2" />
+                                <RefreshCw className="mr-2 h-4 w-4" />
                                 Recalculate Credits
                             </>
                         )}

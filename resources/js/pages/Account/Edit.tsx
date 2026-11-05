@@ -1,20 +1,51 @@
-import React, { useState } from "react";
-import { router, useForm, usePage, Head } from "@inertiajs/react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import AppLayout from "@/layouts/app-layout";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { DatePicker } from "@/components/ui/date-picker";
-import { Label } from "@/components/ui/label";
-import { toast } from "sonner";
-import { PageHeader } from "@/components/PageHeader";
-import { LoadingOverlay } from "@/components/LoadingOverlay";
-import { useFlashMessage, usePageLoading, usePageMeta, useReturnTo } from "@/hooks";
-import { index as accountsIndex, edit as accountsEdit, update as accountsUpdate, toggleActive } from "@/routes/accounts";
-import { Switch } from "@/components/ui/switch";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { AlertTriangle, Eye, EyeOff } from "lucide-react";
+import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { PageHeader } from '@/components/PageHeader';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Button } from '@/components/ui/button';
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from '@/components/ui/card';
+import { DatePicker } from '@/components/ui/date-picker';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import {
+    useFlashMessage,
+    usePageLoading,
+    usePageMeta,
+    useReturnTo,
+} from '@/hooks';
+import AppLayout from '@/layouts/app-layout';
+import {
+    edit as accountsEdit,
+    index as accountsIndex,
+    update as accountsUpdate,
+    toggleActive,
+} from '@/routes/accounts';
+import { Head, router, useForm, usePage } from '@inertiajs/react';
+import { AlertTriangle, Eye, EyeOff } from 'lucide-react';
+import React, { useState } from 'react';
+import { toast } from 'sonner';
 
 interface User {
     id: number;
@@ -29,7 +60,11 @@ interface User {
 }
 
 export default function AccountEdit() {
-    const { user, roles, auth } = usePage<{ user: User; roles: string[]; auth: { user: { id: number } } }>().props;
+    const { user, roles, auth } = usePage<{
+        user: User;
+        roles: string[];
+        auth: { user: { id: number } };
+    }>().props;
 
     const fullName = `${user.first_name} ${user.last_name}`;
     const currentUserId = auth.user.id;
@@ -37,12 +72,13 @@ export default function AccountEdit() {
     const [employeeStatus, setEmployeeStatus] = useState(user.is_active);
     const [toggleActiveDialogOpen, setToggleActiveDialogOpen] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
-    const [showPasswordConfirmation, setShowPasswordConfirmation] = useState(false);
+    const [showPasswordConfirmation, setShowPasswordConfirmation] =
+        useState(false);
 
     const { title, breadcrumbs } = usePageMeta({
         title: `Edit ${fullName}`,
         breadcrumbs: [
-            { title: "Accounts", href: accountsIndex().url },
+            { title: 'Accounts', href: accountsIndex().url },
             { title: `Edit ${fullName}`, href: accountsEdit(user.id).url },
         ],
     });
@@ -53,11 +89,11 @@ export default function AccountEdit() {
 
     const { data, setData, patch, processing, errors } = useForm({
         first_name: user.first_name,
-        middle_name: user.middle_name || "",
+        middle_name: user.middle_name || '',
         last_name: user.last_name,
         email: user.email,
-        password: "",
-        password_confirmation: "",
+        password: '',
+        password_confirmation: '',
         role: user.role,
         hired_date: user.hired_date,
         is_solo_parent: user.is_solo_parent,
@@ -75,30 +111,36 @@ export default function AccountEdit() {
     };
 
     const confirmToggleActive = () => {
-        router.post(toggleActive(user.id).url, {}, {
-            preserveState: true,
-            preserveScroll: true,
-            onSuccess: () => {
-                setEmployeeStatus(!employeeStatus);
-                setToggleActiveDialogOpen(false);
-                toast.success(`Employee ${employeeStatus ? 'deactivated' : 'activated'} successfully`);
+        router.post(
+            toggleActive(user.id).url,
+            {},
+            {
+                preserveState: true,
+                preserveScroll: true,
+                onSuccess: () => {
+                    setEmployeeStatus(!employeeStatus);
+                    setToggleActiveDialogOpen(false);
+                    toast.success(
+                        `Employee ${employeeStatus ? 'deactivated' : 'activated'} successfully`,
+                    );
+                },
+                onError: () => {
+                    toast.error('Failed to update employee status');
+                },
             },
-            onError: () => {
-                toast.error('Failed to update employee status');
-            }
-        });
+        );
     };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         patch(accountsUpdate(user.id).url, {
             onSuccess: () => {
-                toast.success("User account updated successfully");
+                toast.success('User account updated successfully');
                 router.get(backUrl);
             },
             onError: (errors) => {
                 const firstError = Object.values(errors)[0] as string;
-                toast.error(firstError || "Validation error");
+                toast.error(firstError || 'Validation error');
             },
         });
     };
@@ -106,104 +148,183 @@ export default function AccountEdit() {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={title} />
-            <LoadingOverlay isLoading={isPageLoading || processing} message={processing ? "Updating account..." : undefined} />
-            <div className="max-w-4xl mx-auto p-6 space-y-6">
-                <PageHeader title="Edit User Account" description={`Update information for ${fullName}`} />
+            <LoadingOverlay
+                isLoading={isPageLoading || processing}
+                message={processing ? 'Updating account...' : undefined}
+            />
+            <div className="mx-auto max-w-4xl space-y-6 p-6">
+                <PageHeader
+                    title="Edit User Account"
+                    description={`Update information for ${fullName}`}
+                />
                 <Card>
                     <CardHeader>
                         <CardTitle>Edit User Account</CardTitle>
-                        <CardDescription>Update user information and settings</CardDescription>
+                        <CardDescription>
+                            Update user information and settings
+                        </CardDescription>
                     </CardHeader>
                     <CardContent>
                         <form onSubmit={handleSubmit} className="space-y-6">
                             {/* Personal Information Section */}
                             <div className="space-y-4">
-                                <h3 className="text-lg font-semibold">Personal Information</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <h3 className="text-lg font-semibold">
+                                    Personal Information
+                                </h3>
+                                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                                     <div>
-                                        <Label htmlFor="first_name">First Name</Label>
+                                        <Label htmlFor="first_name">
+                                            First Name
+                                        </Label>
                                         <Input
                                             id="first_name"
                                             type="text"
                                             value={data.first_name}
-                                            onChange={e => setData("first_name", e.target.value)}
+                                            onChange={(e) =>
+                                                setData(
+                                                    'first_name',
+                                                    e.target.value,
+                                                )
+                                            }
                                             placeholder="John"
                                             required
                                         />
-                                        {errors.first_name && <p className="text-red-600 text-sm mt-1">{errors.first_name}</p>}
+                                        {errors.first_name && (
+                                            <p className="mt-1 text-sm text-red-600">
+                                                {errors.first_name}
+                                            </p>
+                                        )}
                                     </div>
 
                                     <div>
-                                        <Label htmlFor="middle_name">Middle Initial (Optional)</Label>
+                                        <Label htmlFor="middle_name">
+                                            Middle Initial (Optional)
+                                        </Label>
                                         <Input
                                             id="middle_name"
                                             type="text"
                                             value={data.middle_name}
-                                            onChange={e => setData("middle_name", e.target.value.toUpperCase().charAt(0))}
+                                            onChange={(e) =>
+                                                setData(
+                                                    'middle_name',
+                                                    e.target.value
+                                                        .toUpperCase()
+                                                        .charAt(0),
+                                                )
+                                            }
                                             placeholder="M"
                                             maxLength={1}
                                         />
-                                        {errors.middle_name && <p className="text-red-600 text-sm mt-1">{errors.middle_name}</p>}
+                                        {errors.middle_name && (
+                                            <p className="mt-1 text-sm text-red-600">
+                                                {errors.middle_name}
+                                            </p>
+                                        )}
                                     </div>
 
                                     <div>
-                                        <Label htmlFor="last_name">Last Name</Label>
+                                        <Label htmlFor="last_name">
+                                            Last Name
+                                        </Label>
                                         <Input
                                             id="last_name"
                                             type="text"
                                             value={data.last_name}
-                                            onChange={e => setData("last_name", e.target.value)}
+                                            onChange={(e) =>
+                                                setData(
+                                                    'last_name',
+                                                    e.target.value,
+                                                )
+                                            }
                                             placeholder="Doe"
                                             required
                                         />
-                                        {errors.last_name && <p className="text-red-600 text-sm mt-1">{errors.last_name}</p>}
+                                        {errors.last_name && (
+                                            <p className="mt-1 text-sm text-red-600">
+                                                {errors.last_name}
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
                             </div>
 
                             {/* Account Information Section */}
                             <div className="space-y-4">
-                                <h3 className="text-lg font-semibold">Account Information</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <h3 className="text-lg font-semibold">
+                                    Account Information
+                                </h3>
+                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                     <div>
-                                        <Label htmlFor="email">Email Address</Label>
+                                        <Label htmlFor="email">
+                                            Email Address
+                                        </Label>
                                         <Input
                                             id="email"
                                             type="email"
                                             value={data.email}
-                                            onChange={e => setData("email", e.target.value)}
+                                            onChange={(e) =>
+                                                setData('email', e.target.value)
+                                            }
                                             placeholder="john.doe@primehubmail.com"
                                             required
                                         />
-                                        <p className="text-xs text-muted-foreground mt-1">
-                                            Only @primehubmail.com and @prmhubsolutions.com emails are accepted.
+                                        <p className="mt-1 text-xs text-muted-foreground">
+                                            Only @primehubmail.com and
+                                            @prmhubsolutions.com emails are
+                                            accepted.
                                         </p>
-                                        {errors.email && <p className="text-red-600 text-sm mt-1">{errors.email}</p>}
+                                        {errors.email && (
+                                            <p className="mt-1 text-sm text-red-600">
+                                                {errors.email}
+                                            </p>
+                                        )}
                                     </div>
 
                                     <div>
                                         <Label htmlFor="role">Role</Label>
-                                        <Select value={data.role} onValueChange={(val) => setData("role", val)}>
+                                        <Select
+                                            value={data.role}
+                                            onValueChange={(val) =>
+                                                setData('role', val)
+                                            }
+                                        >
                                             <SelectTrigger className="w-full">
                                                 <SelectValue placeholder="Select Role" />
                                             </SelectTrigger>
                                             <SelectContent>
                                                 {roles.map((role) => (
-                                                    <SelectItem key={role} value={role}>{role}</SelectItem>
+                                                    <SelectItem
+                                                        key={role}
+                                                        value={role}
+                                                    >
+                                                        {role}
+                                                    </SelectItem>
                                                 ))}
                                             </SelectContent>
                                         </Select>
-                                        {errors.role && <p className="text-red-600 text-sm mt-1">{errors.role}</p>}
+                                        {errors.role && (
+                                            <p className="mt-1 text-sm text-red-600">
+                                                {errors.role}
+                                            </p>
+                                        )}
                                     </div>
 
                                     <div>
-                                        <Label htmlFor="hired_date">Hired Date</Label>
+                                        <Label htmlFor="hired_date">
+                                            Hired Date
+                                        </Label>
                                         <DatePicker
                                             value={data.hired_date}
-                                            onChange={(value) => setData("hired_date", value)}
+                                            onChange={(value) =>
+                                                setData('hired_date', value)
+                                            }
                                             placeholder="Select hired date"
                                         />
-                                        {errors.hired_date && <p className="text-red-600 text-sm mt-1">{errors.hired_date}</p>}
+                                        {errors.hired_date && (
+                                            <p className="mt-1 text-sm text-red-600">
+                                                {errors.hired_date}
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -211,49 +332,72 @@ export default function AccountEdit() {
                             {/* Employee Status Section */}
                             {user.id !== currentUserId && (
                                 <div className="space-y-4">
-                                    <h3 className="text-lg font-semibold">Employee Status</h3>
-                                    <div className="flex items-center justify-between p-4 border rounded-lg">
+                                    <h3 className="text-lg font-semibold">
+                                        Employee Status
+                                    </h3>
+                                    <div className="flex items-center justify-between rounded-lg border p-4">
                                         <div className="space-y-1">
-                                            <p className="font-medium">Active Status</p>
+                                            <p className="font-medium">
+                                                Active Status
+                                            </p>
                                             <p className="text-sm text-muted-foreground">
                                                 {employeeStatus
-                                                    ? "Employee is currently active and can access the system"
-                                                    : "Employee is inactive and all their schedules are deactivated"}
+                                                    ? 'Employee is currently active and can access the system'
+                                                    : 'Employee is inactive and all their schedules are deactivated'}
                                             </p>
                                         </div>
                                         <div className="flex items-center gap-3">
-                                            <span className={`px-2 py-1 rounded-full text-xs font-medium border ${employeeStatus
-                                                ? 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700'
-                                                : 'bg-gray-100 text-gray-800 border-gray-300 dark:bg-gray-900/30 dark:text-gray-400 dark:border-gray-700'
-                                                }`}>
-                                                {employeeStatus ? 'Active' : 'Inactive'}
+                                            <span
+                                                className={`rounded-full border px-2 py-1 text-xs font-medium ${
+                                                    employeeStatus
+                                                        ? 'border-green-300 bg-green-100 text-green-800 dark:border-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                                        : 'border-gray-300 bg-gray-100 text-gray-800 dark:border-gray-700 dark:bg-gray-900/30 dark:text-gray-400'
+                                                }`}
+                                            >
+                                                {employeeStatus
+                                                    ? 'Active'
+                                                    : 'Inactive'}
                                             </span>
                                             <Switch
                                                 checked={employeeStatus}
-                                                onCheckedChange={handleToggleActive}
+                                                onCheckedChange={
+                                                    handleToggleActive
+                                                }
                                                 aria-label="Toggle employee active status"
                                             />
                                         </div>
                                     </div>
-                                    <div className="flex items-center justify-between p-4 border rounded-lg">
+                                    <div className="flex items-center justify-between rounded-lg border p-4">
                                         <div className="space-y-1">
-                                            <p className="font-medium">Solo Parent</p>
+                                            <p className="font-medium">
+                                                Solo Parent
+                                            </p>
                                             <p className="text-sm text-muted-foreground">
                                                 {data.is_solo_parent
-                                                    ? "Employee is eligible for Solo Parent Leave (SPL) credits"
-                                                    : "Enable to grant Solo Parent Leave (SPL) eligibility"}
+                                                    ? 'Employee is eligible for Solo Parent Leave (SPL) credits'
+                                                    : 'Enable to grant Solo Parent Leave (SPL) eligibility'}
                                             </p>
                                         </div>
                                         <div className="flex items-center gap-3">
-                                            <span className={`px-2 py-1 rounded-full text-xs font-medium border ${data.is_solo_parent
-                                                ? 'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700'
-                                                : 'bg-gray-100 text-gray-800 border-gray-300 dark:bg-gray-900/30 dark:text-gray-400 dark:border-gray-700'
-                                                }`}>
-                                                {data.is_solo_parent ? 'Solo Parent' : 'Not Solo Parent'}
+                                            <span
+                                                className={`rounded-full border px-2 py-1 text-xs font-medium ${
+                                                    data.is_solo_parent
+                                                        ? 'border-blue-300 bg-blue-100 text-blue-800 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                                                        : 'border-gray-300 bg-gray-100 text-gray-800 dark:border-gray-700 dark:bg-gray-900/30 dark:text-gray-400'
+                                                }`}
+                                            >
+                                                {data.is_solo_parent
+                                                    ? 'Solo Parent'
+                                                    : 'Not Solo Parent'}
                                             </span>
                                             <Switch
                                                 checked={data.is_solo_parent}
-                                                onCheckedChange={(checked) => setData('is_solo_parent', checked)}
+                                                onCheckedChange={(checked) =>
+                                                    setData(
+                                                        'is_solo_parent',
+                                                        checked,
+                                                    )
+                                                }
                                                 aria-label="Toggle solo parent status"
                                             />
                                         </div>
@@ -264,28 +408,50 @@ export default function AccountEdit() {
                             {/* Security Section */}
                             <div className="space-y-4">
                                 <div>
-                                    <h3 className="text-lg font-semibold">Change Password</h3>
-                                    <p className="text-sm text-muted-foreground mt-1">
-                                        Leave password fields blank if you don't want to change the password
+                                    <h3 className="text-lg font-semibold">
+                                        Change Password
+                                    </h3>
+                                    <p className="mt-1 text-sm text-muted-foreground">
+                                        Leave password fields blank if you don't
+                                        want to change the password
                                     </p>
                                 </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                     <div>
-                                        <Label htmlFor="password">New Password</Label>
+                                        <Label htmlFor="password">
+                                            New Password
+                                        </Label>
                                         <div className="relative">
                                             <Input
                                                 id="password"
-                                                type={showPassword ? "text" : "password"}
+                                                type={
+                                                    showPassword
+                                                        ? 'text'
+                                                        : 'password'
+                                                }
                                                 value={data.password}
-                                                onChange={e => setData("password", e.target.value)}
+                                                onChange={(e) =>
+                                                    setData(
+                                                        'password',
+                                                        e.target.value,
+                                                    )
+                                                }
                                                 placeholder="••••••••"
                                                 className="pr-10"
                                             />
                                             <button
                                                 type="button"
-                                                onClick={() => setShowPassword(!showPassword)}
-                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                                                aria-label={showPassword ? "Hide password" : "Show password"}
+                                                onClick={() =>
+                                                    setShowPassword(
+                                                        !showPassword,
+                                                    )
+                                                }
+                                                className="absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                                aria-label={
+                                                    showPassword
+                                                        ? 'Hide password'
+                                                        : 'Show password'
+                                                }
                                             >
                                                 {showPassword ? (
                                                     <EyeOff className="h-4 w-4" />
@@ -294,25 +460,50 @@ export default function AccountEdit() {
                                                 )}
                                             </button>
                                         </div>
-                                        {errors.password && <p className="text-red-600 text-sm mt-1">{errors.password}</p>}
+                                        {errors.password && (
+                                            <p className="mt-1 text-sm text-red-600">
+                                                {errors.password}
+                                            </p>
+                                        )}
                                     </div>
 
                                     <div>
-                                        <Label htmlFor="password_confirmation">Confirm New Password</Label>
+                                        <Label htmlFor="password_confirmation">
+                                            Confirm New Password
+                                        </Label>
                                         <div className="relative">
                                             <Input
                                                 id="password_confirmation"
-                                                type={showPasswordConfirmation ? "text" : "password"}
-                                                value={data.password_confirmation}
-                                                onChange={e => setData("password_confirmation", e.target.value)}
+                                                type={
+                                                    showPasswordConfirmation
+                                                        ? 'text'
+                                                        : 'password'
+                                                }
+                                                value={
+                                                    data.password_confirmation
+                                                }
+                                                onChange={(e) =>
+                                                    setData(
+                                                        'password_confirmation',
+                                                        e.target.value,
+                                                    )
+                                                }
                                                 placeholder="••••••••"
                                                 className="pr-10"
                                             />
                                             <button
                                                 type="button"
-                                                onClick={() => setShowPasswordConfirmation(!showPasswordConfirmation)}
-                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                                                aria-label={showPasswordConfirmation ? "Hide password confirmation" : "Show password confirmation"}
+                                                onClick={() =>
+                                                    setShowPasswordConfirmation(
+                                                        !showPasswordConfirmation,
+                                                    )
+                                                }
+                                                className="absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                                aria-label={
+                                                    showPasswordConfirmation
+                                                        ? 'Hide password confirmation'
+                                                        : 'Show password confirmation'
+                                                }
                                             >
                                                 {showPasswordConfirmation ? (
                                                     <EyeOff className="h-4 w-4" />
@@ -321,14 +512,20 @@ export default function AccountEdit() {
                                                 )}
                                             </button>
                                         </div>
-                                        {errors.password_confirmation && <p className="text-red-600 text-sm mt-1">{errors.password_confirmation}</p>}
+                                        {errors.password_confirmation && (
+                                            <p className="mt-1 text-sm text-red-600">
+                                                {errors.password_confirmation}
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="flex gap-2 pt-4 border-t">
+                            <div className="flex gap-2 border-t pt-4">
                                 <Button type="submit" disabled={processing}>
-                                    {processing ? "Updating..." : "Update Account"}
+                                    {processing
+                                        ? 'Updating...'
+                                        : 'Update Account'}
                                 </Button>
                                 <Button
                                     variant="outline"
@@ -344,7 +541,10 @@ export default function AccountEdit() {
             </div>
 
             {/* Deactivate Employee Confirmation Dialog */}
-            <AlertDialog open={toggleActiveDialogOpen} onOpenChange={setToggleActiveDialogOpen}>
+            <AlertDialog
+                open={toggleActiveDialogOpen}
+                onOpenChange={setToggleActiveDialogOpen}
+            >
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle className="flex items-center gap-2">
@@ -353,10 +553,12 @@ export default function AccountEdit() {
                         </AlertDialogTitle>
                         <AlertDialogDescription className="space-y-2">
                             <p>
-                                Are you sure you want to deactivate <strong>{fullName}</strong>?
+                                Are you sure you want to deactivate{' '}
+                                <strong>{fullName}</strong>?
                             </p>
-                            <p className="text-yellow-600 dark:text-yellow-500 font-medium">
-                                ⚠️ This will also deactivate all their active employee schedules.
+                            <p className="font-medium text-yellow-600 dark:text-yellow-500">
+                                ⚠️ This will also deactivate all their active
+                                employee schedules.
                             </p>
                         </AlertDialogDescription>
                     </AlertDialogHeader>

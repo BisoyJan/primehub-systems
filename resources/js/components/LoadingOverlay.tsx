@@ -1,4 +1,3 @@
-import React from 'react';
 import { Loader2 } from 'lucide-react';
 
 interface LoadingOverlayProps {
@@ -18,17 +17,19 @@ interface LoadingOverlayProps {
  */
 export function LoadingOverlay({
     isLoading = false,
-    message = "Loading...",
-    fullScreen = false
+    message = 'Loading...',
+    fullScreen = false,
 }: LoadingOverlayProps) {
     if (!isLoading) return null;
 
     const containerClass = fullScreen
-        ? "fixed inset-0 z-50"
-        : "absolute inset-0 z-20";
+        ? 'fixed inset-0 z-50'
+        : 'absolute inset-0 z-20';
 
     return (
-        <div className={`${containerClass} bg-background/80 backdrop-blur-sm flex items-center justify-center`}>
+        <div
+            className={`${containerClass} flex items-center justify-center bg-background/80 backdrop-blur-sm`}
+        >
             <div className="flex flex-col items-center gap-3">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 <p className="text-sm text-muted-foreground">{message}</p>
@@ -40,6 +41,6 @@ export function LoadingOverlay({
 /**
  * Inline loading spinner (smaller, for buttons or inline use)
  */
-export function LoadingSpinner({ className = "" }: { className?: string }) {
+export function LoadingSpinner({ className = '' }: { className?: string }) {
     return <Loader2 className={`h-4 w-4 animate-spin ${className}`} />;
 }

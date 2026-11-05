@@ -13,7 +13,8 @@ import AuthLayout from '@/layouts/auth-layout';
 
 export default function Register() {
     const [showPassword, setShowPassword] = useState(false);
-    const [showPasswordConfirmation, setShowPasswordConfirmation] = useState(false);
+    const [showPasswordConfirmation, setShowPasswordConfirmation] =
+        useState(false);
 
     return (
         <AuthLayout
@@ -30,19 +31,28 @@ export default function Register() {
                 {({ processing, errors }) => (
                     <>
                         <div className="grid gap-7">
-                            <section className="grid gap-4" aria-labelledby="personal-details-heading">
+                            <section
+                                className="grid gap-4"
+                                aria-labelledby="personal-details-heading"
+                            >
                                 <div className="grid gap-1">
-                                    <h2 id="personal-details-heading" className="text-sm font-semibold text-white">
+                                    <h2
+                                        id="personal-details-heading"
+                                        className="text-sm font-semibold text-white"
+                                    >
                                         Personal details
                                     </h2>
                                     <p className="text-xs text-muted-foreground">
-                                        Use your name as it appears in company records.
+                                        Use your name as it appears in company
+                                        records.
                                     </p>
                                 </div>
 
                                 <div className="grid gap-4 sm:grid-cols-[1fr_5rem_1fr]">
                                     <div className="grid gap-2">
-                                        <Label htmlFor="first_name">First name</Label>
+                                        <Label htmlFor="first_name">
+                                            First name
+                                        </Label>
                                         <Input
                                             id="first_name"
                                             type="text"
@@ -53,11 +63,15 @@ export default function Register() {
                                             name="first_name"
                                             placeholder="John"
                                         />
-                                        <InputError message={errors.first_name} />
+                                        <InputError
+                                            message={errors.first_name}
+                                        />
                                     </div>
 
                                     <div className="grid gap-2">
-                                        <Label htmlFor="middle_name">M.I.</Label>
+                                        <Label htmlFor="middle_name">
+                                            M.I.
+                                        </Label>
                                         <Input
                                             id="middle_name"
                                             type="text"
@@ -67,11 +81,15 @@ export default function Register() {
                                             placeholder="M"
                                             maxLength={1}
                                         />
-                                        <InputError message={errors.middle_name} />
+                                        <InputError
+                                            message={errors.middle_name}
+                                        />
                                     </div>
 
                                     <div className="grid gap-2">
-                                        <Label htmlFor="last_name">Last name</Label>
+                                        <Label htmlFor="last_name">
+                                            Last name
+                                        </Label>
                                         <Input
                                             id="last_name"
                                             type="text"
@@ -81,18 +99,27 @@ export default function Register() {
                                             name="last_name"
                                             placeholder="Doe"
                                         />
-                                        <InputError message={errors.last_name} />
+                                        <InputError
+                                            message={errors.last_name}
+                                        />
                                     </div>
                                 </div>
                             </section>
 
-                            <section className="grid gap-4" aria-labelledby="account-security-heading">
+                            <section
+                                className="grid gap-4"
+                                aria-labelledby="account-security-heading"
+                            >
                                 <div className="grid gap-1">
-                                    <h2 id="account-security-heading" className="text-sm font-semibold text-white">
+                                    <h2
+                                        id="account-security-heading"
+                                        className="text-sm font-semibold text-white"
+                                    >
                                         Account security
                                     </h2>
                                     <p className="text-xs text-muted-foreground">
-                                        Use your company email and create a secure password.
+                                        Use your company email and create a
+                                        secure password.
                                     </p>
                                 </div>
 
@@ -112,11 +139,17 @@ export default function Register() {
 
                                 <div className="grid gap-2 sm:grid-cols-2">
                                     <div className="grid gap-2">
-                                        <Label htmlFor="password">Password</Label>
+                                        <Label htmlFor="password">
+                                            Password
+                                        </Label>
                                         <div className="relative">
                                             <Input
                                                 id="password"
-                                                type={showPassword ? 'text' : 'password'}
+                                                type={
+                                                    showPassword
+                                                        ? 'text'
+                                                        : 'password'
+                                                }
                                                 required
                                                 tabIndex={5}
                                                 autoComplete="new-password"
@@ -126,22 +159,40 @@ export default function Register() {
                                             />
                                             <button
                                                 type="button"
-                                                onClick={() => setShowPassword(!showPassword)}
-                                                aria-label={showPassword ? 'Hide password' : 'Show password'}
-                                                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-sm p-1 text-gray-400 outline-none transition-colors hover:text-white focus-visible:ring-2 focus-visible:ring-ring"
+                                                onClick={() =>
+                                                    setShowPassword(
+                                                        !showPassword,
+                                                    )
+                                                }
+                                                aria-label={
+                                                    showPassword
+                                                        ? 'Hide password'
+                                                        : 'Show password'
+                                                }
+                                                className="absolute top-1/2 right-3 -translate-y-1/2 rounded-sm p-1 text-gray-400 transition-colors outline-none hover:text-white focus-visible:ring-2 focus-visible:ring-ring"
                                             >
-                                                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                                {showPassword ? (
+                                                    <EyeOff className="h-4 w-4" />
+                                                ) : (
+                                                    <Eye className="h-4 w-4" />
+                                                )}
                                             </button>
                                         </div>
                                         <InputError message={errors.password} />
                                     </div>
 
                                     <div className="grid gap-2">
-                                        <Label htmlFor="password_confirmation">Confirm password</Label>
+                                        <Label htmlFor="password_confirmation">
+                                            Confirm password
+                                        </Label>
                                         <div className="relative">
                                             <Input
                                                 id="password_confirmation"
-                                                type={showPasswordConfirmation ? 'text' : 'password'}
+                                                type={
+                                                    showPasswordConfirmation
+                                                        ? 'text'
+                                                        : 'password'
+                                                }
                                                 required
                                                 tabIndex={6}
                                                 autoComplete="new-password"
@@ -151,14 +202,30 @@ export default function Register() {
                                             />
                                             <button
                                                 type="button"
-                                                onClick={() => setShowPasswordConfirmation(!showPasswordConfirmation)}
-                                                aria-label={showPasswordConfirmation ? 'Hide password confirmation' : 'Show password confirmation'}
-                                                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-sm p-1 text-gray-400 outline-none transition-colors hover:text-white focus-visible:ring-2 focus-visible:ring-ring"
+                                                onClick={() =>
+                                                    setShowPasswordConfirmation(
+                                                        !showPasswordConfirmation,
+                                                    )
+                                                }
+                                                aria-label={
+                                                    showPasswordConfirmation
+                                                        ? 'Hide password confirmation'
+                                                        : 'Show password confirmation'
+                                                }
+                                                className="absolute top-1/2 right-3 -translate-y-1/2 rounded-sm p-1 text-gray-400 transition-colors outline-none hover:text-white focus-visible:ring-2 focus-visible:ring-ring"
                                             >
-                                                {showPasswordConfirmation ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                                {showPasswordConfirmation ? (
+                                                    <EyeOff className="h-4 w-4" />
+                                                ) : (
+                                                    <Eye className="h-4 w-4" />
+                                                )}
                                             </button>
                                         </div>
-                                        <InputError message={errors.password_confirmation} />
+                                        <InputError
+                                            message={
+                                                errors.password_confirmation
+                                            }
+                                        />
                                     </div>
                                 </div>
                             </section>

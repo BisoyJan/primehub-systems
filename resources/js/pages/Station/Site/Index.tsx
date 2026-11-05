@@ -1,24 +1,37 @@
-import React, { useState, useEffect, useRef } from "react";
-import { router, Head } from "@inertiajs/react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Can } from '@/components/authorization';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { PageHeader } from '@/components/PageHeader';
+import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
+import { Button } from '@/components/ui/button';
 import {
+    Dialog,
+    DialogContent,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table';
+import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
+import AppLayout from '@/layouts/app-layout';
+import {
+    destroy as siteDestroy,
     index as sitesIndex,
     store as siteStore,
     update as siteUpdate,
-    destroy as siteDestroy,
 } from '@/routes/sites';
-import AppLayout from "@/layouts/app-layout";
-import { Label } from "@/components/ui/label";
-import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { Can } from "@/components/authorization";
-import { PageHeader } from "@/components/PageHeader";
-import { LoadingOverlay } from "@/components/LoadingOverlay";
-import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
-import { index as stationsIndexRoute } from "@/routes/stations";
-import { RefreshCw, Search, Plus, Play, Pause } from 'lucide-react';
+import { index as stationsIndexRoute } from '@/routes/stations';
+import { Head, router } from '@inertiajs/react';
+import { Pause, Play, Plus, RefreshCw, Search } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
 
 interface Site {
     id: number;
@@ -51,10 +64,13 @@ interface SiteManagementProps {
     filters?: Filters;
 }
 
-export default function SiteManagement({ sites, filters = {} }: SiteManagementProps) {
+export default function SiteManagement({
+    sites,
+    filters = {},
+}: SiteManagementProps) {
     const [open, setOpen] = useState(false);
     const [editSite, setEditSite] = useState<Site | null>(null);
-    const [name, setName] = useState("");
+    const [name, setName] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [deleteOpen, setDeleteOpen] = useState(false);
@@ -63,8 +79,10 @@ export default function SiteManagement({ sites, filters = {} }: SiteManagementPr
     const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
 
     // Search state
-    const [search, setSearch] = useState(filters.search || "");
-    const [debouncedSearch, setDebouncedSearch] = useState(filters.search || "");
+    const [search, setSearch] = useState(filters.search || '');
+    const [debouncedSearch, setDebouncedSearch] = useState(
+        filters.search || '',
+    );
     const isInitialMount = useRef(true);
 
     const { title, breadcrumbs } = usePageMeta({
@@ -121,7 +139,9 @@ export default function SiteManagement({ sites, filters = {} }: SiteManagementPr
                 replace: true,
                 only: ['sites'],
                 onSuccess: () => setLastRefresh(new Date()),
-                onFinish: () => { isPollingRef.current = false; },
+                onFinish: () => {
+                    isPollingRef.current = false;
+                },
             });
         }, 30000);
 
@@ -131,7 +151,7 @@ export default function SiteManagement({ sites, filters = {} }: SiteManagementPr
     // Add new site
     const handleAdd = () => {
         setEditSite(null);
-        setName("");
+        setName('');
         setError(null);
         setOpen(true);
     };
@@ -174,9 +194,10 @@ export default function SiteManagement({ sites, filters = {} }: SiteManagementPr
 
         // Check for duplicate names (case-insensitive)
         const trimmedName = name.trim();
-        const isDuplicate = sites.data.some(site =>
-            site.name.toLowerCase() === trimmedName.toLowerCase() &&
-            site.id !== editSite?.id
+        const isDuplicate = sites.data.some(
+            (site) =>
+                site.name.toLowerCase() === trimmedName.toLowerCase() &&
+                site.id !== editSite?.id,
         );
 
         if (isDuplicate) {
@@ -194,7 +215,11 @@ export default function SiteManagement({ sites, filters = {} }: SiteManagementPr
             onError: (errors: Record<string, string | string[]>) => {
                 // Handle backend validation errors
                 if (errors.name) {
-                    setError(Array.isArray(errors.name) ? errors.name[0] : errors.name);
+                    setError(
+                        Array.isArray(errors.name)
+                            ? errors.name[0]
+                            : errors.name,
+                    );
                 }
             },
             preserveState: true,
@@ -220,8 +245,11 @@ export default function SiteManagement({ sites, filters = {} }: SiteManagementPr
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={title} />
-            <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3 relative">
-                <LoadingOverlay isLoading={isPageLoading || loading} message={loading ? 'Processing...' : undefined} />
+            <div className="relative flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3">
+                <LoadingOverlay
+                    isLoading={isPageLoading || loading}
+                    message={loading ? 'Processing...' : undefined}
+                />
 
                 <PageHeader
                     title="Site Management"
@@ -229,42 +257,69 @@ export default function SiteManagement({ sites, filters = {} }: SiteManagementPr
                 />
 
                 <div className="flex flex-col gap-4">
-                    <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
-                        <div className="w-full sm:w-auto flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+                        <div className="grid w-full flex-1 grid-cols-1 gap-3 sm:w-auto sm:grid-cols-2 lg:grid-cols-4">
                             <div className="relative">
-                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Search className="absolute top-2.5 left-2.5 h-4 w-4 text-muted-foreground" />
                                 <Input
                                     placeholder="Search sites by name..."
                                     value={search}
-                                    onChange={e => setSearch(e.target.value)}
+                                    onChange={(e) => setSearch(e.target.value)}
                                     className="pl-8"
                                 />
                             </div>
                         </div>
 
-                        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                        <div className="flex w-full flex-wrap gap-2 sm:w-auto">
                             {search && (
-                                <Button variant="outline" onClick={() => setSearch("")} className="flex-1 sm:flex-none">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setSearch('')}
+                                    className="flex-1 sm:flex-none"
+                                >
                                     Reset
                                 </Button>
                             )}
 
                             <div className="flex gap-2">
-                                <Button variant="ghost" size="icon" onClick={handleManualRefresh} title="Refresh">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={handleManualRefresh}
+                                    title="Refresh"
+                                >
                                     <RefreshCw className="h-4 w-4" />
                                 </Button>
                                 <Button
-                                    variant={autoRefreshEnabled ? "default" : "ghost"}
+                                    variant={
+                                        autoRefreshEnabled ? 'default' : 'ghost'
+                                    }
                                     size="icon"
-                                    onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
-                                    title={autoRefreshEnabled ? "Disable auto-refresh" : "Enable auto-refresh (30s)"}
+                                    onClick={() =>
+                                        setAutoRefreshEnabled(
+                                            !autoRefreshEnabled,
+                                        )
+                                    }
+                                    title={
+                                        autoRefreshEnabled
+                                            ? 'Disable auto-refresh'
+                                            : 'Enable auto-refresh (30s)'
+                                    }
                                 >
-                                    {autoRefreshEnabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                                    {autoRefreshEnabled ? (
+                                        <Pause className="h-4 w-4" />
+                                    ) : (
+                                        <Play className="h-4 w-4" />
+                                    )}
                                 </Button>
                             </div>
 
                             <Can permission="sites.create">
-                                <Button onClick={handleAdd} disabled={loading} className="flex-1 sm:flex-none">
+                                <Button
+                                    onClick={handleAdd}
+                                    disabled={loading}
+                                    className="flex-1 sm:flex-none"
+                                >
                                     <Plus className="mr-2 h-4 w-4" />
                                     Add Site
                                 </Button>
@@ -272,15 +327,19 @@ export default function SiteManagement({ sites, filters = {} }: SiteManagementPr
                         </div>
                     </div>
 
-                    <div className="flex justify-between items-center text-sm">
+                    <div className="flex items-center justify-between text-sm">
                         <div className="text-muted-foreground">
-                            Showing {sites.data.length} of {sites.meta?.total || 0} site{sites.meta?.total !== 1 ? 's' : ''}
+                            Showing {sites.data.length} of{' '}
+                            {sites.meta?.total || 0} site
+                            {sites.meta?.total !== 1 ? 's' : ''}
                         </div>
-                        <div className="text-xs text-muted-foreground">Last updated: {lastRefresh.toLocaleTimeString()}</div>
+                        <div className="text-xs text-muted-foreground">
+                            Last updated: {lastRefresh.toLocaleTimeString()}
+                        </div>
                     </div>
                 </div>
-                <div className="shadow rounded-md overflow-hidden">
-                    <div className="overflow-x-auto ">
+                <div className="overflow-hidden rounded-md shadow">
+                    <div className="overflow-x-auto">
                         <Table>
                             <TableHeader>
                                 <TableRow className="bg-muted/50">
@@ -297,12 +356,27 @@ export default function SiteManagement({ sites, filters = {} }: SiteManagementPr
                                         <TableCell>
                                             <div className="flex items-center gap-2">
                                                 <Can permission="sites.edit">
-                                                    <Button variant="outline" size="sm" onClick={() => handleEdit(site)} disabled={loading}>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() =>
+                                                            handleEdit(site)
+                                                        }
+                                                        disabled={loading}
+                                                    >
                                                         Edit
                                                     </Button>
                                                 </Can>
                                                 <Can permission="sites.delete">
-                                                    <Button variant="destructive" size="sm" onClick={() => handleDelete(site)} className="ml-2" disabled={loading}>
+                                                    <Button
+                                                        variant="destructive"
+                                                        size="sm"
+                                                        onClick={() =>
+                                                            handleDelete(site)
+                                                        }
+                                                        className="ml-2"
+                                                        disabled={loading}
+                                                    >
                                                         Delete
                                                     </Button>
                                                 </Can>
@@ -312,7 +386,10 @@ export default function SiteManagement({ sites, filters = {} }: SiteManagementPr
                                 ))}
                                 {sites.data.length === 0 && !loading && (
                                     <TableRow>
-                                        <TableCell colSpan={3} className="py-8 text-center text-gray-500">
+                                        <TableCell
+                                            colSpan={3}
+                                            className="py-8 text-center text-gray-500"
+                                        >
                                             No sites found
                                         </TableCell>
                                     </TableRow>
@@ -324,17 +401,17 @@ export default function SiteManagement({ sites, filters = {} }: SiteManagementPr
 
                 {/* Pagination */}
                 {sites.links && sites.links.length > 0 && (
-                    <div className="flex justify-center mt-4">
+                    <div className="mt-4 flex justify-center">
                         <PaginationNav links={sites.links} />
                     </div>
                 )}
-
-
             </div>
             <Dialog open={open} onOpenChange={setOpen}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>{editSite ? "Edit Site" : "Add Site"}</DialogTitle>
+                        <DialogTitle>
+                            {editSite ? 'Edit Site' : 'Add Site'}
+                        </DialogTitle>
                     </DialogHeader>
                     <form onSubmit={handleSave} className="space-y-4">
                         <Label htmlFor="site-name">Name</Label>
@@ -346,12 +423,19 @@ export default function SiteManagement({ sites, filters = {} }: SiteManagementPr
                             placeholder="Site name"
                             disabled={loading}
                         />
-                        {error && <div className="text-red-500 text-sm">{error}</div>}
+                        {error && (
+                            <div className="text-sm text-red-500">{error}</div>
+                        )}
                         <DialogFooter>
                             <Button type="submit" disabled={loading}>
                                 {loading ? 'Saving...' : 'Save'}
                             </Button>
-                            <Button variant="outline" type="button" onClick={() => setOpen(false)} disabled={loading}>
+                            <Button
+                                variant="outline"
+                                type="button"
+                                onClick={() => setOpen(false)}
+                                disabled={loading}
+                            >
                                 Cancel
                             </Button>
                         </DialogFooter>
@@ -365,14 +449,26 @@ export default function SiteManagement({ sites, filters = {} }: SiteManagementPr
                     </DialogHeader>
                     <div className="py-2 text-sm">
                         {deleteSite && (
-                            <>Are you sure you want to delete site <b>{deleteSite.name}</b>? This action cannot be undone.</>
+                            <>
+                                Are you sure you want to delete site{' '}
+                                <b>{deleteSite.name}</b>? This action cannot be
+                                undone.
+                            </>
                         )}
                     </div>
                     <DialogFooter className="flex gap-2">
-                        <Button variant="outline" onClick={() => setDeleteOpen(false)} disabled={loading}>
+                        <Button
+                            variant="outline"
+                            onClick={() => setDeleteOpen(false)}
+                            disabled={loading}
+                        >
                             Cancel
                         </Button>
-                        <Button variant="destructive" onClick={confirmDelete} disabled={loading}>
+                        <Button
+                            variant="destructive"
+                            onClick={confirmDelete}
+                            disabled={loading}
+                        >
                             Delete
                         </Button>
                     </DialogFooter>

@@ -2,12 +2,21 @@ import { Button } from '@/components/ui/button';
 import AuthLayout from '@/layouts/auth-layout';
 import { login } from '@/routes';
 import { Head, router } from '@inertiajs/react';
-import { LogOut, Clock, CheckCircle } from 'lucide-react';
+import { CheckCircle, Clock, LogOut } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
 import { SharedData } from '@/types';
 
-export default function PendingApproval({ userStatus }: SharedData & { userStatus: { is_approved: boolean; hired_date: string | null; deleted_at: string | null; deletion_confirmed_at: string | null } }) {
+export default function PendingApproval({
+    userStatus,
+}: SharedData & {
+    userStatus: {
+        is_approved: boolean;
+        hired_date: string | null;
+        deleted_at: string | null;
+        deletion_confirmed_at: string | null;
+    };
+}) {
     const handleLogout = () => {
         router.post('/logout');
     };
@@ -33,29 +42,65 @@ export default function PendingApproval({ userStatus }: SharedData & { userStatu
     }, []);
 
     // Determine if resigned/disapproved
-    const isResignedDisapproved = !!userStatus.hired_date && !userStatus.is_approved;
+    const isResignedDisapproved =
+        !!userStatus.hired_date && !userStatus.is_approved;
 
     return (
         <AuthLayout
-            title={isResignedDisapproved ? 'Account Access Disabled' : 'Account Pending Approval'}
-            description={isResignedDisapproved ? 'Your account has been disabled.' : 'Your account is waiting for administrator approval'}
+            title={
+                isResignedDisapproved
+                    ? 'Account Access Disabled'
+                    : 'Account Pending Approval'
+            }
+            description={
+                isResignedDisapproved
+                    ? 'Your account has been disabled.'
+                    : 'Your account is waiting for administrator approval'
+            }
         >
-            <Head title={isResignedDisapproved ? 'Account Disabled' : 'Pending Approval'} />
+            <Head
+                title={
+                    isResignedDisapproved
+                        ? 'Account Disabled'
+                        : 'Pending Approval'
+                }
+            />
 
             <div className="flex flex-col items-center gap-6 text-center">
-                <div className={`rounded-full p-4 ${isResignedDisapproved ? 'bg-red-500/10' : 'bg-yellow-500/10'}`}>
-                    <Clock className={`h-12 w-12 ${isResignedDisapproved ? 'text-red-500' : 'text-yellow-500'}`} />
+                <div
+                    className={`rounded-full p-4 ${isResignedDisapproved ? 'bg-red-500/10' : 'bg-yellow-500/10'}`}
+                >
+                    <Clock
+                        className={`h-12 w-12 ${isResignedDisapproved ? 'text-red-500' : 'text-yellow-500'}`}
+                    />
                 </div>
 
                 <div className="space-y-3">
                     <h2 className="text-2xl font-semibold text-white">
-                        {isResignedDisapproved ? 'Account Access Disabled' : 'Account Created Successfully!'}
+                        {isResignedDisapproved
+                            ? 'Account Access Disabled'
+                            : 'Account Created Successfully!'}
                     </h2>
                     <p className="text-gray-300">
                         {isResignedDisapproved ? (
-                            <>Your account has been <span className="font-semibold text-red-400">disabled</span> because you are no longer employed by the company and your access was disapproved by an administrator.<br />If you believe this is a mistake, please contact HR or your system administrator.</>
+                            <>
+                                Your account has been{' '}
+                                <span className="font-semibold text-red-400">
+                                    disabled
+                                </span>{' '}
+                                because you are no longer employed by the
+                                company and your access was disapproved by an
+                                administrator.
+                                <br />
+                                If you believe this is a mistake, please contact
+                                HR or your system administrator.
+                            </>
                         ) : (
-                            <>Thank you for registering. Your account has been created but requires administrator approval before you can access the system.</>
+                            <>
+                                Thank you for registering. Your account has been
+                                created but requires administrator approval
+                                before you can access the system.
+                            </>
                         )}
                     </p>
                 </div>
@@ -64,7 +109,9 @@ export default function PendingApproval({ userStatus }: SharedData & { userStatu
                     <div className="flex items-start gap-3 text-left">
                         <CheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-green-500" />
                         <div className="space-y-1">
-                            <p className="font-medium text-white">What's Next?</p>
+                            <p className="font-medium text-white">
+                                What's Next?
+                            </p>
                             <p className="text-sm text-gray-300">
                                 An administrator will review your account and
                                 approve it shortly. You'll receive an email

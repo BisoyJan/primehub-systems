@@ -103,9 +103,21 @@ interface GhostMeta {
 }
 const GHOSTS_META_BASE: GhostMeta[] = [
     { color: '#ff004d', corner: { r: 1, c: 26 }, home: { ...GHOST_EXIT_BASE } },
-    { color: '#ff77e1', corner: { r: 1, c: 1 }, home: { ...GHOST_PEN_BASE[0] } },
-    { color: '#00e5ff', corner: { r: 29, c: 26 }, home: { ...GHOST_PEN_BASE[1] } },
-    { color: '#ff9d00', corner: { r: 29, c: 1 }, home: { ...GHOST_PEN_BASE[2] } },
+    {
+        color: '#ff77e1',
+        corner: { r: 1, c: 1 },
+        home: { ...GHOST_PEN_BASE[0] },
+    },
+    {
+        color: '#00e5ff',
+        corner: { r: 29, c: 26 },
+        home: { ...GHOST_PEN_BASE[1] },
+    },
+    {
+        color: '#ff9d00',
+        corner: { r: 29, c: 1 },
+        home: { ...GHOST_PEN_BASE[2] },
+    },
 ];
 
 function flipPoint(p: { r: number; c: number }): { r: number; c: number } {
@@ -121,7 +133,11 @@ function getGhostPen(): { r: number; c: number }[] {
     return GHOST_PEN_BASE.map(flipPoint);
 }
 function getGhostsMeta(): GhostMeta[] {
-    return GHOSTS_META_BASE.map((m) => ({ ...m, corner: flipPoint(m.corner), home: flipPoint(m.home) }));
+    return GHOSTS_META_BASE.map((m) => ({
+        ...m,
+        corner: flipPoint(m.corner),
+        home: flipPoint(m.home),
+    }));
 }
 
 function isWall(r: number, c: number): boolean {
@@ -184,7 +200,11 @@ export function PacmanEngine({ opacity }: { opacity: number }) {
     const wrapRef = useRef<HTMLDivElement>(null);
     const [size, setSize] = useState({ w: 0, h: 0 });
 
-    const pacRef = useRef<Pac>({ ...getPacStart(), dir: { dr: 0, dc: -1 }, mouth: true });
+    const pacRef = useRef<Pac>({
+        ...getPacStart(),
+        dir: { dr: 0, dc: -1 },
+        mouth: true,
+    });
     const ghostsRef = useRef<Ghost[]>([]);
     const pelletsRef = useRef<Set<number>>(new Set());
     const powerRef = useRef<Set<number>>(new Set());
@@ -216,7 +236,10 @@ export function PacmanEngine({ opacity }: { opacity: number }) {
         const update = () => {
             const top = el.getBoundingClientRect().top;
             const visibleH = Math.max(0, window.innerHeight - Math.max(0, top));
-            setSize({ w: el.clientWidth, h: Math.min(el.clientHeight, visibleH) });
+            setSize({
+                w: el.clientWidth,
+                h: Math.min(el.clientHeight, visibleH),
+            });
         };
         update();
         const ro = new ResizeObserver(update);
@@ -271,7 +294,11 @@ export function PacmanEngine({ opacity }: { opacity: number }) {
         }
 
         function resetPositions() {
-            pacRef.current = { ...getPacStart(), dir: { dr: 0, dc: -1 }, mouth: true };
+            pacRef.current = {
+                ...getPacStart(),
+                dir: { dr: 0, dc: -1 },
+                mouth: true,
+            };
             const now = performance.now();
             const delays = [0, 3500, 8000, 13000];
             const ghostExit = getGhostExit();
@@ -360,7 +387,8 @@ export function PacmanEngine({ opacity }: { opacity: number }) {
             return d < 0 ? 999 : d;
         };
         const pelletTarget = (r: number, c: number) =>
-            pelletsRef.current.has(r * MW + c) || powerRef.current.has(r * MW + c);
+            pelletsRef.current.has(r * MW + c) ||
+            powerRef.current.has(r * MW + c);
 
         function pacStep() {
             const pac = pacRef.current;
@@ -368,7 +396,10 @@ export function PacmanEngine({ opacity }: { opacity: number }) {
 
             const gd = ghostField();
             const anyFright =
-                powerTimerRef.current > 0 && ghostsRef.current.some((g) => g.frightened && g.mode === 'active');
+                powerTimerRef.current > 0 &&
+                ghostsRef.current.some(
+                    (g) => g.frightened && g.mode === 'active',
+                );
             let step: { r: number; c: number } | null = null;
 
             if (anyFright) {
@@ -377,10 +408,17 @@ export function PacmanEngine({ opacity }: { opacity: number }) {
                     pac.r,
                     pac.c,
                     (r, c) =>
-                        ghostsRef.current.some((g) => g.frightened && g.mode === 'active' && g.r === r && g.c === c),
+                        ghostsRef.current.some(
+                            (g) =>
+                                g.frightened &&
+                                g.mode === 'active' &&
+                                g.r === r &&
+                                g.c === c,
+                        ),
                     () => false,
                 );
-                if (!step) step = bfsNext(pac.r, pac.c, pelletTarget, () => false);
+                if (!step)
+                    step = bfsNext(pac.r, pac.c, pelletTarget, () => false);
             } else if (distAt(gd, pac.r, pac.c) <= DANGER) {
                 // Threatened: flee toward the neighbour furthest from all ghosts,
                 // tie-broken by whether that direction still leads to pellets.
@@ -393,8 +431,18 @@ export function PacmanEngine({ opacity }: { opacity: number }) {
                     if (isWall(nr, nc)) continue;
                     const safe = distAt(gd, nr, nc);
                     if (safe === 0) continue; // never step onto a ghost
-                    const leadsToPellet = bfsNext(nr, nc, pelletTarget, (br, bc) => distAt(gd, br, bc) <= 1) ? 0 : 1;
-                    if (safe > bestSafe || (safe === bestSafe && leadsToPellet < bestPellet)) {
+                    const leadsToPellet = bfsNext(
+                        nr,
+                        nc,
+                        pelletTarget,
+                        (br, bc) => distAt(gd, br, bc) <= 1,
+                    )
+                        ? 0
+                        : 1;
+                    if (
+                        safe > bestSafe ||
+                        (safe === bestSafe && leadsToPellet < bestPellet)
+                    ) {
                         bestSafe = safe;
                         bestPellet = leadsToPellet;
                         best = { r: nr, c: nc };
@@ -403,8 +451,19 @@ export function PacmanEngine({ opacity }: { opacity: number }) {
                 step = best;
             } else {
                 // Safe: head to the nearest pellet, keeping a 1-tile safety margin.
-                step = bfsNext(pac.r, pac.c, pelletTarget, (r, c) => distAt(gd, r, c) <= 1);
-                if (!step) step = bfsNext(pac.r, pac.c, pelletTarget, (r, c) => distAt(gd, r, c) === 0);
+                step = bfsNext(
+                    pac.r,
+                    pac.c,
+                    pelletTarget,
+                    (r, c) => distAt(gd, r, c) <= 1,
+                );
+                if (!step)
+                    step = bfsNext(
+                        pac.r,
+                        pac.c,
+                        pelletTarget,
+                        (r, c) => distAt(gd, r, c) === 0,
+                    );
                 if (!step) {
                     let best: { r: number; c: number } | null = null;
                     let bestSafe = -1;
@@ -439,7 +498,11 @@ export function PacmanEngine({ opacity }: { opacity: number }) {
             }
         }
 
-        function ghostTarget(g: Ghost, i: number, pac: Pac): { r: number; c: number } {
+        function ghostTarget(
+            g: Ghost,
+            i: number,
+            pac: Pac,
+        ): { r: number; c: number } {
             if (i === 1) {
                 const tr = clamp(pac.r + pac.dir.dr * 4, 1, MH - 2);
                 const tc = clamp(pac.c + pac.dir.dc * 4, 1, MW - 2);
@@ -480,8 +543,19 @@ export function PacmanEngine({ opacity }: { opacity: number }) {
                     return;
                 }
                 const t = ghostTarget(g, i, pac);
-                let step = bfsNext(g.r, g.c, (r, c) => r === t.r && c === t.c, () => false);
-                if (!step) step = bfsNext(g.r, g.c, (r, c) => r === pac.r && c === pac.c, () => false);
+                let step = bfsNext(
+                    g.r,
+                    g.c,
+                    (r, c) => r === t.r && c === t.c,
+                    () => false,
+                );
+                if (!step)
+                    step = bfsNext(
+                        g.r,
+                        g.c,
+                        (r, c) => r === pac.r && c === pac.c,
+                        () => false,
+                    );
                 if (step) {
                     g.dir = { dr: step.r - g.r, dc: step.c - g.c };
                     g.r = step.r;
@@ -581,7 +655,10 @@ export function PacmanEngine({ opacity }: { opacity: number }) {
                     checkCollisions();
                     dirty = true;
                 }
-                if (phaseRef.current === 'play' && now - lastGhostRef.current >= GHOST_MS) {
+                if (
+                    phaseRef.current === 'play' &&
+                    now - lastGhostRef.current >= GHOST_MS
+                ) {
                     lastGhostRef.current = now;
                     ghostStep();
                     checkCollisions();
@@ -607,7 +684,15 @@ export function PacmanEngine({ opacity }: { opacity: number }) {
     const HUD_ROWS = 1.4;
     const FIT = 0.86;
     const { w, h } = size;
-    const cell = w && h ? Math.max(8, Math.floor(Math.min((w * FIT) / MW, (h * FIT) / (MH + HUD_ROWS)))) : 0;
+    const cell =
+        w && h
+            ? Math.max(
+                  8,
+                  Math.floor(
+                      Math.min((w * FIT) / MW, (h * FIT) / (MH + HUD_ROWS)),
+                  ),
+              )
+            : 0;
     const boardW = cell * MW;
     const boardH = cell * MH;
     const hudH = Math.max(18, cell * 0.95);
@@ -706,11 +791,24 @@ export function PacmanEngine({ opacity }: { opacity: number }) {
     const pac = pacRef.current;
     const ghosts = ghostsRef.current;
     const pacAng =
-        pac.dir.dc === 1 ? 0 : pac.dir.dc === -1 ? 180 : pac.dir.dr === 1 ? 90 : pac.dir.dr === -1 ? 270 : 0;
-    const frightBlink = powerTimerRef.current > 0 && powerTimerRef.current < 1800;
+        pac.dir.dc === 1
+            ? 0
+            : pac.dir.dc === -1
+              ? 180
+              : pac.dir.dr === 1
+                ? 90
+                : pac.dir.dr === -1
+                  ? 270
+                  : 0;
+    const frightBlink =
+        powerTimerRef.current > 0 && powerTimerRef.current < 1800;
 
     return (
-        <div ref={wrapRef} className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+        <div
+            ref={wrapRef}
+            className="pointer-events-none absolute inset-0 overflow-hidden"
+            aria-hidden="true"
+        >
             <style>{`@keyframes pac-pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(0.55);opacity:0.6}}`}</style>
 
             {/* Cyberpunk backdrop */}
@@ -725,11 +823,23 @@ export function PacmanEngine({ opacity }: { opacity: number }) {
             />
             <div
                 className="absolute inset-0"
-                style={{ background: 'radial-gradient(circle at 50% 45%, transparent 25%, rgba(5,3,20,0.8) 100%)', opacity }}
+                style={{
+                    background:
+                        'radial-gradient(circle at 50% 45%, transparent 25%, rgba(5,3,20,0.8) 100%)',
+                    opacity,
+                }}
             />
 
             {cell > 0 && (
-                <div style={{ position: 'absolute', left: offX, top: offY, width: boardW, height: boardH }}>
+                <div
+                    style={{
+                        position: 'absolute',
+                        left: offX,
+                        top: offY,
+                        width: boardW,
+                        height: boardH,
+                    }}
+                >
                     {wallsEl}
                     {pelletsEl}
 
@@ -746,9 +856,18 @@ export function PacmanEngine({ opacity }: { opacity: number }) {
                             opacity: vis,
                         }}
                     >
-                        <svg viewBox="0 0 100 100" width={cell} height={cell} style={{ filter: 'drop-shadow(0 0 5px #ffe600)' }}>
+                        <svg
+                            viewBox="0 0 100 100"
+                            width={cell}
+                            height={cell}
+                            style={{ filter: 'drop-shadow(0 0 5px #ffe600)' }}
+                        >
                             <path
-                                d={pac.mouth ? 'M50 50 L98 24 A48 48 0 1 0 98 76 Z' : 'M50 50 L98 42 A48 48 0 1 0 98 58 Z'}
+                                d={
+                                    pac.mouth
+                                        ? 'M50 50 L98 24 A48 48 0 1 0 98 76 Z'
+                                        : 'M50 50 L98 42 A48 48 0 1 0 98 58 Z'
+                                }
                                 fill="#ffe600"
                             />
                         </svg>
@@ -756,7 +875,11 @@ export function PacmanEngine({ opacity }: { opacity: number }) {
 
                     {/* Ghosts */}
                     {ghosts.map((g, i) => {
-                        const body = g.frightened ? (frightBlink ? '#ffffff' : '#2136ff') : g.color;
+                        const body = g.frightened
+                            ? frightBlink
+                                ? '#ffffff'
+                                : '#2136ff'
+                            : g.color;
                         const eyeDx = g.dir.dc * 2;
                         const eyeDy = g.dir.dr * 2;
                         return (
@@ -768,27 +891,84 @@ export function PacmanEngine({ opacity }: { opacity: number }) {
                                     top: g.r * cell,
                                     width: cell,
                                     height: cell,
-                                    transition: 'left 0.16s linear, top 0.16s linear',
+                                    transition:
+                                        'left 0.16s linear, top 0.16s linear',
                                     opacity: vis,
                                 }}
                             >
-                                <svg viewBox="0 0 100 100" width={cell} height={cell} style={{ filter: `drop-shadow(0 0 5px ${body})` }}>
+                                <svg
+                                    viewBox="0 0 100 100"
+                                    width={cell}
+                                    height={cell}
+                                    style={{
+                                        filter: `drop-shadow(0 0 5px ${body})`,
+                                    }}
+                                >
                                     <path
                                         d="M8 92 V48 a42 42 0 0 1 84 0 V92 l-14 -11 -14 11 -14 -11 -14 11 -14 -11 Z"
                                         fill={body}
                                     />
                                     {g.frightened ? (
                                         <>
-                                            <circle cx="36" cy="46" r="6" fill={frightBlink ? '#ff004d' : '#ffffff'} />
-                                            <circle cx="64" cy="46" r="6" fill={frightBlink ? '#ff004d' : '#ffffff'} />
-                                            <path d="M28 68 l8 -8 8 8 8 -8 8 8 8 -8 8 8" stroke={frightBlink ? '#ff004d' : '#ffffff'} strokeWidth="3" fill="none" />
+                                            <circle
+                                                cx="36"
+                                                cy="46"
+                                                r="6"
+                                                fill={
+                                                    frightBlink
+                                                        ? '#ff004d'
+                                                        : '#ffffff'
+                                                }
+                                            />
+                                            <circle
+                                                cx="64"
+                                                cy="46"
+                                                r="6"
+                                                fill={
+                                                    frightBlink
+                                                        ? '#ff004d'
+                                                        : '#ffffff'
+                                                }
+                                            />
+                                            <path
+                                                d="M28 68 l8 -8 8 8 8 -8 8 8 8 -8 8 8"
+                                                stroke={
+                                                    frightBlink
+                                                        ? '#ff004d'
+                                                        : '#ffffff'
+                                                }
+                                                strokeWidth="3"
+                                                fill="none"
+                                            />
                                         </>
                                     ) : (
                                         <>
-                                            <ellipse cx="36" cy="44" rx="10" ry="12" fill="#ffffff" />
-                                            <ellipse cx="64" cy="44" rx="10" ry="12" fill="#ffffff" />
-                                            <circle cx={36 + eyeDx} cy={44 + eyeDy} r="5" fill="#001b6b" />
-                                            <circle cx={64 + eyeDx} cy={44 + eyeDy} r="5" fill="#001b6b" />
+                                            <ellipse
+                                                cx="36"
+                                                cy="44"
+                                                rx="10"
+                                                ry="12"
+                                                fill="#ffffff"
+                                            />
+                                            <ellipse
+                                                cx="64"
+                                                cy="44"
+                                                rx="10"
+                                                ry="12"
+                                                fill="#ffffff"
+                                            />
+                                            <circle
+                                                cx={36 + eyeDx}
+                                                cy={44 + eyeDy}
+                                                r="5"
+                                                fill="#001b6b"
+                                            />
+                                            <circle
+                                                cx={64 + eyeDx}
+                                                cy={44 + eyeDy}
+                                                r="5"
+                                                fill="#001b6b"
+                                            />
                                         </>
                                     )}
                                 </svg>
@@ -804,7 +984,8 @@ export function PacmanEngine({ opacity }: { opacity: number }) {
                                 inset: 0,
                                 background: 'rgba(255,0,77,0.2)',
                                 border: '2px solid #ff004d',
-                                boxShadow: '0 0 40px #ff004d, inset 0 0 30px rgba(255,0,77,0.35)',
+                                boxShadow:
+                                    '0 0 40px #ff004d, inset 0 0 30px rgba(255,0,77,0.35)',
                                 borderRadius: 4,
                                 display: 'flex',
                                 alignItems: 'center',
@@ -847,10 +1028,20 @@ export function PacmanEngine({ opacity }: { opacity: number }) {
                         }}
                     >
                         <span>SCORE {scoreRef.current}</span>
-                        <span style={{ color: '#ffe600', textShadow: '0 0 8px #ffe600' }}>
+                        <span
+                            style={{
+                                color: '#ffe600',
+                                textShadow: '0 0 8px #ffe600',
+                            }}
+                        >
                             {'●'.repeat(Math.max(0, livesRef.current))}
                         </span>
-                        <span style={{ color: '#ff2d95', textShadow: '0 0 8px #ff2d95' }}>
+                        <span
+                            style={{
+                                color: '#ff2d95',
+                                textShadow: '0 0 8px #ff2d95',
+                            }}
+                        >
                             HI {Math.max(highRef.current, scoreRef.current)}
                         </span>
                     </div>

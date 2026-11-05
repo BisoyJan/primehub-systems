@@ -1,4 +1,9 @@
 import {
+    Collapsible,
+    CollapsibleContent,
+    CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import {
     SidebarGroup,
     SidebarGroupLabel,
     SidebarMenu,
@@ -6,15 +11,10 @@ import {
     SidebarMenuItem,
     useSidebar,
 } from '@/components/ui/sidebar';
-import {
-    Collapsible,
-    CollapsibleContent,
-    CollapsibleTrigger,
-} from '@/components/ui/collapsible';
+import { cn } from '@/lib/utils';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
 import { ChevronRight } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 interface NavGroupProps {
     label: string;
@@ -24,7 +24,13 @@ interface NavGroupProps {
     onToggle: (groupId: string) => void;
 }
 
-export function NavGroup({ label, items = [], groupId, isOpen, onToggle }: NavGroupProps) {
+export function NavGroup({
+    label,
+    items = [],
+    groupId,
+    isOpen,
+    onToggle,
+}: NavGroupProps) {
     const page = usePage();
     const { state } = useSidebar();
 
@@ -78,7 +84,9 @@ export function NavGroup({ label, items = [], groupId, isOpen, onToggle }: NavGr
                                     <span>{item.title}</span>
                                     {item.badge != null && item.badge > 0 && (
                                         <span className="ml-auto inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-semibold text-white">
-                                            {item.badge > 99 ? '99+' : item.badge}
+                                            {item.badge > 99
+                                                ? '99+'
+                                                : item.badge}
                                         </span>
                                     )}
                                 </Link>
@@ -98,19 +106,17 @@ export function NavGroup({ label, items = [], groupId, isOpen, onToggle }: NavGr
         >
             <SidebarGroup className="px-2 py-0">
                 <CollapsibleTrigger asChild>
-                    <SidebarGroupLabel
-                        className="cursor-pointer select-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground rounded-md transition-colors flex items-center justify-between w-full pr-2"
-                    >
+                    <SidebarGroupLabel className="flex w-full cursor-pointer items-center justify-between rounded-md pr-2 transition-colors select-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
                         <span>{label}</span>
                         <ChevronRight
                             className={cn(
-                                "h-4 w-4 shrink-0 transition-transform duration-500 ease-in-out",
-                                isExpanded && "rotate-90"
+                                'h-4 w-4 shrink-0 transition-transform duration-500 ease-in-out',
+                                isExpanded && 'rotate-90',
                             )}
                         />
                     </SidebarGroupLabel>
                 </CollapsibleTrigger>
-                <CollapsibleContent className="overflow-hidden transition-all duration-500 ease-in-out data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down">
+                <CollapsibleContent className="data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down overflow-hidden transition-all duration-500 ease-in-out">
                     <SidebarMenu>
                         {items.map((item) => (
                             <SidebarMenuItem key={item.title}>
@@ -122,11 +128,14 @@ export function NavGroup({ label, items = [], groupId, isOpen, onToggle }: NavGr
                                     <Link href={item.href} prefetch="hover">
                                         {item.icon && <item.icon />}
                                         <span>{item.title}</span>
-                                        {item.badge != null && item.badge > 0 && (
-                                            <span className="ml-auto inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-semibold text-white">
-                                                {item.badge > 99 ? '99+' : item.badge}
-                                            </span>
-                                        )}
+                                        {item.badge != null &&
+                                            item.badge > 0 && (
+                                                <span className="ml-auto inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-semibold text-white">
+                                                    {item.badge > 99
+                                                        ? '99+'
+                                                        : item.badge}
+                                                </span>
+                                            )}
                                     </Link>
                                 </SidebarMenuButton>
                             </SidebarMenuItem>

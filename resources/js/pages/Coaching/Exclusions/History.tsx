@@ -1,9 +1,8 @@
-import { Head, Link, usePage } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
+import { Head, Link, usePage } from '@inertiajs/react';
 
-import AppLayout from '@/layouts/app-layout';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
     Table,
     TableBody,
@@ -12,10 +11,11 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
+import AppLayout from '@/layouts/app-layout';
 import { ChevronLeft } from 'lucide-react';
 
-import { usePageMeta, useFlashMessage } from '@/hooks';
 import { PageHeader } from '@/components/PageHeader';
+import { useFlashMessage, usePageMeta } from '@/hooks';
 
 interface HistoryRow {
     id: number;
@@ -63,7 +63,7 @@ export default function CoachingExclusionsHistory() {
                     </Link>
                 </PageHeader>
 
-                <div className="bg-card rounded-lg border">
+                <div className="rounded-lg border bg-card">
                     <Table>
                         <TableHeader>
                             <TableRow>
@@ -80,28 +80,48 @@ export default function CoachingExclusionsHistory() {
                         <TableBody>
                             {history.map((h) => (
                                 <TableRow key={h.id}>
-                                    <TableCell className="font-medium">{h.reason}</TableCell>
+                                    <TableCell className="font-medium">
+                                        {h.reason}
+                                    </TableCell>
                                     <TableCell>
                                         {h.is_active ? (
-                                            <Badge variant="destructive">Active</Badge>
+                                            <Badge variant="destructive">
+                                                Active
+                                            </Badge>
                                         ) : (
-                                            <Badge variant="secondary">Ended</Badge>
+                                            <Badge variant="secondary">
+                                                Ended
+                                            </Badge>
                                         )}
                                     </TableCell>
                                     <TableCell>{fmt(h.excluded_at)}</TableCell>
                                     <TableCell>{fmt(h.expires_at)}</TableCell>
                                     <TableCell>{fmt(h.revoked_at)}</TableCell>
-                                    <TableCell>{h.excluded_by ?? '—'}</TableCell>
+                                    <TableCell>
+                                        {h.excluded_by ?? '—'}
+                                    </TableCell>
                                     <TableCell>{h.revoked_by ?? '—'}</TableCell>
                                     <TableCell className="text-xs">
-                                        {h.notes && <div><strong>Note:</strong> {h.notes}</div>}
-                                        {h.revoke_notes && <div><strong>Revoke:</strong> {h.revoke_notes}</div>}
+                                        {h.notes && (
+                                            <div>
+                                                <strong>Note:</strong> {h.notes}
+                                            </div>
+                                        )}
+                                        {h.revoke_notes && (
+                                            <div>
+                                                <strong>Revoke:</strong>{' '}
+                                                {h.revoke_notes}
+                                            </div>
+                                        )}
                                     </TableCell>
                                 </TableRow>
                             ))}
                             {history.length === 0 && (
                                 <TableRow>
-                                    <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                                    <TableCell
+                                        colSpan={8}
+                                        className="py-8 text-center text-muted-foreground"
+                                    >
                                         No exclusion history.
                                     </TableCell>
                                 </TableRow>

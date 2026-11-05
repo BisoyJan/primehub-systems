@@ -20,8 +20,11 @@ const key = import.meta.env.VITE_REVERB_APP_KEY as string | undefined;
 const isHttps = window.location.protocol === 'https:';
 const host = isHttps
     ? window.location.hostname
-    : ((import.meta.env.VITE_REVERB_HOST as string | undefined) ?? window.location.hostname);
-const scheme = isHttps ? 'https' : ((import.meta.env.VITE_REVERB_SCHEME as string | undefined) ?? 'http');
+    : ((import.meta.env.VITE_REVERB_HOST as string | undefined) ??
+      window.location.hostname);
+const scheme = isHttps
+    ? 'https'
+    : ((import.meta.env.VITE_REVERB_SCHEME as string | undefined) ?? 'http');
 const port = isHttps ? 443 : Number(import.meta.env.VITE_REVERB_PORT ?? 8080);
 
 let echo: Echo<'reverb'> | null = null;
@@ -32,7 +35,12 @@ export function getEcho(): Echo<'reverb'> | null {
     }
 
     if (!echo) {
-        const csrf = (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement | null)?.content ?? '';
+        const csrf =
+            (
+                document.querySelector(
+                    'meta[name="csrf-token"]',
+                ) as HTMLMetaElement | null
+            )?.content ?? '';
         echo = new Echo({
             broadcaster: 'reverb',
             key,

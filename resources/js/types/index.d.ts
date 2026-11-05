@@ -32,7 +32,8 @@ export interface SharedData {
     [key: string]: unknown;
 }
 
-export type UserRole = 'Super Admin' | 'Admin' | 'Team Lead' | 'Agent' | 'HR' | 'IT' | 'Utility';
+export type UserRole =
+    'Super Admin' | 'Admin' | 'Team Lead' | 'Agent' | 'HR' | 'IT' | 'Utility';
 
 export interface User {
     id: number;
@@ -62,7 +63,8 @@ export type CoachingPurpose =
 
 export type AckStatus = 'Pending' | 'Acknowledged' | 'Disputed' | 'Archived';
 
-export type ComplianceStatus = 'Awaiting_Agent_Ack' | 'For_Review' | 'Verified' | 'Rejected' | 'Archived';
+export type ComplianceStatus =
+    'Awaiting_Agent_Ack' | 'For_Review' | 'Verified' | 'Rejected' | 'Archived';
 
 export type SeverityFlag = 'Normal' | 'Critical';
 

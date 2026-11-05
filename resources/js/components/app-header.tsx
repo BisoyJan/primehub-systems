@@ -121,7 +121,7 @@ export function AppHeader({ breadcrumbs = [] }: AppHeaderProps) {
                                                     key={item.title}
                                                     href={
                                                         typeof item.href ===
-                                                            'string'
+                                                        'string'
                                                             ? item.href
                                                             : item.href.url
                                                     }
@@ -167,11 +167,11 @@ export function AppHeader({ breadcrumbs = [] }: AppHeaderProps) {
                                             className={cn(
                                                 navigationMenuTriggerStyle(),
                                                 page.url ===
-                                                (typeof item.href ===
+                                                    (typeof item.href ===
                                                     'string'
-                                                    ? item.href
-                                                    : item.href.url) &&
-                                                activeItemStyles,
+                                                        ? item.href
+                                                        : item.href.url) &&
+                                                    activeItemStyles,
                                                 'h-9 cursor-pointer px-3',
                                             )}
                                         >
@@ -216,7 +216,7 @@ export function AppHeader({ breadcrumbs = [] }: AppHeaderProps) {
                                                 <a
                                                     href={
                                                         typeof item.href ===
-                                                            'string'
+                                                        'string'
                                                             ? item.href
                                                             : item.href.url
                                                     }
@@ -255,7 +255,9 @@ export function AppHeader({ breadcrumbs = [] }: AppHeaderProps) {
                                             alt={`${auth.user.first_name} ${auth.user.last_name}`}
                                         />
                                         <AvatarFallback className="rounded-lg bg-neutral-200 text-black dark:bg-neutral-700 dark:text-white">
-                                            {getInitials(`${auth.user.first_name} ${auth.user.middle_name ? auth.user.middle_name + '. ' : ''}${auth.user.last_name}`)}
+                                            {getInitials(
+                                                `${auth.user.first_name} ${auth.user.middle_name ? auth.user.middle_name + '. ' : ''}${auth.user.last_name}`,
+                                            )}
                                         </AvatarFallback>
                                     </Avatar>
                                 </Button>

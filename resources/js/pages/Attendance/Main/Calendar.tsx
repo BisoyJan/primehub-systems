@@ -1,16 +1,15 @@
-import React, { useState, useMemo } from "react";
-import { Head, router, usePage } from "@inertiajs/react";
-import AppLayout from "@/layouts/app-layout";
-import { type SharedData } from "@/types";
-import { useFlashMessage, usePageMeta, usePermission } from "@/hooks";
-import { formatTime, formatWorkDuration } from "@/lib/utils";
-import { PageHeader } from "@/components/PageHeader";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { PageHeader } from '@/components/PageHeader';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from '@/components/ui/command';
 import {
     Dialog,
     DialogContent,
@@ -18,14 +17,41 @@ import {
     DialogFooter,
     DialogHeader,
     DialogTitle,
-} from "@/components/ui/dialog";
-import { ChevronLeft, ChevronRight, Check, ChevronsUpDown, Calendar as CalendarIcon, ShieldCheck, X, CheckCircle } from "lucide-react";
+} from '@/components/ui/dialog';
 import {
-    hub as attendanceHub,
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import { useFlashMessage, usePageMeta, usePermission } from '@/hooks';
+import AppLayout from '@/layouts/app-layout';
+import { formatTime, formatWorkDuration } from '@/lib/utils';
+import {
     calendar as attendanceCalendar,
-    review as attendanceReview,
+    hub as attendanceHub,
     quickApprove as attendanceQuickApprove,
-} from "@/routes/attendance";
+    review as attendanceReview,
+} from '@/routes/attendance';
+import { type SharedData } from '@/types';
+import { Head, router, usePage } from '@inertiajs/react';
+import {
+    Calendar as CalendarIcon,
+    Check,
+    CheckCircle,
+    ChevronLeft,
+    ChevronRight,
+    ChevronsUpDown,
+    ShieldCheck,
+    X,
+} from 'lucide-react';
+import { useMemo, useState } from 'react';
 
 interface User {
     id: number;
@@ -68,7 +94,12 @@ interface AttendanceRecord {
     admin_verified: boolean;
     verification_notes?: string;
     notes?: string;
-    warnings?: { type: string; message: string; severity: string; raised_at: string }[];
+    warnings?: {
+        type: string;
+        message: string;
+        severity: string;
+        raised_at: string;
+    }[];
 }
 
 interface PageProps extends SharedData {
@@ -116,7 +147,17 @@ const statusLabels: Record<string, string> = {
 // formatTime is now imported from @/lib/utils
 
 export default function AttendanceCalendar() {
-    const { attendances, users, selectedUser, campaigns = [], teamLeadCampaignIds, month, year, verificationFilter: initialVerificationFilter, campaignFilter: initialCampaignFilter } = usePage<PageProps>().props;
+    const {
+        attendances,
+        users,
+        selectedUser,
+        campaigns = [],
+        teamLeadCampaignIds,
+        month,
+        year,
+        verificationFilter: initialVerificationFilter,
+        campaignFilter: initialCampaignFilter,
+    } = usePage<PageProps>().props;
 
     useFlashMessage();
     const { can } = usePermission();
@@ -130,10 +171,12 @@ export default function AttendanceCalendar() {
     });
 
     const [isUserPopoverOpen, setIsUserPopoverOpen] = useState(false);
-    const [userSearchQuery, setUserSearchQuery] = useState("");
+    const [userSearchQuery, setUserSearchQuery] = useState('');
     const [selectedDate, setSelectedDate] = useState<string | null>(null);
     const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
-    const [verificationFilter, setVerificationFilter] = useState(initialVerificationFilter || 'all');
+    const [verificationFilter, setVerificationFilter] = useState(
+        initialVerificationFilter || 'all',
+    );
     const [campaignFilter, setCampaignFilter] = useState(() => {
         if (initialCampaignFilter) return initialCampaignFilter;
         return 'all';
@@ -142,8 +185,8 @@ export default function AttendanceCalendar() {
     // Filter users based on search query
     const filteredUsers = useMemo(() => {
         if (!userSearchQuery) return users;
-        return users.filter(user =>
-            user.name.toLowerCase().includes(userSearchQuery.toLowerCase())
+        return users.filter((user) =>
+            user.name.toLowerCase().includes(userSearchQuery.toLowerCase()),
         );
     }, [users, userSearchQuery]);
 
@@ -165,8 +208,18 @@ export default function AttendanceCalendar() {
     }
 
     const monthNames = [
-        'January', 'February', 'March', 'April', 'May', 'June',
-        'July', 'August', 'September', 'October', 'November', 'December'
+        'January',
+        'February',
+        'March',
+        'April',
+        'May',
+        'June',
+        'July',
+        'August',
+        'September',
+        'October',
+        'November',
+        'December',
     ];
 
     const handlePreviousMonth = () => {
@@ -182,7 +235,10 @@ export default function AttendanceCalendar() {
     };
 
     const navigateToMonth = (newMonth: number, newYear: number) => {
-        const params: Record<string, string | number> = { month: newMonth, year: newYear };
+        const params: Record<string, string | number> = {
+            month: newMonth,
+            year: newYear,
+        };
         if (selectedUser) {
             params.user_id = selectedUser.id;
         }
@@ -208,7 +264,7 @@ export default function AttendanceCalendar() {
         }
         router.get(attendanceCalendar().url, params);
         setIsUserPopoverOpen(false);
-        setUserSearchQuery("");
+        setUserSearchQuery('');
     };
 
     const handleVerificationFilterChange = (value: string) => {
@@ -257,20 +313,27 @@ export default function AttendanceCalendar() {
     const handleQuickApprove = () => {
         if (!selectedAttendance) return;
 
-        router.post(attendanceQuickApprove({ attendance: selectedAttendance.id }).url, {}, {
-            preserveScroll: true,
-            onSuccess: () => {
-                setIsDetailDialogOpen(false);
-                setSelectedDate(null);
+        router.post(
+            attendanceQuickApprove({ attendance: selectedAttendance.id }).url,
+            {},
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setIsDetailDialogOpen(false);
+                    setSelectedDate(null);
+                },
             },
-        });
+        );
     };
 
     const handleVerify = () => {
         if (!selectedAttendance) return;
 
         // Open review page with verify parameter in new tab
-        window.open(attendanceReview({ query: { verify: selectedAttendance.id } }).url, '_blank');
+        window.open(
+            attendanceReview({ query: { verify: selectedAttendance.id } }).url,
+            '_blank',
+        );
     };
 
     return (
@@ -283,18 +346,33 @@ export default function AttendanceCalendar() {
                 />
 
                 {/* User Selection and Month Navigation */}
-                <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-                    <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+                    <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
                         {campaigns.length > 0 && (
                             <div className="w-full sm:w-60">
-                                <Select value={campaignFilter} onValueChange={handleCampaignFilterChange}>
+                                <Select
+                                    value={campaignFilter}
+                                    onValueChange={handleCampaignFilterChange}
+                                >
                                     <SelectTrigger>
                                         <SelectValue placeholder="All Campaigns" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="all">All Campaigns</SelectItem>
-                                        {(teamLeadCampaignIds?.length ? campaigns.filter(c => teamLeadCampaignIds.includes(c.id)) : campaigns).map(campaign => (
-                                            <SelectItem key={campaign.id} value={String(campaign.id)}>
+                                        <SelectItem value="all">
+                                            All Campaigns
+                                        </SelectItem>
+                                        {(teamLeadCampaignIds?.length
+                                            ? campaigns.filter((c) =>
+                                                  teamLeadCampaignIds.includes(
+                                                      c.id,
+                                                  ),
+                                              )
+                                            : campaigns
+                                        ).map((campaign) => (
+                                            <SelectItem
+                                                key={campaign.id}
+                                                value={String(campaign.id)}
+                                            >
                                                 {campaign.name}
                                             </SelectItem>
                                         ))}
@@ -304,7 +382,10 @@ export default function AttendanceCalendar() {
                         )}
                         {users.length > 0 && (
                             <div className="w-full sm:w-80">
-                                <Popover open={isUserPopoverOpen} onOpenChange={setIsUserPopoverOpen}>
+                                <Popover
+                                    open={isUserPopoverOpen}
+                                    onOpenChange={setIsUserPopoverOpen}
+                                >
                                     <PopoverTrigger asChild>
                                         <Button
                                             variant="outline"
@@ -313,37 +394,56 @@ export default function AttendanceCalendar() {
                                             className="w-full justify-between font-normal"
                                         >
                                             <span className="truncate">
-                                                {selectedUser ? selectedUser.name : "Select employee..."}
+                                                {selectedUser
+                                                    ? selectedUser.name
+                                                    : 'Select employee...'}
                                             </span>
                                             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                         </Button>
                                     </PopoverTrigger>
-                                    <PopoverContent className="w-full p-0" align="start">
+                                    <PopoverContent
+                                        className="w-full p-0"
+                                        align="start"
+                                    >
                                         <Command shouldFilter={false}>
                                             <CommandInput
                                                 placeholder="Search employee..."
                                                 value={userSearchQuery}
-                                                onValueChange={setUserSearchQuery}
+                                                onValueChange={
+                                                    setUserSearchQuery
+                                                }
                                             />
                                             <CommandList>
-                                                <CommandEmpty>No employee found.</CommandEmpty>
+                                                <CommandEmpty>
+                                                    No employee found.
+                                                </CommandEmpty>
                                                 <CommandGroup>
-                                                    {filteredUsers.map((user) => (
-                                                        <CommandItem
-                                                            key={user.id}
-                                                            value={user.name}
-                                                            onSelect={() => handleUserSelect(user.id)}
-                                                            className="cursor-pointer"
-                                                        >
-                                                            <Check
-                                                                className={`mr-2 h-4 w-4 ${selectedUser?.id === user.id
-                                                                    ? "opacity-100"
-                                                                    : "opacity-0"
+                                                    {filteredUsers.map(
+                                                        (user) => (
+                                                            <CommandItem
+                                                                key={user.id}
+                                                                value={
+                                                                    user.name
+                                                                }
+                                                                onSelect={() =>
+                                                                    handleUserSelect(
+                                                                        user.id,
+                                                                    )
+                                                                }
+                                                                className="cursor-pointer"
+                                                            >
+                                                                <Check
+                                                                    className={`mr-2 h-4 w-4 ${
+                                                                        selectedUser?.id ===
+                                                                        user.id
+                                                                            ? 'opacity-100'
+                                                                            : 'opacity-0'
                                                                     }`}
-                                                            />
-                                                            {user.name}
-                                                        </CommandItem>
-                                                    ))}
+                                                                />
+                                                                {user.name}
+                                                            </CommandItem>
+                                                        ),
+                                                    )}
                                                 </CommandGroup>
                                             </CommandList>
                                         </Command>
@@ -353,14 +453,25 @@ export default function AttendanceCalendar() {
                         )}
                         {selectedUser && (
                             <div className="w-full sm:w-60">
-                                <Select value={verificationFilter} onValueChange={handleVerificationFilterChange}>
+                                <Select
+                                    value={verificationFilter}
+                                    onValueChange={
+                                        handleVerificationFilterChange
+                                    }
+                                >
                                     <SelectTrigger>
                                         <SelectValue placeholder="Filter by status" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="all">All Records</SelectItem>
-                                        <SelectItem value="verified">Verified Only</SelectItem>
-                                        <SelectItem value="non_verified">Non-Verified Only</SelectItem>
+                                        <SelectItem value="all">
+                                            All Records
+                                        </SelectItem>
+                                        <SelectItem value="verified">
+                                            Verified Only
+                                        </SelectItem>
+                                        <SelectItem value="non_verified">
+                                            Non-Verified Only
+                                        </SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -375,7 +486,7 @@ export default function AttendanceCalendar() {
                         >
                             <ChevronLeft className="h-4 w-4" />
                         </Button>
-                        <h2 className="text-lg font-semibold min-w-[180px] text-center">
+                        <h2 className="min-w-[180px] text-center text-lg font-semibold">
                             {monthNames[month - 1]} {year}
                         </h2>
                         <Button
@@ -391,9 +502,10 @@ export default function AttendanceCalendar() {
                 {!selectedUser && users.length > 0 ? (
                     <Card>
                         <CardContent className="flex flex-col items-center justify-center py-12">
-                            <CalendarIcon className="h-12 w-12 text-muted-foreground mb-4" />
-                            <p className="text-muted-foreground text-center">
-                                Please select an employee to view their attendance calendar
+                            <CalendarIcon className="mb-4 h-12 w-12 text-muted-foreground" />
+                            <p className="text-center text-muted-foreground">
+                                Please select an employee to view their
+                                attendance calendar
                             </p>
                         </CardContent>
                     </Card>
@@ -403,10 +515,18 @@ export default function AttendanceCalendar() {
                             {/* Calendar Grid */}
                             <div className="grid grid-cols-7 gap-0">
                                 {/* Day headers */}
-                                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+                                {[
+                                    'Sun',
+                                    'Mon',
+                                    'Tue',
+                                    'Wed',
+                                    'Thu',
+                                    'Fri',
+                                    'Sat',
+                                ].map((day) => (
                                     <div
                                         key={day}
-                                        className="border-b border-r last:border-r-0 p-2 text-center text-sm font-semibold bg-muted"
+                                        className="border-r border-b bg-muted p-2 text-center text-sm font-semibold last:border-r-0"
                                     >
                                         {day}
                                     </div>
@@ -414,59 +534,103 @@ export default function AttendanceCalendar() {
 
                                 {/* Calendar days */}
                                 {calendarDays.map((day, index) => {
-                                    const attendance = day ? getAttendanceForDay(day) : undefined;
-                                    const isToday = day && new Date().getDate() === day &&
+                                    const attendance = day
+                                        ? getAttendanceForDay(day)
+                                        : undefined;
+                                    const isToday =
+                                        day &&
+                                        new Date().getDate() === day &&
                                         new Date().getMonth() === month - 1 &&
                                         new Date().getFullYear() === year;
 
                                     return (
                                         <div
                                             key={index}
-                                            className={`min-h-[100px] border-b border-r last:border-r-0 p-2 ${day ? 'cursor-pointer hover:bg-muted/50' : 'bg-muted/20'
-                                                } ${isToday ? 'bg-blue-50' : ''}`}
-                                            onClick={() => day && attendance && handleDayClick(day)}
+                                            className={`min-h-[100px] border-r border-b p-2 last:border-r-0 ${
+                                                day
+                                                    ? 'cursor-pointer hover:bg-muted/50'
+                                                    : 'bg-muted/20'
+                                            } ${isToday ? 'bg-blue-50' : ''}`}
+                                            onClick={() =>
+                                                day &&
+                                                attendance &&
+                                                handleDayClick(day)
+                                            }
                                         >
                                             {day && (
                                                 <>
-                                                    <div className={`text-sm font-medium mb-2 ${isToday ? 'text-blue-600 font-bold' : ''
-                                                        }`}>
+                                                    <div
+                                                        className={`mb-2 text-sm font-medium ${
+                                                            isToday
+                                                                ? 'font-bold text-blue-600'
+                                                                : ''
+                                                        }`}
+                                                    >
                                                         {day}
                                                     </div>
                                                     {attendance && (
                                                         <div className="space-y-1.5">
                                                             {/* Status indicators as small squares like legend */}
-                                                            <div className="flex items-center justify-center gap-1 flex-wrap">
+                                                            <div className="flex flex-wrap items-center justify-center gap-1">
                                                                 {/* Primary Status */}
                                                                 <div
-                                                                    className={`w-4 h-4 rounded ${statusColors[attendance.status] || 'bg-gray-500'
-                                                                        }`}
-                                                                    title={statusLabels[attendance.status] || attendance.status}
+                                                                    className={`h-4 w-4 rounded ${
+                                                                        statusColors[
+                                                                            attendance
+                                                                                .status
+                                                                        ] ||
+                                                                        'bg-gray-500'
+                                                                    }`}
+                                                                    title={
+                                                                        statusLabels[
+                                                                            attendance
+                                                                                .status
+                                                                        ] ||
+                                                                        attendance.status
+                                                                    }
                                                                 />
 
                                                                 {/* Secondary Status */}
                                                                 {attendance.secondary_status && (
                                                                     <div
-                                                                        className={`w-4 h-4 rounded ${statusColors[attendance.secondary_status] || 'bg-gray-500'
-                                                                            }`}
-                                                                        title={statusLabels[attendance.secondary_status]}
+                                                                        className={`h-4 w-4 rounded ${
+                                                                            statusColors[
+                                                                                attendance
+                                                                                    .secondary_status
+                                                                            ] ||
+                                                                            'bg-gray-500'
+                                                                        }`}
+                                                                        title={
+                                                                            statusLabels[
+                                                                                attendance
+                                                                                    .secondary_status
+                                                                            ]
+                                                                        }
                                                                     />
                                                                 )}
 
                                                                 {/* Overtime */}
-                                                                {attendance.overtime_minutes && attendance.overtime_minutes > 30 && (
-                                                                    <div
-                                                                        className={`w-4 h-4 rounded flex items-center justify-center ${attendance.overtime_approved
-                                                                            ? 'bg-green-600'
-                                                                            : 'bg-red-500'
+                                                                {attendance.overtime_minutes &&
+                                                                    attendance.overtime_minutes >
+                                                                        30 && (
+                                                                        <div
+                                                                            className={`flex h-4 w-4 items-center justify-center rounded ${
+                                                                                attendance.overtime_approved
+                                                                                    ? 'bg-green-600'
+                                                                                    : 'bg-red-500'
                                                                             }`}
-                                                                        title={`Overtime: ${attendance.overtime_minutes >= 60
-                                                                            ? `${Math.floor(attendance.overtime_minutes / 60)}h ${attendance.overtime_minutes % 60 > 0 ? `${attendance.overtime_minutes % 60}m` : ''}`.trim()
-                                                                            : `${attendance.overtime_minutes}m`
+                                                                            title={`Overtime: ${
+                                                                                attendance.overtime_minutes >=
+                                                                                60
+                                                                                    ? `${Math.floor(attendance.overtime_minutes / 60)}h ${attendance.overtime_minutes % 60 > 0 ? `${attendance.overtime_minutes % 60}m` : ''}`.trim()
+                                                                                    : `${attendance.overtime_minutes}m`
                                                                             }${attendance.overtime_approved ? ' (Approved)' : ' (Not Approved)'}`}
-                                                                    >
-                                                                        {!attendance.overtime_approved && <X className="h-3 w-3 text-white" />}
-                                                                    </div>
-                                                                )}
+                                                                        >
+                                                                            {!attendance.overtime_approved && (
+                                                                                <X className="h-3 w-3 text-white" />
+                                                                            )}
+                                                                        </div>
+                                                                    )}
 
                                                                 {/* Verified Icon */}
                                                                 {attendance.admin_verified && (
@@ -477,13 +641,24 @@ export default function AttendanceCalendar() {
                                                             </div>
 
                                                             {/* Time Display - In and Out on same row */}
-                                                            {(attendance.actual_time_in || attendance.actual_time_out) && (
-                                                                <div className="text-[13px] text-muted-foreground text-center leading-tight flex items-center justify-center gap-2">
+                                                            {(attendance.actual_time_in ||
+                                                                attendance.actual_time_out) && (
+                                                                <div className="flex items-center justify-center gap-2 text-center text-[13px] leading-tight text-muted-foreground">
                                                                     {attendance.actual_time_in && (
-                                                                        <span>In: {formatTime(attendance.actual_time_in)}</span>
+                                                                        <span>
+                                                                            In:{' '}
+                                                                            {formatTime(
+                                                                                attendance.actual_time_in,
+                                                                            )}
+                                                                        </span>
                                                                     )}
                                                                     {attendance.actual_time_out && (
-                                                                        <span>Out: {formatTime(attendance.actual_time_out)}</span>
+                                                                        <span>
+                                                                            Out:{' '}
+                                                                            {formatTime(
+                                                                                attendance.actual_time_out,
+                                                                            )}
+                                                                        </span>
                                                                     )}
                                                                 </div>
                                                             )}
@@ -503,30 +678,45 @@ export default function AttendanceCalendar() {
                 {selectedUser && (
                     <Card>
                         <CardHeader>
-                            <CardTitle className="text-sm">Status Legend</CardTitle>
+                            <CardTitle className="text-sm">
+                                Status Legend
+                            </CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                                {Object.entries(statusLabels).map(([key, label]) => (
-                                    <div key={key} className="flex items-center gap-2">
-                                        <div className={`w-4 h-4 rounded ${statusColors[key] || 'bg-gray-500'}`}></div>
-                                        <span className="text-xs">{label}</span>
-                                    </div>
-                                ))}
+                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+                                {Object.entries(statusLabels).map(
+                                    ([key, label]) => (
+                                        <div
+                                            key={key}
+                                            className="flex items-center gap-2"
+                                        >
+                                            <div
+                                                className={`h-4 w-4 rounded ${statusColors[key] || 'bg-gray-500'}`}
+                                            ></div>
+                                            <span className="text-xs">
+                                                {label}
+                                            </span>
+                                        </div>
+                                    ),
+                                )}
                             </div>
                         </CardContent>
                     </Card>
                 )}
 
                 {/* Detail Dialog */}
-                <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
-                    <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                <Dialog
+                    open={isDetailDialogOpen}
+                    onOpenChange={setIsDetailDialogOpen}
+                >
+                    <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
                         <DialogHeader>
                             <DialogTitle>Attendance Details</DialogTitle>
                             <DialogDescription>
                                 {selectedAttendance && (
                                     <>
-                                        {selectedAttendance.user.name} - {selectedAttendance.shift_date}
+                                        {selectedAttendance.user.name} -{' '}
+                                        {selectedAttendance.shift_date}
                                     </>
                                 )}
                             </DialogDescription>
@@ -535,18 +725,34 @@ export default function AttendanceCalendar() {
                             <div className="space-y-4">
                                 {/* Status */}
                                 <div>
-                                    <label className="text-sm font-semibold">Status</label>
-                                    <div className="flex gap-2 mt-1">
-                                        <Badge className={`border-0 ${statusColors[selectedAttendance.status] || 'bg-gray-500 text-white'}`}>
-                                            {statusLabels[selectedAttendance.status] || selectedAttendance.status}
+                                    <label className="text-sm font-semibold">
+                                        Status
+                                    </label>
+                                    <div className="mt-1 flex gap-2">
+                                        <Badge
+                                            className={`border-0 ${statusColors[selectedAttendance.status] || 'bg-gray-500 text-white'}`}
+                                        >
+                                            {statusLabels[
+                                                selectedAttendance.status
+                                            ] || selectedAttendance.status}
                                         </Badge>
                                         {selectedAttendance.secondary_status && (
-                                            <Badge className={`border-0 ${statusColors[selectedAttendance.secondary_status] || 'bg-gray-500 text-white'}`}>
-                                                {statusLabels[selectedAttendance.secondary_status]}
+                                            <Badge
+                                                className={`border-0 ${statusColors[selectedAttendance.secondary_status] || 'bg-gray-500 text-white'}`}
+                                            >
+                                                {
+                                                    statusLabels[
+                                                        selectedAttendance
+                                                            .secondary_status
+                                                    ]
+                                                }
                                             </Badge>
                                         )}
                                         {selectedAttendance.admin_verified && (
-                                            <Badge variant="outline" className="bg-green-600 text-white border-0">
+                                            <Badge
+                                                variant="outline"
+                                                className="border-0 bg-green-600 text-white"
+                                            >
                                                 ✓ Verified
                                             </Badge>
                                         )}
@@ -556,16 +762,36 @@ export default function AttendanceCalendar() {
                                 {/* Schedule */}
                                 {selectedAttendance.employee_schedule && (
                                     <div>
-                                        <label className="text-sm font-semibold">Schedule</label>
-                                        <div className="text-sm mt-1">
+                                        <label className="text-sm font-semibold">
+                                            Schedule
+                                        </label>
+                                        <div className="mt-1 text-sm">
                                             <div>
-                                                Shift: {selectedAttendance.employee_schedule.shift_type.replace('_', ' ').toUpperCase()}
+                                                Shift:{' '}
+                                                {selectedAttendance.employee_schedule.shift_type
+                                                    .replace('_', ' ')
+                                                    .toUpperCase()}
                                             </div>
                                             <div>
-                                                Time: {formatTime(selectedAttendance.scheduled_time_in)} - {formatTime(selectedAttendance.scheduled_time_out)}
+                                                Time:{' '}
+                                                {formatTime(
+                                                    selectedAttendance.scheduled_time_in,
+                                                )}{' '}
+                                                -{' '}
+                                                {formatTime(
+                                                    selectedAttendance.scheduled_time_out,
+                                                )}
                                             </div>
-                                            {selectedAttendance.employee_schedule.site && (
-                                                <div>Site: {selectedAttendance.employee_schedule.site.name}</div>
+                                            {selectedAttendance
+                                                .employee_schedule.site && (
+                                                <div>
+                                                    Site:{' '}
+                                                    {
+                                                        selectedAttendance
+                                                            .employee_schedule
+                                                            .site.name
+                                                    }
+                                                </div>
                                             )}
                                         </div>
                                     </div>
@@ -574,28 +800,44 @@ export default function AttendanceCalendar() {
                                 {/* Actual Times */}
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="text-sm font-semibold">Time In</label>
-                                        <div className="text-sm mt-1">
+                                        <label className="text-sm font-semibold">
+                                            Time In
+                                        </label>
+                                        <div className="mt-1 text-sm">
                                             {selectedAttendance.actual_time_in
-                                                ? formatTime(selectedAttendance.actual_time_in)
+                                                ? formatTime(
+                                                      selectedAttendance.actual_time_in,
+                                                  )
                                                 : 'No record'}
                                         </div>
                                         {selectedAttendance.bio_in_site && (
                                             <div className="text-xs text-muted-foreground">
-                                                Site: {selectedAttendance.bio_in_site.name}
+                                                Site:{' '}
+                                                {
+                                                    selectedAttendance
+                                                        .bio_in_site.name
+                                                }
                                             </div>
                                         )}
                                     </div>
                                     <div>
-                                        <label className="text-sm font-semibold">Time Out</label>
-                                        <div className="text-sm mt-1">
+                                        <label className="text-sm font-semibold">
+                                            Time Out
+                                        </label>
+                                        <div className="mt-1 text-sm">
                                             {selectedAttendance.actual_time_out
-                                                ? formatTime(selectedAttendance.actual_time_out)
+                                                ? formatTime(
+                                                      selectedAttendance.actual_time_out,
+                                                  )
                                                 : 'No record'}
                                         </div>
                                         {selectedAttendance.bio_out_site && (
                                             <div className="text-xs text-muted-foreground">
-                                                Site: {selectedAttendance.bio_out_site.name}
+                                                Site:{' '}
+                                                {
+                                                    selectedAttendance
+                                                        .bio_out_site.name
+                                                }
                                             </div>
                                         )}
                                     </div>
@@ -603,63 +845,92 @@ export default function AttendanceCalendar() {
 
                                 {/* Total Hours Worked */}
                                 <div>
-                                    <label className="text-sm font-semibold">Total Hours Worked</label>
-                                    <div className="text-sm mt-1">
-                                        {formatWorkDuration(selectedAttendance.total_minutes_worked)}
+                                    <label className="text-sm font-semibold">
+                                        Total Hours Worked
+                                    </label>
+                                    <div className="mt-1 text-sm">
+                                        {formatWorkDuration(
+                                            selectedAttendance.total_minutes_worked,
+                                        )}
                                     </div>
                                 </div>
 
                                 {/* Violations */}
-                                {(selectedAttendance.tardy_minutes || selectedAttendance.undertime_minutes || selectedAttendance.overtime_minutes) && (
+                                {(selectedAttendance.tardy_minutes ||
+                                    selectedAttendance.undertime_minutes ||
+                                    selectedAttendance.overtime_minutes) && (
                                     <div>
-                                        <label className="text-sm font-semibold">Time Adjustments</label>
-                                        <div className="space-y-1 mt-1 text-sm">
+                                        <label className="text-sm font-semibold">
+                                            Time Adjustments
+                                        </label>
+                                        <div className="mt-1 space-y-1 text-sm">
                                             {selectedAttendance.tardy_minutes && (
                                                 <div className="text-yellow-700">
-                                                    Tardy: {selectedAttendance.tardy_minutes >= 60
+                                                    Tardy:{' '}
+                                                    {selectedAttendance.tardy_minutes >=
+                                                    60
                                                         ? `${Math.floor(selectedAttendance.tardy_minutes / 60)} hour${Math.floor(selectedAttendance.tardy_minutes / 60) > 1 ? 's' : ''}${selectedAttendance.tardy_minutes % 60 > 0 ? ` ${selectedAttendance.tardy_minutes % 60} minutes` : ''}`
-                                                        : `${selectedAttendance.tardy_minutes} minutes`
-                                                    }
+                                                        : `${selectedAttendance.tardy_minutes} minutes`}
                                                 </div>
                                             )}
                                             {selectedAttendance.undertime_minutes && (
                                                 <div className="text-orange-700">
-                                                    Undertime: {selectedAttendance.undertime_minutes >= 60
+                                                    Undertime:{' '}
+                                                    {selectedAttendance.undertime_minutes >=
+                                                    60
                                                         ? `${Math.floor(selectedAttendance.undertime_minutes / 60)} hour${Math.floor(selectedAttendance.undertime_minutes / 60) > 1 ? 's' : ''}${selectedAttendance.undertime_minutes % 60 > 0 ? ` ${selectedAttendance.undertime_minutes % 60} minutes` : ''}`
-                                                        : `${selectedAttendance.undertime_minutes} minutes`
-                                                    }
+                                                        : `${selectedAttendance.undertime_minutes} minutes`}
                                                 </div>
                                             )}
-                                            {selectedAttendance.overtime_minutes && selectedAttendance.overtime_minutes > 30 && (
-                                                <div className="flex items-center gap-1">
-                                                    <span className={selectedAttendance.overtime_approved ? "text-green-700" : "text-red-700"}>
-                                                        Overtime: {selectedAttendance.overtime_minutes >= 60
-                                                            ? `${Math.floor(selectedAttendance.overtime_minutes / 60)} hour${Math.floor(selectedAttendance.overtime_minutes / 60) > 1 ? 's' : ''}${selectedAttendance.overtime_minutes % 60 > 0 ? ` ${selectedAttendance.overtime_minutes % 60} minutes` : ''}`
-                                                            : `${selectedAttendance.overtime_minutes} minutes`
-                                                        }
-                                                    </span>
-                                                    {selectedAttendance.overtime_approved ? (
-                                                        <CheckCircle className="h-3 w-3 text-green-700" />
-                                                    ) : selectedAttendance.admin_verified ? (
-                                                        <X className="h-3 w-3 text-red-700" />
-                                                    ) : null}
-                                                </div>
-                                            )}
+                                            {selectedAttendance.overtime_minutes &&
+                                                selectedAttendance.overtime_minutes >
+                                                    30 && (
+                                                    <div className="flex items-center gap-1">
+                                                        <span
+                                                            className={
+                                                                selectedAttendance.overtime_approved
+                                                                    ? 'text-green-700'
+                                                                    : 'text-red-700'
+                                                            }
+                                                        >
+                                                            Overtime:{' '}
+                                                            {selectedAttendance.overtime_minutes >=
+                                                            60
+                                                                ? `${Math.floor(selectedAttendance.overtime_minutes / 60)} hour${Math.floor(selectedAttendance.overtime_minutes / 60) > 1 ? 's' : ''}${selectedAttendance.overtime_minutes % 60 > 0 ? ` ${selectedAttendance.overtime_minutes % 60} minutes` : ''}`
+                                                                : `${selectedAttendance.overtime_minutes} minutes`}
+                                                        </span>
+                                                        {selectedAttendance.overtime_approved ? (
+                                                            <CheckCircle className="h-3 w-3 text-green-700" />
+                                                        ) : selectedAttendance.admin_verified ? (
+                                                            <X className="h-3 w-3 text-red-700" />
+                                                        ) : null}
+                                                    </div>
+                                                )}
                                         </div>
                                     </div>
                                 )}
 
                                 {/* Notes */}
-                                {(selectedAttendance.notes || selectedAttendance.verification_notes) && (
+                                {(selectedAttendance.notes ||
+                                    selectedAttendance.verification_notes) && (
                                     <div>
-                                        <label className="text-sm font-semibold">Notes</label>
-                                        <div className="text-sm mt-1 space-y-1">
+                                        <label className="text-sm font-semibold">
+                                            Notes
+                                        </label>
+                                        <div className="mt-1 space-y-1 text-sm">
                                             {selectedAttendance.notes && (
-                                                <div className="bg-muted p-2 rounded">{selectedAttendance.notes}</div>
+                                                <div className="rounded bg-muted p-2">
+                                                    {selectedAttendance.notes}
+                                                </div>
                                             )}
                                             {selectedAttendance.verification_notes && (
-                                                <div className="bg-blue-50 p-2 rounded text-blue-900">
-                                                    <span className="font-semibold">Verification:</span> {selectedAttendance.verification_notes}
+                                                <div className="rounded bg-blue-50 p-2 text-blue-900">
+                                                    <span className="font-semibold">
+                                                        Verification:
+                                                    </span>{' '}
+                                                    {
+                                                        selectedAttendance.verification_notes
+                                                    }
                                                 </div>
                                             )}
                                         </div>
@@ -667,18 +938,29 @@ export default function AttendanceCalendar() {
                                 )}
 
                                 {/* Warnings */}
-                                {selectedAttendance.warnings && selectedAttendance.warnings.length > 0 && (
-                                    <div>
-                                        <label className="text-sm font-semibold text-amber-700">Warnings</label>
-                                        <div className="text-sm mt-1 space-y-1">
-                                            {selectedAttendance.warnings.map((warning, idx) => (
-                                                <div key={idx} className="bg-amber-50 p-2 rounded text-amber-900">
-                                                    {typeof warning === 'string' ? warning : warning.message}
-                                                </div>
-                                            ))}
+                                {selectedAttendance.warnings &&
+                                    selectedAttendance.warnings.length > 0 && (
+                                        <div>
+                                            <label className="text-sm font-semibold text-amber-700">
+                                                Warnings
+                                            </label>
+                                            <div className="mt-1 space-y-1 text-sm">
+                                                {selectedAttendance.warnings.map(
+                                                    (warning, idx) => (
+                                                        <div
+                                                            key={idx}
+                                                            className="rounded bg-amber-50 p-2 text-amber-900"
+                                                        >
+                                                            {typeof warning ===
+                                                            'string'
+                                                                ? warning
+                                                                : warning.message}
+                                                        </div>
+                                                    ),
+                                                )}
+                                            </div>
                                         </div>
-                                    </div>
-                                )}
+                                    )}
                             </div>
                         )}
                         <DialogFooter className="flex gap-2">
@@ -692,7 +974,7 @@ export default function AttendanceCalendar() {
                                         onClick={handleQuickApprove}
                                         className="bg-green-600 hover:bg-green-700"
                                     >
-                                        <Check className="h-4 w-4 mr-2" />
+                                        <Check className="mr-2 h-4 w-4" />
                                         Approve
                                     </Button>
                                 )}
@@ -707,7 +989,7 @@ export default function AttendanceCalendar() {
                                         variant="outline"
                                         className="border-blue-600 text-blue-600 hover:bg-blue-50"
                                     >
-                                        <ShieldCheck className="h-4 w-4 mr-2" />
+                                        <ShieldCheck className="mr-2 h-4 w-4" />
                                         Verify
                                     </Button>
                                 )}

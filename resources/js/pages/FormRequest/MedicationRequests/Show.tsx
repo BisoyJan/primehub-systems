@@ -1,12 +1,7 @@
-import { Head, Link, router } from '@inertiajs/react';
-import { useState } from 'react';
-import AppLayout from '@/layouts/app-layout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
+import { Can } from '@/components/authorization';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
     Dialog,
     DialogContent,
@@ -15,9 +10,17 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { ArrowLeft, CheckCircle, XCircle, Package } from 'lucide-react';
-import { Can } from '@/components/authorization';
-import { index as medicationIndexRoute, updateStatus as medicationUpdateStatusRoute } from '@/routes/medication-requests';
+import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
+import { Textarea } from '@/components/ui/textarea';
+import AppLayout from '@/layouts/app-layout';
+import {
+    index as medicationIndexRoute,
+    updateStatus as medicationUpdateStatusRoute,
+} from '@/routes/medication-requests';
+import { Head, Link, router } from '@inertiajs/react';
+import { ArrowLeft, CheckCircle, Package, XCircle } from 'lucide-react';
+import { useState } from 'react';
 
 interface MedicationRequest {
     id: number;
@@ -49,8 +52,12 @@ interface Props {
 
 export default function Show({ medicationRequest }: Props) {
     const [isDialogOpen, setIsDialogOpen] = useState(false);
-    const [actionType, setActionType] = useState<'approved' | 'dispensed' | 'rejected'>('approved');
-    const [adminNotes, setAdminNotes] = useState(medicationRequest.admin_notes || '');
+    const [actionType, setActionType] = useState<
+        'approved' | 'dispensed' | 'rejected'
+    >('approved');
+    const [adminNotes, setAdminNotes] = useState(
+        medicationRequest.admin_notes || '',
+    );
     const [processing, setProcessing] = useState(false);
 
     const openDialog = (type: 'approved' | 'dispensed' | 'rejected') => {
@@ -60,19 +67,23 @@ export default function Show({ medicationRequest }: Props) {
 
     const handleStatusUpdate = () => {
         setProcessing(true);
-        router.post(medicationUpdateStatusRoute(medicationRequest.id).url, {
-            status: actionType,
-            admin_notes: adminNotes,
-        }, {
-            preserveScroll: true,
-            onSuccess: () => {
-                setIsDialogOpen(false);
-                setAdminNotes('');
+        router.post(
+            medicationUpdateStatusRoute(medicationRequest.id).url,
+            {
+                status: actionType,
+                admin_notes: adminNotes,
             },
-            onFinish: () => {
-                setProcessing(false);
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setIsDialogOpen(false);
+                    setAdminNotes('');
+                },
+                onFinish: () => {
+                    setProcessing(false);
+                },
             },
-        });
+        );
     };
 
     const getStatusBadge = (status: string) => {
@@ -84,7 +95,10 @@ export default function Show({ medicationRequest }: Props) {
         };
 
         return (
-            <Badge variant="outline" className={colors[status as keyof typeof colors]}>
+            <Badge
+                variant="outline"
+                className={colors[status as keyof typeof colors]}
+            >
                 {status.charAt(0).toUpperCase() + status.slice(1)}
             </Badge>
         );
@@ -95,7 +109,7 @@ export default function Show({ medicationRequest }: Props) {
             <Head title={`Medication Request - ${medicationRequest.name}`} />
 
             <div className="container mx-auto px-4 py-8">
-                <div className="flex items-center justify-between mb-6">
+                <div className="mb-6 flex items-center justify-between">
                     <div className="flex items-center gap-4">
                         <Link href={medicationIndexRoute().url}>
                             <Button variant="ghost" size="sm">
@@ -104,8 +118,10 @@ export default function Show({ medicationRequest }: Props) {
                             </Button>
                         </Link>
                         <div>
-                            <h1 className="text-3xl font-bold">Medication Request Details</h1>
-                            <p className="text-muted-foreground mt-2">
+                            <h1 className="text-3xl font-bold">
+                                Medication Request Details
+                            </h1>
+                            <p className="mt-2 text-muted-foreground">
                                 Request ID: #{medicationRequest.id}
                             </p>
                         </div>
@@ -120,54 +136,59 @@ export default function Show({ medicationRequest }: Props) {
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <div>
-                                <Label className="text-muted-foreground">Employee Name</Label>
-                                <p className="text-lg font-medium">{medicationRequest.name}</p>
+                                <Label className="text-muted-foreground">
+                                    Employee Name
+                                </Label>
+                                <p className="text-lg font-medium">
+                                    {medicationRequest.name}
+                                </p>
                             </div>
 
                             <Separator />
 
                             <div>
-                                <Label className="text-muted-foreground">Campaign</Label>
-                                <p className="text-lg font-medium">{medicationRequest.user?.active_schedule?.campaign?.name || '-'}</p>
+                                <Label className="text-muted-foreground">
+                                    Campaign
+                                </Label>
+                                <p className="text-lg font-medium">
+                                    {medicationRequest.user?.active_schedule
+                                        ?.campaign?.name || '-'}
+                                </p>
                             </div>
 
                             <Separator />
 
                             <div>
-                                <Label className="text-muted-foreground">Site</Label>
-                                <p className="text-lg font-medium">{medicationRequest.user?.active_schedule?.site?.name || '-'}</p>
+                                <Label className="text-muted-foreground">
+                                    Site
+                                </Label>
+                                <p className="text-lg font-medium">
+                                    {medicationRequest.user?.active_schedule
+                                        ?.site?.name || '-'}
+                                </p>
                             </div>
 
                             <Separator />
 
                             <div>
-                                <Label className="text-muted-foreground">Medication Type</Label>
-                                <p className="text-lg font-medium">{medicationRequest.medication_type}</p>
+                                <Label className="text-muted-foreground">
+                                    Medication Type
+                                </Label>
+                                <p className="text-lg font-medium">
+                                    {medicationRequest.medication_type}
+                                </p>
                             </div>
 
                             <Separator />
 
                             <div>
-                                <Label className="text-muted-foreground">Onset of Symptoms</Label>
-                                <p className="text-lg capitalize">{medicationRequest.onset_of_symptoms.replace(/_/g, ' ')}</p>
-                            </div>
-
-                            <Separator />
-
-                            <div>
-                                <Label className="text-muted-foreground">Reason for Request</Label>
-                                <p className="text-base whitespace-pre-wrap mt-2">{medicationRequest.reason}</p>
-                            </div>
-
-                            <Separator />
-
-                            <div>
-                                <Label className="text-muted-foreground">Policy Agreement</Label>
-                                <p className="text-base">
-                                    {medicationRequest.agrees_to_policy ? (
-                                        <span className="text-green-600 font-medium">✓ Agreed to policy</span>
-                                    ) : (
-                                        <span className="text-red-600 font-medium">✗ Did not agree to policy</span>
+                                <Label className="text-muted-foreground">
+                                    Onset of Symptoms
+                                </Label>
+                                <p className="text-lg capitalize">
+                                    {medicationRequest.onset_of_symptoms.replace(
+                                        /_/g,
+                                        ' ',
                                     )}
                                 </p>
                             </div>
@@ -175,9 +196,43 @@ export default function Show({ medicationRequest }: Props) {
                             <Separator />
 
                             <div>
-                                <Label className="text-muted-foreground">Requested Date</Label>
+                                <Label className="text-muted-foreground">
+                                    Reason for Request
+                                </Label>
+                                <p className="mt-2 text-base whitespace-pre-wrap">
+                                    {medicationRequest.reason}
+                                </p>
+                            </div>
+
+                            <Separator />
+
+                            <div>
+                                <Label className="text-muted-foreground">
+                                    Policy Agreement
+                                </Label>
                                 <p className="text-base">
-                                    {new Date(medicationRequest.created_at).toLocaleString()}
+                                    {medicationRequest.agrees_to_policy ? (
+                                        <span className="font-medium text-green-600">
+                                            ✓ Agreed to policy
+                                        </span>
+                                    ) : (
+                                        <span className="font-medium text-red-600">
+                                            ✗ Did not agree to policy
+                                        </span>
+                                    )}
+                                </p>
+                            </div>
+
+                            <Separator />
+
+                            <div>
+                                <Label className="text-muted-foreground">
+                                    Requested Date
+                                </Label>
+                                <p className="text-base">
+                                    {new Date(
+                                        medicationRequest.created_at,
+                                    ).toLocaleString()}
                                 </p>
                             </div>
                         </CardContent>
@@ -194,31 +249,46 @@ export default function Show({ medicationRequest }: Props) {
                                         <Package className="h-4 w-4 text-blue-600" />
                                     </div>
                                     <div>
-                                        <p className="font-medium">Request Submitted</p>
+                                        <p className="font-medium">
+                                            Request Submitted
+                                        </p>
                                         <p className="text-sm text-muted-foreground">
-                                            {new Date(medicationRequest.created_at).toLocaleString()}
+                                            {new Date(
+                                                medicationRequest.created_at,
+                                            ).toLocaleString()}
                                         </p>
                                     </div>
                                 </div>
 
-                                {medicationRequest.approved_at && medicationRequest.approved_by_user && (
-                                    <div className="flex items-start gap-3">
-                                        <div className="rounded-full bg-green-100 p-2">
-                                            <CheckCircle className="h-4 w-4 text-green-600" />
+                                {medicationRequest.approved_at &&
+                                    medicationRequest.approved_by_user && (
+                                        <div className="flex items-start gap-3">
+                                            <div className="rounded-full bg-green-100 p-2">
+                                                <CheckCircle className="h-4 w-4 text-green-600" />
+                                            </div>
+                                            <div>
+                                                <p className="font-medium">
+                                                    {medicationRequest.status ===
+                                                    'rejected'
+                                                        ? 'Rejected'
+                                                        : 'Approved'}
+                                                </p>
+                                                <p className="text-sm text-muted-foreground">
+                                                    By{' '}
+                                                    {
+                                                        medicationRequest
+                                                            .approved_by_user
+                                                            .name
+                                                    }
+                                                </p>
+                                                <p className="text-sm text-muted-foreground">
+                                                    {new Date(
+                                                        medicationRequest.approved_at,
+                                                    ).toLocaleString()}
+                                                </p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <p className="font-medium">
-                                                {medicationRequest.status === 'rejected' ? 'Rejected' : 'Approved'}
-                                            </p>
-                                            <p className="text-sm text-muted-foreground">
-                                                By {medicationRequest.approved_by_user.name}
-                                            </p>
-                                            <p className="text-sm text-muted-foreground">
-                                                {new Date(medicationRequest.approved_at).toLocaleString()}
-                                            </p>
-                                        </div>
-                                    </div>
-                                )}
+                                    )}
 
                                 {medicationRequest.status === 'dispensed' && (
                                     <div className="flex items-start gap-3">
@@ -226,7 +296,9 @@ export default function Show({ medicationRequest }: Props) {
                                             <Package className="h-4 w-4 text-purple-600" />
                                         </div>
                                         <div>
-                                            <p className="font-medium">Medication Dispensed</p>
+                                            <p className="font-medium">
+                                                Medication Dispensed
+                                            </p>
                                         </div>
                                     </div>
                                 )}
@@ -237,12 +309,16 @@ export default function Show({ medicationRequest }: Props) {
                             {medicationRequest.status === 'pending' && (
                                 <Card>
                                     <CardHeader>
-                                        <CardTitle>Update Request Status</CardTitle>
+                                        <CardTitle>
+                                            Update Request Status
+                                        </CardTitle>
                                     </CardHeader>
                                     <CardContent className="space-y-4">
                                         <div className="flex gap-2">
                                             <Button
-                                                onClick={() => openDialog('approved')}
+                                                onClick={() =>
+                                                    openDialog('approved')
+                                                }
                                                 disabled={processing}
                                                 className="flex-1"
                                             >
@@ -250,7 +326,9 @@ export default function Show({ medicationRequest }: Props) {
                                                 Approve
                                             </Button>
                                             <Button
-                                                onClick={() => openDialog('rejected')}
+                                                onClick={() =>
+                                                    openDialog('rejected')
+                                                }
                                                 disabled={processing}
                                                 variant="destructive"
                                                 className="flex-1"
@@ -270,7 +348,9 @@ export default function Show({ medicationRequest }: Props) {
                                     </CardHeader>
                                     <CardContent>
                                         <Button
-                                            onClick={() => openDialog('dispensed')}
+                                            onClick={() =>
+                                                openDialog('dispensed')
+                                            }
                                             disabled={processing}
                                             className="w-full"
                                         >
@@ -283,14 +363,33 @@ export default function Show({ medicationRequest }: Props) {
                         </Can>
 
                         {medicationRequest.admin_notes && (
-                            <Card className={medicationRequest.status === 'rejected' ? 'border-red-400 bg-red-50 dark:bg-red-950 dark:border-red-800' : ''}>
+                            <Card
+                                className={
+                                    medicationRequest.status === 'rejected'
+                                        ? 'border-red-400 bg-red-50 dark:border-red-800 dark:bg-red-950'
+                                        : ''
+                                }
+                            >
                                 <CardHeader>
-                                    <CardTitle className={medicationRequest.status === 'rejected' ? 'text-red-800 dark:text-red-400' : ''}>
-                                        {medicationRequest.status === 'rejected' ? 'Rejection Reason' : 'Admin Notes'}
+                                    <CardTitle
+                                        className={
+                                            medicationRequest.status ===
+                                            'rejected'
+                                                ? 'text-red-800 dark:text-red-400'
+                                                : ''
+                                        }
+                                    >
+                                        {medicationRequest.status === 'rejected'
+                                            ? 'Rejection Reason'
+                                            : 'Admin Notes'}
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent>
-                                    <p className={`whitespace-pre-wrap ${medicationRequest.status === 'rejected' ? 'text-red-700 dark:text-red-300' : ''}`}>{medicationRequest.admin_notes}</p>
+                                    <p
+                                        className={`whitespace-pre-wrap ${medicationRequest.status === 'rejected' ? 'text-red-700 dark:text-red-300' : ''}`}
+                                    >
+                                        {medicationRequest.admin_notes}
+                                    </p>
                                 </CardContent>
                             </Card>
                         )}
@@ -301,26 +400,32 @@ export default function Show({ medicationRequest }: Props) {
                     <DialogContent>
                         <DialogHeader>
                             <DialogTitle>
-                                {actionType === 'approved' && 'Approve Medication Request'}
-                                {actionType === 'rejected' && 'Reject Medication Request'}
-                                {actionType === 'dispensed' && 'Mark as Dispensed'}
+                                {actionType === 'approved' &&
+                                    'Approve Medication Request'}
+                                {actionType === 'rejected' &&
+                                    'Reject Medication Request'}
+                                {actionType === 'dispensed' &&
+                                    'Mark as Dispensed'}
                             </DialogTitle>
                             <DialogDescription>
                                 {actionType === 'dispensed'
                                     ? 'Confirm that the medication has been dispensed to the employee.'
-                                    : 'Add optional notes and confirm your decision.'
-                                }
+                                    : 'Add optional notes and confirm your decision.'}
                             </DialogDescription>
                         </DialogHeader>
 
                         {actionType !== 'dispensed' && (
                             <div className="space-y-2">
-                                <Label htmlFor="admin_notes">Admin Notes (Optional)</Label>
+                                <Label htmlFor="admin_notes">
+                                    Admin Notes (Optional)
+                                </Label>
                                 <Textarea
                                     id="admin_notes"
                                     placeholder="Add any notes about this request..."
                                     value={adminNotes}
-                                    onChange={(e) => setAdminNotes(e.target.value)}
+                                    onChange={(e) =>
+                                        setAdminNotes(e.target.value)
+                                    }
                                     rows={4}
                                 />
                             </div>
@@ -339,7 +444,11 @@ export default function Show({ medicationRequest }: Props) {
                                 type="button"
                                 onClick={handleStatusUpdate}
                                 disabled={processing}
-                                variant={actionType === 'rejected' ? 'destructive' : 'default'}
+                                variant={
+                                    actionType === 'rejected'
+                                        ? 'destructive'
+                                        : 'default'
+                                }
                             >
                                 {processing ? 'Processing...' : 'Confirm'}
                             </Button>

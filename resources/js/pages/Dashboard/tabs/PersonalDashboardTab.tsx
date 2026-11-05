@@ -1,10 +1,32 @@
-import React, { useState, useMemo } from 'react';
-import { motion } from 'framer-motion';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from '@/components/ui/card';
+import {
+    ChartContainer,
+    ChartTooltip,
+    ChartTooltipContent,
+} from '@/components/ui/chart';
 import { Separator } from '@/components/ui/separator';
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { motion } from 'framer-motion';
+import {
+    AlertTriangle,
+    Award,
+    Calendar,
+    CheckCircle2,
+    ClipboardList,
+    Clock,
+    TrendingUp,
+    UserCheck,
+    UserX,
+    XCircle,
+} from 'lucide-react';
+import React, { useMemo, useState } from 'react';
 import {
     Bar,
     BarChart,
@@ -19,19 +41,12 @@ import {
     XAxis,
     YAxis,
 } from 'recharts';
-import {
-    Calendar,
-    Clock,
-    CheckCircle2,
-    AlertTriangle,
-    XCircle,
-    UserCheck,
-    UserX,
-    ClipboardList,
-    TrendingUp,
-    Award,
-} from 'lucide-react';
-import type { PersonalSchedule, PersonalRequests, PersonalAttendanceSummary, LeaveCredits } from '../types';
+import type {
+    LeaveCredits,
+    PersonalAttendanceSummary,
+    PersonalRequests,
+    PersonalSchedule,
+} from '../types';
 
 export interface PersonalDashboardTabProps {
     personalSchedule?: PersonalSchedule | null;
@@ -101,18 +116,41 @@ export const PersonalDashboardTab: React.FC<PersonalDashboardTabProps> = ({
 
     const pointsThreshold = personalAttendanceSummary?.points_threshold ?? 6;
     const totalPoints = personalAttendanceSummary?.total_points ?? 0;
-    const pointsPercentage = Math.min((totalPoints / pointsThreshold) * 100, 100);
+    const pointsPercentage = Math.min(
+        (totalPoints / pointsThreshold) * 100,
+        100,
+    );
 
     // Donut chart data for attendance distribution
     const attendanceDonutData = useMemo(() => {
         if (!personalAttendanceSummary) return [];
         return [
-            { name: 'On Time', value: personalAttendanceSummary.on_time, fill: 'hsl(142, 71%, 45%)' },
-            { name: 'Tardy', value: personalAttendanceSummary.tardy, fill: 'hsl(45, 93%, 47%)' },
-            { name: 'Half Day', value: personalAttendanceSummary.half_day, fill: 'hsl(25, 95%, 53%)' },
-            { name: 'NCNS', value: personalAttendanceSummary.ncns, fill: 'hsl(0, 84%, 60%)' },
-            { name: 'On Leave', value: personalAttendanceSummary.on_leave, fill: 'hsl(221, 83%, 53%)' },
-        ].filter(d => d.value > 0);
+            {
+                name: 'On Time',
+                value: personalAttendanceSummary.on_time,
+                fill: 'hsl(142, 71%, 45%)',
+            },
+            {
+                name: 'Tardy',
+                value: personalAttendanceSummary.tardy,
+                fill: 'hsl(45, 93%, 47%)',
+            },
+            {
+                name: 'Half Day',
+                value: personalAttendanceSummary.half_day,
+                fill: 'hsl(25, 95%, 53%)',
+            },
+            {
+                name: 'NCNS',
+                value: personalAttendanceSummary.ncns,
+                fill: 'hsl(0, 84%, 60%)',
+            },
+            {
+                name: 'On Leave',
+                value: personalAttendanceSummary.on_leave,
+                fill: 'hsl(221, 83%, 53%)',
+            },
+        ].filter((d) => d.value > 0);
     }, [personalAttendanceSummary]);
 
     // Horizontal bar data for points by type
@@ -135,16 +173,26 @@ export const PersonalDashboardTab: React.FC<PersonalDashboardTabProps> = ({
     }, [personalAttendanceSummary]);
 
     // Radial gauge data for points threshold
-    const pointsGaugeData = useMemo(() => [{
-        name: 'points',
-        value: Math.min(totalPoints, pointsThreshold),
-        fill: pointsPercentage >= 80 ? 'hsl(0, 84%, 60%)' : pointsPercentage >= 50 ? 'hsl(45, 93%, 47%)' : 'hsl(142, 71%, 45%)',
-    }], [totalPoints, pointsThreshold, pointsPercentage]);
+    const pointsGaugeData = useMemo(
+        () => [
+            {
+                name: 'points',
+                value: Math.min(totalPoints, pointsThreshold),
+                fill:
+                    pointsPercentage >= 80
+                        ? 'hsl(0, 84%, 60%)'
+                        : pointsPercentage >= 50
+                          ? 'hsl(45, 93%, 47%)'
+                          : 'hsl(142, 71%, 45%)',
+            },
+        ],
+        [totalPoints, pointsThreshold, pointsPercentage],
+    );
 
     return (
         <div className="space-y-6">
             {/* Row 1: Schedule + Attendance Summary */}
-            <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                 {/* Schedule Card */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
@@ -159,7 +207,8 @@ export const PersonalDashboardTab: React.FC<PersonalDashboardTabProps> = ({
                             </CardTitle>
                             {personalSchedule && (
                                 <CardDescription>
-                                    {personalSchedule.campaign} · {personalSchedule.site}
+                                    {personalSchedule.campaign} ·{' '}
+                                    {personalSchedule.site}
                                 </CardDescription>
                             )}
                         </CardHeader>
@@ -168,31 +217,66 @@ export const PersonalDashboardTab: React.FC<PersonalDashboardTabProps> = ({
                                 <div className="space-y-4">
                                     <div className="grid grid-cols-2 gap-3">
                                         <div className="rounded-lg border p-3">
-                                            <p className="text-xs text-muted-foreground">Shift Type</p>
+                                            <p className="text-xs text-muted-foreground">
+                                                Shift Type
+                                            </p>
                                             <p className="text-sm font-semibold capitalize">
-                                                {personalSchedule.is_flexible ? 'Flexible' : (personalSchedule.shift_type ?? 'Regular').replace(/_/g, ' ')}
+                                                {personalSchedule.is_flexible
+                                                    ? 'Flexible'
+                                                    : (
+                                                          personalSchedule.shift_type ??
+                                                          'Regular'
+                                                      ).replace(/_/g, ' ')}
                                             </p>
                                         </div>
                                         <div className="rounded-lg border p-3">
-                                            <p className="text-xs text-muted-foreground">Grace Period</p>
-                                            <p className="text-sm font-semibold">{personalSchedule.grace_period_minutes} min</p>
+                                            <p className="text-xs text-muted-foreground">
+                                                Grace Period
+                                            </p>
+                                            <p className="text-sm font-semibold">
+                                                {
+                                                    personalSchedule.grace_period_minutes
+                                                }{' '}
+                                                min
+                                            </p>
                                         </div>
                                         <div className="rounded-lg border p-3">
-                                            <p className="text-xs text-muted-foreground">Time In</p>
-                                            <p className="text-sm font-semibold">{formatTime(personalSchedule.time_in)}</p>
+                                            <p className="text-xs text-muted-foreground">
+                                                Time In
+                                            </p>
+                                            <p className="text-sm font-semibold">
+                                                {formatTime(
+                                                    personalSchedule.time_in,
+                                                )}
+                                            </p>
                                         </div>
                                         <div className="rounded-lg border p-3">
-                                            <p className="text-xs text-muted-foreground">Time Out</p>
-                                            <p className="text-sm font-semibold">{formatTime(personalSchedule.time_out)}</p>
+                                            <p className="text-xs text-muted-foreground">
+                                                Time Out
+                                            </p>
+                                            <p className="text-sm font-semibold">
+                                                {formatTime(
+                                                    personalSchedule.time_out,
+                                                )}
+                                            </p>
                                         </div>
                                     </div>
 
                                     <div>
-                                        <p className="text-xs text-muted-foreground mb-2">Work Days</p>
+                                        <p className="mb-2 text-xs text-muted-foreground">
+                                            Work Days
+                                        </p>
                                         <div className="flex flex-wrap gap-1.5">
-                                            {(personalSchedule.work_days ?? []).map((day) => (
-                                                <Badge key={day} variant="secondary" className="text-xs">
-                                                    {DAY_ABBREVIATIONS[day] ?? day}
+                                            {(
+                                                personalSchedule.work_days ?? []
+                                            ).map((day) => (
+                                                <Badge
+                                                    key={day}
+                                                    variant="secondary"
+                                                    className="text-xs"
+                                                >
+                                                    {DAY_ABBREVIATIONS[day] ??
+                                                        day}
                                                 </Badge>
                                             ))}
                                         </div>
@@ -201,22 +285,33 @@ export const PersonalDashboardTab: React.FC<PersonalDashboardTabProps> = ({
                                     <Separator />
 
                                     <div>
-                                        <p className="text-xs text-muted-foreground mb-2">Next 7 Work Days</p>
+                                        <p className="mb-2 text-xs text-muted-foreground">
+                                            Next 7 Work Days
+                                        </p>
                                         <div className="space-y-1">
-                                            {(personalSchedule.next_shifts ?? []).slice(0, 7).map((shift, i) => (
-                                                <div
-                                                    key={i}
-                                                    className="flex items-center gap-2 text-sm rounded px-2 py-1 hover:bg-muted/50"
-                                                >
-                                                    <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                                                    <span>{formatDate(shift)}</span>
-                                                </div>
-                                            ))}
+                                            {(
+                                                personalSchedule.next_shifts ??
+                                                []
+                                            )
+                                                .slice(0, 7)
+                                                .map((shift, i) => (
+                                                    <div
+                                                        key={i}
+                                                        className="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-muted/50"
+                                                    >
+                                                        <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                                                        <span>
+                                                            {formatDate(shift)}
+                                                        </span>
+                                                    </div>
+                                                ))}
                                         </div>
                                     </div>
                                 </div>
                             ) : (
-                                <p className="text-sm text-muted-foreground">No active schedule found.</p>
+                                <p className="text-sm text-muted-foreground">
+                                    No active schedule found.
+                                </p>
                             )}
                         </CardContent>
                     </Card>
@@ -235,36 +330,91 @@ export const PersonalDashboardTab: React.FC<PersonalDashboardTabProps> = ({
                                 Attendance Summary
                             </CardTitle>
                             {personalAttendanceSummary && (
-                                <CardDescription>{personalAttendanceSummary.month}</CardDescription>
+                                <CardDescription>
+                                    {personalAttendanceSummary.month}
+                                </CardDescription>
                             )}
                         </CardHeader>
                         <CardContent>
                             {personalAttendanceSummary ? (
                                 <div className="space-y-4">
-                                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                                    <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
                                         {[
-                                            { label: 'Present', value: personalAttendanceSummary.present, icon: CheckCircle2, color: 'text-green-600' },
-                                            { label: 'On Time', value: personalAttendanceSummary.on_time, icon: UserCheck, color: 'text-green-500' },
-                                            { label: 'Tardy', value: personalAttendanceSummary.tardy, icon: Clock, color: 'text-yellow-600' },
-                                            { label: 'Absent', value: personalAttendanceSummary.absent, icon: UserX, color: 'text-red-500' },
-                                            { label: 'NCNS', value: personalAttendanceSummary.ncns, icon: XCircle, color: 'text-red-600' },
-                                        ].map(({ label, value, icon: Icon, color }) => (
-                                            <div key={label} className="rounded-lg border p-2 text-center">
-                                                <Icon className={`h-4 w-4 mx-auto mb-1 ${color}`} />
-                                                <p className="text-lg font-bold">{value}</p>
-                                                <p className="text-[10px] text-muted-foreground">{label}</p>
-                                            </div>
-                                        ))}
+                                            {
+                                                label: 'Present',
+                                                value: personalAttendanceSummary.present,
+                                                icon: CheckCircle2,
+                                                color: 'text-green-600',
+                                            },
+                                            {
+                                                label: 'On Time',
+                                                value: personalAttendanceSummary.on_time,
+                                                icon: UserCheck,
+                                                color: 'text-green-500',
+                                            },
+                                            {
+                                                label: 'Tardy',
+                                                value: personalAttendanceSummary.tardy,
+                                                icon: Clock,
+                                                color: 'text-yellow-600',
+                                            },
+                                            {
+                                                label: 'Absent',
+                                                value: personalAttendanceSummary.absent,
+                                                icon: UserX,
+                                                color: 'text-red-500',
+                                            },
+                                            {
+                                                label: 'NCNS',
+                                                value: personalAttendanceSummary.ncns,
+                                                icon: XCircle,
+                                                color: 'text-red-600',
+                                            },
+                                        ].map(
+                                            ({
+                                                label,
+                                                value,
+                                                icon: Icon,
+                                                color,
+                                            }) => (
+                                                <div
+                                                    key={label}
+                                                    className="rounded-lg border p-2 text-center"
+                                                >
+                                                    <Icon
+                                                        className={`mx-auto mb-1 h-4 w-4 ${color}`}
+                                                    />
+                                                    <p className="text-lg font-bold">
+                                                        {value}
+                                                    </p>
+                                                    <p className="text-[10px] text-muted-foreground">
+                                                        {label}
+                                                    </p>
+                                                </div>
+                                            ),
+                                        )}
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-2">
                                         <div className="rounded-lg border p-2 text-center">
-                                            <p className="text-sm text-muted-foreground">Half Day</p>
-                                            <p className="text-lg font-bold">{personalAttendanceSummary.half_day}</p>
+                                            <p className="text-sm text-muted-foreground">
+                                                Half Day
+                                            </p>
+                                            <p className="text-lg font-bold">
+                                                {
+                                                    personalAttendanceSummary.half_day
+                                                }
+                                            </p>
                                         </div>
                                         <div className="rounded-lg border p-2 text-center">
-                                            <p className="text-sm text-muted-foreground">On Leave</p>
-                                            <p className="text-lg font-bold">{personalAttendanceSummary.on_leave}</p>
+                                            <p className="text-sm text-muted-foreground">
+                                                On Leave
+                                            </p>
+                                            <p className="text-lg font-bold">
+                                                {
+                                                    personalAttendanceSummary.on_leave
+                                                }
+                                            </p>
                                         </div>
                                     </div>
 
@@ -273,18 +423,43 @@ export const PersonalDashboardTab: React.FC<PersonalDashboardTabProps> = ({
                                         <>
                                             <Separator />
                                             <div>
-                                                <p className="text-xs text-muted-foreground mb-2">Status Distribution</p>
-                                                <ChartContainer config={{
-                                                    on_time: { label: 'On Time', color: 'hsl(142, 71%, 45%)' },
-                                                    tardy: { label: 'Tardy', color: 'hsl(45, 93%, 47%)' },
-                                                    half_day: { label: 'Half Day', color: 'hsl(25, 95%, 53%)' },
-                                                    ncns: { label: 'NCNS', color: 'hsl(0, 84%, 60%)' },
-                                                    on_leave: { label: 'On Leave', color: 'hsl(221, 83%, 53%)' },
-                                                }} className="h-40 w-full">
-                                                    <ResponsiveContainer width="100%" height="100%">
+                                                <p className="mb-2 text-xs text-muted-foreground">
+                                                    Status Distribution
+                                                </p>
+                                                <ChartContainer
+                                                    config={{
+                                                        on_time: {
+                                                            label: 'On Time',
+                                                            color: 'hsl(142, 71%, 45%)',
+                                                        },
+                                                        tardy: {
+                                                            label: 'Tardy',
+                                                            color: 'hsl(45, 93%, 47%)',
+                                                        },
+                                                        half_day: {
+                                                            label: 'Half Day',
+                                                            color: 'hsl(25, 95%, 53%)',
+                                                        },
+                                                        ncns: {
+                                                            label: 'NCNS',
+                                                            color: 'hsl(0, 84%, 60%)',
+                                                        },
+                                                        on_leave: {
+                                                            label: 'On Leave',
+                                                            color: 'hsl(221, 83%, 53%)',
+                                                        },
+                                                    }}
+                                                    className="h-40 w-full"
+                                                >
+                                                    <ResponsiveContainer
+                                                        width="100%"
+                                                        height="100%"
+                                                    >
                                                         <PieChart>
                                                             <Pie
-                                                                data={attendanceDonutData}
+                                                                data={
+                                                                    attendanceDonutData
+                                                                }
                                                                 dataKey="value"
                                                                 nameKey="name"
                                                                 innerRadius={40}
@@ -292,23 +467,80 @@ export const PersonalDashboardTab: React.FC<PersonalDashboardTabProps> = ({
                                                                 strokeWidth={2}
                                                                 paddingAngle={2}
                                                             >
-                                                                {attendanceDonutData.map((entry, i) => (
-                                                                    <Cell key={i} fill={entry.fill} />
-                                                                ))}
+                                                                {attendanceDonutData.map(
+                                                                    (
+                                                                        entry,
+                                                                        i,
+                                                                    ) => (
+                                                                        <Cell
+                                                                            key={
+                                                                                i
+                                                                            }
+                                                                            fill={
+                                                                                entry.fill
+                                                                            }
+                                                                        />
+                                                                    ),
+                                                                )}
                                                                 <Label
-                                                                    content={({ viewBox }) => {
-                                                                        if (viewBox && 'cx' in viewBox && 'cy' in viewBox) {
+                                                                    content={({
+                                                                        viewBox,
+                                                                    }) => {
+                                                                        if (
+                                                                            viewBox &&
+                                                                            'cx' in
+                                                                                viewBox &&
+                                                                            'cy' in
+                                                                                viewBox
+                                                                        ) {
                                                                             return (
-                                                                                <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle" dominantBaseline="middle">
-                                                                                    <tspan x={viewBox.cx} y={viewBox.cy} className="fill-foreground text-xl font-bold">{personalAttendanceSummary.total}</tspan>
-                                                                                    <tspan x={viewBox.cx} y={(viewBox.cy ?? 0) + 16} className="fill-muted-foreground text-[10px]">Total</tspan>
+                                                                                <text
+                                                                                    x={
+                                                                                        viewBox.cx
+                                                                                    }
+                                                                                    y={
+                                                                                        viewBox.cy
+                                                                                    }
+                                                                                    textAnchor="middle"
+                                                                                    dominantBaseline="middle"
+                                                                                >
+                                                                                    <tspan
+                                                                                        x={
+                                                                                            viewBox.cx
+                                                                                        }
+                                                                                        y={
+                                                                                            viewBox.cy
+                                                                                        }
+                                                                                        className="fill-foreground text-xl font-bold"
+                                                                                    >
+                                                                                        {
+                                                                                            personalAttendanceSummary.total
+                                                                                        }
+                                                                                    </tspan>
+                                                                                    <tspan
+                                                                                        x={
+                                                                                            viewBox.cx
+                                                                                        }
+                                                                                        y={
+                                                                                            (viewBox.cy ??
+                                                                                                0) +
+                                                                                            16
+                                                                                        }
+                                                                                        className="fill-muted-foreground text-[10px]"
+                                                                                    >
+                                                                                        Total
+                                                                                    </tspan>
                                                                                 </text>
                                                                             );
                                                                         }
                                                                     }}
                                                                 />
                                                             </Pie>
-                                                            <ChartTooltip content={<ChartTooltipContent />} />
+                                                            <ChartTooltip
+                                                                content={
+                                                                    <ChartTooltipContent />
+                                                                }
+                                                            />
                                                         </PieChart>
                                                     </ResponsiveContainer>
                                                 </ChartContainer>
@@ -320,54 +552,126 @@ export const PersonalDashboardTab: React.FC<PersonalDashboardTabProps> = ({
 
                                     {/* Points Gauge (RadialBarChart) */}
                                     <div>
-                                        <p className="text-xs text-muted-foreground mb-1">Attendance Points</p>
+                                        <p className="mb-1 text-xs text-muted-foreground">
+                                            Attendance Points
+                                        </p>
                                         <div className="flex items-center gap-4">
-                                            <ChartContainer config={{ points: { label: 'Points' } }} className="h-30 w-30 shrink-0">
+                                            <ChartContainer
+                                                config={{
+                                                    points: { label: 'Points' },
+                                                }}
+                                                className="h-30 w-30 shrink-0"
+                                            >
                                                 <RadialBarChart
                                                     innerRadius={35}
                                                     outerRadius={55}
                                                     data={pointsGaugeData}
                                                     startAngle={90}
-                                                    endAngle={90 + (Math.min(totalPoints, pointsThreshold) / pointsThreshold) * 360}
+                                                    endAngle={
+                                                        90 +
+                                                        (Math.min(
+                                                            totalPoints,
+                                                            pointsThreshold,
+                                                        ) /
+                                                            pointsThreshold) *
+                                                            360
+                                                    }
                                                 >
-                                                    <PolarRadiusAxis tick={false} tickLine={false} axisLine={false}>
+                                                    <PolarRadiusAxis
+                                                        tick={false}
+                                                        tickLine={false}
+                                                        axisLine={false}
+                                                    >
                                                         <Label
-                                                            content={({ viewBox }) => {
-                                                                if (viewBox && 'cx' in viewBox && 'cy' in viewBox) {
+                                                            content={({
+                                                                viewBox,
+                                                            }) => {
+                                                                if (
+                                                                    viewBox &&
+                                                                    'cx' in
+                                                                        viewBox &&
+                                                                    'cy' in
+                                                                        viewBox
+                                                                ) {
                                                                     return (
-                                                                        <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle" dominantBaseline="middle">
-                                                                            <tspan x={viewBox.cx} y={viewBox.cy} className="fill-foreground text-lg font-bold">{totalPoints}</tspan>
-                                                                            <tspan x={viewBox.cx} y={(viewBox.cy ?? 0) + 14} className="fill-muted-foreground text-[9px]">of {pointsThreshold}</tspan>
+                                                                        <text
+                                                                            x={
+                                                                                viewBox.cx
+                                                                            }
+                                                                            y={
+                                                                                viewBox.cy
+                                                                            }
+                                                                            textAnchor="middle"
+                                                                            dominantBaseline="middle"
+                                                                        >
+                                                                            <tspan
+                                                                                x={
+                                                                                    viewBox.cx
+                                                                                }
+                                                                                y={
+                                                                                    viewBox.cy
+                                                                                }
+                                                                                className="fill-foreground text-lg font-bold"
+                                                                            >
+                                                                                {
+                                                                                    totalPoints
+                                                                                }
+                                                                            </tspan>
+                                                                            <tspan
+                                                                                x={
+                                                                                    viewBox.cx
+                                                                                }
+                                                                                y={
+                                                                                    (viewBox.cy ??
+                                                                                        0) +
+                                                                                    14
+                                                                                }
+                                                                                className="fill-muted-foreground text-[9px]"
+                                                                            >
+                                                                                of{' '}
+                                                                                {
+                                                                                    pointsThreshold
+                                                                                }
+                                                                            </tspan>
                                                                         </text>
                                                                     );
                                                                 }
                                                             }}
                                                         />
                                                     </PolarRadiusAxis>
-                                                    <RadialBar dataKey="value" background cornerRadius={8} />
+                                                    <RadialBar
+                                                        dataKey="value"
+                                                        background
+                                                        cornerRadius={8}
+                                                    />
                                                 </RadialBarChart>
                                             </ChartContainer>
-                                            <div className="space-y-1 flex-1">
+                                            <div className="flex-1 space-y-1">
                                                 {pointsPercentage >= 80 && (
-                                                    <p className="text-xs text-red-500 flex items-center gap-1">
+                                                    <p className="flex items-center gap-1 text-xs text-red-500">
                                                         <AlertTriangle className="h-3 w-3" />
                                                         Approaching threshold
                                                     </p>
                                                 )}
-                                                {pointsPercentage >= 50 && pointsPercentage < 80 && (
-                                                    <p className="text-xs text-yellow-600 flex items-center gap-1">
-                                                        <AlertTriangle className="h-3 w-3" />
-                                                        Moderate risk
-                                                    </p>
-                                                )}
+                                                {pointsPercentage >= 50 &&
+                                                    pointsPercentage < 80 && (
+                                                        <p className="flex items-center gap-1 text-xs text-yellow-600">
+                                                            <AlertTriangle className="h-3 w-3" />
+                                                            Moderate risk
+                                                        </p>
+                                                    )}
                                                 {pointsPercentage < 50 && (
-                                                    <p className="text-xs text-green-600 flex items-center gap-1">
+                                                    <p className="flex items-center gap-1 text-xs text-green-600">
                                                         <CheckCircle2 className="h-3 w-3" />
                                                         Good standing
                                                     </p>
                                                 )}
                                                 <p className="text-[10px] text-muted-foreground">
-                                                    {(pointsThreshold - totalPoints).toFixed(2)} pts remaining
+                                                    {(
+                                                        pointsThreshold -
+                                                        totalPoints
+                                                    ).toFixed(2)}{' '}
+                                                    pts remaining
                                                 </p>
                                             </div>
                                         </div>
@@ -376,14 +680,59 @@ export const PersonalDashboardTab: React.FC<PersonalDashboardTabProps> = ({
                                     {/* Points by Type — Horizontal BarChart */}
                                     {pointsByTypeBarData.length > 0 && (
                                         <div>
-                                            <p className="text-xs text-muted-foreground mb-2">Points by Type</p>
-                                            <ChartContainer config={{ points: { label: 'Points', color: 'hsl(25, 95%, 53%)' } }} className="h-30 w-full">
-                                                <ResponsiveContainer width="100%" height="100%">
-                                                    <BarChart data={pointsByTypeBarData} layout="vertical" margin={{ left: 0, right: 5, top: 0, bottom: 0 }}>
-                                                        <XAxis type="number" hide />
-                                                        <YAxis type="category" dataKey="name" width={100} tickLine={false} axisLine={false} fontSize={10} />
-                                                        <ChartTooltip content={<ChartTooltipContent />} />
-                                                        <Bar dataKey="points" fill="hsl(25, 95%, 53%)" radius={[0, 4, 4, 0]} barSize={14} />
+                                            <p className="mb-2 text-xs text-muted-foreground">
+                                                Points by Type
+                                            </p>
+                                            <ChartContainer
+                                                config={{
+                                                    points: {
+                                                        label: 'Points',
+                                                        color: 'hsl(25, 95%, 53%)',
+                                                    },
+                                                }}
+                                                className="h-30 w-full"
+                                            >
+                                                <ResponsiveContainer
+                                                    width="100%"
+                                                    height="100%"
+                                                >
+                                                    <BarChart
+                                                        data={
+                                                            pointsByTypeBarData
+                                                        }
+                                                        layout="vertical"
+                                                        margin={{
+                                                            left: 0,
+                                                            right: 5,
+                                                            top: 0,
+                                                            bottom: 0,
+                                                        }}
+                                                    >
+                                                        <XAxis
+                                                            type="number"
+                                                            hide
+                                                        />
+                                                        <YAxis
+                                                            type="category"
+                                                            dataKey="name"
+                                                            width={100}
+                                                            tickLine={false}
+                                                            axisLine={false}
+                                                            fontSize={10}
+                                                        />
+                                                        <ChartTooltip
+                                                            content={
+                                                                <ChartTooltipContent />
+                                                            }
+                                                        />
+                                                        <Bar
+                                                            dataKey="points"
+                                                            fill="hsl(25, 95%, 53%)"
+                                                            radius={[
+                                                                0, 4, 4, 0,
+                                                            ]}
+                                                            barSize={14}
+                                                        />
                                                     </BarChart>
                                                 </ResponsiveContainer>
                                             </ChartContainer>
@@ -391,34 +740,56 @@ export const PersonalDashboardTab: React.FC<PersonalDashboardTabProps> = ({
                                     )}
 
                                     {/* Upcoming Expirations */}
-                                    {personalAttendanceSummary.upcoming_expirations.length > 0 && (
+                                    {personalAttendanceSummary
+                                        .upcoming_expirations.length > 0 && (
                                         <div className="space-y-1">
-                                            <p className="text-xs text-muted-foreground">Upcoming Expirations</p>
-                                            {personalAttendanceSummary.upcoming_expirations.map((exp, i) => (
-                                                <div
-                                                    key={i}
-                                                    className="flex items-center justify-between text-xs rounded px-2 py-1 bg-muted/50"
-                                                >
-                                                    <span className="flex items-center gap-1.5">
-                                                    <span>{exp.point_type.replace(/_/g, ' ')}</span>
-                                                    <span className={`text-[10px] px-1 rounded font-medium ${
-                                                        exp.expiration_type === 'gbro'
-                                                            ? 'bg-blue-500/10 text-blue-600'
-                                                            : 'bg-gray-500/10 text-gray-600'
-                                                    }`}>
-                                                        {exp.expiration_type === 'gbro' ? 'GBRO' : 'SRO'}
-                                                    </span>
-                                                </span>
-                                                    <span className="text-muted-foreground">
-                                                        {exp.points}pt · expires {formatDate(exp.expires_at)}
-                                                    </span>
-                                                </div>
-                                            ))}
+                                            <p className="text-xs text-muted-foreground">
+                                                Upcoming Expirations
+                                            </p>
+                                            {personalAttendanceSummary.upcoming_expirations.map(
+                                                (exp, i) => (
+                                                    <div
+                                                        key={i}
+                                                        className="flex items-center justify-between rounded bg-muted/50 px-2 py-1 text-xs"
+                                                    >
+                                                        <span className="flex items-center gap-1.5">
+                                                            <span>
+                                                                {exp.point_type.replace(
+                                                                    /_/g,
+                                                                    ' ',
+                                                                )}
+                                                            </span>
+                                                            <span
+                                                                className={`rounded px-1 text-[10px] font-medium ${
+                                                                    exp.expiration_type ===
+                                                                    'gbro'
+                                                                        ? 'bg-blue-500/10 text-blue-600'
+                                                                        : 'bg-gray-500/10 text-gray-600'
+                                                                }`}
+                                                            >
+                                                                {exp.expiration_type ===
+                                                                'gbro'
+                                                                    ? 'GBRO'
+                                                                    : 'SRO'}
+                                                            </span>
+                                                        </span>
+                                                        <span className="text-muted-foreground">
+                                                            {exp.points}pt ·
+                                                            expires{' '}
+                                                            {formatDate(
+                                                                exp.expires_at,
+                                                            )}
+                                                        </span>
+                                                    </div>
+                                                ),
+                                            )}
                                         </div>
                                     )}
                                 </div>
                             ) : (
-                                <p className="text-sm text-muted-foreground">No attendance data available.</p>
+                                <p className="text-sm text-muted-foreground">
+                                    No attendance data available.
+                                </p>
                             )}
                         </CardContent>
                     </Card>
@@ -426,7 +797,7 @@ export const PersonalDashboardTab: React.FC<PersonalDashboardTabProps> = ({
             </div>
 
             {/* Row 2: Recent Requests + Leave Credits */}
-            <div className="grid gap-6 grid-cols-1 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
                 {/* Recent Requests */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
@@ -445,135 +816,274 @@ export const PersonalDashboardTab: React.FC<PersonalDashboardTabProps> = ({
                             {userRole === 'IT' ? (
                                 personalRequests?.leaves?.length ? (
                                     <div className="space-y-2">
-                                        {personalRequests.leaves.slice(0, 5).map((leave) => (
-                                            <div
-                                                key={leave.id}
-                                                className="flex items-center justify-between rounded-lg border p-3"
-                                            >
-                                                <div className="space-y-0.5">
-                                                    <p className="text-sm font-medium">{leave.leave_type}</p>
-                                                    <p className="text-xs text-muted-foreground">
-                                                        {formatDate(leave.start_date)} — {formatDate(leave.end_date)} ·{' '}
-                                                        {leave.days_requested}d
-                                                    </p>
+                                        {personalRequests.leaves
+                                            .slice(0, 5)
+                                            .map((leave) => (
+                                                <div
+                                                    key={leave.id}
+                                                    className="flex items-center justify-between rounded-lg border p-3"
+                                                >
+                                                    <div className="space-y-0.5">
+                                                        <p className="text-sm font-medium">
+                                                            {leave.leave_type}
+                                                        </p>
+                                                        <p className="text-xs text-muted-foreground">
+                                                            {formatDate(
+                                                                leave.start_date,
+                                                            )}{' '}
+                                                            —{' '}
+                                                            {formatDate(
+                                                                leave.end_date,
+                                                            )}{' '}
+                                                            ·{' '}
+                                                            {
+                                                                leave.days_requested
+                                                            }
+                                                            d
+                                                        </p>
+                                                    </div>
+                                                    <Badge
+                                                        variant="outline"
+                                                        className={
+                                                            STATUS_COLORS[
+                                                                leave.status.toLowerCase()
+                                                            ] ?? ''
+                                                        }
+                                                    >
+                                                        {leave.status}
+                                                    </Badge>
                                                 </div>
-                                                <Badge variant="outline" className={STATUS_COLORS[leave.status.toLowerCase()] ?? ''}>
-                                                    {leave.status}
-                                                </Badge>
-                                            </div>
-                                        ))}
+                                            ))}
                                     </div>
                                 ) : (
-                                    <p className="text-sm text-muted-foreground py-4 text-center">No leave requests.</p>
+                                    <p className="py-4 text-center text-sm text-muted-foreground">
+                                        No leave requests.
+                                    </p>
                                 )
                             ) : (
-                                <Tabs value={requestTab} onValueChange={setRequestTab}>
+                                <Tabs
+                                    value={requestTab}
+                                    onValueChange={setRequestTab}
+                                >
                                     <TabsList className="grid w-full grid-cols-3">
-                                        <TabsTrigger value="leaves" className="text-xs sm:text-sm">
+                                        <TabsTrigger
+                                            value="leaves"
+                                            className="text-xs sm:text-sm"
+                                        >
                                             Leaves
-                                            {personalRequests?.leaves?.length ? (
-                                                <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5">
-                                                    {personalRequests.leaves.length}
+                                            {personalRequests?.leaves
+                                                ?.length ? (
+                                                <Badge
+                                                    variant="secondary"
+                                                    className="ml-1.5 px-1.5 text-[10px]"
+                                                >
+                                                    {
+                                                        personalRequests.leaves
+                                                            .length
+                                                    }
                                                 </Badge>
                                             ) : null}
                                         </TabsTrigger>
-                                        <TabsTrigger value="it_concerns" className="text-xs sm:text-sm">
+                                        <TabsTrigger
+                                            value="it_concerns"
+                                            className="text-xs sm:text-sm"
+                                        >
                                             IT Concerns
-                                            {personalRequests?.it_concerns?.length ? (
-                                                <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5">
-                                                    {personalRequests.it_concerns.length}
+                                            {personalRequests?.it_concerns
+                                                ?.length ? (
+                                                <Badge
+                                                    variant="secondary"
+                                                    className="ml-1.5 px-1.5 text-[10px]"
+                                                >
+                                                    {
+                                                        personalRequests
+                                                            .it_concerns.length
+                                                    }
                                                 </Badge>
                                             ) : null}
                                         </TabsTrigger>
-                                        <TabsTrigger value="medication" className="text-xs sm:text-sm">
+                                        <TabsTrigger
+                                            value="medication"
+                                            className="text-xs sm:text-sm"
+                                        >
                                             Medication
-                                            {personalRequests?.medication_requests?.length ? (
-                                                <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5">
-                                                    {personalRequests.medication_requests.length}
+                                            {personalRequests
+                                                ?.medication_requests
+                                                ?.length ? (
+                                                <Badge
+                                                    variant="secondary"
+                                                    className="ml-1.5 px-1.5 text-[10px]"
+                                                >
+                                                    {
+                                                        personalRequests
+                                                            .medication_requests
+                                                            .length
+                                                    }
                                                 </Badge>
                                             ) : null}
                                         </TabsTrigger>
                                     </TabsList>
 
                                     {/* Leaves Tab */}
-                                    <TabsContent value="leaves" className="mt-3">
+                                    <TabsContent
+                                        value="leaves"
+                                        className="mt-3"
+                                    >
                                         {personalRequests?.leaves?.length ? (
                                             <div className="space-y-2">
-                                                {personalRequests.leaves.slice(0, 5).map((leave) => (
-                                                    <div
-                                                        key={leave.id}
-                                                        className="flex items-center justify-between rounded-lg border p-3"
-                                                    >
-                                                        <div className="space-y-0.5">
-                                                            <p className="text-sm font-medium">{leave.leave_type}</p>
-                                                            <p className="text-xs text-muted-foreground">
-                                                                {formatDate(leave.start_date)} — {formatDate(leave.end_date)} ·{' '}
-                                                                {leave.days_requested}d
-                                                            </p>
+                                                {personalRequests.leaves
+                                                    .slice(0, 5)
+                                                    .map((leave) => (
+                                                        <div
+                                                            key={leave.id}
+                                                            className="flex items-center justify-between rounded-lg border p-3"
+                                                        >
+                                                            <div className="space-y-0.5">
+                                                                <p className="text-sm font-medium">
+                                                                    {
+                                                                        leave.leave_type
+                                                                    }
+                                                                </p>
+                                                                <p className="text-xs text-muted-foreground">
+                                                                    {formatDate(
+                                                                        leave.start_date,
+                                                                    )}{' '}
+                                                                    —{' '}
+                                                                    {formatDate(
+                                                                        leave.end_date,
+                                                                    )}{' '}
+                                                                    ·{' '}
+                                                                    {
+                                                                        leave.days_requested
+                                                                    }
+                                                                    d
+                                                                </p>
+                                                            </div>
+                                                            <Badge
+                                                                variant="outline"
+                                                                className={
+                                                                    STATUS_COLORS[
+                                                                        leave.status.toLowerCase()
+                                                                    ] ?? ''
+                                                                }
+                                                            >
+                                                                {leave.status}
+                                                            </Badge>
                                                         </div>
-                                                        <Badge variant="outline" className={STATUS_COLORS[leave.status.toLowerCase()] ?? ''}>
-                                                            {leave.status}
-                                                        </Badge>
-                                                    </div>
-                                                ))}
+                                                    ))}
                                             </div>
                                         ) : (
-                                            <p className="text-sm text-muted-foreground py-4 text-center">No leave requests.</p>
+                                            <p className="py-4 text-center text-sm text-muted-foreground">
+                                                No leave requests.
+                                            </p>
                                         )}
                                     </TabsContent>
 
                                     {/* IT Concerns Tab */}
-                                    <TabsContent value="it_concerns" className="mt-3">
-                                        {personalRequests?.it_concerns?.length ? (
+                                    <TabsContent
+                                        value="it_concerns"
+                                        className="mt-3"
+                                    >
+                                        {personalRequests?.it_concerns
+                                            ?.length ? (
                                             <div className="space-y-2">
-                                                {personalRequests.it_concerns.slice(0, 5).map((concern) => (
-                                                    <div
-                                                        key={concern.id}
-                                                        className="flex items-center justify-between rounded-lg border p-3"
-                                                    >
-                                                        <div className="space-y-0.5 flex-1 min-w-0 mr-3">
-                                                            <p className="text-sm font-medium">{concern.category}</p>
-                                                            <p className="text-xs text-muted-foreground truncate">
-                                                                {concern.description}
-                                                            </p>
+                                                {personalRequests.it_concerns
+                                                    .slice(0, 5)
+                                                    .map((concern) => (
+                                                        <div
+                                                            key={concern.id}
+                                                            className="flex items-center justify-between rounded-lg border p-3"
+                                                        >
+                                                            <div className="mr-3 min-w-0 flex-1 space-y-0.5">
+                                                                <p className="text-sm font-medium">
+                                                                    {
+                                                                        concern.category
+                                                                    }
+                                                                </p>
+                                                                <p className="truncate text-xs text-muted-foreground">
+                                                                    {
+                                                                        concern.description
+                                                                    }
+                                                                </p>
+                                                            </div>
+                                                            <div className="flex shrink-0 items-center gap-1.5">
+                                                                <Badge
+                                                                    variant="outline"
+                                                                    className={
+                                                                        PRIORITY_COLORS[
+                                                                            concern.priority.toLowerCase()
+                                                                        ] ?? ''
+                                                                    }
+                                                                >
+                                                                    {
+                                                                        concern.priority
+                                                                    }
+                                                                </Badge>
+                                                                <Badge
+                                                                    variant="outline"
+                                                                    className={
+                                                                        STATUS_COLORS[
+                                                                            concern.status.toLowerCase()
+                                                                        ] ?? ''
+                                                                    }
+                                                                >
+                                                                    {
+                                                                        concern.status
+                                                                    }
+                                                                </Badge>
+                                                            </div>
                                                         </div>
-                                                        <div className="flex items-center gap-1.5 shrink-0">
-                                                            <Badge variant="outline" className={PRIORITY_COLORS[concern.priority.toLowerCase()] ?? ''}>
-                                                                {concern.priority}
-                                                            </Badge>
-                                                            <Badge variant="outline" className={STATUS_COLORS[concern.status.toLowerCase()] ?? ''}>
-                                                                {concern.status}
-                                                            </Badge>
-                                                        </div>
-                                                    </div>
-                                                ))}
+                                                    ))}
                                             </div>
                                         ) : (
-                                            <p className="text-sm text-muted-foreground py-4 text-center">No IT concerns.</p>
+                                            <p className="py-4 text-center text-sm text-muted-foreground">
+                                                No IT concerns.
+                                            </p>
                                         )}
                                     </TabsContent>
 
                                     {/* Medication Tab */}
-                                    <TabsContent value="medication" className="mt-3">
-                                        {personalRequests?.medication_requests?.length ? (
+                                    <TabsContent
+                                        value="medication"
+                                        className="mt-3"
+                                    >
+                                        {personalRequests?.medication_requests
+                                            ?.length ? (
                                             <div className="space-y-2">
-                                                {personalRequests.medication_requests.slice(0, 5).map((med) => (
-                                                    <div
-                                                        key={med.id}
-                                                        className="flex items-center justify-between rounded-lg border p-3"
-                                                    >
-                                                        <div className="space-y-0.5">
-                                                            <p className="text-sm font-medium">{med.name}</p>
-                                                            <p className="text-xs text-muted-foreground">{med.medication_type}</p>
+                                                {personalRequests.medication_requests
+                                                    .slice(0, 5)
+                                                    .map((med) => (
+                                                        <div
+                                                            key={med.id}
+                                                            className="flex items-center justify-between rounded-lg border p-3"
+                                                        >
+                                                            <div className="space-y-0.5">
+                                                                <p className="text-sm font-medium">
+                                                                    {med.name}
+                                                                </p>
+                                                                <p className="text-xs text-muted-foreground">
+                                                                    {
+                                                                        med.medication_type
+                                                                    }
+                                                                </p>
+                                                            </div>
+                                                            <Badge
+                                                                variant="outline"
+                                                                className={
+                                                                    STATUS_COLORS[
+                                                                        med.status.toLowerCase()
+                                                                    ] ?? ''
+                                                                }
+                                                            >
+                                                                {med.status}
+                                                            </Badge>
                                                         </div>
-                                                        <Badge variant="outline" className={STATUS_COLORS[med.status.toLowerCase()] ?? ''}>
-                                                            {med.status}
-                                                        </Badge>
-                                                    </div>
-                                                ))}
+                                                    ))}
                                             </div>
                                         ) : (
-                                            <p className="text-sm text-muted-foreground py-4 text-center">No medication requests.</p>
+                                            <p className="py-4 text-center text-sm text-muted-foreground">
+                                                No medication requests.
+                                            </p>
                                         )}
                                     </TabsContent>
                                 </Tabs>
@@ -595,7 +1105,9 @@ export const PersonalDashboardTab: React.FC<PersonalDashboardTabProps> = ({
                                 Leave Credits
                             </CardTitle>
                             {leaveCredits && (
-                                <CardDescription>FY {leaveCredits.year}</CardDescription>
+                                <CardDescription>
+                                    FY {leaveCredits.year}
+                                </CardDescription>
                             )}
                         </CardHeader>
                         <CardContent>
@@ -603,47 +1115,71 @@ export const PersonalDashboardTab: React.FC<PersonalDashboardTabProps> = ({
                                 <div className="space-y-4">
                                     {!leaveCredits.is_eligible ? (
                                         <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-3">
-                                            <p className="text-xs text-yellow-700 flex items-center gap-1.5">
+                                            <p className="flex items-center gap-1.5 text-xs text-yellow-700">
                                                 <AlertTriangle className="h-3.5 w-3.5" />
-                                                Not yet eligible for leave credits
+                                                Not yet eligible for leave
+                                                credits
                                             </p>
                                             {leaveCredits.eligibility_date && (
-                                                <p className="text-xs text-muted-foreground mt-1">
-                                                    Eligible from {formatDate(leaveCredits.eligibility_date)}
+                                                <p className="mt-1 text-xs text-muted-foreground">
+                                                    Eligible from{' '}
+                                                    {formatDate(
+                                                        leaveCredits.eligibility_date,
+                                                    )}
                                                 </p>
                                             )}
                                         </div>
                                     ) : (
                                         <>
                                             <div className="text-center">
-                                                <p className="text-3xl font-bold">{leaveCredits.balance.toFixed(1)}</p>
-                                                <p className="text-xs text-muted-foreground">Days Remaining</p>
+                                                <p className="text-3xl font-bold">
+                                                    {leaveCredits.balance.toFixed(
+                                                        1,
+                                                    )}
+                                                </p>
+                                                <p className="text-xs text-muted-foreground">
+                                                    Days Remaining
+                                                </p>
                                             </div>
 
                                             <Separator />
 
                                             <div className="space-y-2">
                                                 <div className="flex items-center justify-between text-sm">
-                                                    <span className="text-muted-foreground">Monthly Rate</span>
-                                                    <span className="font-medium">{leaveCredits.monthly_rate.toFixed(2)}</span>
-                                                </div>
-                                                <div className="flex items-center justify-between text-sm">
-                                                    <span className="text-muted-foreground">Total Earned</span>
-                                                    <span className="font-medium text-green-600">
-                                                        {leaveCredits.total_earned.toFixed(1)}
+                                                    <span className="text-muted-foreground">
+                                                        Monthly Rate
+                                                    </span>
+                                                    <span className="font-medium">
+                                                        {leaveCredits.monthly_rate.toFixed(
+                                                            2,
+                                                        )}
                                                     </span>
                                                 </div>
                                                 <div className="flex items-center justify-between text-sm">
-                                                    <span className="text-muted-foreground">Total Used</span>
+                                                    <span className="text-muted-foreground">
+                                                        Total Earned
+                                                    </span>
+                                                    <span className="font-medium text-green-600">
+                                                        {leaveCredits.total_earned.toFixed(
+                                                            1,
+                                                        )}
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center justify-between text-sm">
+                                                    <span className="text-muted-foreground">
+                                                        Total Used
+                                                    </span>
                                                     <span className="font-medium text-red-600">
-                                                        {leaveCredits.total_used.toFixed(1)}
+                                                        {leaveCredits.total_used.toFixed(
+                                                            1,
+                                                        )}
                                                     </span>
                                                 </div>
                                             </div>
 
                                             {/* Usage bar */}
                                             <div className="space-y-1">
-                                                <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                                                <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
                                                     <div
                                                         className="h-full rounded-full bg-primary transition-all"
                                                         style={{
@@ -651,9 +1187,14 @@ export const PersonalDashboardTab: React.FC<PersonalDashboardTabProps> = ({
                                                         }}
                                                     />
                                                 </div>
-                                                <p className="text-[10px] text-muted-foreground text-center">
-                                                    {leaveCredits.total_earned > 0
-                                                        ? ((leaveCredits.total_used / leaveCredits.total_earned) * 100).toFixed(0)
+                                                <p className="text-center text-[10px] text-muted-foreground">
+                                                    {leaveCredits.total_earned >
+                                                    0
+                                                        ? (
+                                                              (leaveCredits.total_used /
+                                                                  leaveCredits.total_earned) *
+                                                              100
+                                                          ).toFixed(0)
                                                         : 0}
                                                     % used
                                                 </p>
@@ -662,7 +1203,9 @@ export const PersonalDashboardTab: React.FC<PersonalDashboardTabProps> = ({
                                     )}
                                 </div>
                             ) : (
-                                <p className="text-sm text-muted-foreground">No leave credit data available.</p>
+                                <p className="text-sm text-muted-foreground">
+                                    No leave credit data available.
+                                </p>
                             )}
                         </CardContent>
                     </Card>

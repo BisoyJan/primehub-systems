@@ -12,9 +12,9 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { destroy } from '@/routes/account';
 import { Form } from '@inertiajs/react';
 import { useRef } from 'react';
-import { destroy } from '@/routes/account';
 
 export default function DeleteUser() {
     const passwordInput = useRef<HTMLInputElement>(null);

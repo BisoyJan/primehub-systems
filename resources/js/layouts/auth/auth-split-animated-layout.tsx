@@ -1,8 +1,7 @@
-import { useEffect, useRef } from 'react';
-import { gsap } from 'gsap';
-import { type PropsWithChildren } from 'react';
 import { AnimatedQuotes } from '@/components/animated-quotes';
 import { Spinning3DCube } from '@/components/ui/spinning-3d-cube';
+import { gsap } from 'gsap';
+import { useEffect, useRef, type PropsWithChildren } from 'react';
 
 interface AuthLayoutProps {
     name?: string;
@@ -26,15 +25,18 @@ export default function AuthSplitAnimatedLayout({
     useEffect(() => {
         const ctx = gsap.context(() => {
             if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-                gsap.set([
-                    logoContainerRef.current,
-                    cubeRef.current,
-                    logoRef.current,
-                    titleRef.current,
-                    taglineRef.current,
-                    formContainerRef.current,
-                    dividerRef.current,
-                ], { clearProps: 'all' });
+                gsap.set(
+                    [
+                        logoContainerRef.current,
+                        cubeRef.current,
+                        logoRef.current,
+                        titleRef.current,
+                        taglineRef.current,
+                        formContainerRef.current,
+                        dividerRef.current,
+                    ],
+                    { clearProps: 'all' },
+                );
                 return;
             }
 
@@ -116,65 +118,63 @@ export default function AuthSplitAnimatedLayout({
     }, []);
 
     return (
-        <div className="dark flex min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-black relative motion-reduce:**:animate-none!">
+        <div className="dark relative flex min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-black motion-reduce:**:animate-none!">
             {/* Left Side - Logo and Branding */}
             <div
                 ref={logoContainerRef}
-                className="hidden lg:flex lg:w-1/2 relative overflow-hidden"
+                className="relative hidden overflow-hidden lg:flex lg:w-1/2"
             >
                 {/* Animated Background Pattern */}
                 <div className="absolute inset-0 opacity-10">
-                    <div className="absolute inset-0 auth-grid-pattern" />
+                    <div className="auth-grid-pattern absolute inset-0" />
                 </div>
 
                 {/* Gradient Overlay */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
 
                 {/* Content */}
-                <div className="relative z-10 flex flex-col items-center justify-center w-full p-12">
-                    <div className="text-center space-y-8 max-w-lg">
+                <div className="relative z-10 flex w-full flex-col items-center justify-center p-12">
+                    <div className="max-w-lg space-y-8 text-center">
                         {/* 3D Spinning Cube */}
-                        <div ref={cubeRef} className="flex justify-center mb-6">
+                        <div ref={cubeRef} className="mb-6 flex justify-center">
                             <Spinning3DCube size={120} />
                         </div>
 
                         {/* Logo with Modern Card */}
                         <div className="flex justify-center">
-
                             <img
                                 ref={logoRef}
                                 src="/primehub-logo.png"
                                 alt="PrimeHub Logo"
                                 className="h-24 w-auto"
                             />
-
                         </div>
 
                         {/* Title with Modern Typography */}
                         <h1
                             ref={titleRef}
-                            className="text-6xl font-black text-white drop-shadow-2xl tracking-tight"
+                            className="text-6xl font-black tracking-tight text-white drop-shadow-2xl"
                         >
                             Welcome Back
                         </h1>
 
                         {/* Animated Motivational Quotes */}
-                        <div ref={taglineRef} className="min-h-[120px] flex items-center justify-center">
-                            <AnimatedQuotes className="text-lg font-light text-white/90 max-w-md mx-auto leading-relaxed text-center" />
+                        <div
+                            ref={taglineRef}
+                            className="flex min-h-[120px] items-center justify-center"
+                        >
+                            <AnimatedQuotes className="mx-auto max-w-md text-center text-lg leading-relaxed font-light text-white/90" />
                         </div>
 
                         {/* Modern Progress Dots */}
                         <div className="flex justify-center gap-3 pt-8">
                             {[...Array(3)].map((_, i) => (
-                                <div
-                                    key={i}
-                                    className="relative"
-                                >
+                                <div key={i} className="relative">
                                     <div
-                                        className={`w-3 h-3 rounded-full bg-white/70 shadow-lg animate-modern-pulse animate-modern-pulse-delay-${i}`}
+                                        className={`animate-modern-pulse h-3 w-3 rounded-full bg-white/70 shadow-lg animate-modern-pulse-delay-${i}`}
                                     />
                                     <div
-                                        className={`absolute inset-0 w-3 h-3 rounded-full bg-white/30 animate-ping-slow animate-ping-delay-${i}`}
+                                        className={`animate-ping-slow absolute inset-0 h-3 w-3 rounded-full bg-white/30 animate-ping-delay-${i}`}
                                     />
                                 </div>
                             ))}
@@ -183,26 +183,23 @@ export default function AuthSplitAnimatedLayout({
                 </div>
 
                 {/* Modern Floating Orbs */}
-                <div className="absolute top-20 left-20 w-64 h-64 bg-blue-500/25 rounded-full blur-3xl animate-float" />
-                <div className="absolute bottom-20 right-20 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl animate-float-delayed" />
-                <div className="absolute top-1/2 left-1/4 w-40 h-40 bg-purple-500/15 rounded-full blur-2xl animate-float-slow" />
+                <div className="animate-float absolute top-20 left-20 h-64 w-64 rounded-full bg-blue-500/25 blur-3xl" />
+                <div className="animate-float-delayed absolute right-20 bottom-20 h-80 w-80 rounded-full bg-indigo-500/10 blur-3xl" />
+                <div className="animate-float-slow absolute top-1/2 left-1/4 h-40 w-40 rounded-full bg-purple-500/15 blur-2xl" />
             </div>
 
             {/* Subtle Vertical Divider - Blended */}
             <div
                 ref={dividerRef}
-                className="hidden lg:block absolute left-1/2 top-0 bottom-0 w-px origin-top auth-divider"
+                className="auth-divider absolute top-0 bottom-0 left-1/2 hidden w-px origin-top lg:block"
             />
 
             {/* Right Side - Login Form */}
-            <div className="w-full lg:w-1/2 flex items-center justify-center p-5 sm:p-8">
-                <div
-                    ref={formContainerRef}
-                    className="w-full max-w-lg"
-                >
+            <div className="flex w-full items-center justify-center p-5 sm:p-8 lg:w-1/2">
+                <div ref={formContainerRef} className="w-full max-w-lg">
                     {/* Mobile Logo */}
-                    <div className="lg:hidden flex justify-center mb-8">
-                        <div className="bg-white/5 backdrop-blur-xl rounded-2xl p-4 shadow-xl border border-white/10">
+                    <div className="mb-8 flex justify-center lg:hidden">
+                        <div className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-xl backdrop-blur-xl">
                             <img
                                 src="/primehub-logo.png"
                                 alt="PrimeHub Logo"
@@ -212,25 +209,23 @@ export default function AuthSplitAnimatedLayout({
                     </div>
 
                     {/* Glass Morphism Card Container */}
-                    <div className="bg-white/5 backdrop-blur-2xl rounded-3xl shadow-2xl p-6 sm:p-8 border border-white/10">
+                    <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur-2xl sm:p-8">
                         {/* Title and Description */}
-                        <div className="space-y-3 mb-8">
+                        <div className="mb-8 space-y-3">
                             <h2 className="text-3xl font-bold tracking-tight text-white">
                                 {title}
                             </h2>
-                            <p className="text-sm text-gray-300 font-medium">
+                            <p className="text-sm font-medium text-gray-300">
                                 {description}
                             </p>
                         </div>
 
                         {/* Form Content */}
-                        <div className="space-y-6">
-                            {children}
-                        </div>
+                        <div className="space-y-6">{children}</div>
                     </div>
 
                     {/* Footer Text */}
-                    <p className="text-center text-sm text-gray-400 mt-6">
+                    <p className="mt-6 text-center text-sm text-gray-400">
                         Powered by PrimeHub Systems
                     </p>
                 </div>

@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { Badge } from '@/components/ui/badge';
+import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { Calendar as CalendarIcon, Loader2 } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
 
 // Types based on Nager.Date API
 export interface Holiday {
@@ -29,8 +29,12 @@ const CalendarWithHolidays: React.FC<CalendarWithHolidaysProps> = ({
     width = 420,
     className,
 }) => {
-    const [selectedDate, setSelectedDate] = useState<Date | undefined>(initialDate);
-    const [currentMonth, setCurrentMonth] = useState<Date>(new Date(initialDate));
+    const [selectedDate, setSelectedDate] = useState<Date | undefined>(
+        initialDate,
+    );
+    const [currentMonth, setCurrentMonth] = useState<Date>(
+        new Date(initialDate),
+    );
     const [holidays, setHolidays] = useState<Holiday[]>([]);
     const [loading, setLoading] = useState<boolean>(false);
 
@@ -38,10 +42,15 @@ const CalendarWithHolidays: React.FC<CalendarWithHolidaysProps> = ({
     const fetchHolidays = async (year: number) => {
         setLoading(true);
         try {
-            const codes = Array.isArray(countryCode) ? countryCode : [countryCode];
+            const codes = Array.isArray(countryCode)
+                ? countryCode
+                : [countryCode];
             const promises = codes.map(async (code) => {
-                const res = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/${code}`);
-                if (!res.ok) throw new Error(`Failed to fetch holidays for ${code}`);
+                const res = await fetch(
+                    `https://date.nager.at/api/v3/PublicHolidays/${year}/${code}`,
+                );
+                if (!res.ok)
+                    throw new Error(`Failed to fetch holidays for ${code}`);
                 return res.json();
             });
 
@@ -60,21 +69,30 @@ const CalendarWithHolidays: React.FC<CalendarWithHolidaysProps> = ({
     useEffect(() => {
         fetchHolidays(currentMonth.getFullYear());
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentMonth.getFullYear(), Array.isArray(countryCode) ? countryCode.join(',') : countryCode]);
+    }, [
+        currentMonth.getFullYear(),
+        Array.isArray(countryCode) ? countryCode.join(',') : countryCode,
+    ]);
 
     // Holidays for the current visible month
     const monthHolidays = useMemo(() => {
         return holidays.filter((h) => {
             const d = new Date(h.date);
             return (
-                d.getFullYear() === currentMonth.getFullYear() && d.getMonth() === currentMonth.getMonth()
+                d.getFullYear() === currentMonth.getFullYear() &&
+                d.getMonth() === currentMonth.getMonth()
             );
         });
     }, [holidays, currentMonth]);
 
-    const containerStyle: React.CSSProperties = { width: `${width}px`, maxWidth: '100%' };
+    const containerStyle: React.CSSProperties = {
+        width: `${width}px`,
+        maxWidth: '100%',
+    };
 
-    const selectedISO = selectedDate ? selectedDate.toISOString().slice(0, 10) : null;
+    const selectedISO = selectedDate
+        ? selectedDate.toISOString().slice(0, 10)
+        : null;
     const selectedHolidays = selectedISO
         ? holidays.filter((h) => h.date === selectedISO)
         : [];
@@ -83,9 +101,11 @@ const CalendarWithHolidays: React.FC<CalendarWithHolidaysProps> = ({
         <div className={className}>
             <div style={containerStyle}>
                 {loading && (
-                    <div className="flex items-center justify-center py-2 mb-2">
-                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                        <span className="text-sm text-muted-foreground">Loading holidays...</span>
+                    <div className="mb-2 flex items-center justify-center py-2">
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        <span className="text-sm text-muted-foreground">
+                            Loading holidays...
+                        </span>
                     </div>
                 )}
 
@@ -96,8 +116,10 @@ const CalendarWithHolidays: React.FC<CalendarWithHolidaysProps> = ({
                     required
                     month={currentMonth}
                     onMonthChange={setCurrentMonth}
-                    className="rounded-lg border shadow-md w-full"
-                    modifiers={{ holiday: monthHolidays.map((h) => new Date(h.date)) }}
+                    className="w-full rounded-lg border shadow-md"
+                    modifiers={{
+                        holiday: monthHolidays.map((h) => new Date(h.date)),
+                    }}
                     modifiersClassNames={{
                         holiday:
                             'relative bg-yellow-200 dark:bg-yellow-900/40 text-yellow-900 dark:text-yellow-100 font-bold',
@@ -106,26 +128,32 @@ const CalendarWithHolidays: React.FC<CalendarWithHolidaysProps> = ({
                         DayButton: ({ day, modifiers, ...props }) => {
                             const isHoliday = modifiers.holiday;
                             const dateStr = day.date.toISOString().slice(0, 10);
-                            const dayHolidays = monthHolidays.filter((h) => h.date === dateStr);
+                            const dayHolidays = monthHolidays.filter(
+                                (h) => h.date === dateStr,
+                            );
                             return (
-                                <div className="relative group">
-                                    <button {...props} className={props.className}>
+                                <div className="group relative">
+                                    <button
+                                        {...props}
+                                        className={props.className}
+                                    >
                                         {day.date.getDate()}
                                         {isHoliday && (
                                             <span
-                                                className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"
+                                                className="absolute top-0 right-0 h-2 w-2 rounded-full bg-red-500"
                                                 title="Holiday"
                                             ></span>
                                         )}
                                     </button>
                                     {isHoliday && dayHolidays.length > 0 && (
-                                        <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity pointer-events-none">
+                                        <div className="pointer-events-none invisible absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 rounded bg-gray-900 px-2 py-1 text-xs whitespace-nowrap text-white opacity-0 transition-opacity group-hover:visible group-hover:opacity-100">
                                             {dayHolidays.map((h, i) => (
                                                 <div key={i}>
-                                                    🎉 {h.name} ({h.countryCode})
+                                                    🎉 {h.name} ({h.countryCode}
+                                                    )
                                                 </div>
                                             ))}
-                                            <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900"></div>
+                                            <div className="absolute top-full left-1/2 -mt-1 -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
                                         </div>
                                     )}
                                 </div>
@@ -138,15 +166,22 @@ const CalendarWithHolidays: React.FC<CalendarWithHolidaysProps> = ({
                 {selectedHolidays.length > 0 && (
                     <div className="mt-4 space-y-2">
                         {selectedHolidays.map((holiday, idx) => (
-                            <div key={idx} className="p-3 rounded-lg bg-yellow-100 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700">
+                            <div
+                                key={idx}
+                                className="rounded-lg border border-yellow-300 bg-yellow-100 p-3 dark:border-yellow-700 dark:bg-yellow-900/20"
+                            >
                                 <div className="flex items-start gap-2">
                                     <span className="text-xl">🎉</span>
                                     <div className="flex-1">
                                         <div className="font-semibold text-yellow-900 dark:text-yellow-100">
-                                            {holiday.name} <span className="text-xs font-normal text-yellow-800 dark:text-yellow-200">({holiday.countryCode})</span>
+                                            {holiday.name}{' '}
+                                            <span className="text-xs font-normal text-yellow-800 dark:text-yellow-200">
+                                                ({holiday.countryCode})
+                                            </span>
                                         </div>
-                                        <div className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
-                                            {holiday.types.join(', ')} • {holiday.date}
+                                        <div className="mt-1 text-xs text-yellow-700 dark:text-yellow-300">
+                                            {holiday.types.join(', ')} •{' '}
+                                            {holiday.date}
                                         </div>
                                     </div>
                                 </div>
@@ -156,8 +191,8 @@ const CalendarWithHolidays: React.FC<CalendarWithHolidaysProps> = ({
                 )}
 
                 {/* Holiday List Panel */}
-                <div className="mt-4 p-4 rounded-lg border bg-card">
-                    <div className="font-semibold text-lg mb-3 flex items-center gap-2">
+                <div className="mt-4 rounded-lg border bg-card p-4">
+                    <div className="mb-3 flex items-center gap-2 text-lg font-semibold">
                         <CalendarIcon className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
                         Holidays This Month
                     </div>
@@ -166,29 +201,42 @@ const CalendarWithHolidays: React.FC<CalendarWithHolidaysProps> = ({
                             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                         </div>
                     ) : monthHolidays.length === 0 ? (
-                        <div className="text-sm text-muted-foreground text-center py-4">No holidays this month</div>
+                        <div className="py-4 text-center text-sm text-muted-foreground">
+                            No holidays this month
+                        </div>
                     ) : (
                         <div className="space-y-2">
                             {monthHolidays.map((h, idx) => {
                                 const holidayDate = new Date(h.date);
-                                const formattedDate = holidayDate.toLocaleDateString('en-US', {
-                                    weekday: 'short',
-                                    month: 'short',
-                                    day: 'numeric',
-                                });
+                                const formattedDate =
+                                    holidayDate.toLocaleDateString('en-US', {
+                                        weekday: 'short',
+                                        month: 'short',
+                                        day: 'numeric',
+                                    });
                                 return (
                                     <div
                                         key={`${h.date}-${h.countryCode}-${idx}`}
-                                        className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors"
+                                        className="flex items-center justify-between rounded-lg p-2 transition-colors hover:bg-muted/50"
                                     >
                                         <div className="flex items-center gap-3">
-                                            <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                                            <div className="h-2 w-2 rounded-full bg-red-500"></div>
                                             <div>
-                                                <span className="font-medium text-sm">🎉 {h.name} <span className="text-xs text-muted-foreground">({h.countryCode})</span></span>
-                                                <div className="text-xs text-muted-foreground">{h.types.join(', ')}</div>
+                                                <span className="text-sm font-medium">
+                                                    🎉 {h.name}{' '}
+                                                    <span className="text-xs text-muted-foreground">
+                                                        ({h.countryCode})
+                                                    </span>
+                                                </span>
+                                                <div className="text-xs text-muted-foreground">
+                                                    {h.types.join(', ')}
+                                                </div>
                                             </div>
                                         </div>
-                                        <Badge variant="outline" className="text-xs">
+                                        <Badge
+                                            variant="outline"
+                                            className="text-xs"
+                                        >
                                             {formattedDate}
                                         </Badge>
                                     </div>

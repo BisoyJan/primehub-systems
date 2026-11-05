@@ -24,9 +24,9 @@ export default function AuthEditorialLayout({
                     <img
                         src="/primehub-logo.png"
                         alt="PrimeHub"
-                        className="h-8 w-auto grayscale opacity-80 transition-opacity hover:opacity-100"
+                        className="h-8 w-auto opacity-80 grayscale transition-opacity hover:opacity-100"
                     />
-                    <span className="text-sm font-medium tracking-wide uppercase text-muted-foreground">
+                    <span className="text-sm font-medium tracking-wide text-muted-foreground uppercase">
                         PrimeHub Systems
                     </span>
                 </Link>
@@ -53,9 +53,9 @@ export default function AuthEditorialLayout({
                         <img
                             src="/primehub-logo.png"
                             alt="PrimeHub"
-                            className="h-7 w-auto grayscale opacity-80"
+                            className="h-7 w-auto opacity-80 grayscale"
                         />
-                        <span className="text-xs font-medium tracking-wide uppercase text-muted-foreground">
+                        <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
                             PrimeHub Systems
                         </span>
                     </Link>

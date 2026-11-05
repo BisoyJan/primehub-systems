@@ -1,45 +1,84 @@
-import React, { useState, useEffect, useRef } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
-import { toast } from 'sonner';
-import { ArrowLeft, Search, ArrowRight, Check, AlertCircle, X, MousePointer, CheckSquare, ListChecks, ChevronDown } from 'lucide-react';
+import {
+    AlertCircle,
+    ArrowLeft,
+    ArrowRight,
+    Check,
+    CheckSquare,
+    ChevronDown,
+    ListChecks,
+    MousePointer,
+    Search,
+    X,
+} from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
 import _UseAnimations from 'react-useanimations';
 import _help from 'react-useanimations/lib/help';
+import { toast } from 'sonner';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const UseAnimations = (_UseAnimations as any)?.default ?? _UseAnimations;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const help = (_help as any)?.default ?? _help;
 
-import AppLayout from '@/layouts/app-layout';
-import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from '@/components/ui/card';
+import {
+    Collapsible,
+    CollapsibleContent,
+    CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 import {
     Dialog,
     DialogContent,
+    DialogDescription,
     DialogHeader,
     DialogTitle,
-    DialogDescription,
 } from '@/components/ui/dialog';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
+import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 
 import {
-    index as pcTransfersIndexRoute,
     bulk as pcTransfersBulkRoute,
+    index as pcTransfersIndexRoute,
     transferPage as pcTransfersTransferPageRoute,
 } from '@/routes/pc-transfers';
 
 // New reusable components and hooks
-import { usePageMeta, useFlashMessage, usePageLoading, useReturnTo } from '@/hooks';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { PageHeader } from '@/components/PageHeader';
+import {
+    useFlashMessage,
+    usePageLoading,
+    usePageMeta,
+    useReturnTo,
+} from '@/hooks';
 import { index as stationsIndexRoute } from '@/routes/stations';
 
 interface PcSpec {
@@ -133,7 +172,13 @@ interface ColorizedProps extends React.HTMLAttributes<HTMLElement> {
     children?: React.ReactNode;
 }
 
-const Colorized = ({ children, style, className, as: Component = 'div', ...props }: ColorizedProps) => {
+const Colorized = ({
+    children,
+    style,
+    className,
+    as: Component = 'div',
+    ...props
+}: ColorizedProps) => {
     const ref = useRef<HTMLElement>(null);
     const appliedKeys = useRef<string[]>([]);
 
@@ -157,7 +202,11 @@ const Colorized = ({ children, style, className, as: Component = 'div', ...props
         });
     }, [style]);
 
-    return <Component ref={ref} className={className} {...props}>{children}</Component>;
+    return (
+        <Component ref={ref} className={className} {...props}>
+            {children}
+        </Component>
+    );
 };
 
 type TransferType = 'assign' | 'swap';
@@ -173,28 +222,41 @@ interface Transfer {
 
 // Helper to read query params synchronously for initial state
 function getInitialQueryParams() {
-    if (typeof window === 'undefined') return { pcId: null, filter: 'all' as const };
+    if (typeof window === 'undefined')
+        return { pcId: null, filter: 'all' as const };
     const params = new URLSearchParams(window.location.search);
     const pcIdParam = params.get('pc');
     const filterParam = params.get('filter');
     return {
         pcId: pcIdParam ? parseInt(pcIdParam, 10) : null,
-        filter: (filterParam === 'available' || filterParam === 'assigned' ? filterParam : 'all') as 'all' | 'available' | 'assigned'
+        filter: (filterParam === 'available' || filterParam === 'assigned'
+            ? filterParam
+            : 'all') as 'all' | 'available' | 'assigned',
     };
 }
 
-export default function Transfer({ stations, pcSpecs, filters, initialFilters, preselectedStationId }: Props) {
-
+export default function Transfer({
+    stations,
+    pcSpecs,
+    filters,
+    initialFilters,
+    preselectedStationId,
+}: Props) {
     // Read 'pc' and 'filter' query params from URL (synchronous for initial state)
     const initialParams = getInitialQueryParams();
     const [autoSelectedPcId] = useState<number | null>(
-        initialParams.pcId && !isNaN(initialParams.pcId) ? initialParams.pcId : null
+        initialParams.pcId && !isNaN(initialParams.pcId)
+            ? initialParams.pcId
+            : null,
     );
 
     const indexWithFilters = pcTransfersIndexRoute({
         query: {
             site: initialFilters.site !== 'all' ? initialFilters.site : null,
-            campaign: initialFilters.campaign !== 'all' ? initialFilters.campaign : null,
+            campaign:
+                initialFilters.campaign !== 'all'
+                    ? initialFilters.campaign
+                    : null,
             search: initialFilters.search || null,
         },
     }).url;
@@ -207,7 +269,7 @@ export default function Transfer({ stations, pcSpecs, filters, initialFilters, p
             { title: 'Stations', href: stationsIndexRoute().url },
             { title: 'PC Transfer', href: pcTransfersIndexRoute().url },
             { title: 'Workspace', href: pcTransfersTransferPageRoute().url },
-        ]
+        ],
     });
 
     useFlashMessage(); // Automatically handles flash messages
@@ -215,33 +277,50 @@ export default function Transfer({ stations, pcSpecs, filters, initialFilters, p
 
     // Ensure unique sites and campaigns (in case backend sends duplicates)
     const uniqueSites = Array.from(
-        new Map(filters.sites.map(site => [site.id, site])).values()
+        new Map(filters.sites.map((site) => [site.id, site])).values(),
     );
     const uniqueCampaigns = Array.from(
-        new Map(filters.campaigns.map(campaign => [campaign.id, campaign])).values()
+        new Map(
+            filters.campaigns.map((campaign) => [campaign.id, campaign]),
+        ).values(),
     );
 
     const [pcSearch, setPcSearch] = useState('');
-    const [stationSearch, setStationSearch] = useState(initialFilters.search ?? '');
-    const [pcSiteFilter, setPcSiteFilter] = useState(initialFilters.site || 'all');
+    const [stationSearch, setStationSearch] = useState(
+        initialFilters.search ?? '',
+    );
+    const [pcSiteFilter, setPcSiteFilter] = useState(
+        initialFilters.site || 'all',
+    );
     const [pcCampaignFilter, setPcCampaignFilter] = useState('all');
-    const [pcAssignmentFilter, setPcAssignmentFilter] = useState<'all' | 'available' | 'assigned'>(initialParams.filter);
-    const [stationSiteFilter, setStationSiteFilter] = useState(initialFilters.site || 'all');
-    const [stationCampaignFilter, setStationCampaignFilter] = useState(initialFilters.campaign || 'all');
-    const [stationAssignmentFilter, setStationAssignmentFilter] = useState<'all' | 'empty' | 'has-pc'>('all');
+    const [pcAssignmentFilter, setPcAssignmentFilter] = useState<
+        'all' | 'available' | 'assigned'
+    >(initialParams.filter);
+    const [stationSiteFilter, setStationSiteFilter] = useState(
+        initialFilters.site || 'all',
+    );
+    const [stationCampaignFilter, setStationCampaignFilter] = useState(
+        initialFilters.campaign || 'all',
+    );
+    const [stationAssignmentFilter, setStationAssignmentFilter] = useState<
+        'all' | 'empty' | 'has-pc'
+    >('all');
     const [transfers, setTransfers] = useState<Transfer[]>([]);
     const [activePcId, setActivePcId] = useState<number | null>(null);
     const [mobileTab, setMobileTab] = useState<MobileTab>('pcs');
     const [errors, setErrors] = useState<string[]>([]);
     const [processing, setProcessing] = useState(false);
     const [notes, setNotes] = useState('');
-    const [highlightedStationId, setHighlightedStationId] = useState<number | null>(null);
+    const [highlightedStationId, setHighlightedStationId] = useState<
+        number | null
+    >(null);
     const [helpDialogOpen, setHelpDialogOpen] = useState(false);
-    const readyTransfers = transfers.filter(t => t.stationId !== 0).length;
-    const transferActionDisabled = processing || transfers.some(t => t.stationId === 0);
+    const readyTransfers = transfers.filter((t) => t.stationId !== 0).length;
+    const transferActionDisabled =
+        processing || transfers.some((t) => t.stationId === 0);
     const overlayMessage = processing ? 'Processing transfers...' : undefined;
-    const activeTransfer = transfers.find(t => t.pcId === activePcId);
-    const incompleteTransfer = transfers.find(t => t.stationId === 0);
+    const activeTransfer = transfers.find((t) => t.pcId === activePcId);
+    const incompleteTransfer = transfers.find((t) => t.stationId === 0);
     // The transfer that will receive the next station click: explicit active, else first incomplete.
     const targetTransfer = activeTransfer ?? incompleteTransfer;
 
@@ -249,30 +328,44 @@ export default function Transfer({ stations, pcSpecs, filters, initialFilters, p
     useEffect(() => {
         // Existing logic for preselectedStationId
         if (preselectedStationId) {
-            const preselectedStation = stations.find(s => s.id === preselectedStationId);
+            const preselectedStation = stations.find(
+                (s) => s.id === preselectedStationId,
+            );
             if (preselectedStation?.pc_spec_id) {
                 const pcId = preselectedStation.pc_spec_id;
                 const color = generateRandomColor();
-                setTransfers([{
-                    pcId,
-                    stationId: 0,
-                    color,
-                    transferType: 'assign',
-                }]);
+                setTransfers([
+                    {
+                        pcId,
+                        stationId: 0,
+                        color,
+                        transferType: 'assign',
+                    },
+                ]);
                 setActivePcId(pcId);
                 setMobileTab('stations');
                 setTimeout(() => {
-                    const pcRow = document.querySelector(`[data-pc-id="${pcId}"]`);
+                    const pcRow = document.querySelector(
+                        `[data-pc-id="${pcId}"]`,
+                    );
                     if (pcRow) {
-                        pcRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        pcRow.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'center',
+                        });
                     }
                 }, 100);
             } else if (preselectedStation) {
                 setHighlightedStationId(preselectedStationId);
                 setTimeout(() => {
-                    const stationRow = document.querySelector(`[data-station-id="${preselectedStationId}"]`);
+                    const stationRow = document.querySelector(
+                        `[data-station-id="${preselectedStationId}"]`,
+                    );
                     if (stationRow) {
-                        stationRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        stationRow.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'center',
+                        });
                     }
                 }, 100);
             }
@@ -280,69 +373,94 @@ export default function Transfer({ stations, pcSpecs, filters, initialFilters, p
         // New logic for autoSelectedPcId from query param
         else if (autoSelectedPcId) {
             // Only auto-select if not already selected
-            setTransfers(prev => {
-                if (prev.some(t => t.pcId === autoSelectedPcId)) return prev;
+            setTransfers((prev) => {
+                if (prev.some((t) => t.pcId === autoSelectedPcId)) return prev;
                 const color = generateRandomColor();
-                return [{ pcId: autoSelectedPcId, stationId: 0, color, transferType: 'assign' }];
+                return [
+                    {
+                        pcId: autoSelectedPcId,
+                        stationId: 0,
+                        color,
+                        transferType: 'assign',
+                    },
+                ];
             });
             setActivePcId(autoSelectedPcId);
             setMobileTab('stations');
             setTimeout(() => {
-                const pcRow = document.querySelector(`[data-pc-id="${autoSelectedPcId}"]`);
+                const pcRow = document.querySelector(
+                    `[data-pc-id="${autoSelectedPcId}"]`,
+                );
                 if (pcRow) {
-                    pcRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    pcRow.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'center',
+                    });
                 }
             }, 100);
         }
     }, [preselectedStationId, stations, autoSelectedPcId]);
 
-    const filteredPcSpecs = pcSpecs.filter(pc => {
+    const filteredPcSpecs = pcSpecs.filter((pc) => {
         const search = pcSearch.toLowerCase();
-        const matchesSearch = (
+        const matchesSearch =
             (pc.pc_number && pc.pc_number.toLowerCase().includes(search)) ||
             (pc.label ?? '').toLowerCase().includes(search) ||
-            (pc.details.processor && pc.details.processor.toLowerCase().includes(search))
-        );
+            (pc.details.processor &&
+                pc.details.processor.toLowerCase().includes(search));
 
         // Unassigned PCs belong to no site/campaign, so they always pass location filters.
-        const matchesSite = pcSiteFilter === 'all' || !pc.station || String(pc.station.site_id) === pcSiteFilter;
-        const matchesCampaign = pcCampaignFilter === 'all' || !pc.station || String(pc.station.campaign_id) === pcCampaignFilter;
+        const matchesSite =
+            pcSiteFilter === 'all' ||
+            !pc.station ||
+            String(pc.station.site_id) === pcSiteFilter;
+        const matchesCampaign =
+            pcCampaignFilter === 'all' ||
+            !pc.station ||
+            String(pc.station.campaign_id) === pcCampaignFilter;
 
         // Filter by assignment status (Available = no station, Assigned = has station)
-        const matchesAssignment = pcAssignmentFilter === 'all' ||
+        const matchesAssignment =
+            pcAssignmentFilter === 'all' ||
             (pcAssignmentFilter === 'available' && !pc.station) ||
             (pcAssignmentFilter === 'assigned' && !!pc.station);
 
-        return matchesSearch && matchesSite && matchesCampaign && matchesAssignment;
+        return (
+            matchesSearch && matchesSite && matchesCampaign && matchesAssignment
+        );
     });
 
-    const filteredStations = stations.filter(station => {
+    const filteredStations = stations.filter((station) => {
         const search = stationSearch.toLowerCase();
-        const matchesSearch = (
+        const matchesSearch =
             (station.station_number ?? '').toLowerCase().includes(search) ||
             (station.site ?? '').toLowerCase().includes(search) ||
-            (station.campaign ?? '').toLowerCase().includes(search)
-        );
+            (station.campaign ?? '').toLowerCase().includes(search);
 
-        const matchesSite = stationSiteFilter === 'all' || String(station.site_id) === stationSiteFilter;
-        const matchesCampaign = stationCampaignFilter === 'all' || String(station.campaign_id) === stationCampaignFilter;
+        const matchesSite =
+            stationSiteFilter === 'all' ||
+            String(station.site_id) === stationSiteFilter;
+        const matchesCampaign =
+            stationCampaignFilter === 'all' ||
+            String(station.campaign_id) === stationCampaignFilter;
 
         // Filter by assignment status (Empty = no PC, Has PC = has pc_spec_id)
-        const matchesAssignment = stationAssignmentFilter === 'all' ||
+        const matchesAssignment =
+            stationAssignmentFilter === 'all' ||
             (stationAssignmentFilter === 'empty' && !station.pc_spec_id) ||
             (stationAssignmentFilter === 'has-pc' && !!station.pc_spec_id);
 
-        return matchesSearch && matchesSite && matchesCampaign && matchesAssignment;
+        return (
+            matchesSearch && matchesSite && matchesCampaign && matchesAssignment
+        );
     });
 
-
-
     function getTransferByPc(pcId: number): Transfer | undefined {
-        return transfers.find(t => t.pcId === pcId);
+        return transfers.find((t) => t.pcId === pcId);
     }
 
     function getTransferByStation(stationId: number): Transfer | undefined {
-        return transfers.find(t => t.stationId === stationId);
+        return transfers.find((t) => t.stationId === stationId);
     }
 
     function togglePcSelection(pcId: number) {
@@ -350,29 +468,35 @@ export default function Transfer({ stations, pcSpecs, filters, initialFilters, p
         if (existing) {
             // Prevent deselecting PC that was auto-selected from "Transfer PC" button
             if (preselectedStationId) {
-                const preselectedStation = stations.find(s => s.id === preselectedStationId);
+                const preselectedStation = stations.find(
+                    (s) => s.id === preselectedStationId,
+                );
                 if (preselectedStation?.pc_spec_id === pcId) {
-                    toast.error('Cannot deselect this PC. It was auto-selected from the station. Use "Back" to cancel this transfer.');
+                    toast.error(
+                        'Cannot deselect this PC. It was auto-selected from the station. Use "Back" to cancel this transfer.',
+                    );
                     return;
                 }
             }
 
             // Remove this transfer
-            setTransfers(prev => prev.filter(t => t.pcId !== pcId));
+            setTransfers((prev) => prev.filter((t) => t.pcId !== pcId));
             if (activePcId === pcId) {
                 setActivePcId(null);
             }
         } else {
             // Only allow one PC selection at a time when assigning to a preselected station
             const preselectedStation = preselectedStationId
-                ? stations.find(s => s.id === preselectedStationId)
+                ? stations.find((s) => s.id === preselectedStationId)
                 : null;
 
             // If station is preselected (either empty OR has existing PC for transfer)
             if (preselectedStation && preselectedStationId) {
                 // Block selection if there's already a PC selected for this preselected station
                 if (transfers.length > 0) {
-                    toast.error('Cannot select multiple PCs for a single station transfer. Deselect the current PC first.');
+                    toast.error(
+                        'Cannot select multiple PCs for a single station transfer. Deselect the current PC first.',
+                    );
                     return;
                 }
 
@@ -380,30 +504,37 @@ export default function Transfer({ stations, pcSpecs, filters, initialFilters, p
 
                 // Single selection mode - assign directly to preselected station if empty
                 if (!preselectedStation.pc_spec_id) {
-                    setTransfers([{
-                        pcId,
-                        stationId: preselectedStationId,
-                        color,
-                        transferType: 'assign',
-                    }]);
+                    setTransfers([
+                        {
+                            pcId,
+                            stationId: preselectedStationId,
+                            color,
+                            transferType: 'assign',
+                        },
+                    ]);
                     // Remove station highlight once PC is selected
                     setHighlightedStationId(null);
                     setMobileTab('review');
                 } else {
                     // Station has PC - select this PC for transfer (station selection comes later)
-                    setTransfers([{
-                        pcId,
-                        stationId: 0,
-                        color,
-                        transferType: 'assign',
-                    }]);
+                    setTransfers([
+                        {
+                            pcId,
+                            stationId: 0,
+                            color,
+                            transferType: 'assign',
+                        },
+                    ]);
                     setMobileTab('stations');
                 }
                 setActivePcId(pcId);
             } else {
                 // For bulk/multi-select mode, add new transfer and make it the active one
                 const color = generateRandomColor();
-                setTransfers(prev => [...prev, { pcId, stationId: 0, color, transferType: 'assign' }]);
+                setTransfers((prev) => [
+                    ...prev,
+                    { pcId, stationId: 0, color, transferType: 'assign' },
+                ]);
                 setActivePcId(pcId);
                 setMobileTab('stations');
             }
@@ -416,15 +547,22 @@ export default function Transfer({ stations, pcSpecs, filters, initialFilters, p
             return;
         }
 
-        const targetStation = stations.find(s => s.id === stationId);
+        const targetStation = stations.find((s) => s.id === stationId);
         const replacedPcId = targetStation?.pc_spec_id || undefined;
 
         // Re-targeting the active transfer frees its previous station automatically.
-        setTransfers(prev => prev.map(t =>
-            t.pcId === targetTransfer.pcId
-                ? { ...t, stationId, replacedPcId, transferType: 'assign' as TransferType }
-                : t
-        ));
+        setTransfers((prev) =>
+            prev.map((t) =>
+                t.pcId === targetTransfer.pcId
+                    ? {
+                          ...t,
+                          stationId,
+                          replacedPcId,
+                          transferType: 'assign' as TransferType,
+                      }
+                    : t,
+            ),
+        );
         setActivePcId(targetTransfer.pcId);
         setMobileTab('review');
         setErrors([]);
@@ -433,17 +571,26 @@ export default function Transfer({ stations, pcSpecs, filters, initialFilters, p
     function deselectStation(stationId: number) {
         // Prevent deselection of preselected station (from "Assign PC" or "Transfer PC" button)
         if (preselectedStationId && stationId === preselectedStationId) {
-            toast.error('Cannot deselect the target station. Use "Back" to cancel this assignment.');
+            toast.error(
+                'Cannot deselect the target station. Use "Back" to cancel this assignment.',
+            );
             return;
         }
 
         // Find transfer with this station and reset its stationId to 0
-        setTransfers(prev => prev.map(t =>
-            t.stationId === stationId
-                ? { ...t, stationId: 0, replacedPcId: undefined, transferType: 'assign' as TransferType }
-                : t
-        ));
-        const affected = transfers.find(t => t.stationId === stationId);
+        setTransfers((prev) =>
+            prev.map((t) =>
+                t.stationId === stationId
+                    ? {
+                          ...t,
+                          stationId: 0,
+                          replacedPcId: undefined,
+                          transferType: 'assign' as TransferType,
+                      }
+                    : t,
+            ),
+        );
+        const affected = transfers.find((t) => t.stationId === stationId);
         if (affected) {
             setActivePcId(affected.pcId);
         }
@@ -453,14 +600,18 @@ export default function Transfer({ stations, pcSpecs, filters, initialFilters, p
     function clearTransfer(pcId: number) {
         // Prevent clearing transfer when PC was auto-selected from "Transfer PC" button
         if (preselectedStationId) {
-            const preselectedStation = stations.find(s => s.id === preselectedStationId);
+            const preselectedStation = stations.find(
+                (s) => s.id === preselectedStationId,
+            );
             if (preselectedStation?.pc_spec_id === pcId) {
-                toast.error('Cannot deselect this PC. It was auto-selected from the station. Use "Back" to cancel this transfer.');
+                toast.error(
+                    'Cannot deselect this PC. It was auto-selected from the station. Use "Back" to cancel this transfer.',
+                );
                 return;
             }
         }
 
-        setTransfers(prev => prev.filter(t => t.pcId !== pcId));
+        setTransfers((prev) => prev.filter((t) => t.pcId !== pcId));
         if (activePcId === pcId) {
             setActivePcId(null);
         }
@@ -468,7 +619,9 @@ export default function Transfer({ stations, pcSpecs, filters, initialFilters, p
     }
 
     function setTransferType(pcId: number, transferType: TransferType) {
-        setTransfers(prev => prev.map(t => (t.pcId === pcId ? { ...t, transferType } : t)));
+        setTransfers((prev) =>
+            prev.map((t) => (t.pcId === pcId ? { ...t, transferType } : t)),
+        );
         setErrors([]);
     }
 
@@ -481,16 +634,24 @@ export default function Transfer({ stations, pcSpecs, filters, initialFilters, p
         const newColor = generateRandomColor();
 
         // Add transfer with stationId = 0 (will require user to select station)
-        setTransfers(prev => [...prev, { pcId, stationId: 0, color: newColor, transferType: 'assign' }]);
+        setTransfers((prev) => [
+            ...prev,
+            { pcId, stationId: 0, color: newColor, transferType: 'assign' },
+        ]);
         setActivePcId(pcId);
         setMobileTab('stations');
         setErrors([]);
 
         // Auto-scroll to the newly added transfer in Selected Transfers card
         setTimeout(() => {
-            const transferCard = document.querySelector('[data-transfer-id="' + pcId + '"]');
+            const transferCard = document.querySelector(
+                '[data-transfer-id="' + pcId + '"]',
+            );
             if (transferCard) {
-                transferCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                transferCard.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'nearest',
+                });
             }
         }, 100);
     }
@@ -499,53 +660,60 @@ export default function Transfer({ stations, pcSpecs, filters, initialFilters, p
         const validationErrors: string[] = [];
         const usedStations = new Set<number>();
         const usedPcs = new Set<number>();
-        const allPcIds = new Set(transfers.map(t => t.pcId));
-        const allStationIds = new Set(transfers.map(t => t.stationId).filter(id => id !== 0));
+        const allPcIds = new Set(transfers.map((t) => t.pcId));
+        const allStationIds = new Set(
+            transfers.map((t) => t.stationId).filter((id) => id !== 0),
+        );
 
         transfers.forEach((transfer, index) => {
-            const pc = pcSpecs.find(p => p.id === transfer.pcId);
-            const station = stations.find(s => s.id === transfer.stationId);
+            const pc = pcSpecs.find((p) => p.id === transfer.pcId);
+            const station = stations.find((s) => s.id === transfer.stationId);
             const label = pc?.pc_number || pc?.label;
 
             if (!transfer.stationId) {
                 validationErrors.push(
-                    `⚠️ Transfer #${index + 1}: PC "${label}" has no station selected. Please select a destination station.`
+                    `⚠️ Transfer #${index + 1}: PC "${label}" has no station selected. Please select a destination station.`,
                 );
             }
 
             if (pc?.station && pc.station.id === transfer.stationId) {
                 validationErrors.push(
-                    `⚠️ Transfer #${index + 1}: PC "${label}" is already at station "${station?.station_number}". No transfer needed.`
+                    `⚠️ Transfer #${index + 1}: PC "${label}" is already at station "${station?.station_number}". No transfer needed.`,
                 );
             }
 
-            if (usedStations.has(transfer.stationId) && transfer.stationId !== 0) {
+            if (
+                usedStations.has(transfer.stationId) &&
+                transfer.stationId !== 0
+            ) {
                 validationErrors.push(
-                    `⚠️ Transfer #${index + 1}: Station "${station?.station_number}" is already assigned to another PC in this batch. Each station can only receive one PC.`
+                    `⚠️ Transfer #${index + 1}: Station "${station?.station_number}" is already assigned to another PC in this batch. Each station can only receive one PC.`,
                 );
             }
 
             if (usedPcs.has(transfer.pcId)) {
                 validationErrors.push(
-                    `⚠️ Transfer #${index + 1}: PC "${label}" is selected multiple times. Each PC can only be transferred once.`
+                    `⚠️ Transfer #${index + 1}: PC "${label}" is selected multiple times. Each PC can only be transferred once.`,
                 );
             }
 
             if (transfer.transferType === 'swap' && transfer.replacedPcId) {
-                const replaced = pcSpecs.find(p => p.id === transfer.replacedPcId);
+                const replaced = pcSpecs.find(
+                    (p) => p.id === transfer.replacedPcId,
+                );
                 if (!pc?.station) {
                     validationErrors.push(
-                        `⚠️ Transfer #${index + 1}: PC "${label}" has no source station, so "${replaced?.pc_number || replaced?.label}" cannot be swapped back. Use Replace instead.`
+                        `⚠️ Transfer #${index + 1}: PC "${label}" has no source station, so "${replaced?.pc_number || replaced?.label}" cannot be swapped back. Use Replace instead.`,
                     );
                 }
                 if (allPcIds.has(transfer.replacedPcId)) {
                     validationErrors.push(
-                        `⚠️ Transfer #${index + 1}: cannot swap, "${replaced?.pc_number || replaced?.label}" is also being transferred in this batch.`
+                        `⚠️ Transfer #${index + 1}: cannot swap, "${replaced?.pc_number || replaced?.label}" is also being transferred in this batch.`,
                     );
                 }
                 if (pc?.station && allStationIds.has(pc.station.id)) {
                     validationErrors.push(
-                        `⚠️ Transfer #${index + 1}: cannot swap, station "${pc.station.station_number}" is also a destination in this batch.`
+                        `⚠️ Transfer #${index + 1}: cannot swap, station "${pc.station.station_number}" is also a destination in this batch.`,
                     );
                 }
             }
@@ -559,14 +727,18 @@ export default function Transfer({ stations, pcSpecs, filters, initialFilters, p
 
     // Check if a PC will become floating (be replaced by another PC without a swap)
     function isPcBecomingFloating(pcId: number): boolean {
-        return transfers.some(t => t.replacedPcId === pcId && t.transferType !== 'swap');
+        return transfers.some(
+            (t) => t.replacedPcId === pcId && t.transferType !== 'swap',
+        );
     }
 
     function handleSubmit() {
         const validationErrors = validateTransfers();
         if (validationErrors.length > 0) {
             setErrors(validationErrors);
-            toast.error(`Cannot proceed: ${validationErrors.length} validation error(s) found`);
+            toast.error(
+                `Cannot proceed: ${validationErrors.length} validation error(s) found`,
+            );
             return;
         }
 
@@ -574,7 +746,7 @@ export default function Transfer({ stations, pcSpecs, filters, initialFilters, p
         setErrors([]);
 
         const payload = {
-            transfers: transfers.map(t => ({
+            transfers: transfers.map((t) => ({
                 to_station_id: t.stationId,
                 pc_spec_id: t.pcId,
                 transfer_type: t.replacedPcId ? t.transferType : 'assign',
@@ -587,7 +759,9 @@ export default function Transfer({ stations, pcSpecs, filters, initialFilters, p
         router.post(pcTransfersBulkRoute().url, payload, {
             preserveScroll: true,
             onError: (serverErrors) => {
-                const errorMessages = Object.values(serverErrors).flat().map(err => `❌ ${err}`);
+                const errorMessages = Object.values(serverErrors)
+                    .flat()
+                    .map((err) => `❌ ${err}`);
                 setErrors(errorMessages);
                 toast.error('Transfer failed. Please check the errors below.');
                 setProcessing(false);
@@ -596,14 +770,15 @@ export default function Transfer({ stations, pcSpecs, filters, initialFilters, p
         });
     }
 
-
-
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={title} />
 
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3 relative">
-                <LoadingOverlay isLoading={isPageLoading || processing} message={overlayMessage} />
+            <div className="relative flex h-full flex-1 flex-col gap-4 rounded-xl p-3">
+                <LoadingOverlay
+                    isLoading={isPageLoading || processing}
+                    message={overlayMessage}
+                />
 
                 <PageHeader
                     title="Transfer Workspace"
@@ -623,22 +798,28 @@ export default function Transfer({ stations, pcSpecs, filters, initialFilters, p
                                 onClick={() => setHelpDialogOpen(true)}
                                 title="How to use PC Transfer"
                             >
-                                <UseAnimations animation={help} size={25} strokeColor="currentColor" />
+                                <UseAnimations
+                                    animation={help}
+                                    size={25}
+                                    strokeColor="currentColor"
+                                />
                             </Button>
                         </div>
 
                         {transfers.length > 0 && (
-                            <div className="flex flex-col sm:flex-row items-center justify-end gap-2 sm:gap-4">
+                            <div className="flex flex-col items-center justify-end gap-2 sm:flex-row sm:gap-4">
                                 <span className="text-sm text-muted-foreground">
-                                    {readyTransfers} of {transfers.length} transfers ready
+                                    {readyTransfers} of {transfers.length}{' '}
+                                    transfers ready
                                 </span>
                                 <Button
                                     onClick={handleSubmit}
                                     disabled={transferActionDisabled}
-                                    className="w-full sm:w-auto flex items-center justify-center gap-2"
+                                    className="flex w-full items-center justify-center gap-2 sm:w-auto"
                                 >
                                     <Check className="h-4 w-4" />
-                                    Transfer {transfers.length} PC{transfers.length > 1 ? 's' : ''}
+                                    Transfer {transfers.length} PC
+                                    {transfers.length > 1 ? 's' : ''}
                                 </Button>
                             </div>
                         )}
@@ -650,10 +831,14 @@ export default function Transfer({ stations, pcSpecs, filters, initialFilters, p
                     <Alert variant="destructive">
                         <AlertCircle className="h-4 w-4" />
                         <AlertDescription>
-                            <div className="font-semibold mb-2">Transfer Validation Errors:</div>
-                            <ul className="list-disc pl-5 space-y-1">
+                            <div className="mb-2 font-semibold">
+                                Transfer Validation Errors:
+                            </div>
+                            <ul className="list-disc space-y-1 pl-5">
                                 {errors.map((error, index) => (
-                                    <li key={index} className="text-sm">{error}</li>
+                                    <li key={index} className="text-sm">
+                                        {error}
+                                    </li>
                                 ))}
                             </ul>
                         </AlertDescription>
@@ -661,32 +846,56 @@ export default function Transfer({ stations, pcSpecs, filters, initialFilters, p
                 )}
 
                 {/* Mobile step switcher; desktop shows all panels side by side */}
-                <Tabs value={mobileTab} onValueChange={(value) => setMobileTab(value as MobileTab)} className="lg:hidden">
+                <Tabs
+                    value={mobileTab}
+                    onValueChange={(value) => setMobileTab(value as MobileTab)}
+                    className="lg:hidden"
+                >
                     <TabsList className="w-full">
                         <TabsTrigger value="pcs">1. PCs</TabsTrigger>
                         <TabsTrigger value="stations">2. Stations</TabsTrigger>
                         <TabsTrigger value="review">
-                            3. Review{transfers.length > 0 ? ` (${transfers.length})` : ''}
+                            3. Review
+                            {transfers.length > 0
+                                ? ` (${transfers.length})`
+                                : ''}
                         </TabsTrigger>
                     </TabsList>
                 </Tabs>
 
                 {/* Selected Transfers Summary */}
                 {transfers.length > 0 && (
-                    <Collapsible defaultOpen className={cn(mobileTab === 'review' ? 'block' : 'hidden', 'lg:block')}>
+                    <Collapsible
+                        defaultOpen
+                        className={cn(
+                            mobileTab === 'review' ? 'block' : 'hidden',
+                            'lg:block',
+                        )}
+                    >
                         <Card>
                             <CardHeader className="pb-3">
                                 <div className="flex items-center justify-between">
                                     <div>
-                                        <CardTitle className="text-base">Selected Transfers</CardTitle>
+                                        <CardTitle className="text-base">
+                                            Selected Transfers
+                                        </CardTitle>
                                         <CardDescription className="text-xs">
-                                            Click a row to make it active, then pick its station. Occupied destinations can be replaced or swapped.
+                                            Click a row to make it active, then
+                                            pick its station. Occupied
+                                            destinations can be replaced or
+                                            swapped.
                                         </CardDescription>
                                     </div>
                                     <CollapsibleTrigger asChild>
-                                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-8 w-8 p-0"
+                                        >
                                             <ChevronDown className="h-4 w-4 transition-transform duration-200 in-data-[state=closed]:-rotate-90" />
-                                            <span className="sr-only">Toggle transfers</span>
+                                            <span className="sr-only">
+                                                Toggle transfers
+                                            </span>
                                         </Button>
                                     </CollapsibleTrigger>
                                 </div>
@@ -695,53 +904,128 @@ export default function Transfer({ stations, pcSpecs, filters, initialFilters, p
                                 <CardContent>
                                     <div className="space-y-1.5">
                                         {transfers.map((transfer) => {
-                                            const pc = pcSpecs.find(p => p.id === transfer.pcId);
-                                            const station = stations.find(s => s.id === transfer.stationId);
-                                            const replacedPc = transfer.replacedPcId
-                                                ? pcSpecs.find(p => p.id === transfer.replacedPcId)
-                                                : null;
-                                            const darkColor = generateDarkColor(transfer.color);
-                                            const isActive = activePcId === transfer.pcId;
-                                            const canSwap = Boolean(replacedPc && pc?.station);
+                                            const pc = pcSpecs.find(
+                                                (p) => p.id === transfer.pcId,
+                                            );
+                                            const station = stations.find(
+                                                (s) =>
+                                                    s.id === transfer.stationId,
+                                            );
+                                            const replacedPc =
+                                                transfer.replacedPcId
+                                                    ? pcSpecs.find(
+                                                          (p) =>
+                                                              p.id ===
+                                                              transfer.replacedPcId,
+                                                      )
+                                                    : null;
+                                            const darkColor = generateDarkColor(
+                                                transfer.color,
+                                            );
+                                            const isActive =
+                                                activePcId === transfer.pcId;
+                                            const canSwap = Boolean(
+                                                replacedPc && pc?.station,
+                                            );
 
                                             return (
-                                                <div key={transfer.pcId} data-transfer-id={transfer.pcId}>
+                                                <div
+                                                    key={transfer.pcId}
+                                                    data-transfer-id={
+                                                        transfer.pcId
+                                                    }
+                                                >
                                                     <Colorized
                                                         role="button"
                                                         tabIndex={0}
-                                                        onClick={() => setActivePcId(transfer.pcId)}
-                                                        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setActivePcId(transfer.pcId)}
+                                                        onClick={() =>
+                                                            setActivePcId(
+                                                                transfer.pcId,
+                                                            )
+                                                        }
+                                                        onKeyDown={(e) =>
+                                                            (e.key ===
+                                                                'Enter' ||
+                                                                e.key ===
+                                                                    ' ') &&
+                                                            setActivePcId(
+                                                                transfer.pcId,
+                                                            )
+                                                        }
                                                         className={cn(
-                                                            'flex flex-col sm:flex-row items-start sm:items-center justify-between p-2 rounded border-2 space-y-2 sm:space-y-0 cursor-pointer',
-                                                            isActive && 'ring-2 ring-offset-2 ring-foreground/60'
+                                                            'flex cursor-pointer flex-col items-start justify-between space-y-2 rounded border-2 p-2 sm:flex-row sm:items-center sm:space-y-0',
+                                                            isActive &&
+                                                                'ring-2 ring-foreground/60 ring-offset-2',
                                                         )}
                                                         style={{
-                                                            backgroundColor: transfer.color,
-                                                            borderColor: darkColor,
+                                                            backgroundColor:
+                                                                transfer.color,
+                                                            borderColor:
+                                                                darkColor,
                                                         }}
                                                     >
                                                         <div className="flex flex-wrap items-center gap-2">
-                                                            <Colorized className="text-sm font-semibold" style={{ color: darkColor }}>
-                                                                {pc?.pc_number || pc?.label}
+                                                            <Colorized
+                                                                className="text-sm font-semibold"
+                                                                style={{
+                                                                    color: darkColor,
+                                                                }}
+                                                            >
+                                                                {pc?.pc_number ||
+                                                                    pc?.label}
                                                             </Colorized>
-                                                            <Colorized as="span" className="text-xs opacity-80" style={{ color: darkColor }}>
-                                                                {pc?.station ? `from ${pc.station.station_number}` : 'unassigned'}
+                                                            <Colorized
+                                                                as="span"
+                                                                className="text-xs opacity-80"
+                                                                style={{
+                                                                    color: darkColor,
+                                                                }}
+                                                            >
+                                                                {pc?.station
+                                                                    ? `from ${pc.station.station_number}`
+                                                                    : 'unassigned'}
                                                             </Colorized>
-                                                            <Colorized as="span" style={{ color: darkColor }} className="flex items-center">
+                                                            <Colorized
+                                                                as="span"
+                                                                style={{
+                                                                    color: darkColor,
+                                                                }}
+                                                                className="flex items-center"
+                                                            >
                                                                 <ArrowRight className="h-3 w-3" />
                                                             </Colorized>
-                                                            <Colorized className="text-sm font-semibold" style={{ color: darkColor }}>
-                                                                {station ? station.station_number : 'Pick a station →'}
+                                                            <Colorized
+                                                                className="text-sm font-semibold"
+                                                                style={{
+                                                                    color: darkColor,
+                                                                }}
+                                                            >
+                                                                {station
+                                                                    ? station.station_number
+                                                                    : 'Pick a station →'}
                                                             </Colorized>
-                                                            {isActive && !station && (
-                                                                <Badge variant="outline" className="text-[10px] uppercase tracking-wide">Active</Badge>
-                                                            )}
+                                                            {isActive &&
+                                                                !station && (
+                                                                    <Badge
+                                                                        variant="outline"
+                                                                        className="text-[10px] tracking-wide uppercase"
+                                                                    >
+                                                                        Active
+                                                                    </Badge>
+                                                                )}
                                                         </div>
-                                                        <div className="w-full sm:w-auto flex justify-end">
+                                                        <div className="flex w-full justify-end sm:w-auto">
                                                             <Button
                                                                 size="sm"
                                                                 variant="ghost"
-                                                                onClick={(e) => { e.stopPropagation(); clearTransfer(transfer.pcId); }}
+                                                                onClick={(
+                                                                    e,
+                                                                ) => {
+                                                                    e.stopPropagation();
+                                                                    clearTransfer(
+                                                                        transfer.pcId,
+                                                                    );
+                                                                }}
                                                                 className="h-6 w-6 p-0"
                                                                 aria-label="Remove transfer"
                                                             >
@@ -751,48 +1035,88 @@ export default function Transfer({ stations, pcSpecs, filters, initialFilters, p
                                                     </Colorized>
 
                                                     {replacedPc && (
-                                                        <div className="mt-1 p-2 bg-orange-50 dark:bg-orange-950/30 border-l-2 border-orange-400 rounded text-xs">
-                                                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                                                        <div className="mt-1 rounded border-l-2 border-orange-400 bg-orange-50 p-2 text-xs dark:bg-orange-950/30">
+                                                            <div className="flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center">
                                                                 <div className="flex items-center gap-1.5 text-orange-700 dark:text-orange-300">
                                                                     <AlertCircle className="h-3 w-3 flex-shrink-0" />
                                                                     <div>
-                                                                        <span className="font-semibold">{replacedPc.pc_number || replacedPc.label}</span>
+                                                                        <span className="font-semibold">
+                                                                            {replacedPc.pc_number ||
+                                                                                replacedPc.label}
+                                                                        </span>
                                                                         <span>
-                                                                            {transfer.transferType === 'swap' && pc?.station
+                                                                            {transfer.transferType ===
+                                                                                'swap' &&
+                                                                            pc?.station
                                                                                 ? ` → ${pc.station.station_number} (swap)`
                                                                                 : ' will be unassigned (floating)'}
                                                                         </span>
                                                                     </div>
                                                                 </div>
-                                                                <div className="flex w-full sm:w-auto items-center gap-1">
+                                                                <div className="flex w-full items-center gap-1 sm:w-auto">
                                                                     <Button
                                                                         size="sm"
-                                                                        variant={transfer.transferType === 'assign' ? 'default' : 'outline'}
-                                                                        onClick={() => setTransferType(transfer.pcId, 'assign')}
-                                                                        className="h-6 text-xs px-2 flex-1 sm:flex-none"
+                                                                        variant={
+                                                                            transfer.transferType ===
+                                                                            'assign'
+                                                                                ? 'default'
+                                                                                : 'outline'
+                                                                        }
+                                                                        onClick={() =>
+                                                                            setTransferType(
+                                                                                transfer.pcId,
+                                                                                'assign',
+                                                                            )
+                                                                        }
+                                                                        className="h-6 flex-1 px-2 text-xs sm:flex-none"
                                                                     >
                                                                         Replace
                                                                     </Button>
                                                                     <Button
                                                                         size="sm"
-                                                                        variant={transfer.transferType === 'swap' ? 'default' : 'outline'}
-                                                                        onClick={() => setTransferType(transfer.pcId, 'swap')}
-                                                                        disabled={!canSwap}
-                                                                        title={canSwap ? `Send ${replacedPc.pc_number || replacedPc.label} to ${pc?.station?.station_number}` : 'Swap needs a source station'}
-                                                                        className="h-6 text-xs px-2 flex-1 sm:flex-none"
+                                                                        variant={
+                                                                            transfer.transferType ===
+                                                                            'swap'
+                                                                                ? 'default'
+                                                                                : 'outline'
+                                                                        }
+                                                                        onClick={() =>
+                                                                            setTransferType(
+                                                                                transfer.pcId,
+                                                                                'swap',
+                                                                            )
+                                                                        }
+                                                                        disabled={
+                                                                            !canSwap
+                                                                        }
+                                                                        title={
+                                                                            canSwap
+                                                                                ? `Send ${replacedPc.pc_number || replacedPc.label} to ${pc?.station?.station_number}`
+                                                                                : 'Swap needs a source station'
+                                                                        }
+                                                                        className="h-6 flex-1 px-2 text-xs sm:flex-none"
                                                                     >
                                                                         Swap
                                                                     </Button>
-                                                                    {transfer.transferType !== 'swap' && !getTransferByPc(replacedPc.id) && (
-                                                                        <Button
-                                                                            size="sm"
-                                                                            variant="secondary"
-                                                                            onClick={() => assignFloatingPc(replacedPc.id)}
-                                                                            className="h-6 text-xs px-2 flex-1 sm:flex-none"
-                                                                        >
-                                                                            Assign elsewhere
-                                                                        </Button>
-                                                                    )}
+                                                                    {transfer.transferType !==
+                                                                        'swap' &&
+                                                                        !getTransferByPc(
+                                                                            replacedPc.id,
+                                                                        ) && (
+                                                                            <Button
+                                                                                size="sm"
+                                                                                variant="secondary"
+                                                                                onClick={() =>
+                                                                                    assignFloatingPc(
+                                                                                        replacedPc.id,
+                                                                                    )
+                                                                                }
+                                                                                className="h-6 flex-1 px-2 text-xs sm:flex-none"
+                                                                            >
+                                                                                Assign
+                                                                                elsewhere
+                                                                            </Button>
+                                                                        )}
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -807,9 +1131,16 @@ export default function Transfer({ stations, pcSpecs, filters, initialFilters, p
                     </Collapsible>
                 )}
 
-                <Card className={cn(mobileTab === 'review' ? 'block' : 'hidden', 'lg:block')}>
+                <Card
+                    className={cn(
+                        mobileTab === 'review' ? 'block' : 'hidden',
+                        'lg:block',
+                    )}
+                >
                     <CardHeader className="pb-3">
-                        <CardTitle className="text-sm font-medium">Transfer Notes (Optional)</CardTitle>
+                        <CardTitle className="text-sm font-medium">
+                            Transfer Notes (Optional)
+                        </CardTitle>
                     </CardHeader>
                     <CardContent className="p-3 pt-0">
                         <Textarea
@@ -820,62 +1151,100 @@ export default function Transfer({ stations, pcSpecs, filters, initialFilters, p
                             maxLength={500}
                             className="resize-none"
                         />
-                        <div className="text-xs text-muted-foreground mt-1">
+                        <div className="mt-1 text-xs text-muted-foreground">
                             {notes.length}/500 characters
                         </div>
                     </CardContent>
                 </Card>
 
                 {/* Split View: PC Specs (Left) and Stations (Right) */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                     {/* PC Specs Table - Left Side */}
-                    <Card className={cn(mobileTab === 'pcs' ? 'block' : 'hidden', 'lg:block')}>
+                    <Card
+                        className={cn(
+                            mobileTab === 'pcs' ? 'block' : 'hidden',
+                            'lg:block',
+                        )}
+                    >
                         <CardHeader>
                             <CardTitle>Available PC Specs</CardTitle>
                             <CardDescription>
-                                {preselectedStationId && !stations.find(s => s.id === preselectedStationId)?.pc_spec_id
-                                    ? `Select a PC to assign to station ${stations.find(s => s.id === preselectedStationId)?.station_number}`
+                                {preselectedStationId &&
+                                !stations.find(
+                                    (s) => s.id === preselectedStationId,
+                                )?.pc_spec_id
+                                    ? `Select a PC to assign to station ${stations.find((s) => s.id === preselectedStationId)?.station_number}`
                                     : 'Click the "Select" button to add PCs to your transfer list'}
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
                             <div className="mb-4 space-y-3">
                                 <div className="relative">
-                                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                    <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 transform text-muted-foreground" />
                                     <Input
                                         type="text"
                                         placeholder="Search PCs..."
                                         className="pl-10"
                                         value={pcSearch}
-                                        onChange={(e) => setPcSearch(e.target.value)}
+                                        onChange={(e) =>
+                                            setPcSearch(e.target.value)
+                                        }
                                     />
                                 </div>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                                     <div>
-                                        <Label className="text-xs text-muted-foreground">Assignment Status</Label>
-                                        <Select value={pcAssignmentFilter} onValueChange={(value) => setPcAssignmentFilter(value as 'all' | 'available' | 'assigned')}>
+                                        <Label className="text-xs text-muted-foreground">
+                                            Assignment Status
+                                        </Label>
+                                        <Select
+                                            value={pcAssignmentFilter}
+                                            onValueChange={(value) =>
+                                                setPcAssignmentFilter(
+                                                    value as
+                                                        | 'all'
+                                                        | 'available'
+                                                        | 'assigned',
+                                                )
+                                            }
+                                        >
                                             <SelectTrigger className="h-9">
                                                 <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="all">All PCs</SelectItem>
-                                                <SelectItem value="available">Available (Unassigned)</SelectItem>
-                                                <SelectItem value="assigned">Assigned to Station</SelectItem>
+                                                <SelectItem value="all">
+                                                    All PCs
+                                                </SelectItem>
+                                                <SelectItem value="available">
+                                                    Available (Unassigned)
+                                                </SelectItem>
+                                                <SelectItem value="assigned">
+                                                    Assigned to Station
+                                                </SelectItem>
                                             </SelectContent>
                                         </Select>
                                     </div>
 
                                     <div>
-                                        <Label className="text-xs text-muted-foreground">Site Filter</Label>
-                                        <Select value={pcSiteFilter} onValueChange={setPcSiteFilter}>
+                                        <Label className="text-xs text-muted-foreground">
+                                            Site Filter
+                                        </Label>
+                                        <Select
+                                            value={pcSiteFilter}
+                                            onValueChange={setPcSiteFilter}
+                                        >
                                             <SelectTrigger className="h-9">
                                                 <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="all">All Sites</SelectItem>
+                                                <SelectItem value="all">
+                                                    All Sites
+                                                </SelectItem>
                                                 {uniqueSites.map((site) => (
-                                                    <SelectItem key={site.id} value={String(site.id)}>
+                                                    <SelectItem
+                                                        key={site.id}
+                                                        value={String(site.id)}
+                                                    >
                                                         {site.name}
                                                     </SelectItem>
                                                 ))}
@@ -884,108 +1253,207 @@ export default function Transfer({ stations, pcSpecs, filters, initialFilters, p
                                     </div>
 
                                     <div>
-                                        <Label className="text-xs text-muted-foreground">Campaign Filter</Label>
-                                        <Select value={pcCampaignFilter} onValueChange={setPcCampaignFilter}>
+                                        <Label className="text-xs text-muted-foreground">
+                                            Campaign Filter
+                                        </Label>
+                                        <Select
+                                            value={pcCampaignFilter}
+                                            onValueChange={setPcCampaignFilter}
+                                        >
                                             <SelectTrigger className="h-9">
                                                 <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="all">All Campaigns</SelectItem>
-                                                {uniqueCampaigns.map((campaign) => (
-                                                    <SelectItem key={campaign.id} value={String(campaign.id)}>
-                                                        {campaign.name}
-                                                    </SelectItem>
-                                                ))}
+                                                <SelectItem value="all">
+                                                    All Campaigns
+                                                </SelectItem>
+                                                {uniqueCampaigns.map(
+                                                    (campaign) => (
+                                                        <SelectItem
+                                                            key={campaign.id}
+                                                            value={String(
+                                                                campaign.id,
+                                                            )}
+                                                        >
+                                                            {campaign.name}
+                                                        </SelectItem>
+                                                    ),
+                                                )}
                                             </SelectContent>
                                         </Select>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="border rounded-lg max-h-[600px] overflow-x-auto overflow-y-auto">
+                            <div className="max-h-[600px] overflow-x-auto overflow-y-auto rounded-lg border">
                                 <Table>
-                                    <TableHeader className="sticky top-0 bg-background z-10">
+                                    <TableHeader className="sticky top-0 z-10 bg-background">
                                         <TableRow className="bg-muted/50">
                                             <TableHead>PC Number</TableHead>
-                                            <TableHead className="hidden md:table-cell">Manufacturer</TableHead>
+                                            <TableHead className="hidden md:table-cell">
+                                                Manufacturer
+                                            </TableHead>
                                             <TableHead>Status</TableHead>
-                                            <TableHead className="text-right">Action</TableHead>
+                                            <TableHead className="text-right">
+                                                Action
+                                            </TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {filteredPcSpecs.length === 0 ? (
                                             <TableRow>
-                                                <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                                                <TableCell
+                                                    colSpan={4}
+                                                    className="py-8 text-center text-muted-foreground"
+                                                >
                                                     No PC specs found
                                                 </TableCell>
                                             </TableRow>
                                         ) : (
                                             filteredPcSpecs.map((pc) => {
-                                                const transfer = getTransferByPc(pc.id);
-                                                const darkColor = transfer ? generateDarkColor(transfer.color) : null;
-                                                const willBeFloating = isPcBecomingFloating(pc.id);
+                                                const transfer =
+                                                    getTransferByPc(pc.id);
+                                                const darkColor = transfer
+                                                    ? generateDarkColor(
+                                                          transfer.color,
+                                                      )
+                                                    : null;
+                                                const willBeFloating =
+                                                    isPcBecomingFloating(pc.id);
 
                                                 // Disable other PCs when in single-station mode with a PC already selected
-                                                const isSingleStationMode = !!preselectedStationId;
-                                                const hasSelection = transfers.length > 0;
-                                                const isDisabled = isSingleStationMode && hasSelection && !transfer && !willBeFloating;
+                                                const isSingleStationMode =
+                                                    !!preselectedStationId;
+                                                const hasSelection =
+                                                    transfers.length > 0;
+                                                const isDisabled =
+                                                    isSingleStationMode &&
+                                                    hasSelection &&
+                                                    !transfer &&
+                                                    !willBeFloating;
 
-                                                const isActivePc = activePcId === pc.id && Boolean(transfer);
+                                                const isActivePc =
+                                                    activePcId === pc.id &&
+                                                    Boolean(transfer);
 
                                                 return (
                                                     <TableRow
                                                         key={pc.id}
                                                         data-pc-id={pc.id}
-                                                        onClick={() => transfer && setActivePcId(pc.id)}
+                                                        onClick={() =>
+                                                            transfer &&
+                                                            setActivePcId(pc.id)
+                                                        }
                                                         className={cn(
                                                             'hover:bg-muted/50',
-                                                            transfer && 'cursor-pointer',
-                                                            isActivePc && 'ring-2 ring-inset ring-foreground/60'
+                                                            transfer &&
+                                                                'cursor-pointer',
+                                                            isActivePc &&
+                                                                'ring-2 ring-foreground/60 ring-inset',
                                                         )}
-                                                        style={transfer ? {
-                                                            backgroundColor: transfer.color,
-                                                            borderLeftWidth: '4px',
-                                                            borderLeftColor: darkColor || undefined,
-                                                        } : willBeFloating ? {
-                                                            backgroundColor: '#fff7ed',
-                                                            borderLeftWidth: '4px',
-                                                            borderLeftColor: '#fb923c',
-                                                        } : {}}
+                                                        style={
+                                                            transfer
+                                                                ? {
+                                                                      backgroundColor:
+                                                                          transfer.color,
+                                                                      borderLeftWidth:
+                                                                          '4px',
+                                                                      borderLeftColor:
+                                                                          darkColor ||
+                                                                          undefined,
+                                                                  }
+                                                                : willBeFloating
+                                                                  ? {
+                                                                        backgroundColor:
+                                                                            '#fff7ed',
+                                                                        borderLeftWidth:
+                                                                            '4px',
+                                                                        borderLeftColor:
+                                                                            '#fb923c',
+                                                                    }
+                                                                  : {}
+                                                        }
                                                     >
                                                         <TableCell>
                                                             <Colorized
                                                                 as="span"
                                                                 className="font-medium"
-                                                                style={{ color: darkColor || (willBeFloating ? '#ea580c' : '#2563eb') }}
+                                                                style={{
+                                                                    color:
+                                                                        darkColor ||
+                                                                        (willBeFloating
+                                                                            ? '#ea580c'
+                                                                            : '#2563eb'),
+                                                                }}
                                                             >
-                                                                {pc.pc_number || '-'}
+                                                                {pc.pc_number ||
+                                                                    '-'}
                                                             </Colorized>
                                                         </TableCell>
                                                         <TableCell className="hidden md:table-cell">
-                                                            <Colorized style={{ color: darkColor || undefined }}>
-                                                                <div className="font-medium text-sm">{pc.details.manufacturer || '-'}</div>
-                                                                <div className="text-xs text-muted-foreground">{pc.details.processor || '-'}</div>
+                                                            <Colorized
+                                                                style={{
+                                                                    color:
+                                                                        darkColor ||
+                                                                        undefined,
+                                                                }}
+                                                            >
+                                                                <div className="text-sm font-medium">
+                                                                    {pc.details
+                                                                        .manufacturer ||
+                                                                        '-'}
+                                                                </div>
+                                                                <div className="text-xs text-muted-foreground">
+                                                                    {pc.details
+                                                                        .processor ||
+                                                                        '-'}
+                                                                </div>
                                                             </Colorized>
                                                         </TableCell>
                                                         <TableCell>
                                                             {willBeFloating ? (
                                                                 <div className="space-y-1">
-                                                                    <Badge variant="outline" className="text-xs bg-orange-100 border-orange-400 text-orange-700">
-                                                                        🔄 Will be floating
+                                                                    <Badge
+                                                                        variant="outline"
+                                                                        className="border-orange-400 bg-orange-100 text-xs text-orange-700"
+                                                                    >
+                                                                        🔄 Will
+                                                                        be
+                                                                        floating
                                                                     </Badge>
                                                                     <div className="text-xs text-orange-600">
-                                                                        Being replaced, can reassign
+                                                                        Being
+                                                                        replaced,
+                                                                        can
+                                                                        reassign
                                                                     </div>
                                                                     <div className="text-xs text-orange-600">
-                                                                        assigned currently {pc.station?.station_number}
+                                                                        assigned
+                                                                        currently{' '}
+                                                                        {
+                                                                            pc
+                                                                                .station
+                                                                                ?.station_number
+                                                                        }
                                                                     </div>
                                                                 </div>
                                                             ) : pc.station ? (
-                                                                <Badge variant="secondary" className="text-xs">
-                                                                    At {pc.station.station_number}
+                                                                <Badge
+                                                                    variant="secondary"
+                                                                    className="text-xs"
+                                                                >
+                                                                    At{' '}
+                                                                    {
+                                                                        pc
+                                                                            .station
+                                                                            .station_number
+                                                                    }
                                                                 </Badge>
                                                             ) : (
-                                                                <Badge variant="outline" className="text-xs">
+                                                                <Badge
+                                                                    variant="outline"
+                                                                    className="text-xs"
+                                                                >
                                                                     Available
                                                                 </Badge>
                                                             )}
@@ -995,13 +1463,24 @@ export default function Transfer({ stations, pcSpecs, filters, initialFilters, p
                                                                 <Button
                                                                     size="sm"
                                                                     variant="outline"
-                                                                    onClick={(e) => { e.stopPropagation(); togglePcSelection(pc.id); }}
+                                                                    onClick={(
+                                                                        e,
+                                                                    ) => {
+                                                                        e.stopPropagation();
+                                                                        togglePcSelection(
+                                                                            pc.id,
+                                                                        );
+                                                                    }}
                                                                     style={{
-                                                                        borderColor: darkColor || undefined,
-                                                                        color: darkColor || undefined
+                                                                        borderColor:
+                                                                            darkColor ||
+                                                                            undefined,
+                                                                        color:
+                                                                            darkColor ||
+                                                                            undefined,
                                                                     }}
                                                                 >
-                                                                    <X className="h-4 w-4 mr-1" />
+                                                                    <X className="mr-1 h-4 w-4" />
                                                                     Deselect
                                                                 </Button>
                                                             ) : willBeFloating ? (
@@ -1011,13 +1490,20 @@ export default function Transfer({ stations, pcSpecs, filters, initialFilters, p
                                                                     disabled
                                                                     className="text-orange-600"
                                                                 >
-                                                                    Being Replaced
+                                                                    Being
+                                                                    Replaced
                                                                 </Button>
                                                             ) : (
                                                                 <Button
                                                                     size="sm"
-                                                                    onClick={() => togglePcSelection(pc.id)}
-                                                                    disabled={isDisabled}
+                                                                    onClick={() =>
+                                                                        togglePcSelection(
+                                                                            pc.id,
+                                                                        )
+                                                                    }
+                                                                    disabled={
+                                                                        isDisabled
+                                                                    }
                                                                 >
                                                                     Select
                                                                 </Button>
@@ -1034,55 +1520,93 @@ export default function Transfer({ stations, pcSpecs, filters, initialFilters, p
                     </Card>
 
                     {/* Stations Table - Right Side */}
-                    <Card className={cn(mobileTab === 'stations' ? 'block' : 'hidden', 'lg:block')}>
+                    <Card
+                        className={cn(
+                            mobileTab === 'stations' ? 'block' : 'hidden',
+                            'lg:block',
+                        )}
+                    >
                         <CardHeader>
                             <CardTitle>Destination Stations</CardTitle>
                             <CardDescription>
-                                {preselectedStationId && !stations.find(s => s.id === preselectedStationId)?.pc_spec_id
+                                {preselectedStationId &&
+                                !stations.find(
+                                    (s) => s.id === preselectedStationId,
+                                )?.pc_spec_id
                                     ? 'Select a PC from the left to assign to the highlighted station'
                                     : targetTransfer
-                                        ? `Pick a station for ${pcSpecs.find(p => p.id === targetTransfer.pcId)?.pc_number ?? 'the active PC'}`
-                                        : 'Select PCs first, then choose destination stations'}
+                                      ? `Pick a station for ${pcSpecs.find((p) => p.id === targetTransfer.pcId)?.pc_number ?? 'the active PC'}`
+                                      : 'Select PCs first, then choose destination stations'}
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
                             <div className="mb-4 space-y-3">
                                 <div className="relative">
-                                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                    <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 transform text-muted-foreground" />
                                     <Input
                                         type="text"
                                         placeholder="Search stations..."
                                         className="pl-10"
                                         value={stationSearch}
-                                        onChange={(e) => setStationSearch(e.target.value)}
+                                        onChange={(e) =>
+                                            setStationSearch(e.target.value)
+                                        }
                                     />
                                 </div>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                                     <div>
-                                        <Label className="text-xs text-muted-foreground">PC Status</Label>
-                                        <Select value={stationAssignmentFilter} onValueChange={(value) => setStationAssignmentFilter(value as 'all' | 'empty' | 'has-pc')}>
+                                        <Label className="text-xs text-muted-foreground">
+                                            PC Status
+                                        </Label>
+                                        <Select
+                                            value={stationAssignmentFilter}
+                                            onValueChange={(value) =>
+                                                setStationAssignmentFilter(
+                                                    value as
+                                                        | 'all'
+                                                        | 'empty'
+                                                        | 'has-pc',
+                                                )
+                                            }
+                                        >
                                             <SelectTrigger className="h-9">
                                                 <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="all">All Stations</SelectItem>
-                                                <SelectItem value="empty">Empty (No PC)</SelectItem>
-                                                <SelectItem value="has-pc">Has PC Assigned</SelectItem>
+                                                <SelectItem value="all">
+                                                    All Stations
+                                                </SelectItem>
+                                                <SelectItem value="empty">
+                                                    Empty (No PC)
+                                                </SelectItem>
+                                                <SelectItem value="has-pc">
+                                                    Has PC Assigned
+                                                </SelectItem>
                                             </SelectContent>
                                         </Select>
                                     </div>
 
                                     <div>
-                                        <Label className="text-xs text-muted-foreground">Site Filter</Label>
-                                        <Select value={stationSiteFilter} onValueChange={setStationSiteFilter}>
+                                        <Label className="text-xs text-muted-foreground">
+                                            Site Filter
+                                        </Label>
+                                        <Select
+                                            value={stationSiteFilter}
+                                            onValueChange={setStationSiteFilter}
+                                        >
                                             <SelectTrigger className="h-9">
                                                 <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="all">All Sites</SelectItem>
+                                                <SelectItem value="all">
+                                                    All Sites
+                                                </SelectItem>
                                                 {uniqueSites.map((site) => (
-                                                    <SelectItem key={site.id} value={String(site.id)}>
+                                                    <SelectItem
+                                                        key={site.id}
+                                                        value={String(site.id)}
+                                                    >
                                                         {site.name}
                                                     </SelectItem>
                                                 ))}
@@ -1091,82 +1615,159 @@ export default function Transfer({ stations, pcSpecs, filters, initialFilters, p
                                     </div>
 
                                     <div>
-                                        <Label className="text-xs text-muted-foreground">Campaign Filter</Label>
-                                        <Select value={stationCampaignFilter} onValueChange={setStationCampaignFilter}>
+                                        <Label className="text-xs text-muted-foreground">
+                                            Campaign Filter
+                                        </Label>
+                                        <Select
+                                            value={stationCampaignFilter}
+                                            onValueChange={
+                                                setStationCampaignFilter
+                                            }
+                                        >
                                             <SelectTrigger className="h-9">
                                                 <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="all">All Campaigns</SelectItem>
-                                                {uniqueCampaigns.map((campaign) => (
-                                                    <SelectItem key={campaign.id} value={String(campaign.id)}>
-                                                        {campaign.name}
-                                                    </SelectItem>
-                                                ))}
+                                                <SelectItem value="all">
+                                                    All Campaigns
+                                                </SelectItem>
+                                                {uniqueCampaigns.map(
+                                                    (campaign) => (
+                                                        <SelectItem
+                                                            key={campaign.id}
+                                                            value={String(
+                                                                campaign.id,
+                                                            )}
+                                                        >
+                                                            {campaign.name}
+                                                        </SelectItem>
+                                                    ),
+                                                )}
                                             </SelectContent>
                                         </Select>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="border rounded-lg max-h-[600px] overflow-x-auto overflow-y-auto">
+                            <div className="max-h-[600px] overflow-x-auto overflow-y-auto rounded-lg border">
                                 <Table>
-                                    <TableHeader className="sticky top-0 bg-background z-10">
+                                    <TableHeader className="sticky top-0 z-10 bg-background">
                                         <TableRow>
-                                            <TableHead>Station Number</TableHead>
-                                            <TableHead className="hidden md:table-cell">Site</TableHead>
+                                            <TableHead>
+                                                Station Number
+                                            </TableHead>
+                                            <TableHead className="hidden md:table-cell">
+                                                Site
+                                            </TableHead>
                                             <TableHead>Current PC</TableHead>
-                                            <TableHead className="text-right">Action</TableHead>
+                                            <TableHead className="text-right">
+                                                Action
+                                            </TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {filteredStations.length === 0 ? (
                                             <TableRow>
-                                                <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                                                <TableCell
+                                                    colSpan={4}
+                                                    className="py-8 text-center text-muted-foreground"
+                                                >
                                                     No stations found
                                                 </TableCell>
                                             </TableRow>
                                         ) : (
                                             filteredStations.map((station) => {
-                                                const transfer = getTransferByStation(station.id);
-                                                const darkColor = transfer ? generateDarkColor(transfer.color) : null;
-                                                const canSelect = Boolean(targetTransfer) && targetTransfer?.stationId !== station.id;
-                                                const isHighlighted = highlightedStationId === station.id;
+                                                const transfer =
+                                                    getTransferByStation(
+                                                        station.id,
+                                                    );
+                                                const darkColor = transfer
+                                                    ? generateDarkColor(
+                                                          transfer.color,
+                                                      )
+                                                    : null;
+                                                const canSelect =
+                                                    Boolean(targetTransfer) &&
+                                                    targetTransfer?.stationId !==
+                                                        station.id;
+                                                const isHighlighted =
+                                                    highlightedStationId ===
+                                                    station.id;
 
                                                 return (
                                                     <TableRow
                                                         key={station.id}
-                                                        data-station-id={station.id}
-                                                        className={`hover:bg-muted/50 transition-all duration-300 ${isHighlighted ? 'bg-blue-100 dark:bg-blue-900/30 ring-2 ring-blue-500 ring-inset' : ''
-                                                            }`}
-                                                        style={transfer ? {
-                                                            backgroundColor: transfer.color,
-                                                            borderLeftWidth: '4px',
-                                                            borderLeftColor: darkColor || undefined,
-                                                        } : {}}
+                                                        data-station-id={
+                                                            station.id
+                                                        }
+                                                        className={`transition-all duration-300 hover:bg-muted/50 ${
+                                                            isHighlighted
+                                                                ? 'bg-blue-100 ring-2 ring-blue-500 ring-inset dark:bg-blue-900/30'
+                                                                : ''
+                                                        }`}
+                                                        style={
+                                                            transfer
+                                                                ? {
+                                                                      backgroundColor:
+                                                                          transfer.color,
+                                                                      borderLeftWidth:
+                                                                          '4px',
+                                                                      borderLeftColor:
+                                                                          darkColor ||
+                                                                          undefined,
+                                                                  }
+                                                                : {}
+                                                        }
                                                     >
                                                         <TableCell>
                                                             <Colorized
                                                                 as="span"
                                                                 className="font-medium"
-                                                                style={{ color: darkColor || undefined }}
+                                                                style={{
+                                                                    color:
+                                                                        darkColor ||
+                                                                        undefined,
+                                                                }}
                                                             >
-                                                                {station.station_number}
+                                                                {
+                                                                    station.station_number
+                                                                }
                                                             </Colorized>
                                                         </TableCell>
-                                                        <TableCell className="hidden md:table-cell" style={{ color: darkColor || undefined }}>
-                                                            <div className="text-sm">{station.site}</div>
-                                                            <div className="text-xs text-muted-foreground">{station.campaign}</div>
+                                                        <TableCell
+                                                            className="hidden md:table-cell"
+                                                            style={{
+                                                                color:
+                                                                    darkColor ||
+                                                                    undefined,
+                                                            }}
+                                                        >
+                                                            <div className="text-sm">
+                                                                {station.site}
+                                                            </div>
+                                                            <div className="text-xs text-muted-foreground">
+                                                                {
+                                                                    station.campaign
+                                                                }
+                                                            </div>
                                                         </TableCell>
                                                         <TableCell>
                                                             {station.pc_spec_details ? (
                                                                 <div className="text-sm">
                                                                     <div className="font-medium text-blue-600">
-                                                                        {station.pc_spec_details.pc_number || 'Assigned'}
+                                                                        {station
+                                                                            .pc_spec_details
+                                                                            .pc_number ||
+                                                                            'Assigned'}
                                                                     </div>
                                                                 </div>
                                                             ) : (
-                                                                <Badge variant="outline" className="text-xs">Empty</Badge>
+                                                                <Badge
+                                                                    variant="outline"
+                                                                    className="text-xs"
+                                                                >
+                                                                    Empty
+                                                                </Badge>
                                                             )}
                                                         </TableCell>
                                                         <TableCell className="text-right">
@@ -1174,11 +1775,19 @@ export default function Transfer({ stations, pcSpecs, filters, initialFilters, p
                                                                 <Button
                                                                     size="sm"
                                                                     variant="outline"
-                                                                    onClick={() => deselectStation(station.id)}
+                                                                    onClick={() =>
+                                                                        deselectStation(
+                                                                            station.id,
+                                                                        )
+                                                                    }
                                                                     className="gap-2"
                                                                     style={{
-                                                                        borderColor: darkColor || undefined,
-                                                                        color: darkColor || undefined
+                                                                        borderColor:
+                                                                            darkColor ||
+                                                                            undefined,
+                                                                        color:
+                                                                            darkColor ||
+                                                                            undefined,
                                                                     }}
                                                                 >
                                                                     <X className="h-3 w-3" />
@@ -1187,9 +1796,19 @@ export default function Transfer({ stations, pcSpecs, filters, initialFilters, p
                                                             ) : (
                                                                 <Button
                                                                     size="sm"
-                                                                    onClick={() => selectStationForPc(station.id)}
-                                                                    disabled={!canSelect}
-                                                                    title={canSelect ? undefined : 'Select a PC first'}
+                                                                    onClick={() =>
+                                                                        selectStationForPc(
+                                                                            station.id,
+                                                                        )
+                                                                    }
+                                                                    disabled={
+                                                                        !canSelect
+                                                                    }
+                                                                    title={
+                                                                        canSelect
+                                                                            ? undefined
+                                                                            : 'Select a PC first'
+                                                                    }
                                                                 >
                                                                     Select
                                                                 </Button>
@@ -1208,10 +1827,14 @@ export default function Transfer({ stations, pcSpecs, filters, initialFilters, p
 
                 {/* Help Dialog */}
                 <Dialog open={helpDialogOpen} onOpenChange={setHelpDialogOpen}>
-                    <DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <DialogContent className="max-h-[90vh] max-w-[95vw] overflow-y-auto sm:max-w-2xl">
                         <DialogHeader>
                             <DialogTitle className="flex items-center gap-2">
-                                <UseAnimations animation={help} size={20} strokeColor="currentColor" />
+                                <UseAnimations
+                                    animation={help}
+                                    size={20}
+                                    strokeColor="currentColor"
+                                />
                                 How to Use PC Transfer
                             </DialogTitle>
                             <DialogDescription>
@@ -1222,39 +1845,88 @@ export default function Transfer({ stations, pcSpecs, filters, initialFilters, p
                         <div className="space-y-6 py-4">
                             {/* Assign PC (Empty Station) */}
                             <div className="space-y-3">
-                                <h3 className="font-semibold text-lg flex items-center gap-2">
+                                <h3 className="flex items-center gap-2 text-lg font-semibold">
                                     <MousePointer className="h-5 w-5 text-blue-600" />
                                     Assign PC (Empty Station)
                                 </h3>
                                 <div className="space-y-2 pl-7 text-sm">
                                     <div className="flex items-start gap-2">
-                                        <span className="font-bold text-blue-600">1.</span>
+                                        <span className="font-bold text-blue-600">
+                                            1.
+                                        </span>
                                         <div>
-                                            <span className="font-medium">From Station Page:</span> Click <Badge variant="outline" className="mx-1">Assign PC</Badge> button on an empty station
+                                            <span className="font-medium">
+                                                From Station Page:
+                                            </span>{' '}
+                                            Click{' '}
+                                            <Badge
+                                                variant="outline"
+                                                className="mx-1"
+                                            >
+                                                Assign PC
+                                            </Badge>{' '}
+                                            button on an empty station
                                         </div>
                                     </div>
                                     <div className="flex items-start gap-2">
-                                        <span className="font-bold text-blue-600">2.</span>
+                                        <span className="font-bold text-blue-600">
+                                            2.
+                                        </span>
                                         <div>
-                                            <span className="font-medium">Station Highlighted:</span> The target station will be <span className="bg-blue-100 px-2 py-0.5 rounded">highlighted in blue</span>
+                                            <span className="font-medium">
+                                                Station Highlighted:
+                                            </span>{' '}
+                                            The target station will be{' '}
+                                            <span className="rounded bg-blue-100 px-2 py-0.5">
+                                                highlighted in blue
+                                            </span>
                                         </div>
                                     </div>
                                     <div className="flex items-start gap-2">
-                                        <span className="font-bold text-blue-600">3.</span>
+                                        <span className="font-bold text-blue-600">
+                                            3.
+                                        </span>
                                         <div>
-                                            <span className="font-medium">Select PC:</span> Click <Badge variant="outline" className="mx-1">Select</Badge> on any PC from the left table (only one PC allowed)
+                                            <span className="font-medium">
+                                                Select PC:
+                                            </span>{' '}
+                                            Click{' '}
+                                            <Badge
+                                                variant="outline"
+                                                className="mx-1"
+                                            >
+                                                Select
+                                            </Badge>{' '}
+                                            on any PC from the left table (only
+                                            one PC allowed)
                                         </div>
                                     </div>
                                     <div className="flex items-start gap-2">
-                                        <span className="font-bold text-blue-600">4.</span>
+                                        <span className="font-bold text-blue-600">
+                                            4.
+                                        </span>
                                         <div>
-                                            <span className="font-medium">Auto-Assignment:</span> PC automatically assigns to the highlighted station. Other PCs become unselectable.
+                                            <span className="font-medium">
+                                                Auto-Assignment:
+                                            </span>{' '}
+                                            PC automatically assigns to the
+                                            highlighted station. Other PCs
+                                            become unselectable.
                                         </div>
                                     </div>
                                     <div className="flex items-start gap-2">
-                                        <span className="font-bold text-blue-600">5.</span>
+                                        <span className="font-bold text-blue-600">
+                                            5.
+                                        </span>
                                         <div>
-                                            <span className="font-medium">Submit:</span> Click <Badge className="mx-1 bg-blue-600">Transfer 1 PC</Badge> to complete
+                                            <span className="font-medium">
+                                                Submit:
+                                            </span>{' '}
+                                            Click{' '}
+                                            <Badge className="mx-1 bg-blue-600">
+                                                Transfer 1 PC
+                                            </Badge>{' '}
+                                            to complete
                                         </div>
                                     </div>
                                 </div>
@@ -1264,39 +1936,105 @@ export default function Transfer({ stations, pcSpecs, filters, initialFilters, p
 
                             {/* Transfer PC (Station with PC) */}
                             <div className="space-y-3">
-                                <h3 className="font-semibold text-lg flex items-center gap-2">
+                                <h3 className="flex items-center gap-2 text-lg font-semibold">
                                     <ArrowRight className="h-5 w-5 text-indigo-600" />
                                     Transfer PC (Station with Existing PC)
                                 </h3>
                                 <div className="space-y-2 pl-7 text-sm">
                                     <div className="flex items-start gap-2">
-                                        <span className="font-bold text-indigo-600">1.</span>
+                                        <span className="font-bold text-indigo-600">
+                                            1.
+                                        </span>
                                         <div>
-                                            <span className="font-medium">From Station Page:</span> Click <Badge variant="outline" className="mx-1">Transfer PC</Badge> button on a station with a PC
+                                            <span className="font-medium">
+                                                From Station Page:
+                                            </span>{' '}
+                                            Click{' '}
+                                            <Badge
+                                                variant="outline"
+                                                className="mx-1"
+                                            >
+                                                Transfer PC
+                                            </Badge>{' '}
+                                            button on a station with a PC
                                         </div>
                                     </div>
                                     <div className="flex items-start gap-2">
-                                        <span className="font-bold text-indigo-600">2.</span>
+                                        <span className="font-bold text-indigo-600">
+                                            2.
+                                        </span>
                                         <div>
-                                            <span className="font-medium">Auto-Selection:</span> The PC currently at that station is automatically selected and <span className="font-semibold">locked</span>
+                                            <span className="font-medium">
+                                                Auto-Selection:
+                                            </span>{' '}
+                                            The PC currently at that station is
+                                            automatically selected and{' '}
+                                            <span className="font-semibold">
+                                                locked
+                                            </span>
                                         </div>
                                     </div>
                                     <div className="flex items-start gap-2">
-                                        <span className="font-bold text-indigo-600">3.</span>
+                                        <span className="font-bold text-indigo-600">
+                                            3.
+                                        </span>
                                         <div>
-                                            <span className="font-medium">Cannot Deselect:</span> The selected PC cannot be deselected (use "Back" to cancel entire transfer)
+                                            <span className="font-medium">
+                                                Cannot Deselect:
+                                            </span>{' '}
+                                            The selected PC cannot be deselected
+                                            (use "Back" to cancel entire
+                                            transfer)
                                         </div>
                                     </div>
                                     <div className="flex items-start gap-2">
-                                        <span className="font-bold text-indigo-600">4.</span>
+                                        <span className="font-bold text-indigo-600">
+                                            4.
+                                        </span>
                                         <div>
-                                            <span className="font-medium">Choose Destination:</span> Click <Badge variant="outline" className="mx-1">Select</Badge> on a destination station from the right table. If it already has a PC, choose <Badge variant="outline" className="mx-1">Replace</Badge> (it floats) or <Badge variant="outline" className="mx-1">Swap</Badge> (it goes to the source station)
+                                            <span className="font-medium">
+                                                Choose Destination:
+                                            </span>{' '}
+                                            Click{' '}
+                                            <Badge
+                                                variant="outline"
+                                                className="mx-1"
+                                            >
+                                                Select
+                                            </Badge>{' '}
+                                            on a destination station from the
+                                            right table. If it already has a PC,
+                                            choose{' '}
+                                            <Badge
+                                                variant="outline"
+                                                className="mx-1"
+                                            >
+                                                Replace
+                                            </Badge>{' '}
+                                            (it floats) or{' '}
+                                            <Badge
+                                                variant="outline"
+                                                className="mx-1"
+                                            >
+                                                Swap
+                                            </Badge>{' '}
+                                            (it goes to the source station)
                                         </div>
                                     </div>
                                     <div className="flex items-start gap-2">
-                                        <span className="font-bold text-indigo-600">5.</span>
+                                        <span className="font-bold text-indigo-600">
+                                            5.
+                                        </span>
                                         <div>
-                                            <span className="font-medium">Submit:</span> Click <Badge className="mx-1 bg-blue-600">Transfer 1 PC</Badge> — you return to the filtered list immediately
+                                            <span className="font-medium">
+                                                Submit:
+                                            </span>{' '}
+                                            Click{' '}
+                                            <Badge className="mx-1 bg-blue-600">
+                                                Transfer 1 PC
+                                            </Badge>{' '}
+                                            — you return to the filtered list
+                                            immediately
                                         </div>
                                     </div>
                                 </div>
@@ -1306,45 +2044,120 @@ export default function Transfer({ stations, pcSpecs, filters, initialFilters, p
 
                             {/* Multiple Station Assignment */}
                             <div className="space-y-3">
-                                <h3 className="font-semibold text-lg flex items-center gap-2">
+                                <h3 className="flex items-center gap-2 text-lg font-semibold">
                                     <CheckSquare className="h-5 w-5 text-green-600" />
                                     Multiple Stations (Bulk Mode)
                                 </h3>
                                 <div className="space-y-2 pl-7 text-sm">
                                     <div className="flex items-start gap-2">
-                                        <span className="font-bold text-green-600">1.</span>
+                                        <span className="font-bold text-green-600">
+                                            1.
+                                        </span>
                                         <div>
-                                            <span className="font-medium">From Station Page:</span> Check <Badge variant="outline" className="mx-1">☑</Badge> multiple empty stations
+                                            <span className="font-medium">
+                                                From Station Page:
+                                            </span>{' '}
+                                            Check{' '}
+                                            <Badge
+                                                variant="outline"
+                                                className="mx-1"
+                                            >
+                                                ☑
+                                            </Badge>{' '}
+                                            multiple empty stations
                                         </div>
                                     </div>
                                     <div className="flex items-start gap-2">
-                                        <span className="font-bold text-green-600">2.</span>
+                                        <span className="font-bold text-green-600">
+                                            2.
+                                        </span>
                                         <div>
-                                            <span className="font-medium">Bulk Action:</span> Click <Badge variant="outline" className="mx-1">Configure Transfers</Badge>
+                                            <span className="font-medium">
+                                                Bulk Action:
+                                            </span>{' '}
+                                            Click{' '}
+                                            <Badge
+                                                variant="outline"
+                                                className="mx-1"
+                                            >
+                                                Configure Transfers
+                                            </Badge>
                                         </div>
                                     </div>
                                     <div className="flex items-start gap-2">
-                                        <span className="font-bold text-green-600">3.</span>
+                                        <span className="font-bold text-green-600">
+                                            3.
+                                        </span>
                                         <div>
-                                            <span className="font-medium">Select PCs:</span> Click <Badge variant="outline" className="mx-1">Select</Badge> on each PC you want to assign. The most recent one is <span className="font-semibold">active</span>
+                                            <span className="font-medium">
+                                                Select PCs:
+                                            </span>{' '}
+                                            Click{' '}
+                                            <Badge
+                                                variant="outline"
+                                                className="mx-1"
+                                            >
+                                                Select
+                                            </Badge>{' '}
+                                            on each PC you want to assign. The
+                                            most recent one is{' '}
+                                            <span className="font-semibold">
+                                                active
+                                            </span>
                                         </div>
                                     </div>
                                     <div className="flex items-start gap-2">
-                                        <span className="font-bold text-green-600">4.</span>
+                                        <span className="font-bold text-green-600">
+                                            4.
+                                        </span>
                                         <div>
-                                            <span className="font-medium">Choose Stations:</span> Click <Badge variant="outline" className="mx-1">Select</Badge> on a station to pair it with the active PC. Click any row in <span className="bg-purple-50 border border-purple-300 px-2 py-0.5 rounded">Selected Transfers</span> to make it active and re-pick its station
+                                            <span className="font-medium">
+                                                Choose Stations:
+                                            </span>{' '}
+                                            Click{' '}
+                                            <Badge
+                                                variant="outline"
+                                                className="mx-1"
+                                            >
+                                                Select
+                                            </Badge>{' '}
+                                            on a station to pair it with the
+                                            active PC. Click any row in{' '}
+                                            <span className="rounded border border-purple-300 bg-purple-50 px-2 py-0.5">
+                                                Selected Transfers
+                                            </span>{' '}
+                                            to make it active and re-pick its
+                                            station
                                         </div>
                                     </div>
                                     <div className="flex items-start gap-2">
-                                        <span className="font-bold text-green-600">5.</span>
+                                        <span className="font-bold text-green-600">
+                                            5.
+                                        </span>
                                         <div>
-                                            <span className="font-medium">Review:</span> Check <span className="bg-purple-50 border border-purple-300 px-2 py-0.5 rounded">Selected Transfers</span> card for accuracy
+                                            <span className="font-medium">
+                                                Review:
+                                            </span>{' '}
+                                            Check{' '}
+                                            <span className="rounded border border-purple-300 bg-purple-50 px-2 py-0.5">
+                                                Selected Transfers
+                                            </span>{' '}
+                                            card for accuracy
                                         </div>
                                     </div>
                                     <div className="flex items-start gap-2">
-                                        <span className="font-bold text-green-600">6.</span>
+                                        <span className="font-bold text-green-600">
+                                            6.
+                                        </span>
                                         <div>
-                                            <span className="font-medium">Submit:</span> Click <Badge className="mx-1 bg-blue-600">Transfer X PCs</Badge> to complete all at once
+                                            <span className="font-medium">
+                                                Submit:
+                                            </span>{' '}
+                                            Click{' '}
+                                            <Badge className="mx-1 bg-blue-600">
+                                                Transfer X PCs
+                                            </Badge>{' '}
+                                            to complete all at once
                                         </div>
                                     </div>
                                 </div>
@@ -1354,33 +2167,58 @@ export default function Transfer({ stations, pcSpecs, filters, initialFilters, p
 
                             {/* Color Coding System */}
                             <div className="space-y-3">
-                                <h3 className="font-semibold text-lg flex items-center gap-2">
+                                <h3 className="flex items-center gap-2 text-lg font-semibold">
                                     <ListChecks className="h-5 w-5 text-purple-600" />
                                     Understanding Color Codes
                                 </h3>
                                 <div className="space-y-2 pl-7 text-sm">
                                     <div className="flex items-start gap-3">
-                                        <div className="w-6 h-6 rounded border-2 border-blue-500 bg-blue-100 flex-shrink-0 mt-0.5" />
+                                        <div className="mt-0.5 h-6 w-6 flex-shrink-0 rounded border-2 border-blue-500 bg-blue-100" />
                                         <div>
-                                            <span className="font-medium">Blue Highlight:</span> Station waiting for PC assignment (single mode)
+                                            <span className="font-medium">
+                                                Blue Highlight:
+                                            </span>{' '}
+                                            Station waiting for PC assignment
+                                            (single mode)
                                         </div>
                                     </div>
                                     <div className="flex items-start gap-3">
-                                        <div className="w-6 h-6 rounded border-2 border-purple-500 bg-purple-100 flex-shrink-0 mt-0.5" />
+                                        <div className="mt-0.5 h-6 w-6 flex-shrink-0 rounded border-2 border-purple-500 bg-purple-100" />
                                         <div>
-                                            <span className="font-medium">Random Colors:</span> Each PC-to-station transfer pair gets a unique color
+                                            <span className="font-medium">
+                                                Random Colors:
+                                            </span>{' '}
+                                            Each PC-to-station transfer pair
+                                            gets a unique color
                                         </div>
                                     </div>
                                     <div className="flex items-start gap-3">
-                                        <div className="w-6 h-6 rounded border-2 border-orange-400 bg-orange-50 flex-shrink-0 mt-0.5" />
+                                        <div className="mt-0.5 h-6 w-6 flex-shrink-0 rounded border-2 border-orange-400 bg-orange-50" />
                                         <div>
-                                            <span className="font-medium">Orange Alert:</span> A PC will become "floating" (unassigned) when replaced — switch to <Badge variant="outline" className="mx-1">Swap</Badge> to send it to the source station instead
+                                            <span className="font-medium">
+                                                Orange Alert:
+                                            </span>{' '}
+                                            A PC will become "floating"
+                                            (unassigned) when replaced — switch
+                                            to{' '}
+                                            <Badge
+                                                variant="outline"
+                                                className="mx-1"
+                                            >
+                                                Swap
+                                            </Badge>{' '}
+                                            to send it to the source station
+                                            instead
                                         </div>
                                     </div>
                                     <div className="flex items-start gap-3">
-                                        <div className="w-6 h-6 rounded border-2 border-foreground/60 ring-2 ring-foreground/60 ring-offset-1 flex-shrink-0 mt-0.5" />
+                                        <div className="mt-0.5 h-6 w-6 flex-shrink-0 rounded border-2 border-foreground/60 ring-2 ring-foreground/60 ring-offset-1" />
                                         <div>
-                                            <span className="font-medium">Dark Ring:</span> The active transfer — the next station you select is paired with it
+                                            <span className="font-medium">
+                                                Dark Ring:
+                                            </span>{' '}
+                                            The active transfer — the next
+                                            station you select is paired with it
                                         </div>
                                     </div>
                                 </div>
@@ -1390,36 +2228,94 @@ export default function Transfer({ stations, pcSpecs, filters, initialFilters, p
 
                             {/* Quick Tips */}
                             <div className="space-y-3">
-                                <h3 className="font-semibold text-lg flex items-center gap-2">
+                                <h3 className="flex items-center gap-2 text-lg font-semibold">
                                     <AlertCircle className="h-5 w-5 text-amber-600" />
                                     Quick Tips
                                 </h3>
                                 <div className="space-y-2 pl-7 text-sm">
                                     <div className="flex items-start gap-2">
-                                        <ArrowRight className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                                        <div><span className="font-medium">Deselect:</span> Click <Badge variant="outline" className="mx-1">Deselect</Badge> to remove a PC or station from transfer</div>
+                                        <ArrowRight className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />
+                                        <div>
+                                            <span className="font-medium">
+                                                Deselect:
+                                            </span>{' '}
+                                            Click{' '}
+                                            <Badge
+                                                variant="outline"
+                                                className="mx-1"
+                                            >
+                                                Deselect
+                                            </Badge>{' '}
+                                            to remove a PC or station from
+                                            transfer
+                                        </div>
                                     </div>
                                     <div className="flex items-start gap-2">
-                                        <ArrowRight className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                                        <div><span className="font-medium">Floating PCs:</span> Click <Badge variant="secondary" className="mx-1">Assign elsewhere</Badge> to give a replaced PC its own destination in the same batch</div>
+                                        <ArrowRight className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />
+                                        <div>
+                                            <span className="font-medium">
+                                                Floating PCs:
+                                            </span>{' '}
+                                            Click{' '}
+                                            <Badge
+                                                variant="secondary"
+                                                className="mx-1"
+                                            >
+                                                Assign elsewhere
+                                            </Badge>{' '}
+                                            to give a replaced PC its own
+                                            destination in the same batch
+                                        </div>
                                     </div>
                                     <div className="flex items-start gap-2">
-                                        <ArrowRight className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                                        <div><span className="font-medium">Quick single moves:</span> For one station, use <Badge variant="outline" className="mx-1">Assign</Badge> / <Badge variant="outline" className="mx-1">Transfer</Badge> on the list page — it opens a dialog, no page change</div>
+                                        <ArrowRight className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />
+                                        <div>
+                                            <span className="font-medium">
+                                                Quick single moves:
+                                            </span>{' '}
+                                            For one station, use{' '}
+                                            <Badge
+                                                variant="outline"
+                                                className="mx-1"
+                                            >
+                                                Assign
+                                            </Badge>{' '}
+                                            /{' '}
+                                            <Badge
+                                                variant="outline"
+                                                className="mx-1"
+                                            >
+                                                Transfer
+                                            </Badge>{' '}
+                                            on the list page — it opens a
+                                            dialog, no page change
+                                        </div>
                                     </div>
                                     <div className="flex items-start gap-2">
-                                        <ArrowRight className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                                        <div><span className="font-medium">Notes:</span> Add optional notes before transferring for record-keeping</div>
+                                        <ArrowRight className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />
+                                        <div>
+                                            <span className="font-medium">
+                                                Notes:
+                                            </span>{' '}
+                                            Add optional notes before
+                                            transferring for record-keeping
+                                        </div>
                                     </div>
                                     <div className="flex items-start gap-2">
-                                        <ArrowRight className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                                        <div><span className="font-medium">Search:</span> Use search boxes to quickly find specific PCs or stations</div>
+                                        <ArrowRight className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />
+                                        <div>
+                                            <span className="font-medium">
+                                                Search:
+                                            </span>{' '}
+                                            Use search boxes to quickly find
+                                            specific PCs or stations
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="flex justify-end pt-4 border-t">
+                        <div className="flex justify-end border-t pt-4">
                             <Button onClick={() => setHelpDialogOpen(false)}>
                                 Got it!
                             </Button>

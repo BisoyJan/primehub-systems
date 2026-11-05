@@ -1,12 +1,18 @@
-import React from 'react';
-import { Head, Link, router } from '@inertiajs/react';
-import AppLayout from '@/layouts/app-layout';
-import { useFlashMessage, usePageMeta, usePageLoading } from '@/hooks';
+import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { PageHeader } from '@/components/PageHeader';
+import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import {
     Table,
     TableBody,
@@ -15,20 +21,25 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
-import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
-import { LoadingOverlay } from '@/components/LoadingOverlay';
-import { formatDateTime } from '@/lib/utils';
-import { AlertTriangle, CheckCircle2, PlayCircle, RefreshCw, RotateCcw, Trash2 } from 'lucide-react';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
+import AppLayout from '@/layouts/app-layout';
+import { formatDateTime } from '@/lib/utils';
+import { Head, Link, router } from '@inertiajs/react';
+import {
+    AlertTriangle,
+    CheckCircle2,
+    PlayCircle,
+    RefreshCw,
+    RotateCcw,
+    Trash2,
+} from 'lucide-react';
+import React from 'react';
 
 const INDEX_URL = '/attendance-points/management/anomaly-logs';
 const RUN_URL = '/attendance-points/management/anomaly-logs/run-audit';
@@ -103,26 +114,46 @@ const TRIGGER_LABEL: Record<string, string> = {
 };
 
 const TYPE_TONE: Record<string, string> = {
-    STALE_PENDING_GBRO: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
-    STALE_PENDING_SRO: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
-    ORPHAN_GBRO_DATE: 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-200',
-    EXCUSED_HAS_GBRO_DATE: 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-200',
-    GBRO_ELIGIBILITY_MISMATCH: 'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200',
-    EXPIRES_AT_OVERFLOW: 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-200',
-    GBRO_EXPIRES_AT_DRIFT: 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-200',
+    STALE_PENDING_GBRO:
+        'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
+    STALE_PENDING_SRO:
+        'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
+    ORPHAN_GBRO_DATE:
+        'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-200',
+    EXCUSED_HAS_GBRO_DATE:
+        'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-200',
+    GBRO_ELIGIBILITY_MISMATCH:
+        'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200',
+    EXPIRES_AT_OVERFLOW:
+        'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-200',
+    GBRO_EXPIRES_AT_DRIFT:
+        'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-200',
 };
 
 const TYPE_DESCRIPTION: Record<string, string> = {
-    STALE_PENDING_GBRO: 'GBRO expiry date has already passed but the point was never marked as expired.',
-    STALE_PENDING_SRO: 'SRO expiry date has already passed but the point was never marked as expired.',
-    ORPHAN_GBRO_DATE: 'Point has a GBRO expiry date set but is not eligible for GBRO — the date should not exist.',
-    EXCUSED_HAS_GBRO_DATE: 'Point is excused but still carries a GBRO expiry date. Excused points must never be GBRO-expired.',
-    GBRO_ELIGIBILITY_MISMATCH: "Point's eligible_for_gbro flag does not match what its violation type actually allows.",
-    EXPIRES_AT_OVERFLOW: 'More than 2 active points have GBRO expiry dates. Only the top-2 most-recent eligible points should hold a date.',
-    GBRO_EXPIRES_AT_DRIFT: 'Point should have GBRO-expired (60+ day clean window after it) but gbro_expires_at was bumped forward, hiding the overdue state.',
+    STALE_PENDING_GBRO:
+        'GBRO expiry date has already passed but the point was never marked as expired.',
+    STALE_PENDING_SRO:
+        'SRO expiry date has already passed but the point was never marked as expired.',
+    ORPHAN_GBRO_DATE:
+        'Point has a GBRO expiry date set but is not eligible for GBRO — the date should not exist.',
+    EXCUSED_HAS_GBRO_DATE:
+        'Point is excused but still carries a GBRO expiry date. Excused points must never be GBRO-expired.',
+    GBRO_ELIGIBILITY_MISMATCH:
+        "Point's eligible_for_gbro flag does not match what its violation type actually allows.",
+    EXPIRES_AT_OVERFLOW:
+        'More than 2 active points have GBRO expiry dates. Only the top-2 most-recent eligible points should hold a date.',
+    GBRO_EXPIRES_AT_DRIFT:
+        'Point should have GBRO-expired (60+ day clean window after it) but gbro_expires_at was bumped forward, hiding the overdue state.',
 };
 
-export default function GbroAnomalyLogIndex({ logs, filters, stats, types, triggers }: Props) {
+export default function GbroAnomalyLogIndex({
+    logs,
+    filters,
+    stats,
+    types,
+    triggers,
+}: Props) {
     const { title, breadcrumbs } = usePageMeta({
         title: 'GBRO Anomaly Logs',
         breadcrumbs: [
@@ -141,10 +172,12 @@ export default function GbroAnomalyLogIndex({ logs, filters, stats, types, trigg
     const [batchId, setBatchId] = React.useState(filters.batch_id ?? '');
 
     // Derive active tab from the repaired filter
-    const activeTab = repaired === '0' ? 'pending' : repaired === '1' ? 'repaired' : 'all';
+    const activeTab =
+        repaired === '0' ? 'pending' : repaired === '1' ? 'repaired' : 'all';
 
     const switchTab = (tab: string) => {
-        const repairedVal = tab === 'pending' ? '0' : tab === 'repaired' ? '1' : '';
+        const repairedVal =
+            tab === 'pending' ? '0' : tab === 'repaired' ? '1' : '';
         setRepaired(repairedVal);
         router.get(
             INDEX_URL,
@@ -179,7 +212,11 @@ export default function GbroAnomalyLogIndex({ logs, filters, stats, types, trigg
         setRepaired('');
         setUserId('');
         setBatchId('');
-        router.get(INDEX_URL, {}, { preserveState: false, preserveScroll: true });
+        router.get(
+            INDEX_URL,
+            {},
+            { preserveState: false, preserveScroll: true },
+        );
     };
 
     const runAudit = (dryRun: boolean) => {
@@ -205,11 +242,20 @@ export default function GbroAnomalyLogIndex({ logs, filters, stats, types, trigg
                     description="Detected GBRO/SRO drift across attendance points. Auto-fires on excuse / unexcuse, manual point writes, and the daily 8:23 AM audit."
                     actions={
                         <div className="flex flex-col gap-2 sm:flex-row">
-                            <Button variant="outline" onClick={() => runAudit(true)} disabled={isLoading}>
-                                <PlayCircle className="mr-2 h-4 w-4" /> Dry-run audit
+                            <Button
+                                variant="outline"
+                                onClick={() => runAudit(true)}
+                                disabled={isLoading}
+                            >
+                                <PlayCircle className="mr-2 h-4 w-4" /> Dry-run
+                                audit
                             </Button>
-                            <Button onClick={() => runAudit(false)} disabled={isLoading}>
-                                <RotateCcw className="mr-2 h-4 w-4" /> Run audit & repair
+                            <Button
+                                onClick={() => runAudit(false)}
+                                disabled={isLoading}
+                            >
+                                <RotateCcw className="mr-2 h-4 w-4" /> Run audit
+                                & repair
                             </Button>
                         </div>
                     }
@@ -219,15 +265,21 @@ export default function GbroAnomalyLogIndex({ logs, filters, stats, types, trigg
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                     <Card>
                         <CardHeader className="pb-2">
-                            <CardTitle className="text-sm text-muted-foreground">Total logged</CardTitle>
+                            <CardTitle className="text-sm text-muted-foreground">
+                                Total logged
+                            </CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <p className="text-2xl font-semibold">{stats.total}</p>
+                            <p className="text-2xl font-semibold">
+                                {stats.total}
+                            </p>
                         </CardContent>
                     </Card>
                     <Card>
                         <CardHeader className="pb-2">
-                            <CardTitle className="text-sm text-muted-foreground">Unrepaired</CardTitle>
+                            <CardTitle className="text-sm text-muted-foreground">
+                                Unrepaired
+                            </CardTitle>
                         </CardHeader>
                         <CardContent>
                             <p className="text-2xl font-semibold text-amber-600 dark:text-amber-400">
@@ -237,18 +289,26 @@ export default function GbroAnomalyLogIndex({ logs, filters, stats, types, trigg
                     </Card>
                     <Card>
                         <CardHeader className="pb-2">
-                            <CardTitle className="text-sm text-muted-foreground">Last 24h</CardTitle>
+                            <CardTitle className="text-sm text-muted-foreground">
+                                Last 24h
+                            </CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <p className="text-2xl font-semibold">{stats.last_24h}</p>
+                            <p className="text-2xl font-semibold">
+                                {stats.last_24h}
+                            </p>
                         </CardContent>
                     </Card>
                     <Card>
                         <CardHeader className="pb-2">
-                            <CardTitle className="text-sm text-muted-foreground">Distinct types</CardTitle>
+                            <CardTitle className="text-sm text-muted-foreground">
+                                Distinct types
+                            </CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <p className="text-2xl font-semibold">{Object.keys(stats.by_type).length}</p>
+                            <p className="text-2xl font-semibold">
+                                {Object.keys(stats.by_type).length}
+                            </p>
                         </CardContent>
                     </Card>
                 </div>
@@ -257,11 +317,19 @@ export default function GbroAnomalyLogIndex({ logs, filters, stats, types, trigg
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <Tabs value={activeTab} onValueChange={switchTab}>
                         <TabsList>
-                            <TabsTrigger value="all">All ({stats.total})</TabsTrigger>
-                            <TabsTrigger value="pending" className="text-amber-600 data-[state=active]:text-amber-600">
+                            <TabsTrigger value="all">
+                                All ({stats.total})
+                            </TabsTrigger>
+                            <TabsTrigger
+                                value="pending"
+                                className="text-amber-600 data-[state=active]:text-amber-600"
+                            >
                                 Pending ({stats.unrepaired})
                             </TabsTrigger>
-                            <TabsTrigger value="repaired" className="text-green-600 data-[state=active]:text-green-600">
+                            <TabsTrigger
+                                value="repaired"
+                                className="text-green-600 data-[state=active]:text-green-600"
+                            >
                                 Repaired ({stats.total - stats.unrepaired})
                             </TabsTrigger>
                         </TabsList>
@@ -273,8 +341,15 @@ export default function GbroAnomalyLogIndex({ logs, filters, stats, types, trigg
                             description="This will permanently delete all repaired anomaly log entries. Pending (unrepaired) logs will be kept. This cannot be undone."
                             triggerLabel="Clear repaired"
                             trigger={
-                                <Button variant="outline" size="sm" disabled={stats.total - stats.unrepaired === 0}>
-                                    <Trash2 className="mr-2 h-4 w-4" /> Clear repaired
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={
+                                        stats.total - stats.unrepaired === 0
+                                    }
+                                >
+                                    <Trash2 className="mr-2 h-4 w-4" /> Clear
+                                    repaired
                                 </Button>
                             }
                             onConfirm={() => clearLogs('repaired')}
@@ -284,8 +359,13 @@ export default function GbroAnomalyLogIndex({ logs, filters, stats, types, trigg
                             description="This will permanently delete every anomaly log entry including pending ones. This cannot be undone."
                             triggerLabel="Clear all"
                             trigger={
-                                <Button variant="destructive" size="sm" disabled={stats.total === 0}>
-                                    <Trash2 className="mr-2 h-4 w-4" /> Clear all
+                                <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    disabled={stats.total === 0}
+                                >
+                                    <Trash2 className="mr-2 h-4 w-4" /> Clear
+                                    all
                                 </Button>
                             }
                             onConfirm={() => clearLogs('all')}
@@ -302,12 +382,19 @@ export default function GbroAnomalyLogIndex({ logs, filters, stats, types, trigg
                         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
                             <div>
                                 <Label className="text-xs">Type</Label>
-                                <Select value={type || 'all'} onValueChange={(v) => setType(v === 'all' ? '' : v)}>
+                                <Select
+                                    value={type || 'all'}
+                                    onValueChange={(v) =>
+                                        setType(v === 'all' ? '' : v)
+                                    }
+                                >
                                     <SelectTrigger>
                                         <SelectValue placeholder="All types" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="all">All types</SelectItem>
+                                        <SelectItem value="all">
+                                            All types
+                                        </SelectItem>
                                         {types.map((t) => (
                                             <SelectItem key={t} value={t}>
                                                 {t}
@@ -320,13 +407,17 @@ export default function GbroAnomalyLogIndex({ logs, filters, stats, types, trigg
                                 <Label className="text-xs">Trigger</Label>
                                 <Select
                                     value={trigger || 'all'}
-                                    onValueChange={(v) => setTrigger(v === 'all' ? '' : v)}
+                                    onValueChange={(v) =>
+                                        setTrigger(v === 'all' ? '' : v)
+                                    }
                                 >
                                     <SelectTrigger>
                                         <SelectValue placeholder="All triggers" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="all">All triggers</SelectItem>
+                                        <SelectItem value="all">
+                                            All triggers
+                                        </SelectItem>
                                         {triggers.map((t) => (
                                             <SelectItem key={t} value={t}>
                                                 {t}
@@ -354,10 +445,17 @@ export default function GbroAnomalyLogIndex({ logs, filters, stats, types, trigg
                             </div>
                         </div>
                         <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                            <Button onClick={applyFilters} className="flex-1 sm:flex-none">
+                            <Button
+                                onClick={applyFilters}
+                                className="flex-1 sm:flex-none"
+                            >
                                 <RefreshCw className="mr-2 h-4 w-4" /> Apply
                             </Button>
-                            <Button variant="outline" onClick={resetFilters} className="flex-1 sm:flex-none">
+                            <Button
+                                variant="outline"
+                                onClick={resetFilters}
+                                className="flex-1 sm:flex-none"
+                            >
                                 Reset
                             </Button>
                         </div>
@@ -384,8 +482,12 @@ export default function GbroAnomalyLogIndex({ logs, filters, stats, types, trigg
                             <TableBody>
                                 {logs.data.length === 0 && (
                                     <TableRow>
-                                        <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
-                                            No anomalies recorded for the current filters.
+                                        <TableCell
+                                            colSpan={9}
+                                            className="py-10 text-center text-muted-foreground"
+                                        >
+                                            No anomalies recorded for the
+                                            current filters.
                                         </TableCell>
                                     </TableRow>
                                 )}
@@ -405,15 +507,25 @@ export default function GbroAnomalyLogIndex({ logs, filters, stats, types, trigg
                                                 </TooltipTrigger>
                                                 {TYPE_DESCRIPTION[row.type] && (
                                                     <TooltipContent className="max-w-xs text-xs">
-                                                        {TYPE_DESCRIPTION[row.type]}
+                                                        {
+                                                            TYPE_DESCRIPTION[
+                                                                row.type
+                                                            ]
+                                                        }
                                                     </TooltipContent>
                                                 )}
                                             </Tooltip>
                                         </TableCell>
                                         <TableCell>
                                             <span className="flex flex-col gap-0.5">
-                                                <span className="text-xs font-medium">{TRIGGER_LABEL[row.trigger] ?? row.trigger}</span>
-                                                <span className="font-mono text-[10px] text-muted-foreground">{row.trigger}</span>
+                                                <span className="text-xs font-medium">
+                                                    {TRIGGER_LABEL[
+                                                        row.trigger
+                                                    ] ?? row.trigger}
+                                                </span>
+                                                <span className="font-mono text-[10px] text-muted-foreground">
+                                                    {row.trigger}
+                                                </span>
                                             </span>
                                         </TableCell>
                                         <TableCell>
@@ -437,30 +549,44 @@ export default function GbroAnomalyLogIndex({ logs, filters, stats, types, trigg
                                             {row.expected ? (
                                                 <Tooltip>
                                                     <TooltipTrigger asChild>
-                                                        <span className="block truncate cursor-default">{row.expected}</span>
+                                                        <span className="block cursor-default truncate">
+                                                            {row.expected}
+                                                        </span>
                                                     </TooltipTrigger>
-                                                    <TooltipContent className="max-w-sm break-all font-mono text-xs">{row.expected}</TooltipContent>
+                                                    <TooltipContent className="max-w-sm font-mono text-xs break-all">
+                                                        {row.expected}
+                                                    </TooltipContent>
                                                 </Tooltip>
-                                            ) : '—'}
+                                            ) : (
+                                                '—'
+                                            )}
                                         </TableCell>
                                         <TableCell className="w-36 max-w-36 text-xs text-muted-foreground">
                                             {row.actual ? (
                                                 <Tooltip>
                                                     <TooltipTrigger asChild>
-                                                        <span className="block truncate cursor-default">{row.actual}</span>
+                                                        <span className="block cursor-default truncate">
+                                                            {row.actual}
+                                                        </span>
                                                     </TooltipTrigger>
-                                                    <TooltipContent className="max-w-sm break-all font-mono text-xs">{row.actual}</TooltipContent>
+                                                    <TooltipContent className="max-w-sm font-mono text-xs break-all">
+                                                        {row.actual}
+                                                    </TooltipContent>
                                                 </Tooltip>
-                                            ) : '—'}
+                                            ) : (
+                                                '—'
+                                            )}
                                         </TableCell>
                                         <TableCell>
                                             {row.repaired ? (
                                                 <span className="inline-flex items-center gap-1 text-green-700 dark:text-green-400">
-                                                    <CheckCircle2 className="h-4 w-4" /> Repaired
+                                                    <CheckCircle2 className="h-4 w-4" />{' '}
+                                                    Repaired
                                                 </span>
                                             ) : (
                                                 <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400">
-                                                    <AlertTriangle className="h-4 w-4" /> Pending
+                                                    <AlertTriangle className="h-4 w-4" />{' '}
+                                                    Pending
                                                 </span>
                                             )}
                                         </TableCell>
@@ -506,25 +632,39 @@ export default function GbroAnomalyLogIndex({ logs, filters, stats, types, trigg
                                     )}
                                 </div>
                                 <p className="text-xs text-muted-foreground">
-                                    {formatDateTime(row.created_at)} • <span className="font-mono">{row.trigger}</span>
+                                    {formatDateTime(row.created_at)} •{' '}
+                                    <span className="font-mono">
+                                        {row.trigger}
+                                    </span>
                                 </p>
                                 {row.user && (
                                     <p className="text-sm">
-                                        <span className="text-muted-foreground">Employee:</span>{' '}
-                                        {row.user.first_name} {row.user.last_name}
+                                        <span className="text-muted-foreground">
+                                            Employee:
+                                        </span>{' '}
+                                        {row.user.first_name}{' '}
+                                        {row.user.last_name}
                                     </p>
                                 )}
                                 {row.expected && (
                                     <p className="text-xs">
-                                        <span className="text-muted-foreground">Expected:</span> {row.expected}
+                                        <span className="text-muted-foreground">
+                                            Expected:
+                                        </span>{' '}
+                                        {row.expected}
                                     </p>
                                 )}
                                 {row.actual && (
                                     <p className="text-xs">
-                                        <span className="text-muted-foreground">Actual:</span> {row.actual}
+                                        <span className="text-muted-foreground">
+                                            Actual:
+                                        </span>{' '}
+                                        {row.actual}
                                     </p>
                                 )}
-                                <p className="font-mono text-[10px] text-muted-foreground">{row.batch_id}</p>
+                                <p className="font-mono text-[10px] text-muted-foreground">
+                                    {row.batch_id}
+                                </p>
                             </CardContent>
                         </Card>
                     ))}

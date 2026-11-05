@@ -1,32 +1,39 @@
-import { Head, usePage, useForm, router } from '@inertiajs/react';
-import AppLayout from '@/layouts/app-layout';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogDescription,
-} from '@/components/ui/dialog';
-import { usePageMeta, useFlashMessage, usePageLoading } from '@/hooks';
+import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { PageHeader } from '@/components/PageHeader';
 import { Can } from '@/components/authorization';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import {
-    store as storeRoute,
-    update as updateRoute,
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table';
+import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
+import AppLayout from '@/layouts/app-layout';
+import {
     destroy as destroyRoute,
+    store as storeRoute,
     toggle as toggleRoute,
+    update as updateRoute,
 } from '@/routes/break-timer/policies';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
-import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
-import { useState, FormEvent } from 'react';
+import { Head, router, useForm, usePage } from '@inertiajs/react';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { FormEvent, useState } from 'react';
 
 interface BreakPolicyData {
     id: number;
@@ -87,7 +94,9 @@ export default function BreakTimerPolicies() {
     const isLoading = usePageLoading();
 
     const [isDialogOpen, setIsDialogOpen] = useState(false);
-    const [editingPolicy, setEditingPolicy] = useState<BreakPolicyData | null>(null);
+    const [editingPolicy, setEditingPolicy] = useState<BreakPolicyData | null>(
+        null,
+    );
 
     const form = useForm<PolicyForm>(defaultForm);
 
@@ -107,7 +116,8 @@ export default function BreakTimerPolicies() {
             max_lunch: policy.max_lunch,
             lunch_duration_minutes: policy.lunch_duration_minutes,
             grace_period_seconds: policy.grace_period_seconds,
-            allowed_pause_reasons: policy.allowed_pause_reasons?.join(', ') ?? '',
+            allowed_pause_reasons:
+                policy.allowed_pause_reasons?.join(', ') ?? '',
             is_active: policy.is_active,
             retention_months: policy.retention_months ?? '',
             shift_reset_time: policy.shift_reset_time ?? '06:00',
@@ -121,9 +131,15 @@ export default function BreakTimerPolicies() {
 
         const payload = {
             ...form.data,
-            retention_months: form.data.retention_months === '' ? null : Number(form.data.retention_months),
+            retention_months:
+                form.data.retention_months === ''
+                    ? null
+                    : Number(form.data.retention_months),
             allowed_pause_reasons: form.data.allowed_pause_reasons
-                ? form.data.allowed_pause_reasons.split(',').map((s) => s.trim()).filter(Boolean)
+                ? form.data.allowed_pause_reasons
+                      .split(',')
+                      .map((s) => s.trim())
+                      .filter(Boolean)
                 : [],
         };
 
@@ -156,7 +172,9 @@ export default function BreakTimerPolicies() {
             <LoadingOverlay isLoading={isLoading} />
 
             <div className="space-y-6 p-4 md:p-6">
-                <PageHeader title={title} description="Manage break time policies"
+                <PageHeader
+                    title={title}
+                    description="Manage break time policies"
                     actions={
                         <Can permission="break_timer.manage_policy">
                             <Button size="sm" onClick={openCreate}>
@@ -183,30 +201,71 @@ export default function BreakTimerPolicies() {
                                         <TableHead>Retention</TableHead>
                                         <TableHead>Shift Reset</TableHead>
                                         <TableHead>Status</TableHead>
-                                        <TableHead className="text-right">Actions</TableHead>
+                                        <TableHead className="text-right">
+                                            Actions
+                                        </TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {policies.length === 0 ? (
                                         <TableRow>
-                                            <TableCell colSpan={10} className="text-muted-foreground py-8 text-center">
+                                            <TableCell
+                                                colSpan={10}
+                                                className="py-8 text-center text-muted-foreground"
+                                            >
                                                 No policies configured.
                                             </TableCell>
                                         </TableRow>
                                     ) : (
                                         policies.map((policy) => (
                                             <TableRow key={policy.id}>
-                                                <TableCell className="font-medium">{policy.name}</TableCell>
-                                                <TableCell>{policy.max_breaks}</TableCell>
-                                                <TableCell>{policy.break_duration_minutes} min</TableCell>
-                                                <TableCell>{policy.max_lunch}</TableCell>
-                                                <TableCell>{policy.lunch_duration_minutes} min</TableCell>
-                                                <TableCell>{policy.grace_period_seconds}s</TableCell>
-                                                <TableCell>{policy.retention_months ? `${policy.retention_months} mo` : 'Never'}</TableCell>
-                                                <TableCell>{policy.shift_reset_time ?? '06:00'}</TableCell>
+                                                <TableCell className="font-medium">
+                                                    {policy.name}
+                                                </TableCell>
                                                 <TableCell>
-                                                    <Badge variant={policy.is_active ? 'default' : 'secondary'}>
-                                                        {policy.is_active ? 'Active' : 'Inactive'}
+                                                    {policy.max_breaks}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {
+                                                        policy.break_duration_minutes
+                                                    }{' '}
+                                                    min
+                                                </TableCell>
+                                                <TableCell>
+                                                    {policy.max_lunch}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {
+                                                        policy.lunch_duration_minutes
+                                                    }{' '}
+                                                    min
+                                                </TableCell>
+                                                <TableCell>
+                                                    {
+                                                        policy.grace_period_seconds
+                                                    }
+                                                    s
+                                                </TableCell>
+                                                <TableCell>
+                                                    {policy.retention_months
+                                                        ? `${policy.retention_months} mo`
+                                                        : 'Never'}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {policy.shift_reset_time ??
+                                                        '06:00'}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Badge
+                                                        variant={
+                                                            policy.is_active
+                                                                ? 'default'
+                                                                : 'secondary'
+                                                        }
+                                                    >
+                                                        {policy.is_active
+                                                            ? 'Active'
+                                                            : 'Inactive'}
                                                     </Badge>
                                                 </TableCell>
                                                 <TableCell>
@@ -214,19 +273,35 @@ export default function BreakTimerPolicies() {
                                                         <div className="flex justify-end gap-2">
                                                             <div
                                                                 className="inline-flex cursor-pointer items-center"
-                                                                onClick={() => handleToggle(policy)}
+                                                                onClick={() =>
+                                                                    handleToggle(
+                                                                        policy,
+                                                                    )
+                                                                }
                                                             >
-                                                                <Switch checked={policy.is_active} />
+                                                                <Switch
+                                                                    checked={
+                                                                        policy.is_active
+                                                                    }
+                                                                />
                                                             </div>
                                                             <Button
                                                                 size="sm"
                                                                 variant="ghost"
-                                                                onClick={() => openEdit(policy)}
+                                                                onClick={() =>
+                                                                    openEdit(
+                                                                        policy,
+                                                                    )
+                                                                }
                                                             >
                                                                 <Pencil className="h-4 w-4" />
                                                             </Button>
                                                             <DeleteConfirmDialog
-                                                                onConfirm={() => handleDelete(policy)}
+                                                                onConfirm={() =>
+                                                                    handleDelete(
+                                                                        policy,
+                                                                    )
+                                                                }
                                                                 title="Delete Policy"
                                                                 description={`Are you sure you want to delete "${policy.name}"? This cannot be undone.`}
                                                                 trigger={
@@ -252,48 +327,93 @@ export default function BreakTimerPolicies() {
                 </div>
 
                 {/* Mobile Card View */}
-                <div className="md:hidden space-y-4">
+                <div className="space-y-4 md:hidden">
                     {policies.length === 0 ? (
                         <Card>
-                            <CardContent className="text-muted-foreground py-8 text-center">
+                            <CardContent className="py-8 text-center text-muted-foreground">
                                 No policies configured.
                             </CardContent>
                         </Card>
                     ) : (
                         policies.map((policy) => (
-                            <div key={policy.id} className="bg-card border rounded-lg p-4 shadow-sm space-y-3">
+                            <div
+                                key={policy.id}
+                                className="space-y-3 rounded-lg border bg-card p-4 shadow-sm"
+                            >
                                 <div className="flex items-center justify-between">
-                                    <span className="font-medium">{policy.name}</span>
-                                    <Badge variant={policy.is_active ? 'default' : 'secondary'}>
-                                        {policy.is_active ? 'Active' : 'Inactive'}
+                                    <span className="font-medium">
+                                        {policy.name}
+                                    </span>
+                                    <Badge
+                                        variant={
+                                            policy.is_active
+                                                ? 'default'
+                                                : 'secondary'
+                                        }
+                                    >
+                                        {policy.is_active
+                                            ? 'Active'
+                                            : 'Inactive'}
                                     </Badge>
                                 </div>
-                                <div className="text-muted-foreground grid grid-cols-2 gap-1 text-sm">
-                                    <span>Breaks: {policy.max_breaks} x {policy.break_duration_minutes}min</span>
-                                    <span>Lunch: {policy.max_lunch} x {policy.lunch_duration_minutes}min</span>
-                                    <span>Grace: {policy.grace_period_seconds}s</span>
-                                    <span>Retention: {policy.retention_months ? `${policy.retention_months} mo` : 'Never'}</span>
-                                    <span>Reset: {policy.shift_reset_time ?? '06:00'}</span>
+                                <div className="grid grid-cols-2 gap-1 text-sm text-muted-foreground">
+                                    <span>
+                                        Breaks: {policy.max_breaks} x{' '}
+                                        {policy.break_duration_minutes}min
+                                    </span>
+                                    <span>
+                                        Lunch: {policy.max_lunch} x{' '}
+                                        {policy.lunch_duration_minutes}min
+                                    </span>
+                                    <span>
+                                        Grace: {policy.grace_period_seconds}s
+                                    </span>
+                                    <span>
+                                        Retention:{' '}
+                                        {policy.retention_months
+                                            ? `${policy.retention_months} mo`
+                                            : 'Never'}
+                                    </span>
+                                    <span>
+                                        Reset:{' '}
+                                        {policy.shift_reset_time ?? '06:00'}
+                                    </span>
                                 </div>
                                 <Can permission="break_timer.manage_policy">
                                     <div className="flex gap-2">
-                                        <Button size="sm" variant="outline" onClick={() => handleToggle(policy)} className="flex-1">
-                                            {policy.is_active ? 'Deactivate' : 'Activate'}
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => handleToggle(policy)}
+                                            className="flex-1"
+                                        >
+                                            {policy.is_active
+                                                ? 'Deactivate'
+                                                : 'Activate'}
                                         </Button>
-                                        <Button size="sm" variant="outline" onClick={() => openEdit(policy)} className="flex-1">
-                                            <Pencil className="mr-1 h-3 w-3" /> Edit
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => openEdit(policy)}
+                                            className="flex-1"
+                                        >
+                                            <Pencil className="mr-1 h-3 w-3" />{' '}
+                                            Edit
                                         </Button>
                                         <DeleteConfirmDialog
-                                            onConfirm={() => handleDelete(policy)}
+                                            onConfirm={() =>
+                                                handleDelete(policy)
+                                            }
                                             title="Delete Policy"
                                             description={`Are you sure you want to delete "${policy.name}"? This cannot be undone.`}
                                             trigger={
                                                 <Button
                                                     size="sm"
                                                     variant="outline"
-                                                    className="text-red-500 flex-1"
+                                                    className="flex-1 text-red-500"
                                                 >
-                                                    <Trash2 className="mr-1 h-3 w-3" /> Delete
+                                                    <Trash2 className="mr-1 h-3 w-3" />{' '}
+                                                    Delete
                                                 </Button>
                                             }
                                         />
@@ -309,9 +429,13 @@ export default function BreakTimerPolicies() {
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogContent className="max-h-[90vh] max-w-[90vw] overflow-y-auto sm:max-w-lg">
                     <DialogHeader>
-                        <DialogTitle>{editingPolicy ? 'Edit Policy' : 'Create Policy'}</DialogTitle>
+                        <DialogTitle>
+                            {editingPolicy ? 'Edit Policy' : 'Create Policy'}
+                        </DialogTitle>
                         <DialogDescription>
-                            {editingPolicy ? 'Update the break policy settings.' : 'Configure a new break policy.'}
+                            {editingPolicy
+                                ? 'Update the break policy settings.'
+                                : 'Configure a new break policy.'}
                         </DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleSubmit} className="space-y-4">
@@ -319,10 +443,16 @@ export default function BreakTimerPolicies() {
                             <Label>Name</Label>
                             <Input
                                 value={form.data.name}
-                                onChange={(e) => form.setData('name', e.target.value)}
+                                onChange={(e) =>
+                                    form.setData('name', e.target.value)
+                                }
                                 placeholder="e.g. Standard Policy"
                             />
-                            {form.errors.name && <p className="text-sm text-red-500">{form.errors.name}</p>}
+                            {form.errors.name && (
+                                <p className="text-sm text-red-500">
+                                    {form.errors.name}
+                                </p>
+                            )}
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
@@ -333,10 +463,21 @@ export default function BreakTimerPolicies() {
                                     min={0}
                                     max={10}
                                     value={form.data.max_breaks}
-                                    onChange={(e) => form.setData('max_breaks', parseInt(e.target.value) || 0)}
+                                    onChange={(e) =>
+                                        form.setData(
+                                            'max_breaks',
+                                            parseInt(e.target.value) || 0,
+                                        )
+                                    }
                                 />
-                                <p className="text-muted-foreground text-[11px]">0–10 breaks per day</p>
-                                {form.errors.max_breaks && <p className="text-sm text-red-500">{form.errors.max_breaks}</p>}
+                                <p className="text-[11px] text-muted-foreground">
+                                    0–10 breaks per day
+                                </p>
+                                {form.errors.max_breaks && (
+                                    <p className="text-sm text-red-500">
+                                        {form.errors.max_breaks}
+                                    </p>
+                                )}
                             </div>
                             <div className="space-y-2">
                                 <Label>Break Duration (min)</Label>
@@ -345,10 +486,21 @@ export default function BreakTimerPolicies() {
                                     min={1}
                                     max={120}
                                     value={form.data.break_duration_minutes}
-                                    onChange={(e) => form.setData('break_duration_minutes', parseInt(e.target.value) || 15)}
+                                    onChange={(e) =>
+                                        form.setData(
+                                            'break_duration_minutes',
+                                            parseInt(e.target.value) || 15,
+                                        )
+                                    }
                                 />
-                                <p className="text-muted-foreground text-[11px]">1–120 minutes</p>
-                                {form.errors.break_duration_minutes && <p className="text-sm text-red-500">{form.errors.break_duration_minutes}</p>}
+                                <p className="text-[11px] text-muted-foreground">
+                                    1–120 minutes
+                                </p>
+                                {form.errors.break_duration_minutes && (
+                                    <p className="text-sm text-red-500">
+                                        {form.errors.break_duration_minutes}
+                                    </p>
+                                )}
                             </div>
                         </div>
 
@@ -360,10 +512,21 @@ export default function BreakTimerPolicies() {
                                     min={0}
                                     max={5}
                                     value={form.data.max_lunch}
-                                    onChange={(e) => form.setData('max_lunch', parseInt(e.target.value) || 0)}
+                                    onChange={(e) =>
+                                        form.setData(
+                                            'max_lunch',
+                                            parseInt(e.target.value) || 0,
+                                        )
+                                    }
                                 />
-                                <p className="text-muted-foreground text-[11px]">0–3 per day</p>
-                                {form.errors.max_lunch && <p className="text-sm text-red-500">{form.errors.max_lunch}</p>}
+                                <p className="text-[11px] text-muted-foreground">
+                                    0–3 per day
+                                </p>
+                                {form.errors.max_lunch && (
+                                    <p className="text-sm text-red-500">
+                                        {form.errors.max_lunch}
+                                    </p>
+                                )}
                             </div>
                             <div className="space-y-2">
                                 <Label>Lunch Duration (min)</Label>
@@ -372,10 +535,21 @@ export default function BreakTimerPolicies() {
                                     min={1}
                                     max={240}
                                     value={form.data.lunch_duration_minutes}
-                                    onChange={(e) => form.setData('lunch_duration_minutes', parseInt(e.target.value) || 60)}
+                                    onChange={(e) =>
+                                        form.setData(
+                                            'lunch_duration_minutes',
+                                            parseInt(e.target.value) || 60,
+                                        )
+                                    }
                                 />
-                                <p className="text-muted-foreground text-[11px]">1–180 minutes</p>
-                                {form.errors.lunch_duration_minutes && <p className="text-sm text-red-500">{form.errors.lunch_duration_minutes}</p>}
+                                <p className="text-[11px] text-muted-foreground">
+                                    1–180 minutes
+                                </p>
+                                {form.errors.lunch_duration_minutes && (
+                                    <p className="text-sm text-red-500">
+                                        {form.errors.lunch_duration_minutes}
+                                    </p>
+                                )}
                             </div>
                         </div>
 
@@ -386,10 +560,22 @@ export default function BreakTimerPolicies() {
                                 min={0}
                                 max={1800}
                                 value={form.data.grace_period_seconds}
-                                onChange={(e) => form.setData('grace_period_seconds', parseInt(e.target.value) || 0)}
+                                onChange={(e) =>
+                                    form.setData(
+                                        'grace_period_seconds',
+                                        parseInt(e.target.value) || 0,
+                                    )
+                                }
                             />
-                            <p className="text-muted-foreground text-[11px]">0–1800 seconds before overage (e.g. 30 = 30s, 60 = 1min)</p>
-                            {form.errors.grace_period_seconds && <p className="text-sm text-red-500">{form.errors.grace_period_seconds}</p>}
+                            <p className="text-[11px] text-muted-foreground">
+                                0–1800 seconds before overage (e.g. 30 = 30s, 60
+                                = 1min)
+                            </p>
+                            {form.errors.grace_period_seconds && (
+                                <p className="text-sm text-red-500">
+                                    {form.errors.grace_period_seconds}
+                                </p>
+                            )}
                         </div>
 
                         <div className="space-y-2">
@@ -397,10 +583,22 @@ export default function BreakTimerPolicies() {
                             <Input
                                 type="time"
                                 value={form.data.shift_reset_time}
-                                onChange={(e) => form.setData('shift_reset_time', e.target.value)}
+                                onChange={(e) =>
+                                    form.setData(
+                                        'shift_reset_time',
+                                        e.target.value,
+                                    )
+                                }
                             />
-                            <p className="text-muted-foreground text-[11px]">Time when orphaned sessions from the previous day auto-end (24h format)</p>
-                            {form.errors.shift_reset_time && <p className="text-sm text-red-500">{form.errors.shift_reset_time}</p>}
+                            <p className="text-[11px] text-muted-foreground">
+                                Time when orphaned sessions from the previous
+                                day auto-end (24h format)
+                            </p>
+                            {form.errors.shift_reset_time && (
+                                <p className="text-sm text-red-500">
+                                    {form.errors.shift_reset_time}
+                                </p>
+                            )}
                         </div>
 
                         <div className="space-y-2">
@@ -410,34 +608,67 @@ export default function BreakTimerPolicies() {
                                 min={1}
                                 max={120}
                                 value={form.data.retention_months}
-                                onChange={(e) => form.setData('retention_months', e.target.value === '' ? '' : parseInt(e.target.value) || '')}
+                                onChange={(e) =>
+                                    form.setData(
+                                        'retention_months',
+                                        e.target.value === ''
+                                            ? ''
+                                            : parseInt(e.target.value) || '',
+                                    )
+                                }
                                 placeholder="Leave empty to keep forever"
                             />
-                            <p className="text-muted-foreground text-[11px]">Sessions older than this will be automatically purged. Leave empty to disable.</p>
-                            {form.errors.retention_months && <p className="text-sm text-red-500">{form.errors.retention_months}</p>}
+                            <p className="text-[11px] text-muted-foreground">
+                                Sessions older than this will be automatically
+                                purged. Leave empty to disable.
+                            </p>
+                            {form.errors.retention_months && (
+                                <p className="text-sm text-red-500">
+                                    {form.errors.retention_months}
+                                </p>
+                            )}
                         </div>
 
                         <div className="space-y-2">
-                            <Label>Allowed Pause Reasons (comma-separated)</Label>
+                            <Label>
+                                Allowed Pause Reasons (comma-separated)
+                            </Label>
                             <Input
                                 value={form.data.allowed_pause_reasons}
-                                onChange={(e) => form.setData('allowed_pause_reasons', e.target.value)}
+                                onChange={(e) =>
+                                    form.setData(
+                                        'allowed_pause_reasons',
+                                        e.target.value,
+                                    )
+                                }
                                 placeholder="e.g. Bathroom, Coaching, IT Issue"
                             />
-                            <p className="text-muted-foreground text-[11px]">Leave empty to allow free-text reasons</p>
-                            {form.errors.allowed_pause_reasons && <p className="text-sm text-red-500">{form.errors.allowed_pause_reasons}</p>}
+                            <p className="text-[11px] text-muted-foreground">
+                                Leave empty to allow free-text reasons
+                            </p>
+                            {form.errors.allowed_pause_reasons && (
+                                <p className="text-sm text-red-500">
+                                    {form.errors.allowed_pause_reasons}
+                                </p>
+                            )}
                         </div>
 
                         <div className="flex items-center gap-2">
                             <Switch
                                 checked={form.data.is_active}
-                                onCheckedChange={(checked) => form.setData('is_active', checked)}
+                                onCheckedChange={(checked) =>
+                                    form.setData('is_active', checked)
+                                }
                             />
                             <Label>Active</Label>
                         </div>
 
                         <div className="flex justify-end gap-2">
-                            <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setIsDialogOpen(false)}
+                            >
                                 Cancel
                             </Button>
                             <Button type="submit" disabled={form.processing}>
@@ -447,7 +678,6 @@ export default function BreakTimerPolicies() {
                     </form>
                 </DialogContent>
             </Dialog>
-
         </AppLayout>
     );
 }

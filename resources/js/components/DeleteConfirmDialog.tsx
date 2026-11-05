@@ -1,4 +1,3 @@
-import React from 'react';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -12,6 +11,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Trash } from 'lucide-react';
+import React from 'react';
 
 interface DeleteConfirmDialogProps {
     onConfirm: () => void;
@@ -44,12 +44,12 @@ interface DeleteConfirmDialogProps {
  */
 export function DeleteConfirmDialog({
     onConfirm,
-    title = "Are you absolutely sure?",
-    description = "This action cannot be undone. This will permanently delete this item from the database.",
-    triggerLabel = "Delete",
-    triggerClassName = "",
+    title = 'Are you absolutely sure?',
+    description = 'This action cannot be undone. This will permanently delete this item from the database.',
+    triggerLabel = 'Delete',
+    triggerClassName = '',
     disabled = false,
-    trigger
+    trigger,
 }: DeleteConfirmDialogProps) {
     return (
         <AlertDialog>
@@ -63,7 +63,7 @@ export function DeleteConfirmDialog({
                         className={triggerClassName}
                         disabled={disabled}
                     >
-                        <Trash className="w-4 h-4 mr-1" />
+                        <Trash className="mr-1 h-4 w-4" />
                         {triggerLabel}
                     </Button>
                 )}
@@ -71,7 +71,9 @@ export function DeleteConfirmDialog({
             <AlertDialogContent>
                 <AlertDialogHeader>
                     <AlertDialogTitle>{title}</AlertDialogTitle>
-                    <AlertDialogDescription>{description}</AlertDialogDescription>
+                    <AlertDialogDescription>
+                        {description}
+                    </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>

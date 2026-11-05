@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 // ─── Types ───────────────────────────────────────────────────
 
@@ -86,7 +86,8 @@ export const THEMES: TimerTheme[] = [
         icon: '☕',
         quote: 'Take a moment, savor the pause',
         alwaysDark: false,
-        bgLight: 'linear-gradient(160deg, #f5ebe0 0%, #e8d5c4 30%, #f2e2d0 60%, #faf6f1 100%)',
+        bgLight:
+            'linear-gradient(160deg, #f5ebe0 0%, #e8d5c4 30%, #f2e2d0 60%, #faf6f1 100%)',
         bgDark: 'linear-gradient(160deg, #2c1a0e 0%, #3d2417 35%, #2a1810 65%, #1a0e07 100%)',
         glassLight: 'rgba(255,255,255,0.35)',
         glassDark: 'rgba(60,35,18,0.45)',
@@ -117,7 +118,8 @@ export const THEMES: TimerTheme[] = [
         icon: '🌧️',
         quote: 'Let the rhythm of rain calm your mind',
         alwaysDark: false,
-        bgLight: 'linear-gradient(180deg, #cfd8dc 0%, #b0bec5 30%, #c5ced8 60%, #e0e4e8 100%)',
+        bgLight:
+            'linear-gradient(180deg, #cfd8dc 0%, #b0bec5 30%, #c5ced8 60%, #e0e4e8 100%)',
         bgDark: 'linear-gradient(180deg, #1a2332 0%, #243447 35%, #1e2d3d 65%, #111827 100%)',
         glassLight: 'rgba(255,255,255,0.30)',
         glassDark: 'rgba(30,45,61,0.50)',
@@ -148,7 +150,8 @@ export const THEMES: TimerTheme[] = [
         icon: '🌸',
         quote: 'Like petals, let your worries drift away',
         alwaysDark: false,
-        bgLight: 'linear-gradient(135deg, #fce4ec 0%, #f8bbd0 25%, #fce4ec 50%, #fff0f3 75%, #fce4ec 100%)',
+        bgLight:
+            'linear-gradient(135deg, #fce4ec 0%, #f8bbd0 25%, #fce4ec 50%, #fff0f3 75%, #fce4ec 100%)',
         bgDark: 'linear-gradient(135deg, #3d1f2e 0%, #4a2438 30%, #352030 60%, #2a1520 100%)',
         glassLight: 'rgba(255,240,243,0.40)',
         glassDark: 'rgba(60,30,45,0.45)',
@@ -179,7 +182,8 @@ export const THEMES: TimerTheme[] = [
         icon: '🌊',
         quote: 'Breathe with the waves',
         alwaysDark: false,
-        bgLight: 'linear-gradient(180deg, #e0f7fa 0%, #b2ebf2 25%, #c5f0f5 50%, #e0f7fa 75%, #f0fbfc 100%)',
+        bgLight:
+            'linear-gradient(180deg, #e0f7fa 0%, #b2ebf2 25%, #c5f0f5 50%, #e0f7fa 75%, #f0fbfc 100%)',
         bgDark: 'linear-gradient(180deg, #0a2e3d 0%, #0d3d4f 30%, #0a3545 60%, #051d28 100%)',
         glassLight: 'rgba(255,255,255,0.30)',
         glassDark: 'rgba(10,50,65,0.45)',
@@ -210,7 +214,8 @@ export const THEMES: TimerTheme[] = [
         icon: '🌃',
         quote: 'The city never sleeps, but you should rest',
         alwaysDark: true,
-        bgLight: 'linear-gradient(160deg, #1a1a2e 0%, #16213e 30%, #1a1a2e 60%, #0f0f1e 100%)',
+        bgLight:
+            'linear-gradient(160deg, #1a1a2e 0%, #16213e 30%, #1a1a2e 60%, #0f0f1e 100%)',
         bgDark: 'linear-gradient(160deg, #0a0a1a 0%, #12122d 30%, #0d0d20 60%, #050510 100%)',
         glassLight: 'rgba(25,25,50,0.50)',
         glassDark: 'rgba(15,15,35,0.55)',
@@ -241,7 +246,8 @@ export const THEMES: TimerTheme[] = [
         icon: '🌅',
         quote: 'Chase the golden moments',
         alwaysDark: false,
-        bgLight: 'linear-gradient(180deg, #fff8e1 0%, #ffe0b2 25%, #ffccbc 50%, #fce4ec 75%, #fff8e1 100%)',
+        bgLight:
+            'linear-gradient(180deg, #fff8e1 0%, #ffe0b2 25%, #ffccbc 50%, #fce4ec 75%, #fff8e1 100%)',
         bgDark: 'linear-gradient(180deg, #3e2723 0%, #4e342e 25%, #bf360c20 50%, #3e2723 75%, #2c1810 100%)',
         glassLight: 'rgba(255,248,225,0.35)',
         glassDark: 'rgba(62,39,35,0.45)',
@@ -272,7 +278,8 @@ export const THEMES: TimerTheme[] = [
         icon: '🌲',
         quote: 'Find your peace among the trees',
         alwaysDark: false,
-        bgLight: 'linear-gradient(180deg, #e8f5e9 0%, #c8e6c9 25%, #dcedc8 50%, #f1f8e9 75%, #e8f5e9 100%)',
+        bgLight:
+            'linear-gradient(180deg, #e8f5e9 0%, #c8e6c9 25%, #dcedc8 50%, #f1f8e9 75%, #e8f5e9 100%)',
         bgDark: 'linear-gradient(180deg, #1b3a28 0%, #0d2818 30%, #152e1f 60%, #0a1f12 100%)',
         glassLight: 'rgba(255,255,255,0.30)',
         glassDark: 'rgba(20,45,30,0.45)',
@@ -303,7 +310,8 @@ export const THEMES: TimerTheme[] = [
         icon: '❄️',
         quote: 'Let stillness wash over you',
         alwaysDark: false,
-        bgLight: 'linear-gradient(180deg, #f8f9ff 0%, #e8eaf6 30%, #f0f1fa 60%, #ffffff 100%)',
+        bgLight:
+            'linear-gradient(180deg, #f8f9ff 0%, #e8eaf6 30%, #f0f1fa 60%, #ffffff 100%)',
         bgDark: 'linear-gradient(180deg, #263238 0%, #37474f 30%, #2c3e4a 60%, #1a252b 100%)',
         glassLight: 'rgba(255,255,255,0.45)',
         glassDark: 'rgba(38,50,56,0.50)',
@@ -334,7 +342,8 @@ export const THEMES: TimerTheme[] = [
         icon: '🌙',
         quote: 'Rest under the gentle moonlight',
         alwaysDark: false,
-        bgLight: 'linear-gradient(160deg, #ede7f6 0%, #d1c4e9 30%, #e8dff5 60%, #f5f0ff 100%)',
+        bgLight:
+            'linear-gradient(160deg, #ede7f6 0%, #d1c4e9 30%, #e8dff5 60%, #f5f0ff 100%)',
         bgDark: 'linear-gradient(160deg, #1a1040 0%, #2d1b69 30%, #1f1050 60%, #0d0826 100%)',
         glassLight: 'rgba(255,255,255,0.30)',
         glassDark: 'rgba(30,20,65,0.50)',
@@ -365,7 +374,8 @@ export const THEMES: TimerTheme[] = [
         icon: '✨',
         quote: 'Watch the magic unfold',
         alwaysDark: false,
-        bgLight: 'linear-gradient(135deg, #e8f5e9 0%, #e0f7fa 25%, #ede7f6 50%, #fce4ec 75%, #e8f5e9 100%)',
+        bgLight:
+            'linear-gradient(135deg, #e8f5e9 0%, #e0f7fa 25%, #ede7f6 50%, #fce4ec 75%, #e8f5e9 100%)',
         bgDark: 'linear-gradient(135deg, #0d1f2d 0%, #0a2e3d 25%, #1a1040 50%, #2d1b35 75%, #0d1f2d 100%)',
         glassLight: 'rgba(255,255,255,0.25)',
         glassDark: 'rgba(15,30,45,0.45)',
@@ -395,7 +405,8 @@ export const THEMES: TimerTheme[] = [
         icon: '🌃',
         quote: 'Wake up, samurai. Time to work.',
         alwaysDark: true,
-        bgLight: 'radial-gradient(circle at 10% 20%, rgb(30, 0, 45) 0%, rgb(9, 9, 14) 90%)',
+        bgLight:
+            'radial-gradient(circle at 10% 20%, rgb(30, 0, 45) 0%, rgb(9, 9, 14) 90%)',
         bgDark: 'radial-gradient(circle at 10% 20%, rgb(30, 0, 45) 0%, rgb(9, 9, 14) 90%)',
         glassLight: 'rgba(255, 0, 100, 0.1)',
         glassDark: 'rgba(255, 0, 100, 0.1)',
@@ -425,7 +436,8 @@ export const THEMES: TimerTheme[] = [
         icon: '🌇',
         quote: '80s Retro Drive',
         alwaysDark: true,
-        bgLight: 'linear-gradient(180deg, #1f013d 0%, #3d0043 50%, #900a6e 100%)',
+        bgLight:
+            'linear-gradient(180deg, #1f013d 0%, #3d0043 50%, #900a6e 100%)',
         bgDark: 'linear-gradient(180deg, #1f013d 0%, #3d0043 50%, #900a6e 100%)',
         glassLight: 'rgba(255, 105, 180, 0.15)',
         glassDark: 'rgba(255, 105, 180, 0.15)',
@@ -456,7 +468,8 @@ export const THEMES: TimerTheme[] = [
         icon: '🕹️',
         quote: 'Clear your mind, one line at a time',
         alwaysDark: true,
-        bgLight: 'radial-gradient(circle at 50% 120%, #1a0a3a 0%, #0a0618 65%, #050308 100%)',
+        bgLight:
+            'radial-gradient(circle at 50% 120%, #1a0a3a 0%, #0a0618 65%, #050308 100%)',
         bgDark: 'radial-gradient(circle at 50% 120%, #1a0a3a 0%, #0a0618 65%, #050308 100%)',
         glassLight: 'rgba(20, 10, 45, 0.5)',
         glassDark: 'rgba(20, 10, 45, 0.5)',
@@ -487,7 +500,8 @@ export const THEMES: TimerTheme[] = [
         icon: '🟡',
         quote: 'Waka waka waka',
         alwaysDark: true,
-        bgLight: 'radial-gradient(circle at 50% 50%, #10021f 0%, #0a0416 65%, #050308 100%)',
+        bgLight:
+            'radial-gradient(circle at 50% 50%, #10021f 0%, #0a0416 65%, #050308 100%)',
         bgDark: 'radial-gradient(circle at 50% 50%, #10021f 0%, #0a0416 65%, #050308 100%)',
         glassLight: 'rgba(15, 6, 35, 0.5)',
         glassDark: 'rgba(15, 6, 35, 0.5)',
@@ -518,7 +532,8 @@ export const THEMES: TimerTheme[] = [
         icon: '🐍',
         quote: 'Keep growing, one bite at a time',
         alwaysDark: true,
-        bgLight: 'radial-gradient(circle at 50% 50%, #04210d 0%, #04140a 65%, #020806 100%)',
+        bgLight:
+            'radial-gradient(circle at 50% 50%, #04210d 0%, #04140a 65%, #020806 100%)',
         bgDark: 'radial-gradient(circle at 50% 50%, #04210d 0%, #04140a 65%, #020806 100%)',
         glassLight: 'rgba(6, 30, 16, 0.5)',
         glassDark: 'rgba(6, 30, 16, 0.5)',
@@ -549,7 +564,8 @@ export const THEMES: TimerTheme[] = [
         icon: '🪿',
         quote: 'Honk honk! Take a break!',
         alwaysDark: false,
-        bgLight: 'linear-gradient(180deg, #e8f5e9 0%, #c8e6c9 40%, #a5d6a7 100%)',
+        bgLight:
+            'linear-gradient(180deg, #e8f5e9 0%, #c8e6c9 40%, #a5d6a7 100%)',
         bgDark: 'linear-gradient(180deg, #1b2e1b 0%, #263826 40%, #2e4a2e 100%)',
         glassLight: 'rgba(255,255,255,0.4)',
         glassDark: 'rgba(30,50,30,0.5)',
@@ -633,13 +649,19 @@ export function btnStyle(colors: ButtonColors): React.CSSProperties {
     };
 }
 
-export function getGlassStyle(theme: TimerTheme, isDark: boolean): React.CSSProperties {
+export function getGlassStyle(
+    theme: TimerTheme,
+    isDark: boolean,
+): React.CSSProperties {
     return {
         background: isDark ? theme.glassDark : theme.glassLight,
     };
 }
 
-export function getPageBackground(theme: TimerTheme, isDark: boolean): React.CSSProperties {
+export function getPageBackground(
+    theme: TimerTheme,
+    isDark: boolean,
+): React.CSSProperties {
     return {
         background: isDark ? theme.bgDark : theme.bgLight,
         transition: 'background 0.6s ease',

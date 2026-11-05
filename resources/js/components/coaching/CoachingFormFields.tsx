@@ -1,22 +1,6 @@
-import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
 import { RichTextarea } from '@/components/coaching/RichTextarea';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
-import { DatePicker } from '@/components/ui/date-picker';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from '@/components/ui/popover';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
     Command,
     CommandEmpty,
@@ -25,7 +9,7 @@ import {
     CommandItem,
     CommandList,
 } from '@/components/ui/command';
-import { AlertTriangle, Check, ChevronsUpDown, FileText, Paperclip, Users, X, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { DatePicker } from '@/components/ui/date-picker';
 import {
     Dialog,
     DialogContent,
@@ -33,7 +17,39 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import type { CoachingMode, CoachingPurposeLabels, CoachingSessionAttachment, User } from '@/types';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import type {
+    CoachingMode,
+    CoachingPurposeLabels,
+    CoachingSessionAttachment,
+    User,
+} from '@/types';
+import {
+    AlertTriangle,
+    Check,
+    ChevronsUpDown,
+    FileText,
+    Paperclip,
+    RotateCcw,
+    Users,
+    X,
+    ZoomIn,
+    ZoomOut,
+} from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 interface CoachingFormFieldsProps {
     data: Record<string, unknown>;
@@ -60,7 +76,13 @@ interface CoachingFormFieldsProps {
 
 const MAX_ATTACHMENTS = 10;
 const MAX_FILE_SIZE = 9 * 1024 * 1024;
-const IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+const IMAGE_TYPES = [
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/gif',
+    'image/webp',
+];
 const DOCUMENT_TYPES = [
     'application/pdf',
     'application/msword',
@@ -69,15 +91,23 @@ const DOCUMENT_TYPES = [
 const ALLOWED_TYPES = [...IMAGE_TYPES, ...DOCUMENT_TYPES];
 const ACCEPTED_FILES = '.jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx';
 
-function isImageAttachment(file: Pick<File, 'type' | 'name'> | { mime_type: string; original_filename: string }): boolean {
+function isImageAttachment(
+    file:
+        | Pick<File, 'type' | 'name'>
+        | { mime_type: string; original_filename: string },
+): boolean {
     const type = 'mime_type' in file ? file.mime_type : file.type;
-    const name = 'original_filename' in file ? file.original_filename : file.name;
+    const name =
+        'original_filename' in file ? file.original_filename : file.name;
 
     return IMAGE_TYPES.includes(type) || /\.(jpe?g|png|gif|webp)$/i.test(name);
 }
 
 function isAllowedFile(file: File): boolean {
-    return ALLOWED_TYPES.includes(file.type) || /\.(jpe?g|png|gif|webp|pdf|docx?)$/i.test(file.name);
+    return (
+        ALLOWED_TYPES.includes(file.type) ||
+        /\.(jpe?g|png|gif|webp|pdf|docx?)$/i.test(file.name)
+    );
 }
 
 function ImageAttachments({
@@ -88,15 +118,29 @@ function ImageAttachments({
     removedAttachmentIds = [],
     onRemoveExistingAttachment,
     attachmentViewUrl,
-}: Pick<CoachingFormFieldsProps, 'data' | 'setData' | 'errors' | 'existingAttachments' | 'removedAttachmentIds' | 'onRemoveExistingAttachment' | 'attachmentViewUrl'>) {
+}: Pick<
+    CoachingFormFieldsProps,
+    | 'data'
+    | 'setData'
+    | 'errors'
+    | 'existingAttachments'
+    | 'removedAttachmentIds'
+    | 'onRemoveExistingAttachment'
+    | 'attachmentViewUrl'
+>) {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [previews, setPreviews] = useState<string[]>([]);
     const [warning, setWarning] = useState<string | null>(null);
-    const [previewImage, setPreviewImage] = useState<{ src: string; name: string } | null>(null);
+    const [previewImage, setPreviewImage] = useState<{
+        src: string;
+        name: string;
+    } | null>(null);
     const [imageZoom, setImageZoom] = useState(100);
 
     const newFiles = (data.attachments as File[]) || [];
-    const activeExisting = existingAttachments.filter((a) => !removedAttachmentIds.includes(a.id));
+    const activeExisting = existingAttachments.filter(
+        (a) => !removedAttachmentIds.includes(a.id),
+    );
     const totalCount = activeExisting.length + newFiles.length;
     const canAddMore = totalCount < MAX_ATTACHMENTS;
 
@@ -107,33 +151,45 @@ function ImageAttachments({
             setWarning(null);
 
             const currentFiles = (data.attachments as File[]) || [];
-            const currentExisting = existingAttachments.filter((a) => !removedAttachmentIds.includes(a.id));
+            const currentExisting = existingAttachments.filter(
+                (a) => !removedAttachmentIds.includes(a.id),
+            );
             const currentTotal = currentExisting.length + currentFiles.length;
             const availableSlots = MAX_ATTACHMENTS - currentTotal;
 
             if (availableSlots <= 0) {
-                setWarning(`Maximum of ${MAX_ATTACHMENTS} attachments allowed. You already have ${currentTotal}.`);
+                setWarning(
+                    `Maximum of ${MAX_ATTACHMENTS} attachments allowed. You already have ${currentTotal}.`,
+                );
                 return;
             }
 
-            const validFiles = files.filter((file) => isAllowedFile(file) && file.size <= MAX_FILE_SIZE);
+            const validFiles = files.filter(
+                (file) => isAllowedFile(file) && file.size <= MAX_FILE_SIZE,
+            );
             const skippedCount = files.length - validFiles.length;
             const excessCount = Math.max(0, validFiles.length - availableSlots);
             const filesToAdd = validFiles.slice(0, availableSlots);
 
             const warnings: string[] = [];
             if (excessCount > 0) {
-                warnings.push(`${excessCount} attachment${excessCount > 1 ? 's were' : ' was'} not added - limit is ${MAX_ATTACHMENTS}.`);
+                warnings.push(
+                    `${excessCount} attachment${excessCount > 1 ? 's were' : ' was'} not added - limit is ${MAX_ATTACHMENTS}.`,
+                );
             }
             if (skippedCount > 0) {
-                warnings.push(`${skippedCount} file${skippedCount > 1 ? 's were' : ' was'} skipped (invalid type or exceeds 9MB).`);
+                warnings.push(
+                    `${skippedCount} file${skippedCount > 1 ? 's were' : ' was'} skipped (invalid type or exceeds 9MB).`,
+                );
             }
             if (warnings.length > 0) {
                 setWarning(warnings.join(' '));
             }
 
             if (filesToAdd.length > 0) {
-                const newPreviewUrls = filesToAdd.map((file) => isImageAttachment(file) ? URL.createObjectURL(file) : '');
+                const newPreviewUrls = filesToAdd.map((file) =>
+                    isImageAttachment(file) ? URL.createObjectURL(file) : '',
+                );
                 setData('attachments', [...currentFiles, ...filesToAdd]);
                 setPreviews((prev) => [...prev, ...newPreviewUrls]);
             }
@@ -174,8 +230,14 @@ function ImageAttachments({
                     const file = item.getAsFile();
                     if (file) {
                         const ext = file.type.split('/')[1] || 'png';
-                        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-                        const namedFile = new File([file], `pasted-image-${timestamp}.${ext}`, { type: file.type });
+                        const timestamp = new Date()
+                            .toISOString()
+                            .replace(/[:.]/g, '-');
+                        const namedFile = new File(
+                            [file],
+                            `pasted-image-${timestamp}.${ext}`,
+                            { type: file.type },
+                        );
                         imageFiles.push(namedFile);
                     }
                 }
@@ -216,9 +278,9 @@ function ImageAttachments({
 
     return (
         <section className="space-y-4">
-            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide border-b pb-2">
+            <h3 className="border-b pb-2 text-sm font-semibold tracking-wide text-muted-foreground uppercase">
                 Attachments
-                <span className="ml-2 text-xs font-normal normal-case text-muted-foreground">
+                <span className="ml-2 text-xs font-normal text-muted-foreground normal-case">
                     ({totalCount}/{MAX_ATTACHMENTS})
                 </span>
             </h3>
@@ -228,41 +290,76 @@ function ImageAttachments({
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                     {/* Existing Attachments */}
                     {activeExisting.map((attachment) => (
-                        <div key={`existing-${attachment.id}`} className="group relative aspect-square overflow-hidden rounded-lg border bg-muted/30">
+                        <div
+                            key={`existing-${attachment.id}`}
+                            className="group relative aspect-square overflow-hidden rounded-lg border bg-muted/30"
+                        >
                             {isImageAttachment(attachment) ? (
                                 <button
                                     type="button"
                                     className="h-full w-full"
                                     onClick={() => {
                                         setPreviewImage({
-                                            src: attachmentViewUrl ? attachmentViewUrl(attachment.coaching_session_id, attachment.id) : '#',
+                                            src: attachmentViewUrl
+                                                ? attachmentViewUrl(
+                                                      attachment.coaching_session_id,
+                                                      attachment.id,
+                                                  )
+                                                : '#',
                                             name: attachment.original_filename,
                                         });
                                         setImageZoom(100);
                                     }}
                                 >
-                                    <img src={attachmentViewUrl ? attachmentViewUrl(attachment.coaching_session_id, attachment.id) : '#'} alt={attachment.original_filename} className="h-full w-full object-cover" />
+                                    <img
+                                        src={
+                                            attachmentViewUrl
+                                                ? attachmentViewUrl(
+                                                      attachment.coaching_session_id,
+                                                      attachment.id,
+                                                  )
+                                                : '#'
+                                        }
+                                        alt={attachment.original_filename}
+                                        className="h-full w-full object-cover"
+                                    />
                                     <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/20">
                                         <ZoomIn className="h-5 w-5 text-white opacity-0 transition-opacity group-hover:opacity-100" />
                                     </div>
                                 </button>
                             ) : (
-                                <a href={attachmentViewUrl ? attachmentViewUrl(attachment.coaching_session_id, attachment.id) : '#'} className="flex h-full w-full flex-col items-center justify-center gap-2 p-3 text-center text-muted-foreground hover:bg-muted">
+                                <a
+                                    href={
+                                        attachmentViewUrl
+                                            ? attachmentViewUrl(
+                                                  attachment.coaching_session_id,
+                                                  attachment.id,
+                                              )
+                                            : '#'
+                                    }
+                                    className="flex h-full w-full flex-col items-center justify-center gap-2 p-3 text-center text-muted-foreground hover:bg-muted"
+                                >
                                     <FileText className="h-8 w-8" />
-                                    <span className="line-clamp-2 text-xs">{attachment.original_filename}</span>
+                                    <span className="line-clamp-2 text-xs">
+                                        {attachment.original_filename}
+                                    </span>
                                 </a>
                             )}
                             {onRemoveExistingAttachment && (
                                 <button
                                     type="button"
                                     title="Remove attachment"
-                                    onClick={() => onRemoveExistingAttachment(attachment.id)}
-                                    className="absolute top-1 right-1 rounded-full bg-red-600 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100 z-10"
+                                    onClick={() =>
+                                        onRemoveExistingAttachment(
+                                            attachment.id,
+                                        )
+                                    }
+                                    className="absolute top-1 right-1 z-10 rounded-full bg-red-600 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100"
                                 >
                                     <X className="h-3 w-3" />
                                 </button>
                             )}
-                            <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-1.5 py-0.5 text-[10px] text-white truncate pointer-events-none">
+                            <div className="pointer-events-none absolute right-0 bottom-0 left-0 truncate bg-black/50 px-1.5 py-0.5 text-[10px] text-white">
                                 {attachment.original_filename}
                             </div>
                         </div>
@@ -270,13 +367,27 @@ function ImageAttachments({
 
                     {/* New Attachments */}
                     {newFiles.map((file, index) => (
-                        <div key={`new-${index}`} className="group relative aspect-square rounded-lg border bg-muted/30 overflow-hidden">
+                        <div
+                            key={`new-${index}`}
+                            className="group relative aspect-square overflow-hidden rounded-lg border bg-muted/30"
+                        >
                             {isImageAttachment(file) ? (
-                                <button type="button" className="h-full w-full" onClick={() => {
-                                    setPreviewImage({ src: previews[index], name: file.name });
-                                    setImageZoom(100);
-                                }}>
-                                    <img src={previews[index]} alt={file.name} className="h-full w-full object-cover" />
+                                <button
+                                    type="button"
+                                    className="h-full w-full"
+                                    onClick={() => {
+                                        setPreviewImage({
+                                            src: previews[index],
+                                            name: file.name,
+                                        });
+                                        setImageZoom(100);
+                                    }}
+                                >
+                                    <img
+                                        src={previews[index]}
+                                        alt={file.name}
+                                        className="h-full w-full object-cover"
+                                    />
                                     <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/20">
                                         <ZoomIn className="h-5 w-5 text-white opacity-0 transition-opacity group-hover:opacity-100" />
                                     </div>
@@ -284,18 +395,20 @@ function ImageAttachments({
                             ) : (
                                 <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-3 text-center text-muted-foreground">
                                     <FileText className="h-8 w-8" />
-                                    <span className="line-clamp-2 text-xs">{file.name}</span>
+                                    <span className="line-clamp-2 text-xs">
+                                        {file.name}
+                                    </span>
                                 </div>
                             )}
                             <button
                                 type="button"
                                 title="Remove attachment"
                                 onClick={() => handleRemoveNewFile(index)}
-                                className="absolute top-1 right-1 rounded-full bg-red-600 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100 z-10"
+                                className="absolute top-1 right-1 z-10 rounded-full bg-red-600 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100"
                             >
                                 <X className="h-3 w-3" />
                             </button>
-                            <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-1.5 py-0.5 text-[10px] text-white truncate pointer-events-none">
+                            <div className="pointer-events-none absolute right-0 bottom-0 left-0 truncate bg-black/50 px-1.5 py-0.5 text-[10px] text-white">
                                 {file.name}
                             </div>
                         </div>
@@ -306,7 +419,9 @@ function ImageAttachments({
             {/* Upload Button */}
             {canAddMore && (
                 <div className="flex flex-wrap items-center gap-2">
-                    <label htmlFor="coaching-attachments" className="sr-only">Upload attachments</label>
+                    <label htmlFor="coaching-attachments" className="sr-only">
+                        Upload attachments
+                    </label>
                     <input
                         ref={fileInputRef}
                         type="file"
@@ -326,7 +441,12 @@ function ImageAttachments({
                         Add Attachments
                     </Button>
                     <p className="text-xs text-muted-foreground">
-                        Images, PDF, DOC, or DOCX. Max 9MB per file. You can also <kbd className="rounded border bg-muted px-1 py-0.5 text-[10px] font-mono">Ctrl+V</kbd> to paste screenshots.
+                        Images, PDF, DOC, or DOCX. Max 9MB per file. You can
+                        also{' '}
+                        <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-[10px]">
+                            Ctrl+V
+                        </kbd>{' '}
+                        to paste screenshots.
                     </p>
                 </div>
             )}
@@ -334,24 +454,33 @@ function ImageAttachments({
             {/* Warning */}
             {warning && (
                 <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-200">
-                    <span className="shrink-0 mt-0.5">⚠️</span>
+                    <span className="mt-0.5 shrink-0">⚠️</span>
                     <span>{warning}</span>
                 </div>
             )}
 
             {/* Errors */}
             {attachmentErrors.map((err, i) => (
-                <p key={i} className="text-red-600 text-sm">{err}</p>
+                <p key={i} className="text-sm text-red-600">
+                    {err}
+                </p>
             ))}
 
             {/* Image Preview Lightbox */}
-            <Dialog open={!!previewImage} onOpenChange={(open) => !open && setPreviewImage(null)}>
+            <Dialog
+                open={!!previewImage}
+                onOpenChange={(open) => !open && setPreviewImage(null)}
+            >
                 <DialogContent className="max-w-[95vw] sm:max-w-3xl">
                     <DialogHeader>
-                        <DialogTitle className="truncate pr-8">{previewImage?.name}</DialogTitle>
-                        <DialogDescription className="sr-only">Image preview</DialogDescription>
+                        <DialogTitle className="truncate pr-8">
+                            {previewImage?.name}
+                        </DialogTitle>
+                        <DialogDescription className="sr-only">
+                            Image preview
+                        </DialogDescription>
                     </DialogHeader>
-                    <div className="flex items-center gap-3 pb-2 border-b px-2">
+                    <div className="flex items-center gap-3 border-b px-2 pb-2">
                         <ZoomOut className="h-4 w-4 shrink-0 text-muted-foreground" />
                         <input
                             type="range"
@@ -359,12 +488,16 @@ function ImageAttachments({
                             max={300}
                             step={5}
                             value={imageZoom}
-                            onChange={(e) => setImageZoom(Number(e.target.value))}
-                            className="w-full h-2 accent-primary cursor-pointer"
+                            onChange={(e) =>
+                                setImageZoom(Number(e.target.value))
+                            }
+                            className="h-2 w-full cursor-pointer accent-primary"
                             title="Zoom level"
                         />
                         <ZoomIn className="h-4 w-4 shrink-0 text-muted-foreground" />
-                        <span className="text-sm font-medium min-w-12.5 text-center tabular-nums">{imageZoom}%</span>
+                        <span className="min-w-12.5 text-center text-sm font-medium tabular-nums">
+                            {imageZoom}%
+                        </span>
                         <Button
                             type="button"
                             size="sm"
@@ -376,14 +509,16 @@ function ImageAttachments({
                             <RotateCcw className="h-3.5 w-3.5" />
                         </Button>
                     </div>
-                    <div className="overflow-auto max-h-[70vh] rounded-lg bg-muted/30">
-                        <div className="min-w-full min-h-full flex justify-center items-start p-4">
+                    <div className="max-h-[70vh] overflow-auto rounded-lg bg-muted/30">
+                        <div className="flex min-h-full min-w-full items-start justify-center p-4">
                             {previewImage && (
                                 <img
                                     src={previewImage.src}
                                     alt={previewImage.name}
-                                    className="object-contain rounded-lg border transition-transform duration-200 origin-top"
-                                    style={{ transform: `scale(${imageZoom / 100})` }}
+                                    className="origin-top rounded-lg border object-contain transition-transform duration-200"
+                                    style={{
+                                        transform: `scale(${imageZoom / 100})`,
+                                    }}
                                 />
                             )}
                         </div>
@@ -430,8 +565,12 @@ export function CoachingFormFields({
         return teamLeads.find((tl) => tl.id === id) ?? null;
     }, [data.coach_id, teamLeads]);
 
-    const getAgentCampaign = (agent: User): { id: number; name: string } | null => {
-        const schedule = (agent as Record<string, unknown>).active_schedule as { campaign?: { id?: number; name?: string } } | null;
+    const getAgentCampaign = (
+        agent: User,
+    ): { id: number; name: string } | null => {
+        const schedule = (agent as Record<string, unknown>).active_schedule as {
+            campaign?: { id?: number; name?: string };
+        } | null;
         if (!schedule?.campaign?.id || !schedule?.campaign?.name) return null;
         return { id: schedule.campaign.id, name: schedule.campaign.name };
     };
@@ -455,7 +594,9 @@ export function CoachingFormFields({
     // For admin: filter agents to the selected TL's campaign; for TL: show all (already pre-filtered by backend)
     const campaignFilteredAgents = useMemo(() => {
         if (!isAdmin || !selectedTlCampaignId) return isAdmin ? [] : agents;
-        return agents.filter((a) => getAgentCampaign(a)?.id === selectedTlCampaignId);
+        return agents.filter(
+            (a) => getAgentCampaign(a)?.id === selectedTlCampaignId,
+        );
     }, [agents, isAdmin, selectedTlCampaignId]);
 
     const filteredAgents = useMemo(() => {
@@ -476,7 +617,8 @@ export function CoachingFormFields({
         return teamLeads
             .filter((tl) => {
                 const name = `${tl.first_name} ${tl.last_name}`.toLowerCase();
-                const campaign = getAgentCampaign(tl)?.name?.toLowerCase() ?? '';
+                const campaign =
+                    getAgentCampaign(tl)?.name?.toLowerCase() ?? '';
                 return name.includes(q) || campaign.includes(q);
             })
             .slice(0, 50);
@@ -488,7 +630,8 @@ export function CoachingFormFields({
         return coachableTeamLeads
             .filter((tl) => {
                 const name = `${tl.first_name} ${tl.last_name}`.toLowerCase();
-                const campaign = getAgentCampaign(tl)?.name?.toLowerCase() ?? '';
+                const campaign =
+                    getAgentCampaign(tl)?.name?.toLowerCase() ?? '';
                 return name.includes(q) || campaign.includes(q);
             })
             .slice(0, 50);
@@ -503,27 +646,58 @@ export function CoachingFormFields({
         return d.toISOString().split('T')[0];
     }, []);
 
-    const handleCheckbox = (field: string, checked: boolean | 'indeterminate') => {
+    const handleCheckbox = (
+        field: string,
+        checked: boolean | 'indeterminate',
+    ) => {
         setData(field, checked === true);
     };
 
-    const hasProfile = !!(data.profile_new_hire || data.profile_tenured || data.profile_returning || data.profile_previously_coached_same_issue);
-    const hasFocus = !!(data.focus_attendance_tardiness || data.focus_productivity || data.focus_compliance || data.focus_callouts || data.focus_recognition_milestones || data.focus_growth_development || data.focus_other);
-    const hasRootCause = !!(data.root_cause_lack_of_skills || data.root_cause_lack_of_clarity || data.root_cause_personal_issues || data.root_cause_motivation_engagement || data.root_cause_health_fatigue || data.root_cause_workload_process || data.root_cause_peer_conflict || data.root_cause_others);
+    const hasProfile = !!(
+        data.profile_new_hire ||
+        data.profile_tenured ||
+        data.profile_returning ||
+        data.profile_previously_coached_same_issue
+    );
+    const hasFocus = !!(
+        data.focus_attendance_tardiness ||
+        data.focus_productivity ||
+        data.focus_compliance ||
+        data.focus_callouts ||
+        data.focus_recognition_milestones ||
+        data.focus_growth_development ||
+        data.focus_other
+    );
+    const hasRootCause = !!(
+        data.root_cause_lack_of_skills ||
+        data.root_cause_lack_of_clarity ||
+        data.root_cause_personal_issues ||
+        data.root_cause_motivation_engagement ||
+        data.root_cause_health_fatigue ||
+        data.root_cause_workload_process ||
+        data.root_cause_peer_conflict ||
+        data.root_cause_others
+    );
 
     return (
         <div className="space-y-8">
             {/* Section 1: Agent & Date */}
             <section className="space-y-4">
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide border-b pb-2">
+                <h3 className="border-b pb-2 text-sm font-semibold tracking-wide text-muted-foreground uppercase">
                     Session Details
                 </h3>
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     {/* Team Lead (Coach) selector (Admin assign mode only) */}
                     {showAgentSelect && isAdmin && !isDirectMode && (
                         <div>
-                            <Label htmlFor="coach_id">Team Lead (Coach) <span className="text-red-500">*</span></Label>
-                            <Popover open={tlSearchOpen} onOpenChange={setTlSearchOpen}>
+                            <Label htmlFor="coach_id">
+                                Team Lead (Coach){' '}
+                                <span className="text-red-500">*</span>
+                            </Label>
+                            <Popover
+                                open={tlSearchOpen}
+                                onOpenChange={setTlSearchOpen}
+                            >
                                 <PopoverTrigger asChild>
                                     <Button
                                         variant="outline"
@@ -539,7 +713,10 @@ export function CoachingFormFields({
                                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                     </Button>
                                 </PopoverTrigger>
-                                <PopoverContent className="w-full p-0" align="start">
+                                <PopoverContent
+                                    className="w-full p-0"
+                                    align="start"
+                                >
                                     <Command shouldFilter={false}>
                                         <CommandInput
                                             placeholder="Search team lead..."
@@ -547,29 +724,56 @@ export function CoachingFormFields({
                                             onValueChange={setTlSearchQuery}
                                         />
                                         <CommandList>
-                                            <CommandEmpty>No team lead found.</CommandEmpty>
+                                            <CommandEmpty>
+                                                No team lead found.
+                                            </CommandEmpty>
                                             <CommandGroup>
                                                 {filteredTeamLeads.map((tl) => (
                                                     <CommandItem
                                                         key={tl.id}
                                                         value={String(tl.id)}
                                                         onSelect={() => {
-                                                            setData('coach_id', tl.id);
+                                                            setData(
+                                                                'coach_id',
+                                                                tl.id,
+                                                            );
                                                             // Reset coachee when coach changes
-                                                            setData('coachee_id', '');
-                                                            setTlSearchOpen(false);
-                                                            setTlSearchQuery('');
+                                                            setData(
+                                                                'coachee_id',
+                                                                '',
+                                                            );
+                                                            setTlSearchOpen(
+                                                                false,
+                                                            );
+                                                            setTlSearchQuery(
+                                                                '',
+                                                            );
                                                         }}
                                                         className="cursor-pointer"
                                                     >
                                                         <Check
-                                                            className={`mr-2 h-4 w-4 ${selectedTeamLead?.id === tl.id ? 'opacity-100' : 'opacity-0'
-                                                                }`}
+                                                            className={`mr-2 h-4 w-4 ${
+                                                                selectedTeamLead?.id ===
+                                                                tl.id
+                                                                    ? 'opacity-100'
+                                                                    : 'opacity-0'
+                                                            }`}
                                                         />
                                                         <div className="flex flex-col">
-                                                            <span>{tl.first_name} {tl.last_name}</span>
-                                                            {getAgentCampaign(tl) && (
-                                                                <span className="text-xs text-muted-foreground">{getAgentCampaign(tl)!.name}</span>
+                                                            <span>
+                                                                {tl.first_name}{' '}
+                                                                {tl.last_name}
+                                                            </span>
+                                                            {getAgentCampaign(
+                                                                tl,
+                                                            ) && (
+                                                                <span className="text-xs text-muted-foreground">
+                                                                    {
+                                                                        getAgentCampaign(
+                                                                            tl,
+                                                                        )!.name
+                                                                    }
+                                                                </span>
                                                             )}
                                                         </div>
                                                     </CommandItem>
@@ -579,14 +783,24 @@ export function CoachingFormFields({
                                     </Command>
                                 </PopoverContent>
                             </Popover>
-                            {errors.coach_id && <p className="text-red-600 text-sm mt-1">{errors.coach_id}</p>}
+                            {errors.coach_id && (
+                                <p className="mt-1 text-sm text-red-600">
+                                    {errors.coach_id}
+                                </p>
+                            )}
                         </div>
                     )}
                     {/* Coachee TL selector (Admin direct mode only) */}
                     {showAgentSelect && isAdmin && isDirectMode && (
                         <div>
-                            <Label htmlFor="coachee_id">Team Lead (Coachee) <span className="text-red-500">*</span></Label>
-                            <Popover open={coacheeSearchOpen} onOpenChange={setCoacheeSearchOpen}>
+                            <Label htmlFor="coachee_id">
+                                Team Lead (Coachee){' '}
+                                <span className="text-red-500">*</span>
+                            </Label>
+                            <Popover
+                                open={coacheeSearchOpen}
+                                onOpenChange={setCoacheeSearchOpen}
+                            >
                                 <PopoverTrigger asChild>
                                     <Button
                                         variant="outline"
@@ -602,51 +816,94 @@ export function CoachingFormFields({
                                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                     </Button>
                                 </PopoverTrigger>
-                                <PopoverContent className="w-full p-0" align="start">
+                                <PopoverContent
+                                    className="w-full p-0"
+                                    align="start"
+                                >
                                     <Command shouldFilter={false}>
                                         <CommandInput
                                             placeholder="Search team lead..."
                                             value={coacheeSearchQuery}
-                                            onValueChange={setCoacheeSearchQuery}
+                                            onValueChange={
+                                                setCoacheeSearchQuery
+                                            }
                                         />
                                         <CommandList>
-                                            <CommandEmpty>No team lead found.</CommandEmpty>
+                                            <CommandEmpty>
+                                                No team lead found.
+                                            </CommandEmpty>
                                             <CommandGroup>
-                                                {filteredCoachableTeamLeads.map((tl) => (
-                                                    <CommandItem
-                                                        key={tl.id}
-                                                        value={String(tl.id)}
-                                                        onSelect={() => {
-                                                            setData('coachee_id', tl.id);
-                                                            setCoacheeSearchOpen(false);
-                                                            setCoacheeSearchQuery('');
-                                                        }}
-                                                        className="cursor-pointer"
-                                                    >
-                                                        <Check
-                                                            className={`mr-2 h-4 w-4 ${selectedCoacheeTl?.id === tl.id ? 'opacity-100' : 'opacity-0'}`}
-                                                        />
-                                                        <div className="flex flex-col">
-                                                            <span>{tl.first_name} {tl.last_name}</span>
-                                                            {getAgentCampaign(tl) && (
-                                                                <span className="text-xs text-muted-foreground">{getAgentCampaign(tl)!.name}</span>
+                                                {filteredCoachableTeamLeads.map(
+                                                    (tl) => (
+                                                        <CommandItem
+                                                            key={tl.id}
+                                                            value={String(
+                                                                tl.id,
                                                             )}
-                                                        </div>
-                                                    </CommandItem>
-                                                ))}
+                                                            onSelect={() => {
+                                                                setData(
+                                                                    'coachee_id',
+                                                                    tl.id,
+                                                                );
+                                                                setCoacheeSearchOpen(
+                                                                    false,
+                                                                );
+                                                                setCoacheeSearchQuery(
+                                                                    '',
+                                                                );
+                                                            }}
+                                                            className="cursor-pointer"
+                                                        >
+                                                            <Check
+                                                                className={`mr-2 h-4 w-4 ${selectedCoacheeTl?.id === tl.id ? 'opacity-100' : 'opacity-0'}`}
+                                                            />
+                                                            <div className="flex flex-col">
+                                                                <span>
+                                                                    {
+                                                                        tl.first_name
+                                                                    }{' '}
+                                                                    {
+                                                                        tl.last_name
+                                                                    }
+                                                                </span>
+                                                                {getAgentCampaign(
+                                                                    tl,
+                                                                ) && (
+                                                                    <span className="text-xs text-muted-foreground">
+                                                                        {
+                                                                            getAgentCampaign(
+                                                                                tl,
+                                                                            )!
+                                                                                .name
+                                                                        }
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </CommandItem>
+                                                    ),
+                                                )}
                                             </CommandGroup>
                                         </CommandList>
                                     </Command>
                                 </PopoverContent>
                             </Popover>
-                            {errors.coachee_id && <p className="text-red-600 text-sm mt-1">{errors.coachee_id}</p>}
+                            {errors.coachee_id && (
+                                <p className="mt-1 text-sm text-red-600">
+                                    {errors.coachee_id}
+                                </p>
+                            )}
                         </div>
                     )}
                     {/* Agent (Coachee) selector (assign mode) */}
                     {showAgentSelect && !isDirectMode && (
                         <div>
-                            <Label htmlFor="coachee_id">Agent <span className="text-red-500">*</span></Label>
-                            <Popover open={agentSearchOpen} onOpenChange={setAgentSearchOpen}>
+                            <Label htmlFor="coachee_id">
+                                Agent <span className="text-red-500">*</span>
+                            </Label>
+                            <Popover
+                                open={agentSearchOpen}
+                                onOpenChange={setAgentSearchOpen}
+                            >
                                 <PopoverTrigger asChild>
                                     <Button
                                         variant="outline"
@@ -659,13 +916,16 @@ export function CoachingFormFields({
                                             {isAdmin && !selectedTeamLead
                                                 ? 'Select a team lead first'
                                                 : selectedAgent
-                                                    ? `${selectedAgent.first_name} ${selectedAgent.last_name}${getAgentCampaign(selectedAgent) ? ` — ${getAgentCampaign(selectedAgent)!.name}` : ''}`
-                                                    : 'Select an agent'}
+                                                  ? `${selectedAgent.first_name} ${selectedAgent.last_name}${getAgentCampaign(selectedAgent) ? ` — ${getAgentCampaign(selectedAgent)!.name}` : ''}`
+                                                  : 'Select an agent'}
                                         </span>
                                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                     </Button>
                                 </PopoverTrigger>
-                                <PopoverContent className="w-full p-0" align="start">
+                                <PopoverContent
+                                    className="w-full p-0"
+                                    align="start"
+                                >
                                     <Command shouldFilter={false}>
                                         <CommandInput
                                             placeholder="Search agent..."
@@ -673,40 +933,79 @@ export function CoachingFormFields({
                                             onValueChange={setAgentSearchQuery}
                                         />
                                         <CommandList>
-                                            <CommandEmpty>No agent found.</CommandEmpty>
+                                            <CommandEmpty>
+                                                No agent found.
+                                            </CommandEmpty>
                                             <CommandGroup>
                                                 {filteredAgents.map((agent) => {
-                                                    const isInQueue = queueAgentIds.includes(agent.id);
-                                                    const isCoachedThisWeek = coachedThisWeekIds.includes(agent.id);
-                                                    const isDraftedThisWeek = !isCoachedThisWeek && draftedThisWeekIds.includes(agent.id);
-                                                    const isSelected = selectedAgent?.id === agent.id;
+                                                    const isInQueue =
+                                                        queueAgentIds.includes(
+                                                            agent.id,
+                                                        );
+                                                    const isCoachedThisWeek =
+                                                        coachedThisWeekIds.includes(
+                                                            agent.id,
+                                                        );
+                                                    const isDraftedThisWeek =
+                                                        !isCoachedThisWeek &&
+                                                        draftedThisWeekIds.includes(
+                                                            agent.id,
+                                                        );
+                                                    const isSelected =
+                                                        selectedAgent?.id ===
+                                                        agent.id;
                                                     return (
                                                         <CommandItem
                                                             key={agent.id}
-                                                            value={String(agent.id)}
+                                                            value={String(
+                                                                agent.id,
+                                                            )}
                                                             onSelect={() => {
-                                                                if (onAgentAddToQueue && selectedAgent && agent.id !== selectedAgent.id) {
-                                                                    onAgentAddToQueue(agent);
+                                                                if (
+                                                                    onAgentAddToQueue &&
+                                                                    selectedAgent &&
+                                                                    agent.id !==
+                                                                        selectedAgent.id
+                                                                ) {
+                                                                    onAgentAddToQueue(
+                                                                        agent,
+                                                                    );
                                                                 } else {
-                                                                    setData('coachee_id', agent.id);
+                                                                    setData(
+                                                                        'coachee_id',
+                                                                        agent.id,
+                                                                    );
                                                                 }
-                                                                setAgentSearchOpen(false);
-                                                                setAgentSearchQuery('');
+                                                                setAgentSearchOpen(
+                                                                    false,
+                                                                );
+                                                                setAgentSearchQuery(
+                                                                    '',
+                                                                );
                                                             }}
                                                             className="cursor-pointer"
                                                         >
                                                             <Check
                                                                 className={`mr-2 h-4 w-4 shrink-0 ${isSelected || isInQueue ? 'opacity-100' : 'opacity-0'}`}
                                                             />
-                                                            <div className="flex flex-col flex-1 min-w-0">
+                                                            <div className="flex min-w-0 flex-1 flex-col">
                                                                 <div className="flex items-center gap-1.5">
-                                                                    <span>{agent.first_name} {agent.last_name}</span>
-                                                                    {isInQueue && !isSelected && (
-                                                                        <span className="inline-flex items-center gap-0.5 rounded bg-primary/10 px-1 py-0.5 text-[9px] font-medium text-primary">
-                                                                            <Users className="h-2.5 w-2.5" />
-                                                                            In Queue
-                                                                        </span>
-                                                                    )}
+                                                                    <span>
+                                                                        {
+                                                                            agent.first_name
+                                                                        }{' '}
+                                                                        {
+                                                                            agent.last_name
+                                                                        }
+                                                                    </span>
+                                                                    {isInQueue &&
+                                                                        !isSelected && (
+                                                                            <span className="inline-flex items-center gap-0.5 rounded bg-primary/10 px-1 py-0.5 text-[9px] font-medium text-primary">
+                                                                                <Users className="h-2.5 w-2.5" />
+                                                                                In
+                                                                                Queue
+                                                                            </span>
+                                                                        )}
                                                                     {isCoachedThisWeek && (
                                                                         <span className="inline-flex items-center gap-0.5 rounded bg-amber-500/10 px-1 py-0.5 text-[9px] font-medium text-amber-600 dark:text-amber-400">
                                                                             <AlertTriangle className="h-2.5 w-2.5" />
@@ -719,8 +1018,17 @@ export function CoachingFormFields({
                                                                         </span>
                                                                     )}
                                                                 </div>
-                                                                {getAgentCampaign(agent) && (
-                                                                    <span className="text-xs text-muted-foreground">{getAgentCampaign(agent)!.name}</span>
+                                                                {getAgentCampaign(
+                                                                    agent,
+                                                                ) && (
+                                                                    <span className="text-xs text-muted-foreground">
+                                                                        {
+                                                                            getAgentCampaign(
+                                                                                agent,
+                                                                            )!
+                                                                                .name
+                                                                        }
+                                                                    </span>
                                                                 )}
                                                             </div>
                                                         </CommandItem>
@@ -731,36 +1039,61 @@ export function CoachingFormFields({
                                     </Command>
                                 </PopoverContent>
                             </Popover>
-                            {errors.coachee_id && <p className="text-red-600 text-sm mt-1">{errors.coachee_id}</p>}
-                            {selectedAgent && coachedThisWeekIds.includes(selectedAgent.id) && (
-                                <div className="mt-1.5 flex items-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-400">
-                                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                                    <span>This agent has already been coached this week.</span>
-                                </div>
+                            {errors.coachee_id && (
+                                <p className="mt-1 text-sm text-red-600">
+                                    {errors.coachee_id}
+                                </p>
                             )}
-                            {selectedAgent && !coachedThisWeekIds.includes(selectedAgent.id) && draftedThisWeekIds.includes(selectedAgent.id) && (
-                                <div className="mt-1.5 flex items-center gap-1.5 rounded-md border border-blue-300 bg-blue-50 px-2.5 py-1.5 text-xs text-blue-700 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-400">
-                                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                                    <span>This agent has a draft coaching session this week.</span>
-                                </div>
-                            )}
+                            {selectedAgent &&
+                                coachedThisWeekIds.includes(
+                                    selectedAgent.id,
+                                ) && (
+                                    <div className="mt-1.5 flex items-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-400">
+                                        <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                                        <span>
+                                            This agent has already been coached
+                                            this week.
+                                        </span>
+                                    </div>
+                                )}
+                            {selectedAgent &&
+                                !coachedThisWeekIds.includes(
+                                    selectedAgent.id,
+                                ) &&
+                                draftedThisWeekIds.includes(
+                                    selectedAgent.id,
+                                ) && (
+                                    <div className="mt-1.5 flex items-center gap-1.5 rounded-md border border-blue-300 bg-blue-50 px-2.5 py-1.5 text-xs text-blue-700 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-400">
+                                        <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                                        <span>
+                                            This agent has a draft coaching
+                                            session this week.
+                                        </span>
+                                    </div>
+                                )}
                         </div>
                     )}
                     <div>
-                        <Label htmlFor="session_date">Session Date <span className="text-red-500">*</span></Label>
+                        <Label htmlFor="session_date">
+                            Session Date <span className="text-red-500">*</span>
+                        </Label>
                         <DatePicker
                             value={String(data.session_date || '')}
                             onChange={(val) => setData('session_date', val)}
                             placeholder="Select session date"
                         />
-                        {errors.session_date && <p className="text-red-600 text-sm mt-1">{errors.session_date}</p>}
+                        {errors.session_date && (
+                            <p className="mt-1 text-sm text-red-600">
+                                {errors.session_date}
+                            </p>
+                        )}
                     </div>
                 </div>
             </section>
 
             {/* Section 2: Agent Profile */}
             <section className="space-y-4">
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide border-b pb-2">
+                <h3 className="border-b pb-2 text-sm font-semibold tracking-wide text-muted-foreground uppercase">
                     Agent's Profile <span className="text-red-500">*</span>
                 </h3>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -768,26 +1101,45 @@ export function CoachingFormFields({
                         { field: 'profile_new_hire', label: 'New Hire' },
                         { field: 'profile_tenured', label: 'Tenured' },
                         { field: 'profile_returning', label: 'Returning' },
-                        { field: 'profile_previously_coached_same_issue', label: 'Previously Coached (Same Issue)' },
+                        {
+                            field: 'profile_previously_coached_same_issue',
+                            label: 'Previously Coached (Same Issue)',
+                        },
                     ].map(({ field, label }) => (
                         <div key={field} className="flex items-center gap-2">
                             <Checkbox
                                 id={field}
                                 checked={!!data[field]}
-                                onCheckedChange={(checked) => handleCheckbox(field, checked)}
+                                onCheckedChange={(checked) =>
+                                    handleCheckbox(field, checked)
+                                }
                             />
-                            <Label htmlFor={field} className="cursor-pointer text-sm">{label}</Label>
+                            <Label
+                                htmlFor={field}
+                                className="cursor-pointer text-sm"
+                            >
+                                {label}
+                            </Label>
                         </div>
                     ))}
                 </div>
-                {errors.profile && <p className="text-red-600 text-sm mt-1">{errors.profile}</p>}
-                {!errors.profile && !hasProfile && <p className="text-amber-600 text-sm mt-1">At least one profile selection is required.</p>}
+                {errors.profile && (
+                    <p className="mt-1 text-sm text-red-600">
+                        {errors.profile}
+                    </p>
+                )}
+                {!errors.profile && !hasProfile && (
+                    <p className="mt-1 text-sm text-amber-600">
+                        At least one profile selection is required.
+                    </p>
+                )}
             </section>
 
             {/* Section 3: Purpose */}
             <section className="space-y-4">
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide border-b pb-2">
-                    Purpose of Coaching Session <span className="text-red-500">*</span>
+                <h3 className="border-b pb-2 text-sm font-semibold tracking-wide text-muted-foreground uppercase">
+                    Purpose of Coaching Session{' '}
+                    <span className="text-red-500">*</span>
                 </h3>
                 <Select
                     value={String(data.purpose || '')}
@@ -804,63 +1156,104 @@ export function CoachingFormFields({
                         ))}
                     </SelectContent>
                 </Select>
-                {errors.purpose && <p className="text-red-600 text-sm mt-1">{errors.purpose}</p>}
+                {errors.purpose && (
+                    <p className="mt-1 text-sm text-red-600">
+                        {errors.purpose}
+                    </p>
+                )}
             </section>
 
             {/* Section 4: Focus Areas */}
             <section className="space-y-4">
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide border-b pb-2">
+                <h3 className="border-b pb-2 text-sm font-semibold tracking-wide text-muted-foreground uppercase">
                     Focus Area(s) <span className="text-red-500">*</span>
                 </h3>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     {[
-                        { field: 'focus_attendance_tardiness', label: 'Attendance / Tardiness' },
+                        {
+                            field: 'focus_attendance_tardiness',
+                            label: 'Attendance / Tardiness',
+                        },
                         { field: 'focus_productivity', label: 'Productivity' },
                         { field: 'focus_compliance', label: 'Compliance' },
                         { field: 'focus_callouts', label: 'Callouts' },
-                        { field: 'focus_recognition_milestones', label: 'Recognition / Milestones' },
-                        { field: 'focus_growth_development', label: 'Growth / Development' },
+                        {
+                            field: 'focus_recognition_milestones',
+                            label: 'Recognition / Milestones',
+                        },
+                        {
+                            field: 'focus_growth_development',
+                            label: 'Growth / Development',
+                        },
                         { field: 'focus_other', label: 'Other' },
                     ].map(({ field, label }) => (
                         <div key={field} className="flex items-center gap-2">
                             <Checkbox
                                 id={field}
                                 checked={!!data[field]}
-                                onCheckedChange={(checked) => handleCheckbox(field, checked)}
+                                onCheckedChange={(checked) =>
+                                    handleCheckbox(field, checked)
+                                }
                             />
-                            <Label htmlFor={field} className="cursor-pointer text-sm">{label}</Label>
+                            <Label
+                                htmlFor={field}
+                                className="cursor-pointer text-sm"
+                            >
+                                {label}
+                            </Label>
                         </div>
                     ))}
                 </div>
                 {!!data.focus_other && (
                     <div>
-                        <Label htmlFor="focus_other_notes">Other Focus Area Details</Label>
+                        <Label htmlFor="focus_other_notes">
+                            Other Focus Area Details
+                        </Label>
                         <Input
                             id="focus_other_notes"
                             value={String(data.focus_other_notes || '')}
-                            onChange={(e) => setData('focus_other_notes', e.target.value)}
+                            onChange={(e) =>
+                                setData('focus_other_notes', e.target.value)
+                            }
                             placeholder="Specify other focus area..."
                         />
-                        {errors.focus_other_notes && <p className="text-red-600 text-sm mt-1">{errors.focus_other_notes}</p>}
+                        {errors.focus_other_notes && (
+                            <p className="mt-1 text-sm text-red-600">
+                                {errors.focus_other_notes}
+                            </p>
+                        )}
                     </div>
                 )}
-                {errors.focus && <p className="text-red-600 text-sm mt-1">{errors.focus}</p>}
-                {!errors.focus && !hasFocus && <p className="text-amber-600 text-sm mt-1">At least one focus area is required.</p>}
+                {errors.focus && (
+                    <p className="mt-1 text-sm text-red-600">{errors.focus}</p>
+                )}
+                {!errors.focus && !hasFocus && (
+                    <p className="mt-1 text-sm text-amber-600">
+                        At least one focus area is required.
+                    </p>
+                )}
             </section>
 
             {/* Section 5: Performance Description */}
             <section className="space-y-4">
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide border-b pb-2">
-                    Performance Description <span className="text-red-500">*</span>
+                <h3 className="border-b pb-2 text-sm font-semibold tracking-wide text-muted-foreground uppercase">
+                    Performance Description{' '}
+                    <span className="text-red-500">*</span>
                 </h3>
                 <RichTextarea
                     id="performance_description"
                     value={String(data.performance_description || '')}
-                    onChange={(html) => setData('performance_description', html)}
+                    onChange={(html) =>
+                        setData('performance_description', html)
+                    }
                     placeholder="Describe the employee's current performance, specific incidents, or areas for improvement..."
                     minHeight="120px"
                 />
-                {errors.performance_description && <p className="text-red-600 text-sm mt-1">{errors.performance_description}</p>}
+                {errors.performance_description && (
+                    <p className="mt-1 text-sm text-red-600">
+                        {errors.performance_description}
+                    </p>
+                )}
             </section>
 
             {/* Section 5b: Image Attachments */}
@@ -876,37 +1269,76 @@ export function CoachingFormFields({
 
             {/* Section 6: Root Causes */}
             <section className="space-y-4">
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide border-b pb-2">
+                <h3 className="border-b pb-2 text-sm font-semibold tracking-wide text-muted-foreground uppercase">
                     Root Cause(s) <span className="text-red-500">*</span>
                 </h3>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     {[
-                        { field: 'root_cause_lack_of_skills', label: 'Lack of Skills / Knowledge' },
-                        { field: 'root_cause_lack_of_clarity', label: 'Lack of Clarity on Expectations' },
-                        { field: 'root_cause_personal_issues', label: 'Personal Issues' },
-                        { field: 'root_cause_motivation_engagement', label: 'Motivation / Engagement' },
-                        { field: 'root_cause_health_fatigue', label: 'Health / Fatigue' },
-                        { field: 'root_cause_workload_process', label: 'Workload or Process Issues' },
-                        { field: 'root_cause_peer_conflict', label: 'Peer / Team Conflict' },
-                        { field: 'root_cause_others', label: 'Progress Update' },
+                        {
+                            field: 'root_cause_lack_of_skills',
+                            label: 'Lack of Skills / Knowledge',
+                        },
+                        {
+                            field: 'root_cause_lack_of_clarity',
+                            label: 'Lack of Clarity on Expectations',
+                        },
+                        {
+                            field: 'root_cause_personal_issues',
+                            label: 'Personal Issues',
+                        },
+                        {
+                            field: 'root_cause_motivation_engagement',
+                            label: 'Motivation / Engagement',
+                        },
+                        {
+                            field: 'root_cause_health_fatigue',
+                            label: 'Health / Fatigue',
+                        },
+                        {
+                            field: 'root_cause_workload_process',
+                            label: 'Workload or Process Issues',
+                        },
+                        {
+                            field: 'root_cause_peer_conflict',
+                            label: 'Peer / Team Conflict',
+                        },
+                        {
+                            field: 'root_cause_others',
+                            label: 'Progress Update',
+                        },
                     ].map(({ field, label }) => (
                         <div key={field} className="flex items-center gap-2">
                             <Checkbox
                                 id={field}
                                 checked={!!data[field]}
-                                onCheckedChange={(checked) => handleCheckbox(field, checked)}
+                                onCheckedChange={(checked) =>
+                                    handleCheckbox(field, checked)
+                                }
                             />
-                            <Label htmlFor={field} className="cursor-pointer text-sm">{label}</Label>
+                            <Label
+                                htmlFor={field}
+                                className="cursor-pointer text-sm"
+                            >
+                                {label}
+                            </Label>
                         </div>
                     ))}
                 </div>
-                {errors.root_cause && <p className="text-red-600 text-sm mt-1">{errors.root_cause}</p>}
-                {!errors.root_cause && !hasRootCause && <p className="text-amber-600 text-sm mt-1">At least one root cause is required.</p>}
+                {errors.root_cause && (
+                    <p className="mt-1 text-sm text-red-600">
+                        {errors.root_cause}
+                    </p>
+                )}
+                {!errors.root_cause && !hasRootCause && (
+                    <p className="mt-1 text-sm text-amber-600">
+                        At least one root cause is required.
+                    </p>
+                )}
             </section>
 
             {/* Section 7: Agent Strengths */}
             <section className="space-y-4">
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide border-b pb-2">
+                <h3 className="border-b pb-2 text-sm font-semibold tracking-wide text-muted-foreground uppercase">
                     Agent Strengths or Wins
                 </h3>
                 <RichTextarea
@@ -916,12 +1348,16 @@ export function CoachingFormFields({
                     placeholder="Highlight what the agent is doing well..."
                     minHeight="80px"
                 />
-                {errors.agent_strengths_wins && <p className="text-red-600 text-sm mt-1">{errors.agent_strengths_wins}</p>}
+                {errors.agent_strengths_wins && (
+                    <p className="mt-1 text-sm text-red-600">
+                        {errors.agent_strengths_wins}
+                    </p>
+                )}
             </section>
 
             {/* Section 8: SMART Action Plan */}
             <section className="space-y-4">
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide border-b pb-2">
+                <h3 className="border-b pb-2 text-sm font-semibold tracking-wide text-muted-foreground uppercase">
                     SMART Action Plan <span className="text-red-500">*</span>
                 </h3>
                 <RichTextarea
@@ -931,12 +1367,16 @@ export function CoachingFormFields({
                     placeholder="Define specific, measurable, achievable, relevant, and time-bound action items..."
                     minHeight="120px"
                 />
-                {errors.smart_action_plan && <p className="text-red-600 text-sm mt-1">{errors.smart_action_plan}</p>}
+                {errors.smart_action_plan && (
+                    <p className="mt-1 text-sm text-red-600">
+                        {errors.smart_action_plan}
+                    </p>
+                )}
             </section>
 
             {/* Section 9 & 10: Follow-up Date & Severity */}
             <section className="space-y-4">
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide border-b pb-2">
+                <h3 className="border-b pb-2 text-sm font-semibold tracking-wide text-muted-foreground uppercase">
                     Additional Details
                 </h3>
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -949,13 +1389,19 @@ export function CoachingFormFields({
                             minDate={nextMonday}
                             defaultMonth={nextMonday}
                         />
-                        {errors.follow_up_date && <p className="text-red-600 text-sm mt-1">{errors.follow_up_date}</p>}
+                        {errors.follow_up_date && (
+                            <p className="mt-1 text-sm text-red-600">
+                                {errors.follow_up_date}
+                            </p>
+                        )}
                     </div>
                     <div>
                         <Label htmlFor="severity_flag">Severity Flag</Label>
                         <Select
                             value={String(data.severity_flag || 'Normal')}
-                            onValueChange={(val) => setData('severity_flag', val)}
+                            onValueChange={(val) =>
+                                setData('severity_flag', val)
+                            }
                         >
                             <SelectTrigger id="severity_flag">
                                 <SelectValue />
@@ -968,7 +1414,11 @@ export function CoachingFormFields({
                                 ))}
                             </SelectContent>
                         </Select>
-                        {errors.severity_flag && <p className="text-red-600 text-sm mt-1">{errors.severity_flag}</p>}
+                        {errors.severity_flag && (
+                            <p className="mt-1 text-sm text-red-600">
+                                {errors.severity_flag}
+                            </p>
+                        )}
                     </div>
                 </div>
             </section>

@@ -1,29 +1,62 @@
-import { Head, router } from '@inertiajs/react';
-import { useState } from 'react';
-import { Shield, Plus, Pencil, Trash2, Loader2, BarChart3, FileText, Laptop, Pill, Eye, AlertTriangle, Calendar } from 'lucide-react';
-import AppLayout from '@/layouts/app-layout';
-import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
+import { Can } from '@/components/authorization';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
-import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Can } from '@/components/authorization';
 import {
-    index as retentionPoliciesIndexRoute,
-    store as retentionPoliciesStoreRoute,
-    update as retentionPoliciesUpdateRoute,
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table';
+import { Textarea } from '@/components/ui/textarea';
+import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
+import AppLayout from '@/layouts/app-layout';
+import {
     destroy as retentionPoliciesDestroyRoute,
-    toggle as retentionPoliciesToggleRoute,
+    index as retentionPoliciesIndexRoute,
     preview as retentionPoliciesPreviewRoute,
+    store as retentionPoliciesStoreRoute,
+    toggle as retentionPoliciesToggleRoute,
+    update as retentionPoliciesUpdateRoute,
 } from '@/routes/form-requests/retention-policies';
+import { Head, router } from '@inertiajs/react';
+import {
+    AlertTriangle,
+    BarChart3,
+    Calendar,
+    Eye,
+    FileText,
+    Laptop,
+    Loader2,
+    Pencil,
+    Pill,
+    Plus,
+    Shield,
+    Trash2,
+} from 'lucide-react';
+import { useState } from 'react';
 
 interface Site {
     id: number;
@@ -38,7 +71,12 @@ interface Policy {
     applies_to_type: 'global' | 'site';
     applies_to_id: number | null;
     site?: Site;
-    form_type: 'all' | 'leave_request' | 'it_concern' | 'medication_request' | 'leave_credit';
+    form_type:
+        | 'all'
+        | 'leave_request'
+        | 'it_concern'
+        | 'medication_request'
+        | 'leave_credit';
     priority: number;
     is_active: boolean;
 }
@@ -49,7 +87,12 @@ interface FormData {
     retention_months: number;
     applies_to_type: 'global' | 'site';
     applies_to_id: number | null;
-    form_type: 'all' | 'leave_request' | 'it_concern' | 'medication_request' | 'leave_credit';
+    form_type:
+        | 'all'
+        | 'leave_request'
+        | 'it_concern'
+        | 'medication_request'
+        | 'leave_credit';
     priority: number;
     is_active: boolean;
 }
@@ -97,12 +140,19 @@ interface Props {
     retentionStats?: RetentionStats;
 }
 
-export default function RetentionPolicies({ policies, sites, retentionStats }: Props) {
+export default function RetentionPolicies({
+    policies,
+    sites,
+    retentionStats,
+}: Props) {
     const { title, breadcrumbs } = usePageMeta({
         title: 'Form Request Retention Policies',
         breadcrumbs: [
             { title: 'Form Requests', href: '/form-requests' },
-            { title: 'Retention Policies', href: retentionPoliciesIndexRoute().url },
+            {
+                title: 'Retention Policies',
+                href: retentionPoliciesIndexRoute().url,
+            },
         ],
     });
 
@@ -176,13 +226,17 @@ export default function RetentionPolicies({ policies, sites, retentionStats }: P
         };
 
         if (editingPolicy) {
-            router.put(retentionPoliciesUpdateRoute(editingPolicy.id).url, payload, {
-                onSuccess: () => {
-                    setIsDialogOpen(false);
-                    resetForm();
+            router.put(
+                retentionPoliciesUpdateRoute(editingPolicy.id).url,
+                payload,
+                {
+                    onSuccess: () => {
+                        setIsDialogOpen(false);
+                        resetForm();
+                    },
+                    onFinish: () => setIsSubmitting(false),
                 },
-                onFinish: () => setIsSubmitting(false),
-            });
+            );
         } else {
             router.post(retentionPoliciesStoreRoute().url, payload, {
                 onSuccess: () => {
@@ -195,7 +249,9 @@ export default function RetentionPolicies({ policies, sites, retentionStats }: P
     };
 
     const handleDelete = (policyId: number) => {
-        if (!confirm('Are you sure you want to delete this retention policy?')) {
+        if (
+            !confirm('Are you sure you want to delete this retention policy?')
+        ) {
             return;
         }
 
@@ -212,7 +268,9 @@ export default function RetentionPolicies({ policies, sites, retentionStats }: P
         setPreviewData(null);
 
         try {
-            const response = await fetch(retentionPoliciesPreviewRoute(policyId).url);
+            const response = await fetch(
+                retentionPoliciesPreviewRoute(policyId).url,
+            );
             const data = await response.json();
             setPreviewData(data);
         } catch (error) {
@@ -225,13 +283,22 @@ export default function RetentionPolicies({ policies, sites, retentionStats }: P
     const getFormTypeBadge = (formType: string) => {
         const config: Record<string, { label: string; className: string }> = {
             all: { label: 'All Forms', className: 'bg-purple-500' },
-            leave_request: { label: 'Leave Requests', className: 'bg-blue-500' },
+            leave_request: {
+                label: 'Leave Requests',
+                className: 'bg-blue-500',
+            },
             it_concern: { label: 'IT Concerns', className: 'bg-orange-500' },
-            medication_request: { label: 'Medication Requests', className: 'bg-green-500' },
+            medication_request: {
+                label: 'Medication Requests',
+                className: 'bg-green-500',
+            },
             leave_credit: { label: 'Leave Credits', className: 'bg-cyan-500' },
         };
 
-        const { label, className } = config[formType] || { label: formType, className: 'bg-gray-500' };
+        const { label, className } = config[formType] || {
+            label: formType,
+            className: 'bg-gray-500',
+        };
         return <Badge className={className}>{label}</Badge>;
     };
 
@@ -241,48 +308,75 @@ export default function RetentionPolicies({ policies, sites, retentionStats }: P
             <LoadingOverlay isLoading={isPageLoading} />
 
             <div className="container mx-auto px-4 py-8">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
                     <div>
-                        <h1 className="text-2xl sm:text-3xl font-bold">Retention Policies</h1>
-                        <p className="text-muted-foreground mt-2 text-sm sm:text-base">
+                        <h1 className="text-2xl font-bold sm:text-3xl">
+                            Retention Policies
+                        </h1>
+                        <p className="mt-2 text-sm text-muted-foreground sm:text-base">
                             Manage data retention rules for form request records
                         </p>
                     </div>
                     <Can permission="form_requests.retention">
-                        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                        <Dialog
+                            open={isDialogOpen}
+                            onOpenChange={setIsDialogOpen}
+                        >
                             <DialogTrigger asChild>
-                                <Button onClick={openCreateDialog} className="w-full sm:w-auto">
+                                <Button
+                                    onClick={openCreateDialog}
+                                    className="w-full sm:w-auto"
+                                >
                                     <Plus className="mr-2 h-4 w-4" />
                                     Add Policy
                                 </Button>
                             </DialogTrigger>
-                            <DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+                            <DialogContent className="max-h-[90vh] max-w-[95vw] overflow-y-auto sm:max-w-2xl">
                                 <DialogHeader>
                                     <DialogTitle>
-                                        {editingPolicy ? 'Edit' : 'Create'} Retention Policy
+                                        {editingPolicy ? 'Edit' : 'Create'}{' '}
+                                        Retention Policy
                                     </DialogTitle>
                                     <DialogDescription>
-                                        Define rules for how long form request records should be retained
+                                        Define rules for how long form request
+                                        records should be retained
                                     </DialogDescription>
                                 </DialogHeader>
-                                <form onSubmit={handleSubmit} className="space-y-4">
+                                <form
+                                    onSubmit={handleSubmit}
+                                    className="space-y-4"
+                                >
                                     <div className="space-y-2">
-                                        <Label htmlFor="name">Policy Name *</Label>
+                                        <Label htmlFor="name">
+                                            Policy Name *
+                                        </Label>
                                         <Input
                                             id="name"
                                             value={formData.name}
-                                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                            onChange={(e) =>
+                                                setFormData({
+                                                    ...formData,
+                                                    name: e.target.value,
+                                                })
+                                            }
                                             required
                                             placeholder="e.g., Standard Form Retention Policy"
                                         />
                                     </div>
 
                                     <div className="space-y-2">
-                                        <Label htmlFor="description">Description</Label>
+                                        <Label htmlFor="description">
+                                            Description
+                                        </Label>
                                         <Textarea
                                             id="description"
                                             value={formData.description}
-                                            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                                            onChange={(e) =>
+                                                setFormData({
+                                                    ...formData,
+                                                    description: e.target.value,
+                                                })
+                                            }
                                             placeholder="Optional description of the policy"
                                             rows={3}
                                         />
@@ -290,31 +384,46 @@ export default function RetentionPolicies({ policies, sites, retentionStats }: P
 
                                     <div className="grid gap-4 md:grid-cols-2">
                                         <div className="space-y-2">
-                                            <Label htmlFor="retention-months">Retention Period (Months) *</Label>
+                                            <Label htmlFor="retention-months">
+                                                Retention Period (Months) *
+                                            </Label>
                                             <Input
                                                 id="retention-months"
                                                 type="number"
                                                 min="1"
-                                                value={formData.retention_months}
-                                                onChange={(e) => setFormData({
-                                                    ...formData,
-                                                    retention_months: parseInt(e.target.value)
-                                                })}
+                                                value={
+                                                    formData.retention_months
+                                                }
+                                                onChange={(e) =>
+                                                    setFormData({
+                                                        ...formData,
+                                                        retention_months:
+                                                            parseInt(
+                                                                e.target.value,
+                                                            ),
+                                                    })
+                                                }
                                                 required
                                             />
                                         </div>
 
                                         <div className="space-y-2">
-                                            <Label htmlFor="priority">Priority *</Label>
+                                            <Label htmlFor="priority">
+                                                Priority *
+                                            </Label>
                                             <Input
                                                 id="priority"
                                                 type="number"
                                                 min="1"
                                                 value={formData.priority}
-                                                onChange={(e) => setFormData({
-                                                    ...formData,
-                                                    priority: parseInt(e.target.value)
-                                                })}
+                                                onChange={(e) =>
+                                                    setFormData({
+                                                        ...formData,
+                                                        priority: parseInt(
+                                                            e.target.value,
+                                                        ),
+                                                    })
+                                                }
                                                 required
                                                 placeholder="Higher number = higher priority"
                                             />
@@ -322,64 +431,122 @@ export default function RetentionPolicies({ policies, sites, retentionStats }: P
                                     </div>
 
                                     <div className="space-y-2">
-                                        <Label htmlFor="form-type">Form Type *</Label>
+                                        <Label htmlFor="form-type">
+                                            Form Type *
+                                        </Label>
                                         <Select
                                             value={formData.form_type}
-                                            onValueChange={(value) => setFormData({
-                                                ...formData,
-                                                form_type: value as FormData['form_type'],
-                                            })}
+                                            onValueChange={(value) =>
+                                                setFormData({
+                                                    ...formData,
+                                                    form_type:
+                                                        value as FormData['form_type'],
+                                                })
+                                            }
                                         >
-                                            <SelectTrigger id="form-type" className="w-full">
+                                            <SelectTrigger
+                                                id="form-type"
+                                                className="w-full"
+                                            >
                                                 <SelectValue placeholder="Select form type" />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="all">All Form Types</SelectItem>
-                                                <SelectItem value="leave_request">Leave Requests Only</SelectItem>
-                                                <SelectItem value="it_concern">IT Concerns Only</SelectItem>
-                                                <SelectItem value="medication_request">Medication Requests Only</SelectItem>
-                                                <SelectItem value="leave_credit">Leave Credits Only</SelectItem>
+                                                <SelectItem value="all">
+                                                    All Form Types
+                                                </SelectItem>
+                                                <SelectItem value="leave_request">
+                                                    Leave Requests Only
+                                                </SelectItem>
+                                                <SelectItem value="it_concern">
+                                                    IT Concerns Only
+                                                </SelectItem>
+                                                <SelectItem value="medication_request">
+                                                    Medication Requests Only
+                                                </SelectItem>
+                                                <SelectItem value="leave_credit">
+                                                    Leave Credits Only
+                                                </SelectItem>
                                             </SelectContent>
                                         </Select>
                                     </div>
 
                                     <div className="space-y-2">
-                                        <Label htmlFor="applies-to-type">Applies To *</Label>
+                                        <Label htmlFor="applies-to-type">
+                                            Applies To *
+                                        </Label>
                                         <Select
                                             value={formData.applies_to_type}
-                                            onValueChange={(value) => setFormData({
-                                                ...formData,
-                                                applies_to_type: value as 'global' | 'site',
-                                                applies_to_id: value === 'global' ? null : formData.applies_to_id,
-                                            })}
+                                            onValueChange={(value) =>
+                                                setFormData({
+                                                    ...formData,
+                                                    applies_to_type: value as
+                                                        'global' | 'site',
+                                                    applies_to_id:
+                                                        value === 'global'
+                                                            ? null
+                                                            : formData.applies_to_id,
+                                                })
+                                            }
                                         >
-                                            <SelectTrigger id="applies-to-type" className="w-full">
+                                            <SelectTrigger
+                                                id="applies-to-type"
+                                                className="w-full"
+                                            >
                                                 <SelectValue placeholder="Select scope" />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="global">All Sites (Global)</SelectItem>
-                                                <SelectItem value="site">Specific Site</SelectItem>
+                                                <SelectItem value="global">
+                                                    All Sites (Global)
+                                                </SelectItem>
+                                                <SelectItem value="site">
+                                                    Specific Site
+                                                </SelectItem>
                                             </SelectContent>
                                         </Select>
                                     </div>
 
                                     {formData.applies_to_type === 'site' && (
                                         <div className="space-y-2">
-                                            <Label htmlFor="site">Select Site *</Label>
+                                            <Label htmlFor="site">
+                                                Select Site *
+                                            </Label>
                                             <Select
-                                                value={formData.applies_to_id ? String(formData.applies_to_id) : ''}
-                                                onValueChange={(value) => setFormData({
-                                                    ...formData,
-                                                    applies_to_id: value ? parseInt(value, 10) : null,
-                                                })}
+                                                value={
+                                                    formData.applies_to_id
+                                                        ? String(
+                                                              formData.applies_to_id,
+                                                          )
+                                                        : ''
+                                                }
+                                                onValueChange={(value) =>
+                                                    setFormData({
+                                                        ...formData,
+                                                        applies_to_id: value
+                                                            ? parseInt(
+                                                                  value,
+                                                                  10,
+                                                              )
+                                                            : null,
+                                                    })
+                                                }
                                             >
-                                                <SelectTrigger id="site" className="w-full">
+                                                <SelectTrigger
+                                                    id="site"
+                                                    className="w-full"
+                                                >
                                                     <SelectValue placeholder="Select a site..." />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    <SelectItem value="">Select a site...</SelectItem>
+                                                    <SelectItem value="">
+                                                        Select a site...
+                                                    </SelectItem>
                                                     {sites.map((site) => (
-                                                        <SelectItem key={site.id} value={String(site.id)}>
+                                                        <SelectItem
+                                                            key={site.id}
+                                                            value={String(
+                                                                site.id,
+                                                            )}
+                                                        >
                                                             {site.name}
                                                         </SelectItem>
                                                     ))}
@@ -392,12 +559,17 @@ export default function RetentionPolicies({ policies, sites, retentionStats }: P
                                         <Switch
                                             id="is-active"
                                             checked={formData.is_active}
-                                            onCheckedChange={(checked) => setFormData({
-                                                ...formData,
-                                                is_active: checked
-                                            })}
+                                            onCheckedChange={(checked) =>
+                                                setFormData({
+                                                    ...formData,
+                                                    is_active: checked,
+                                                })
+                                            }
                                         />
-                                        <Label htmlFor="is-active" className="cursor-pointer">
+                                        <Label
+                                            htmlFor="is-active"
+                                            className="cursor-pointer"
+                                        >
                                             Active Policy
                                         </Label>
                                     </div>
@@ -406,18 +578,25 @@ export default function RetentionPolicies({ policies, sites, retentionStats }: P
                                         <Button
                                             type="button"
                                             variant="outline"
-                                            onClick={() => setIsDialogOpen(false)}
+                                            onClick={() =>
+                                                setIsDialogOpen(false)
+                                            }
                                         >
                                             Cancel
                                         </Button>
-                                        <Button type="submit" disabled={isSubmitting}>
+                                        <Button
+                                            type="submit"
+                                            disabled={isSubmitting}
+                                        >
                                             {isSubmitting ? (
                                                 <>
                                                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                                     Saving...
                                                 </>
+                                            ) : editingPolicy ? (
+                                                'Update'
                                             ) : (
-                                                editingPolicy ? 'Update' : 'Create'
+                                                'Create'
                                             )}
                                         </Button>
                                     </div>
@@ -433,10 +612,14 @@ export default function RetentionPolicies({ policies, sites, retentionStats }: P
                         <Alert>
                             <Shield className="h-4 w-4" />
                             <AlertDescription>
-                                Retention policies control how long form request records (Leave Requests, IT Concerns,
-                                Medication Requests, Leave Credits) are kept. Higher priority policies override lower priority ones.
-                                Global policies apply to all sites unless a site-specific policy exists.
-                                Policies with form type "All Forms" act as fallback when no specific policy matches.
+                                Retention policies control how long form request
+                                records (Leave Requests, IT Concerns, Medication
+                                Requests, Leave Credits) are kept. Higher
+                                priority policies override lower priority ones.
+                                Global policies apply to all sites unless a
+                                site-specific policy exists. Policies with form
+                                type "All Forms" act as fallback when no
+                                specific policy matches.
                             </AlertDescription>
                         </Alert>
                     </CardContent>
@@ -445,28 +628,41 @@ export default function RetentionPolicies({ policies, sites, retentionStats }: P
                 {/* Retention Stats */}
                 {retentionStats && (
                     <div className="mb-6">
-                        <div className="flex items-center gap-2 mb-4">
+                        <div className="mb-4 flex items-center gap-2">
                             <BarChart3 className="h-5 w-5 text-muted-foreground" />
-                            <h2 className="text-lg font-semibold">Record Statistics by Age</h2>
+                            <h2 className="text-lg font-semibold">
+                                Record Statistics by Age
+                            </h2>
                         </div>
                         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                             {/* Leave Requests Stats */}
                             <Card>
                                 <CardHeader className="pb-2">
-                                    <CardTitle className="text-base flex items-center gap-2">
+                                    <CardTitle className="flex items-center gap-2 text-base">
                                         <FileText className="h-4 w-4 text-blue-500" />
                                         Leave Requests
                                     </CardTitle>
-                                    <p className="text-2xl font-bold">{retentionStats.leave_request.total.toLocaleString()}</p>
+                                    <p className="text-2xl font-bold">
+                                        {retentionStats.leave_request.total.toLocaleString()}
+                                    </p>
                                 </CardHeader>
                                 <CardContent className="pt-0">
                                     <div className="space-y-1">
-                                        {retentionStats.leave_request.byAge.map((age) => (
-                                            <div key={age.range} className="flex justify-between text-sm">
-                                                <span className="text-muted-foreground">{age.range}</span>
-                                                <span className="font-medium">{age.count.toLocaleString()}</span>
-                                            </div>
-                                        ))}
+                                        {retentionStats.leave_request.byAge.map(
+                                            (age) => (
+                                                <div
+                                                    key={age.range}
+                                                    className="flex justify-between text-sm"
+                                                >
+                                                    <span className="text-muted-foreground">
+                                                        {age.range}
+                                                    </span>
+                                                    <span className="font-medium">
+                                                        {age.count.toLocaleString()}
+                                                    </span>
+                                                </div>
+                                            ),
+                                        )}
                                     </div>
                                 </CardContent>
                             </Card>
@@ -474,20 +670,31 @@ export default function RetentionPolicies({ policies, sites, retentionStats }: P
                             {/* IT Concerns Stats */}
                             <Card>
                                 <CardHeader className="pb-2">
-                                    <CardTitle className="text-base flex items-center gap-2">
+                                    <CardTitle className="flex items-center gap-2 text-base">
                                         <Laptop className="h-4 w-4 text-orange-500" />
                                         IT Concerns
                                     </CardTitle>
-                                    <p className="text-2xl font-bold">{retentionStats.it_concern.total.toLocaleString()}</p>
+                                    <p className="text-2xl font-bold">
+                                        {retentionStats.it_concern.total.toLocaleString()}
+                                    </p>
                                 </CardHeader>
                                 <CardContent className="pt-0">
                                     <div className="space-y-1">
-                                        {retentionStats.it_concern.byAge.map((age) => (
-                                            <div key={age.range} className="flex justify-between text-sm">
-                                                <span className="text-muted-foreground">{age.range}</span>
-                                                <span className="font-medium">{age.count.toLocaleString()}</span>
-                                            </div>
-                                        ))}
+                                        {retentionStats.it_concern.byAge.map(
+                                            (age) => (
+                                                <div
+                                                    key={age.range}
+                                                    className="flex justify-between text-sm"
+                                                >
+                                                    <span className="text-muted-foreground">
+                                                        {age.range}
+                                                    </span>
+                                                    <span className="font-medium">
+                                                        {age.count.toLocaleString()}
+                                                    </span>
+                                                </div>
+                                            ),
+                                        )}
                                     </div>
                                 </CardContent>
                             </Card>
@@ -495,20 +702,31 @@ export default function RetentionPolicies({ policies, sites, retentionStats }: P
                             {/* Medication Requests Stats */}
                             <Card>
                                 <CardHeader className="pb-2">
-                                    <CardTitle className="text-base flex items-center gap-2">
+                                    <CardTitle className="flex items-center gap-2 text-base">
                                         <Pill className="h-4 w-4 text-green-500" />
                                         Medication Requests
                                     </CardTitle>
-                                    <p className="text-2xl font-bold">{retentionStats.medication_request.total.toLocaleString()}</p>
+                                    <p className="text-2xl font-bold">
+                                        {retentionStats.medication_request.total.toLocaleString()}
+                                    </p>
                                 </CardHeader>
                                 <CardContent className="pt-0">
                                     <div className="space-y-1">
-                                        {retentionStats.medication_request.byAge.map((age) => (
-                                            <div key={age.range} className="flex justify-between text-sm">
-                                                <span className="text-muted-foreground">{age.range}</span>
-                                                <span className="font-medium">{age.count.toLocaleString()}</span>
-                                            </div>
-                                        ))}
+                                        {retentionStats.medication_request.byAge.map(
+                                            (age) => (
+                                                <div
+                                                    key={age.range}
+                                                    className="flex justify-between text-sm"
+                                                >
+                                                    <span className="text-muted-foreground">
+                                                        {age.range}
+                                                    </span>
+                                                    <span className="font-medium">
+                                                        {age.count.toLocaleString()}
+                                                    </span>
+                                                </div>
+                                            ),
+                                        )}
                                     </div>
                                 </CardContent>
                             </Card>
@@ -516,20 +734,31 @@ export default function RetentionPolicies({ policies, sites, retentionStats }: P
                             {/* Leave Credits Stats */}
                             <Card>
                                 <CardHeader className="pb-2">
-                                    <CardTitle className="text-base flex items-center gap-2">
+                                    <CardTitle className="flex items-center gap-2 text-base">
                                         <Calendar className="h-4 w-4 text-cyan-500" />
                                         Leave Credits
                                     </CardTitle>
-                                    <p className="text-2xl font-bold">{retentionStats.leave_credit.total.toLocaleString()}</p>
+                                    <p className="text-2xl font-bold">
+                                        {retentionStats.leave_credit.total.toLocaleString()}
+                                    </p>
                                 </CardHeader>
                                 <CardContent className="pt-0">
                                     <div className="space-y-1">
-                                        {retentionStats.leave_credit.byAge.map((age) => (
-                                            <div key={age.range} className="flex justify-between text-sm">
-                                                <span className="text-muted-foreground">{age.range}</span>
-                                                <span className="font-medium">{age.count.toLocaleString()}</span>
-                                            </div>
-                                        ))}
+                                        {retentionStats.leave_credit.byAge.map(
+                                            (age) => (
+                                                <div
+                                                    key={age.range}
+                                                    className="flex justify-between text-sm"
+                                                >
+                                                    <span className="text-muted-foreground">
+                                                        {age.range}
+                                                    </span>
+                                                    <span className="font-medium">
+                                                        {age.count.toLocaleString()}
+                                                    </span>
+                                                </div>
+                                            ),
+                                        )}
                                     </div>
                                 </CardContent>
                             </Card>
@@ -541,23 +770,30 @@ export default function RetentionPolicies({ policies, sites, retentionStats }: P
                 <Card>
                     <CardContent className="pt-6">
                         {policies.length === 0 ? (
-                            <p className="text-center text-muted-foreground py-8">
-                                No retention policies configured. Click "Add Policy" to create one.
+                            <p className="py-8 text-center text-muted-foreground">
+                                No retention policies configured. Click "Add
+                                Policy" to create one.
                             </p>
                         ) : (
                             <>
                                 {/* Desktop Table View */}
-                                <div className="hidden md:block overflow-x-auto">
+                                <div className="hidden overflow-x-auto md:block">
                                     <Table>
                                         <TableHeader>
                                             <TableRow className="bg-muted/50">
                                                 <TableHead>Name</TableHead>
                                                 <TableHead>Form Type</TableHead>
-                                                <TableHead>Retention Period</TableHead>
-                                                <TableHead>Applies To</TableHead>
+                                                <TableHead>
+                                                    Retention Period
+                                                </TableHead>
+                                                <TableHead>
+                                                    Applies To
+                                                </TableHead>
                                                 <TableHead>Priority</TableHead>
                                                 <TableHead>Status</TableHead>
-                                                <TableHead className="text-right">Actions</TableHead>
+                                                <TableHead className="text-right">
+                                                    Actions
+                                                </TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
@@ -565,37 +801,68 @@ export default function RetentionPolicies({ policies, sites, retentionStats }: P
                                                 <TableRow key={policy.id}>
                                                     <TableCell>
                                                         <div>
-                                                            <p className="font-medium">{policy.name}</p>
+                                                            <p className="font-medium">
+                                                                {policy.name}
+                                                            </p>
                                                             {policy.description && (
                                                                 <p className="text-sm text-muted-foreground">
-                                                                    {policy.description}
+                                                                    {
+                                                                        policy.description
+                                                                    }
                                                                 </p>
                                                             )}
                                                         </div>
                                                     </TableCell>
-                                                    <TableCell>{getFormTypeBadge(policy.form_type)}</TableCell>
                                                     <TableCell>
-                                                        {policy.retention_months}{' '}
-                                                        {policy.retention_months === 1 ? 'month' : 'months'}
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        {policy.applies_to_type === 'global' ? (
-                                                            <Badge variant="outline">Global</Badge>
-                                                        ) : (
-                                                            <Badge variant="secondary">{policy.site?.name}</Badge>
+                                                        {getFormTypeBadge(
+                                                            policy.form_type,
                                                         )}
                                                     </TableCell>
                                                     <TableCell>
-                                                        <Badge>{policy.priority}</Badge>
+                                                        {
+                                                            policy.retention_months
+                                                        }{' '}
+                                                        {policy.retention_months ===
+                                                        1
+                                                            ? 'month'
+                                                            : 'months'}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {policy.applies_to_type ===
+                                                        'global' ? (
+                                                            <Badge variant="outline">
+                                                                Global
+                                                            </Badge>
+                                                        ) : (
+                                                            <Badge variant="secondary">
+                                                                {
+                                                                    policy.site
+                                                                        ?.name
+                                                                }
+                                                            </Badge>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Badge>
+                                                            {policy.priority}
+                                                        </Badge>
                                                     </TableCell>
                                                     <TableCell>
                                                         <div className="flex items-center gap-2">
                                                             <Switch
-                                                                checked={policy.is_active}
-                                                                onCheckedChange={() => handleToggle(policy.id)}
+                                                                checked={
+                                                                    policy.is_active
+                                                                }
+                                                                onCheckedChange={() =>
+                                                                    handleToggle(
+                                                                        policy.id,
+                                                                    )
+                                                                }
                                                             />
                                                             <span className="text-sm">
-                                                                {policy.is_active ? 'Active' : 'Inactive'}
+                                                                {policy.is_active
+                                                                    ? 'Active'
+                                                                    : 'Inactive'}
                                                             </span>
                                                         </div>
                                                     </TableCell>
@@ -604,7 +871,11 @@ export default function RetentionPolicies({ policies, sites, retentionStats }: P
                                                             <Button
                                                                 variant="ghost"
                                                                 size="sm"
-                                                                onClick={() => handlePreview(policy.id)}
+                                                                onClick={() =>
+                                                                    handlePreview(
+                                                                        policy.id,
+                                                                    )
+                                                                }
                                                                 title="Preview affected records"
                                                             >
                                                                 <Eye className="h-4 w-4" />
@@ -613,7 +884,11 @@ export default function RetentionPolicies({ policies, sites, retentionStats }: P
                                                                 <Button
                                                                     variant="ghost"
                                                                     size="sm"
-                                                                    onClick={() => openEditDialog(policy)}
+                                                                    onClick={() =>
+                                                                        openEditDialog(
+                                                                            policy,
+                                                                        )
+                                                                    }
                                                                 >
                                                                     <Pencil className="h-4 w-4" />
                                                                 </Button>
@@ -622,7 +897,11 @@ export default function RetentionPolicies({ policies, sites, retentionStats }: P
                                                                 <Button
                                                                     variant="ghost"
                                                                     size="sm"
-                                                                    onClick={() => handleDelete(policy.id)}
+                                                                    onClick={() =>
+                                                                        handleDelete(
+                                                                            policy.id,
+                                                                        )
+                                                                    }
                                                                 >
                                                                     <Trash2 className="h-4 w-4 text-red-600" />
                                                                 </Button>
@@ -636,65 +915,102 @@ export default function RetentionPolicies({ policies, sites, retentionStats }: P
                                 </div>
 
                                 {/* Mobile Card View */}
-                                <div className="md:hidden space-y-4">
+                                <div className="space-y-4 md:hidden">
                                     {policies.map((policy) => (
                                         <div
                                             key={policy.id}
-                                            className="bg-card border rounded-lg p-4 shadow-sm space-y-3"
+                                            className="space-y-3 rounded-lg border bg-card p-4 shadow-sm"
                                         >
-                                            <div className="flex justify-between items-start">
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="font-semibold truncate">{policy.name}</p>
+                                            <div className="flex items-start justify-between">
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="truncate font-semibold">
+                                                        {policy.name}
+                                                    </p>
                                                     {policy.description && (
-                                                        <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
+                                                        <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
                                                             {policy.description}
                                                         </p>
                                                     )}
                                                 </div>
-                                                <div className="ml-2">{getFormTypeBadge(policy.form_type)}</div>
+                                                <div className="ml-2">
+                                                    {getFormTypeBadge(
+                                                        policy.form_type,
+                                                    )}
+                                                </div>
                                             </div>
 
                                             <div className="grid grid-cols-2 gap-2 text-sm">
                                                 <div>
-                                                    <span className="text-muted-foreground">Retention:</span>
+                                                    <span className="text-muted-foreground">
+                                                        Retention:
+                                                    </span>
                                                     <span className="ml-1 font-medium">
-                                                        {policy.retention_months}{' '}
-                                                        {policy.retention_months === 1 ? 'month' : 'months'}
+                                                        {
+                                                            policy.retention_months
+                                                        }{' '}
+                                                        {policy.retention_months ===
+                                                        1
+                                                            ? 'month'
+                                                            : 'months'}
                                                     </span>
                                                 </div>
                                                 <div>
-                                                    <span className="text-muted-foreground">Priority:</span>
+                                                    <span className="text-muted-foreground">
+                                                        Priority:
+                                                    </span>
                                                     <span className="ml-1">
-                                                        <Badge>{policy.priority}</Badge>
+                                                        <Badge>
+                                                            {policy.priority}
+                                                        </Badge>
                                                     </span>
                                                 </div>
                                                 <div>
-                                                    <span className="text-muted-foreground">Applies To:</span>
+                                                    <span className="text-muted-foreground">
+                                                        Applies To:
+                                                    </span>
                                                     <span className="ml-1">
-                                                        {policy.applies_to_type === 'global' ? (
-                                                            <Badge variant="outline">Global</Badge>
+                                                        {policy.applies_to_type ===
+                                                        'global' ? (
+                                                            <Badge variant="outline">
+                                                                Global
+                                                            </Badge>
                                                         ) : (
-                                                            <Badge variant="secondary">{policy.site?.name}</Badge>
+                                                            <Badge variant="secondary">
+                                                                {
+                                                                    policy.site
+                                                                        ?.name
+                                                                }
+                                                            </Badge>
                                                         )}
                                                     </span>
                                                 </div>
                                                 <div className="flex items-center gap-2">
                                                     <Switch
-                                                        checked={policy.is_active}
-                                                        onCheckedChange={() => handleToggle(policy.id)}
+                                                        checked={
+                                                            policy.is_active
+                                                        }
+                                                        onCheckedChange={() =>
+                                                            handleToggle(
+                                                                policy.id,
+                                                            )
+                                                        }
                                                     />
                                                     <span className="text-sm">
-                                                        {policy.is_active ? 'Active' : 'Inactive'}
+                                                        {policy.is_active
+                                                            ? 'Active'
+                                                            : 'Inactive'}
                                                     </span>
                                                 </div>
                                             </div>
 
-                                            <div className="flex gap-2 pt-2 border-t">
+                                            <div className="flex gap-2 border-t pt-2">
                                                 <Button
                                                     variant="outline"
                                                     size="sm"
                                                     className="flex-1"
-                                                    onClick={() => handlePreview(policy.id)}
+                                                    onClick={() =>
+                                                        handlePreview(policy.id)
+                                                    }
                                                 >
                                                     <Eye className="mr-2 h-4 w-4" />
                                                     Preview
@@ -704,7 +1020,11 @@ export default function RetentionPolicies({ policies, sites, retentionStats }: P
                                                         variant="outline"
                                                         size="sm"
                                                         className="flex-1"
-                                                        onClick={() => openEditDialog(policy)}
+                                                        onClick={() =>
+                                                            openEditDialog(
+                                                                policy,
+                                                            )
+                                                        }
                                                     >
                                                         <Pencil className="mr-2 h-4 w-4" />
                                                         Edit
@@ -715,7 +1035,11 @@ export default function RetentionPolicies({ policies, sites, retentionStats }: P
                                                         variant="outline"
                                                         size="sm"
                                                         className="flex-1"
-                                                        onClick={() => handleDelete(policy.id)}
+                                                        onClick={() =>
+                                                            handleDelete(
+                                                                policy.id,
+                                                            )
+                                                        }
                                                     >
                                                         <Trash2 className="mr-2 h-4 w-4 text-red-600" />
                                                         Delete
@@ -740,7 +1064,8 @@ export default function RetentionPolicies({ policies, sites, retentionStats }: P
                             Policy Impact Preview
                         </DialogTitle>
                         <DialogDescription>
-                            Records that would be affected by this retention policy
+                            Records that would be affected by this retention
+                            policy
                         </DialogDescription>
                     </DialogHeader>
 
@@ -753,16 +1078,32 @@ export default function RetentionPolicies({ policies, sites, retentionStats }: P
                             <div className="rounded-lg bg-muted p-4">
                                 <div className="grid gap-2 text-sm">
                                     <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Policy:</span>
-                                        <span className="font-medium">{previewData.policy.name}</span>
+                                        <span className="text-muted-foreground">
+                                            Policy:
+                                        </span>
+                                        <span className="font-medium">
+                                            {previewData.policy.name}
+                                        </span>
                                     </div>
                                     <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Retention Period:</span>
-                                        <span className="font-medium">{previewData.policy.retention_months} months</span>
+                                        <span className="text-muted-foreground">
+                                            Retention Period:
+                                        </span>
+                                        <span className="font-medium">
+                                            {
+                                                previewData.policy
+                                                    .retention_months
+                                            }{' '}
+                                            months
+                                        </span>
                                     </div>
                                     <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Cutoff Date:</span>
-                                        <span className="font-medium">{previewData.cutoff_date}</span>
+                                        <span className="text-muted-foreground">
+                                            Cutoff Date:
+                                        </span>
+                                        <span className="font-medium">
+                                            {previewData.cutoff_date}
+                                        </span>
                                     </div>
                                 </div>
                             </div>
@@ -772,8 +1113,11 @@ export default function RetentionPolicies({ policies, sites, retentionStats }: P
                                     <Alert variant="destructive">
                                         <AlertTriangle className="h-4 w-4" />
                                         <AlertDescription>
-                                            <strong>{previewData.total_affected.toLocaleString()}</strong> records would be deleted
-                                            when this policy is enforced.
+                                            <strong>
+                                                {previewData.total_affected.toLocaleString()}
+                                            </strong>{' '}
+                                            records would be deleted when this
+                                            policy is enforced.
                                         </AlertDescription>
                                     </Alert>
 
@@ -784,16 +1128,32 @@ export default function RetentionPolicies({ policies, sites, retentionStats }: P
                                                 className="flex items-center justify-between rounded-lg border p-3"
                                             >
                                                 <div>
-                                                    <p className="font-medium">{item.label}</p>
-                                                    {item.oldest_date && item.newest_date && (
-                                                        <p className="text-xs text-muted-foreground">
-                                                            From {new Date(item.oldest_date).toLocaleDateString()} to{' '}
-                                                            {new Date(item.newest_date).toLocaleDateString()}
-                                                        </p>
-                                                    )}
+                                                    <p className="font-medium">
+                                                        {item.label}
+                                                    </p>
+                                                    {item.oldest_date &&
+                                                        item.newest_date && (
+                                                            <p className="text-xs text-muted-foreground">
+                                                                From{' '}
+                                                                {new Date(
+                                                                    item.oldest_date,
+                                                                ).toLocaleDateString()}{' '}
+                                                                to{' '}
+                                                                {new Date(
+                                                                    item.newest_date,
+                                                                ).toLocaleDateString()}
+                                                            </p>
+                                                        )}
                                                 </div>
-                                                <Badge variant={item.count > 0 ? 'destructive' : 'secondary'}>
-                                                    {item.count.toLocaleString()} records
+                                                <Badge
+                                                    variant={
+                                                        item.count > 0
+                                                            ? 'destructive'
+                                                            : 'secondary'
+                                                    }
+                                                >
+                                                    {item.count.toLocaleString()}{' '}
+                                                    records
                                                 </Badge>
                                             </div>
                                         ))}
@@ -803,14 +1163,18 @@ export default function RetentionPolicies({ policies, sites, retentionStats }: P
                                 <Alert>
                                     <Shield className="h-4 w-4" />
                                     <AlertDescription>
-                                        No records would be affected by this policy. All current records are within the
-                                        retention period.
+                                        No records would be affected by this
+                                        policy. All current records are within
+                                        the retention period.
                                     </AlertDescription>
                                 </Alert>
                             )}
 
                             <div className="flex justify-end">
-                                <Button variant="outline" onClick={() => setIsPreviewOpen(false)}>
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setIsPreviewOpen(false)}
+                                >
                                     Close
                                 </Button>
                             </div>

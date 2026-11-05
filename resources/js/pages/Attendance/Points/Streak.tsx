@@ -1,11 +1,25 @@
-import { Head, Link } from '@inertiajs/react';
-import AppLayout from '@/layouts/app-layout';
-import { usePageMeta } from '@/hooks';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
-import { Award, Calendar, Flame, Trophy, ArrowLeft, Target, History } from 'lucide-react';
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
+import { usePageMeta } from '@/hooks';
+import AppLayout from '@/layouts/app-layout';
+import { Head, Link } from '@inertiajs/react';
+import {
+    ArrowLeft,
+    Award,
+    Calendar,
+    Flame,
+    History,
+    Target,
+    Trophy,
+} from 'lucide-react';
 
 interface BadgeTier {
     days: number;
@@ -42,7 +56,8 @@ interface PageProps {
 }
 
 const tierStyles: Record<BadgeTier['tier'], string> = {
-    starter: 'bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-100',
+    starter:
+        'bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-100',
     bronze: 'bg-amber-200 text-amber-900 dark:bg-amber-900 dark:text-amber-100',
     silver: 'bg-zinc-300 text-zinc-900 dark:bg-zinc-600 dark:text-zinc-50',
     gold: 'bg-yellow-300 text-yellow-900 dark:bg-yellow-700 dark:text-yellow-50',
@@ -59,7 +74,11 @@ function formatDate(value: string | null): string {
 }
 
 function fullName(u: UserSummary): string {
-    return [u.first_name, u.middle_name ? `${u.middle_name}.` : null, u.last_name]
+    return [
+        u.first_name,
+        u.middle_name ? `${u.middle_name}.` : null,
+        u.last_name,
+    ]
         .filter(Boolean)
         .join(' ');
 }
@@ -78,13 +97,13 @@ export default function StreakPage({ user, streak, badges }: PageProps) {
 
     const progressPct = streak.next_badge
         ? Math.min(
-            100,
-            Math.round(
-                ((streak.next_badge.days - streak.next_badge.days_remaining) /
-                    streak.next_badge.days) *
-                100,
-            ),
-        )
+              100,
+              Math.round(
+                  ((streak.next_badge.days - streak.next_badge.days_remaining) /
+                      streak.next_badge.days) *
+                      100,
+              ),
+          )
         : 100;
 
     return (
@@ -94,9 +113,12 @@ export default function StreakPage({ user, streak, badges }: PageProps) {
             <div className="space-y-6 p-4 md:p-6">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <h1 className="text-2xl font-bold tracking-tight">Tardy-Free Streak</h1>
-                        <p className="text-muted-foreground text-sm">
-                            Consecutive workdays without a non-excused attendance violation.
+                        <h1 className="text-2xl font-bold tracking-tight">
+                            Tardy-Free Streak
+                        </h1>
+                        <p className="text-sm text-muted-foreground">
+                            Consecutive workdays without a non-excused
+                            attendance violation.
                         </p>
                     </div>
                     <div className="flex gap-2">
@@ -125,7 +147,10 @@ export default function StreakPage({ user, streak, badges }: PageProps) {
                             </CardDescription>
                             <CardTitle className="text-4xl font-bold text-orange-600 dark:text-orange-400">
                                 {streak.current_streak}
-                                <span className="text-base font-normal text-muted-foreground"> days</span>
+                                <span className="text-base font-normal text-muted-foreground">
+                                    {' '}
+                                    days
+                                </span>
                             </CardTitle>
                         </CardHeader>
                         <CardContent>
@@ -145,12 +170,16 @@ export default function StreakPage({ user, streak, badges }: PageProps) {
                             </CardDescription>
                             <CardTitle className="text-4xl font-bold">
                                 {streak.longest_streak}
-                                <span className="text-base font-normal text-muted-foreground"> days</span>
+                                <span className="text-base font-normal text-muted-foreground">
+                                    {' '}
+                                    days
+                                </span>
                             </CardTitle>
                         </CardHeader>
                         <CardContent>
                             <p className="text-xs text-muted-foreground">
-                                Personal best across {streak.total_workdays_evaluated} workdays.
+                                Personal best across{' '}
+                                {streak.total_workdays_evaluated} workdays.
                             </p>
                         </CardContent>
                     </Card>
@@ -197,7 +226,8 @@ export default function StreakPage({ user, streak, badges }: PageProps) {
                             </div>
                         ) : (
                             <p className="text-sm text-muted-foreground">
-                                No badge yet — earn the first one at 7 consecutive tardy-free days.
+                                No badge yet — earn the first one at 7
+                                consecutive tardy-free days.
                             </p>
                         )}
 
@@ -206,11 +236,15 @@ export default function StreakPage({ user, streak, badges }: PageProps) {
                                 <div className="flex items-center justify-between text-sm">
                                     <span className="flex items-center gap-1 text-muted-foreground">
                                         <Target className="h-3.5 w-3.5" />
-                                        Next: <strong>{streak.next_badge.label}</strong> at{' '}
-                                        {streak.next_badge.days} days
+                                        Next:{' '}
+                                        <strong>
+                                            {streak.next_badge.label}
+                                        </strong>{' '}
+                                        at {streak.next_badge.days} days
                                     </span>
                                     <span className="font-medium">
-                                        {streak.next_badge.days_remaining} days to go
+                                        {streak.next_badge.days_remaining} days
+                                        to go
                                     </span>
                                 </div>
                                 <Progress value={progressPct} />
@@ -227,7 +261,8 @@ export default function StreakPage({ user, streak, badges }: PageProps) {
                             All Badge Tiers
                         </CardTitle>
                         <CardDescription>
-                            Reach each milestone of consecutive tardy-free workdays to unlock badges.
+                            Reach each milestone of consecutive tardy-free
+                            workdays to unlock badges.
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -237,18 +272,25 @@ export default function StreakPage({ user, streak, badges }: PageProps) {
                                 return (
                                     <div
                                         key={b.days}
-                                        className={`rounded-lg border p-3 text-center transition ${earned
-                                            ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-700 dark:bg-emerald-950/40'
-                                            : 'border-dashed border-muted-foreground/30 opacity-60'
-                                            }`}
+                                        className={`rounded-lg border p-3 text-center transition ${
+                                            earned
+                                                ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-700 dark:bg-emerald-950/40'
+                                                : 'border-dashed border-muted-foreground/30 opacity-60'
+                                        }`}
                                     >
                                         <div className="mb-2 flex justify-center">
-                                            <Badge className={`${tierStyles[b.tier]} px-2 py-0.5 text-xs`}>
+                                            <Badge
+                                                className={`${tierStyles[b.tier]} px-2 py-0.5 text-xs`}
+                                            >
                                                 {b.label}
                                             </Badge>
                                         </div>
-                                        <p className="text-2xl font-bold">{b.days}</p>
-                                        <p className="text-xs text-muted-foreground">days</p>
+                                        <p className="text-2xl font-bold">
+                                            {b.days}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground">
+                                            days
+                                        </p>
                                         {earned && (
                                             <p className="mt-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
                                                 ✓ Earned

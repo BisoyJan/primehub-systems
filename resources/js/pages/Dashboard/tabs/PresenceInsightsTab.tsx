@@ -1,15 +1,24 @@
-import React, { useState, useMemo } from 'react';
-import { motion } from 'framer-motion';
-import { router, Link } from '@inertiajs/react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { DatePicker } from '@/components/ui/date-picker';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis } from 'recharts';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from '@/components/ui/card';
+import {
+    ChartContainer,
+    ChartTooltip,
+    ChartTooltipContent,
+} from '@/components/ui/chart';
+import { DatePicker } from '@/components/ui/date-picker';
+import { Separator } from '@/components/ui/separator';
 import { useInitials } from '@/hooks/use-initials';
+import { show as attendancePointsShow } from '@/routes/attendance-points';
+import { Link, router } from '@inertiajs/react';
+import { motion } from 'framer-motion';
 import {
     AlertCircle,
     AlertTriangle,
@@ -25,9 +34,17 @@ import {
     Users,
     XCircle,
 } from 'lucide-react';
-import { show as attendancePointsShow } from '@/routes/attendance-points';
-import { StatCard } from '../components/StatCard';
+import React, { useMemo, useState } from 'react';
+import {
+    Bar,
+    BarChart,
+    CartesianGrid,
+    ResponsiveContainer,
+    XAxis,
+    YAxis,
+} from 'recharts';
 import { DetailDialog } from '../components/DetailDialog';
+import { StatCard } from '../components/StatCard';
 import type { DashboardProps } from '../types';
 
 export interface PresenceInsightsTabProps {
@@ -46,9 +63,13 @@ export const PresenceInsightsTab: React.FC<PresenceInsightsTabProps> = ({
     pointsByCampaign,
 }) => {
     const [activeDialog, setActiveDialog] = useState<string | null>(null);
-    const [selectedVacantSite, setSelectedVacantSite] = useState<string | null>(null);
+    const [selectedVacantSite, setSelectedVacantSite] = useState<string | null>(
+        null,
+    );
     const [hoveredLeaveId, setHoveredLeaveId] = useState<number | null>(null);
-    const [presenceDate, setPresenceDate] = useState(new Date().toISOString().split('T')[0]);
+    const [presenceDate, setPresenceDate] = useState(
+        new Date().toISOString().split('T')[0],
+    );
     const [calendarDate, setCalendarDate] = useState(() => {
         if (leaveCalendarMonth) {
             return new Date(leaveCalendarMonth);
@@ -66,7 +87,7 @@ export const PresenceInsightsTab: React.FC<PresenceInsightsTabProps> = ({
         setPresenceDate(newDate);
         router.reload({
             data: { presence_date: newDate },
-            only: ["presenceInsights"],
+            only: ['presenceInsights'],
         });
     };
 
@@ -79,17 +100,25 @@ export const PresenceInsightsTab: React.FC<PresenceInsightsTabProps> = ({
 
         router.reload({
             data: { leave_calendar_month: dateStr },
-            only: ["presenceInsights", "leaveCalendarMonth"],
+            only: ['presenceInsights', 'leaveCalendarMonth'],
         });
     };
 
     const handlePrevMonth = () => {
-        const newDate = new Date(calendarDate.getFullYear(), calendarDate.getMonth() - 1, 1);
+        const newDate = new Date(
+            calendarDate.getFullYear(),
+            calendarDate.getMonth() - 1,
+            1,
+        );
         handleCalendarMonthChange(newDate);
     };
 
     const handleNextMonth = () => {
-        const newDate = new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, 1);
+        const newDate = new Date(
+            calendarDate.getFullYear(),
+            calendarDate.getMonth() + 1,
+            1,
+        );
         handleCalendarMonthChange(newDate);
     };
 
@@ -112,25 +141,42 @@ export const PresenceInsightsTab: React.FC<PresenceInsightsTabProps> = ({
                 {!isRestrictedRole && (
                     <Card className="mb-6">
                         <CardHeader>
-                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div>
                                     <CardTitle className="flex items-center gap-2">
                                         <UserCheck className="h-5 w-5" />
                                         Presence Overview
                                     </CardTitle>
-                                    <CardDescription>Employee presence status for {new Date(presenceDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</CardDescription>
+                                    <CardDescription>
+                                        Employee presence status for{' '}
+                                        {new Date(
+                                            presenceDate,
+                                        ).toLocaleDateString('en-US', {
+                                            month: 'long',
+                                            day: 'numeric',
+                                            year: 'numeric',
+                                        })}
+                                    </CardDescription>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <Button
                                         variant="outline"
                                         size="sm"
-                                        onClick={() => handlePresenceDateChange(new Date().toISOString().split('T')[0])}
+                                        onClick={() =>
+                                            handlePresenceDateChange(
+                                                new Date()
+                                                    .toISOString()
+                                                    .split('T')[0],
+                                            )
+                                        }
                                     >
                                         Today
                                     </Button>
                                     <DatePicker
                                         value={presenceDate}
-                                        onChange={(value) => handlePresenceDateChange(value)}
+                                        onChange={(value) =>
+                                            handlePresenceDateChange(value)
+                                        }
                                         placeholder="Select date"
                                     />
                                 </div>
@@ -140,46 +186,70 @@ export const PresenceInsightsTab: React.FC<PresenceInsightsTabProps> = ({
                             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
                                 <StatCard
                                     title="Total Scheduled"
-                                    value={presenceInsights?.todayPresence.total_scheduled || 0}
+                                    value={
+                                        presenceInsights?.todayPresence
+                                            .total_scheduled || 0
+                                    }
                                     icon={Users}
                                     description="Active employees"
-                                    onClick={() => { }}
+                                    onClick={() => {}}
                                     delay={0}
                                 />
                                 <StatCard
                                     title="Present"
-                                    value={presenceInsights?.todayPresence.present || 0}
+                                    value={
+                                        presenceInsights?.todayPresence
+                                            .present || 0
+                                    }
                                     icon={UserCheck}
                                     description="Currently at work"
-                                    onClick={() => setActiveDialog('presentEmployees')}
+                                    onClick={() =>
+                                        setActiveDialog('presentEmployees')
+                                    }
                                     variant="success"
                                     delay={0.05}
                                 />
                                 <StatCard
                                     title="Absent"
-                                    value={presenceInsights?.todayPresence.absent || 0}
+                                    value={
+                                        presenceInsights?.todayPresence
+                                            .absent || 0
+                                    }
                                     icon={UserX}
                                     description="Not reported"
-                                    onClick={() => setActiveDialog('absentEmployees')}
+                                    onClick={() =>
+                                        setActiveDialog('absentEmployees')
+                                    }
                                     variant="danger"
                                     delay={0.1}
                                 />
                                 <StatCard
                                     title="On Leave"
-                                    value={presenceInsights?.todayPresence.on_leave || 0}
+                                    value={
+                                        presenceInsights?.todayPresence
+                                            .on_leave || 0
+                                    }
                                     icon={UserMinus}
                                     description="Approved leaves"
-                                    onClick={() => { }}
+                                    onClick={() => {}}
                                     variant="warning"
                                     delay={0.15}
                                 />
                                 <StatCard
                                     title="Unaccounted"
-                                    value={presenceInsights?.todayPresence.unaccounted || 0}
+                                    value={
+                                        presenceInsights?.todayPresence
+                                            .unaccounted || 0
+                                    }
                                     icon={AlertCircle}
                                     description="No record yet"
-                                    onClick={() => { }}
-                                    variant={presenceInsights?.todayPresence.unaccounted ? "warning" : "default"}
+                                    onClick={() => {}}
+                                    variant={
+                                        presenceInsights?.todayPresence
+                                            .unaccounted
+                                            ? 'warning'
+                                            : 'default'
+                                    }
                                     delay={0.2}
                                 />
                             </div>
@@ -190,145 +260,251 @@ export const PresenceInsightsTab: React.FC<PresenceInsightsTabProps> = ({
                 {/* Leave Calendar Section */}
                 <Card className="mb-6">
                     <CardHeader>
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <div>
                                 <CardTitle className="flex items-center gap-2">
                                     <Calendar className="h-5 w-5" />
                                     Leave Calendar
                                 </CardTitle>
-                                <CardDescription>Employees on approved leave</CardDescription>
+                                <CardDescription>
+                                    Employees on approved leave
+                                </CardDescription>
                             </div>
                             <div className="flex items-center gap-2">
                                 <Button variant="outline" size="sm" asChild>
                                     <Link href="/form-requests/leave-requests/calendar">
-                                        <ExternalLink className="h-4 w-4 mr-1" />
+                                        <ExternalLink className="mr-1 h-4 w-4" />
                                         Full Calendar
                                     </Link>
                                 </Button>
-                                <Button variant="outline" size="sm" onClick={handleToday}>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleToday}
+                                >
                                     Today
                                 </Button>
-                                <Button variant="outline" size="icon" onClick={handlePrevMonth}>
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={handlePrevMonth}
+                                >
                                     <ChevronLeft className="h-4 w-4" />
                                 </Button>
-                                <div className="text-sm font-semibold min-w-35 text-center">
-                                    {calendarDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                                <div className="min-w-35 text-center text-sm font-semibold">
+                                    {calendarDate.toLocaleDateString('en-US', {
+                                        month: 'long',
+                                        year: 'numeric',
+                                    })}
                                 </div>
-                                <Button variant="outline" size="icon" onClick={handleNextMonth}>
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={handleNextMonth}
+                                >
                                     <ChevronRight className="h-4 w-4" />
                                 </Button>
                             </div>
                         </div>
                     </CardHeader>
                     <CardContent>
-                        {(!filteredLeaves || filteredLeaves.length === 0) ? (
-                            <div className="text-center text-muted-foreground py-8">
+                        {!filteredLeaves || filteredLeaves.length === 0 ? (
+                            <div className="py-8 text-center text-muted-foreground">
                                 No employees on leave this month
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                 {/* Calendar Grid - Left Side */}
-                                <div className="border rounded-lg p-4">
+                                <div className="rounded-lg border p-4">
                                     {(() => {
                                         const today = new Date();
                                         const year = calendarDate.getFullYear();
                                         const month = calendarDate.getMonth();
-                                        const firstDay = new Date(year, month, 1);
-                                        const lastDay = new Date(year, month + 1, 0);
+                                        const firstDay = new Date(
+                                            year,
+                                            month,
+                                            1,
+                                        );
+                                        const lastDay = new Date(
+                                            year,
+                                            month + 1,
+                                            0,
+                                        );
                                         const daysInMonth = lastDay.getDate();
-                                        const startingDayOfWeek = firstDay.getDay();
+                                        const startingDayOfWeek =
+                                            firstDay.getDay();
 
                                         const formatDateKey = (date: Date) => {
                                             const y = date.getFullYear();
-                                            const m = String(date.getMonth() + 1).padStart(2, '0');
-                                            const d = String(date.getDate()).padStart(2, '0');
+                                            const m = String(
+                                                date.getMonth() + 1,
+                                            ).padStart(2, '0');
+                                            const d = String(
+                                                date.getDate(),
+                                            ).padStart(2, '0');
                                             return `${y}-${m}-${d}`;
                                         };
 
-                                        const leavesByDate: Record<string, typeof filteredLeaves> = {};
-                                        filteredLeaves.forEach(leave => {
-                                            const startStr = leave.start_date.split('T')[0];
-                                            const endStr = leave.end_date.split('T')[0];
-                                            const [sy, sm, sd] = startStr.split('-').map(Number);
-                                            const [ey, em, ed] = endStr.split('-').map(Number);
-                                            const start = new Date(sy, sm - 1, sd);
-                                            const end = new Date(ey, em - 1, ed);
+                                        const leavesByDate: Record<
+                                            string,
+                                            typeof filteredLeaves
+                                        > = {};
+                                        filteredLeaves.forEach((leave) => {
+                                            const startStr =
+                                                leave.start_date.split('T')[0];
+                                            const endStr =
+                                                leave.end_date.split('T')[0];
+                                            const [sy, sm, sd] = startStr
+                                                .split('-')
+                                                .map(Number);
+                                            const [ey, em, ed] = endStr
+                                                .split('-')
+                                                .map(Number);
+                                            const start = new Date(
+                                                sy,
+                                                sm - 1,
+                                                sd,
+                                            );
+                                            const end = new Date(
+                                                ey,
+                                                em - 1,
+                                                ed,
+                                            );
 
-                                            const effectiveStart = start < firstDay ? firstDay : start;
-                                            const effectiveEnd = end > lastDay ? lastDay : end;
+                                            const effectiveStart =
+                                                start < firstDay
+                                                    ? firstDay
+                                                    : start;
+                                            const effectiveEnd =
+                                                end > lastDay ? lastDay : end;
 
-                                            const currentDate = new Date(effectiveStart);
+                                            const currentDate = new Date(
+                                                effectiveStart,
+                                            );
 
-                                            while (currentDate <= effectiveEnd) {
-                                                const dateKey = formatDateKey(currentDate);
+                                            while (
+                                                currentDate <= effectiveEnd
+                                            ) {
+                                                const dateKey =
+                                                    formatDateKey(currentDate);
                                                 if (!leavesByDate[dateKey]) {
                                                     leavesByDate[dateKey] = [];
                                                 }
-                                                leavesByDate[dateKey].push(leave);
-                                                currentDate.setDate(currentDate.getDate() + 1);
+                                                leavesByDate[dateKey].push(
+                                                    leave,
+                                                );
+                                                currentDate.setDate(
+                                                    currentDate.getDate() + 1,
+                                                );
                                             }
                                         });
 
-                                        const dayNames = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+                                        const dayNames = [
+                                            'S',
+                                            'M',
+                                            'T',
+                                            'W',
+                                            'T',
+                                            'F',
+                                            'S',
+                                        ];
 
                                         return (
                                             <div className="space-y-3">
                                                 {/* Day names */}
                                                 <div className="grid grid-cols-7 gap-1">
-                                                    {dayNames.map((day, idx) => (
-                                                        <div key={idx} className="text-center text-xs font-medium text-muted-foreground p-1">
-                                                            {day}
-                                                        </div>
-                                                    ))}
+                                                    {dayNames.map(
+                                                        (day, idx) => (
+                                                            <div
+                                                                key={idx}
+                                                                className="p-1 text-center text-xs font-medium text-muted-foreground"
+                                                            >
+                                                                {day}
+                                                            </div>
+                                                        ),
+                                                    )}
                                                 </div>
                                                 {/* Calendar days */}
                                                 <div className="grid grid-cols-7 gap-1">
-                                                    {Array.from({ length: startingDayOfWeek }).map((_, i) => (
-                                                        <div key={`empty-${i}`} className="aspect-square" />
+                                                    {Array.from({
+                                                        length: startingDayOfWeek,
+                                                    }).map((_, i) => (
+                                                        <div
+                                                            key={`empty-${i}`}
+                                                            className="aspect-square"
+                                                        />
                                                     ))}
-                                                    {Array.from({ length: daysInMonth }).map((_, i) => {
+                                                    {Array.from({
+                                                        length: daysInMonth,
+                                                    }).map((_, i) => {
                                                         const day = i + 1;
-                                                        const dateKey = formatDateKey(new Date(year, month, day));
-                                                        const leavesOnDay = leavesByDate[dateKey] || [];
-                                                        const isToday = day === today.getDate() && month === today.getMonth() && year === today.getFullYear();
-                                                        const hasLeaves = leavesOnDay.length > 0;
-                                                        const isHoveredLeaveDay = hoveredLeaveId !== null && leavesOnDay.some(l => l.id === hoveredLeaveId);
+                                                        const dateKey =
+                                                            formatDateKey(
+                                                                new Date(
+                                                                    year,
+                                                                    month,
+                                                                    day,
+                                                                ),
+                                                            );
+                                                        const leavesOnDay =
+                                                            leavesByDate[
+                                                                dateKey
+                                                            ] || [];
+                                                        const isToday =
+                                                            day ===
+                                                                today.getDate() &&
+                                                            month ===
+                                                                today.getMonth() &&
+                                                            year ===
+                                                                today.getFullYear();
+                                                        const hasLeaves =
+                                                            leavesOnDay.length >
+                                                            0;
+                                                        const isHoveredLeaveDay =
+                                                            hoveredLeaveId !==
+                                                                null &&
+                                                            leavesOnDay.some(
+                                                                (l) =>
+                                                                    l.id ===
+                                                                    hoveredLeaveId,
+                                                            );
 
                                                         return (
                                                             <div
                                                                 key={day}
-                                                                className={`
-                                                                    aspect-square p-1 rounded flex items-center justify-center text-sm relative transition-all duration-150
-                                                                    ${hasLeaves ? 'bg-amber-500 dark:bg-amber-600 font-semibold text-white' : 'text-muted-foreground'}
-                                                                    ${isToday ? 'ring-2 ring-primary' : ''}
-                                                                    ${isHoveredLeaveDay ? 'ring-2 ring-offset-1 ring-offset-background ring-primary bg-amber-400 dark:bg-amber-500 shadow-lg' : ''}
-                                                                `}
+                                                                className={`relative flex aspect-square items-center justify-center rounded p-1 text-sm transition-all duration-150 ${hasLeaves ? 'bg-amber-500 font-semibold text-white dark:bg-amber-600' : 'text-muted-foreground'} ${isToday ? 'ring-2 ring-primary' : ''} ${isHoveredLeaveDay ? 'bg-amber-400 shadow-lg ring-2 ring-primary ring-offset-1 ring-offset-background dark:bg-amber-500' : ''} `}
                                                             >
                                                                 {day}
-                                                                {hasLeaves && leavesOnDay.length > 1 && (
-                                                                    <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-red-500 rounded-full text-[8px] text-white flex items-center justify-center">
-                                                                        {leavesOnDay.length}
-                                                                    </div>
-                                                                )}
+                                                                {hasLeaves &&
+                                                                    leavesOnDay.length >
+                                                                        1 && (
+                                                                        <div className="absolute -top-0.5 -right-0.5 flex h-3 w-3 items-center justify-center rounded-full bg-red-500 text-[8px] text-white">
+                                                                            {
+                                                                                leavesOnDay.length
+                                                                            }
+                                                                        </div>
+                                                                    )}
                                                             </div>
                                                         );
                                                     })}
                                                 </div>
                                                 {/* Legend */}
-                                                <div className="flex flex-row gap-4 text-xs pt-2 border-t">
+                                                <div className="flex flex-row gap-4 border-t pt-2 text-xs">
                                                     <div className="flex items-center gap-2">
-                                                        <div className="w-4 h-4 rounded bg-amber-500 dark:bg-amber-600" />
+                                                        <div className="h-4 w-4 rounded bg-amber-500 dark:bg-amber-600" />
                                                         <span>On leave</span>
                                                     </div>
                                                     <div className="flex items-center gap-2">
-                                                        <div className="w-4 h-4 rounded ring-2 ring-primary" />
+                                                        <div className="h-4 w-4 rounded ring-2 ring-primary" />
                                                         <span>Today</span>
                                                     </div>
                                                     <div className="flex items-center gap-2">
-                                                        <div className="w-4 h-4 rounded bg-amber-500 relative">
-                                                            <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full" />
+                                                        <div className="relative h-4 w-4 rounded bg-amber-500">
+                                                            <div className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-red-500" />
                                                         </div>
-                                                        <span>Multiple employees</span>
+                                                        <span>
+                                                            Multiple employees
+                                                        </span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -337,47 +513,79 @@ export const PresenceInsightsTab: React.FC<PresenceInsightsTabProps> = ({
                                 </div>
 
                                 {/* Employee List - Right Side */}
-                                <div className="border rounded-lg p-4 flex flex-col">
-                                    <h4 className="text-sm font-semibold mb-3">All Leaves ({filteredLeaves.length})</h4>
-                                    <div className="space-y-2 flex-1 max-h-70 overflow-y-auto pr-2">
+                                <div className="flex flex-col rounded-lg border p-4">
+                                    <h4 className="mb-3 text-sm font-semibold">
+                                        All Leaves ({filteredLeaves.length})
+                                    </h4>
+                                    <div className="max-h-70 flex-1 space-y-2 overflow-y-auto pr-2">
                                         {filteredLeaves.map((leave) => (
                                             <div
                                                 key={leave.id}
-                                                className="p-3 border rounded-lg hover:bg-accent/50 cursor-pointer transition-colors text-sm"
+                                                className="cursor-pointer rounded-lg border p-3 text-sm transition-colors hover:bg-accent/50"
                                                 onClick={() => {
-                                                    setActiveDialog('leaveDetail');
-                                                    setSelectedVacantSite(leave.id.toString());
+                                                    setActiveDialog(
+                                                        'leaveDetail',
+                                                    );
+                                                    setSelectedVacantSite(
+                                                        leave.id.toString(),
+                                                    );
                                                 }}
-                                                onMouseEnter={() => setHoveredLeaveId(leave.id)}
-                                                onMouseLeave={() => setHoveredLeaveId(null)}
+                                                onMouseEnter={() =>
+                                                    setHoveredLeaveId(leave.id)
+                                                }
+                                                onMouseLeave={() =>
+                                                    setHoveredLeaveId(null)
+                                                }
                                             >
-                                                <div className="flex items-start gap-2.5 mb-1">
+                                                <div className="mb-1 flex items-start gap-2.5">
                                                     {leave.avatar_url ? (
                                                         <img
-                                                            src={leave.avatar_url}
-                                                            alt={leave.user_name}
-                                                            className="h-8 w-8 rounded-full object-cover shrink-0 mt-0.5"
+                                                            src={
+                                                                leave.avatar_url
+                                                            }
+                                                            alt={
+                                                                leave.user_name
+                                                            }
+                                                            className="mt-0.5 h-8 w-8 shrink-0 rounded-full object-cover"
                                                         />
                                                     ) : (
-                                                        <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center shrink-0 mt-0.5">
+                                                        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
                                                             <span className="text-xs font-medium text-muted-foreground">
-                                                                {leave.user_name.split(',')[0]?.[0] ?? ''}
+                                                                {leave.user_name.split(
+                                                                    ',',
+                                                                )[0]?.[0] ?? ''}
                                                             </span>
                                                         </div>
                                                     )}
-                                                    <div className="flex-1 min-w-0">
+                                                    <div className="min-w-0 flex-1">
                                                         <div className="flex items-start justify-between gap-1">
-                                                            <span className="font-medium truncate">{leave.user_name}</span>
-                                                            <Badge variant="outline" className="text-xs shrink-0">{leave.leave_type}</Badge>
+                                                            <span className="truncate font-medium">
+                                                                {
+                                                                    leave.user_name
+                                                                }
+                                                            </span>
+                                                            <Badge
+                                                                variant="outline"
+                                                                className="shrink-0 text-xs"
+                                                            >
+                                                                {
+                                                                    leave.leave_type
+                                                                }
+                                                            </Badge>
                                                         </div>
-                                                        <div className="text-xs text-muted-foreground">{leave.campaign_name}</div>
+                                                        <div className="text-xs text-muted-foreground">
+                                                            {
+                                                                leave.campaign_name
+                                                            }
+                                                        </div>
                                                     </div>
                                                 </div>
                                                 <div className="text-xs text-muted-foreground">
-                                                    {Number(leave.days_requested) === 1
+                                                    {Number(
+                                                        leave.days_requested,
+                                                    ) === 1
                                                         ? `${new Date(leave.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} (1 day)`
-                                                        : `${new Date(leave.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${new Date(leave.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} (${Math.round(Number(leave.days_requested))} days)`
-                                                    }
+                                                        : `${new Date(leave.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${new Date(leave.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} (${Math.round(Number(leave.days_requested))} days)`}
                                                 </div>
                                             </div>
                                         ))}
@@ -396,33 +604,57 @@ export const PresenceInsightsTab: React.FC<PresenceInsightsTabProps> = ({
                                 <AlertTriangle className="h-5 w-5" />
                                 Attendance Points Overview
                             </CardTitle>
-                            <CardDescription>Active attendance violations and high-risk employees</CardDescription>
+                            <CardDescription>
+                                Active attendance violations and high-risk
+                                employees
+                            </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-6">
                             {/* Summary Cards */}
                             <div className="grid gap-4 md:grid-cols-4">
                                 <StatCard
                                     title="Total Active Points"
-                                    value={presenceInsights?.attendancePoints.total_active_points.toFixed(1) || '0.0'}
+                                    value={
+                                        presenceInsights?.attendancePoints.total_active_points.toFixed(
+                                            1,
+                                        ) || '0.0'
+                                    }
                                     icon={AlertTriangle}
                                     description="All active violations"
-                                    onClick={() => setActiveDialog('pointsBreakdown')}
+                                    onClick={() =>
+                                        setActiveDialog('pointsBreakdown')
+                                    }
                                     variant="warning"
                                 />
                                 <StatCard
                                     title="Total Violations"
-                                    value={presenceInsights?.attendancePoints.total_violations || 0}
+                                    value={
+                                        presenceInsights?.attendancePoints
+                                            .total_violations || 0
+                                    }
                                     icon={XCircle}
                                     description="Count of infractions"
-                                    onClick={() => setActiveDialog('pointsBreakdown')}
+                                    onClick={() =>
+                                        setActiveDialog('pointsBreakdown')
+                                    }
                                 />
                                 <StatCard
                                     title="High Risk Employees"
-                                    value={presenceInsights?.attendancePoints.high_risk_count || 0}
+                                    value={
+                                        presenceInsights?.attendancePoints
+                                            .high_risk_count || 0
+                                    }
                                     icon={AlertCircle}
                                     description="6+ points"
-                                    onClick={() => setActiveDialog('highRiskEmployees')}
-                                    variant={(presenceInsights?.attendancePoints.high_risk_count || 0) > 0 ? "danger" : "default"}
+                                    onClick={() =>
+                                        setActiveDialog('highRiskEmployees')
+                                    }
+                                    variant={
+                                        (presenceInsights?.attendancePoints
+                                            .high_risk_count || 0) > 0
+                                            ? 'danger'
+                                            : 'default'
+                                    }
                                 />
                                 <StatCard
                                     title="Points Trend"
@@ -431,58 +663,95 @@ export const PresenceInsightsTab: React.FC<PresenceInsightsTabProps> = ({
                                     }
                                     icon={TrendingUp}
                                     description="Last 6 months"
-                                    onClick={() => setActiveDialog('pointsTrend')}
+                                    onClick={() =>
+                                        setActiveDialog('pointsTrend')
+                                    }
                                 />
                             </div>
 
                             {/* High Risk Employees Preview */}
-                            {presenceInsights?.attendancePoints.high_risk_employees && presenceInsights.attendancePoints.high_risk_employees.length > 0 && (
-                                <div className="space-y-3">
-                                    <div className="flex items-center justify-between">
-                                        <h3 className="text-lg font-semibold">High Risk Employees (6+ Points)</h3>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => setActiveDialog('highRiskEmployees')}
-                                        >
-                                            View All
-                                        </Button>
-                                    </div>
-                                    <div className="grid gap-3 md:grid-cols-2">
-                                        {presenceInsights.attendancePoints.high_risk_employees.slice(0, 4).map((emp) => (
-                                            <Card key={emp.user_id} className="border-red-500/30">
-                                                <CardHeader className="pb-3">
-                                                    <div className="flex items-start justify-between">
-                                                        <div>
-                                                            <CardTitle className="text-base">{emp.user_name}</CardTitle>
-                                                            <CardDescription>{emp.user_role}</CardDescription>
-                                                        </div>
-                                                        <Badge variant="destructive" className="text-lg font-bold">
-                                                            {emp.total_points} pts
-                                                        </Badge>
-                                                    </div>
-                                                </CardHeader>
-                                                <CardContent>
-                                                    <div className="text-sm text-muted-foreground">
-                                                        {emp.violations_count} violations
-                                                    </div>
-                                                    <Button
-                                                        variant="link"
-                                                        size="sm"
-                                                        className="px-0 h-auto"
-                                                        onClick={() => {
-                                                            setActiveDialog('highRiskDetail');
-                                                            setSelectedVacantSite(emp.user_id.toString());
-                                                        }}
+                            {presenceInsights?.attendancePoints
+                                .high_risk_employees &&
+                                presenceInsights.attendancePoints
+                                    .high_risk_employees.length > 0 && (
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <h3 className="text-lg font-semibold">
+                                                High Risk Employees (6+ Points)
+                                            </h3>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() =>
+                                                    setActiveDialog(
+                                                        'highRiskEmployees',
+                                                    )
+                                                }
+                                            >
+                                                View All
+                                            </Button>
+                                        </div>
+                                        <div className="grid gap-3 md:grid-cols-2">
+                                            {presenceInsights.attendancePoints.high_risk_employees
+                                                .slice(0, 4)
+                                                .map((emp) => (
+                                                    <Card
+                                                        key={emp.user_id}
+                                                        className="border-red-500/30"
                                                     >
-                                                        View Details →
-                                                    </Button>
-                                                </CardContent>
-                                            </Card>
-                                        ))}
+                                                        <CardHeader className="pb-3">
+                                                            <div className="flex items-start justify-between">
+                                                                <div>
+                                                                    <CardTitle className="text-base">
+                                                                        {
+                                                                            emp.user_name
+                                                                        }
+                                                                    </CardTitle>
+                                                                    <CardDescription>
+                                                                        {
+                                                                            emp.user_role
+                                                                        }
+                                                                    </CardDescription>
+                                                                </div>
+                                                                <Badge
+                                                                    variant="destructive"
+                                                                    className="text-lg font-bold"
+                                                                >
+                                                                    {
+                                                                        emp.total_points
+                                                                    }{' '}
+                                                                    pts
+                                                                </Badge>
+                                                            </div>
+                                                        </CardHeader>
+                                                        <CardContent>
+                                                            <div className="text-sm text-muted-foreground">
+                                                                {
+                                                                    emp.violations_count
+                                                                }{' '}
+                                                                violations
+                                                            </div>
+                                                            <Button
+                                                                variant="link"
+                                                                size="sm"
+                                                                className="h-auto px-0"
+                                                                onClick={() => {
+                                                                    setActiveDialog(
+                                                                        'highRiskDetail',
+                                                                    );
+                                                                    setSelectedVacantSite(
+                                                                        emp.user_id.toString(),
+                                                                    );
+                                                                }}
+                                                            >
+                                                                View Details →
+                                                            </Button>
+                                                        </CardContent>
+                                                    </Card>
+                                                ))}
+                                        </div>
                                     </div>
-                                </div>
-                            )}
+                                )}
                         </CardContent>
                     </Card>
                 )}
@@ -496,47 +765,89 @@ export const PresenceInsightsTab: React.FC<PresenceInsightsTabProps> = ({
                 title="Leave Request Details"
             >
                 {(() => {
-                    const leave = filteredLeaves?.find(l => l.id.toString() === selectedVacantSite);
-                    if (!leave) return <div className="text-center text-muted-foreground py-4">Leave not found</div>;
+                    const leave = filteredLeaves?.find(
+                        (l) => l.id.toString() === selectedVacantSite,
+                    );
+                    if (!leave)
+                        return (
+                            <div className="py-4 text-center text-muted-foreground">
+                                Leave not found
+                            </div>
+                        );
                     return (
                         <div className="space-y-4">
                             <div className="flex items-start gap-4">
                                 <Avatar className="h-16 w-16 overflow-hidden rounded-full">
-                                    <AvatarImage src={leave.avatar_url ?? undefined} alt={leave.user_name} />
-                                    <AvatarFallback className="rounded-full bg-neutral-200 text-black dark:bg-neutral-700 dark:text-white text-lg">
+                                    <AvatarImage
+                                        src={leave.avatar_url ?? undefined}
+                                        alt={leave.user_name}
+                                    />
+                                    <AvatarFallback className="rounded-full bg-neutral-200 text-lg text-black dark:bg-neutral-700 dark:text-white">
                                         {getInitials(leave.user_name)}
                                     </AvatarFallback>
                                 </Avatar>
                                 <div className="flex-1">
-                                    <div className="text-sm font-medium text-muted-foreground">Employee</div>
-                                    <div className="text-lg font-semibold">{leave.user_name}</div>
-                                    <div className="text-sm text-muted-foreground">{leave.campaign_name}</div>
+                                    <div className="text-sm font-medium text-muted-foreground">
+                                        Employee
+                                    </div>
+                                    <div className="text-lg font-semibold">
+                                        {leave.user_name}
+                                    </div>
+                                    <div className="text-sm text-muted-foreground">
+                                        {leave.campaign_name}
+                                    </div>
                                 </div>
                             </div>
                             <Separator />
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <div className="text-sm font-medium text-muted-foreground">Leave Type</div>
-                                    <Badge variant="outline" className="mt-1">{leave.leave_type}</Badge>
+                                    <div className="text-sm font-medium text-muted-foreground">
+                                        Leave Type
+                                    </div>
+                                    <Badge variant="outline" className="mt-1">
+                                        {leave.leave_type}
+                                    </Badge>
                                 </div>
                                 <div>
-                                    <div className="text-sm font-medium text-muted-foreground">Duration</div>
+                                    <div className="text-sm font-medium text-muted-foreground">
+                                        Duration
+                                    </div>
                                     <div className="mt-1">{`${Math.round(Number(leave.days_requested))} day${leave.days_requested !== 1 ? 's' : ''}`}</div>
                                 </div>
                             </div>
                             <div>
-                                <div className="text-sm font-medium text-muted-foreground">Date Range</div>
-                                <div className="flex items-center gap-2 mt-1">
+                                <div className="text-sm font-medium text-muted-foreground">
+                                    Date Range
+                                </div>
+                                <div className="mt-1 flex items-center gap-2">
                                     <Calendar className="h-4 w-4 text-muted-foreground" />
-                                    <span>{new Date(leave.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                    <span>
+                                        {new Date(
+                                            leave.start_date,
+                                        ).toLocaleDateString('en-US', {
+                                            month: 'short',
+                                            day: 'numeric',
+                                            year: 'numeric',
+                                        })}
+                                    </span>
                                     <span>→</span>
-                                    <span>{new Date(leave.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                    <span>
+                                        {new Date(
+                                            leave.end_date,
+                                        ).toLocaleDateString('en-US', {
+                                            month: 'short',
+                                            day: 'numeric',
+                                            year: 'numeric',
+                                        })}
+                                    </span>
                                 </div>
                             </div>
                             {!isRestrictedRole && leave.reason && (
                                 <div>
-                                    <div className="text-sm font-medium text-muted-foreground">Reason</div>
-                                    <div className="mt-1 p-3 bg-muted rounded-md text-sm">
+                                    <div className="text-sm font-medium text-muted-foreground">
+                                        Reason
+                                    </div>
+                                    <div className="mt-1 rounded-md bg-muted p-3 text-sm">
                                         {leave.reason}
                                     </div>
                                 </div>
@@ -553,35 +864,53 @@ export const PresenceInsightsTab: React.FC<PresenceInsightsTabProps> = ({
                 description="Employees with 6 or more active attendance points"
             >
                 <div className="space-y-3">
-                    {(!presenceInsights?.attendancePoints.high_risk_employees || presenceInsights.attendancePoints.high_risk_employees.length === 0) ? (
-                        <div className="text-center text-muted-foreground py-8">
-                            <CheckCircle2 className="h-12 w-12 mx-auto mb-3 text-green-500" />
+                    {!presenceInsights?.attendancePoints.high_risk_employees ||
+                    presenceInsights.attendancePoints.high_risk_employees
+                        .length === 0 ? (
+                        <div className="py-8 text-center text-muted-foreground">
+                            <CheckCircle2 className="mx-auto mb-3 h-12 w-12 text-green-500" />
                             <p>No high-risk employees at this time</p>
                         </div>
                     ) : (
-                        presenceInsights.attendancePoints.high_risk_employees.map((emp) => (
-                            <Card key={emp.user_id} className="border-red-500/30 cursor-pointer hover:bg-accent/50 transition-colors" onClick={() => {
-                                setActiveDialog('highRiskDetail');
-                                setSelectedVacantSite(emp.user_id.toString());
-                            }}>
-                                <CardHeader className="pb-3">
-                                    <div className="flex items-start justify-between">
-                                        <div>
-                                            <CardTitle className="text-base">{emp.user_name}</CardTitle>
-                                            <CardDescription>{emp.user_role}</CardDescription>
+                        presenceInsights.attendancePoints.high_risk_employees.map(
+                            (emp) => (
+                                <Card
+                                    key={emp.user_id}
+                                    className="cursor-pointer border-red-500/30 transition-colors hover:bg-accent/50"
+                                    onClick={() => {
+                                        setActiveDialog('highRiskDetail');
+                                        setSelectedVacantSite(
+                                            emp.user_id.toString(),
+                                        );
+                                    }}
+                                >
+                                    <CardHeader className="pb-3">
+                                        <div className="flex items-start justify-between">
+                                            <div>
+                                                <CardTitle className="text-base">
+                                                    {emp.user_name}
+                                                </CardTitle>
+                                                <CardDescription>
+                                                    {emp.user_role}
+                                                </CardDescription>
+                                            </div>
+                                            <Badge
+                                                variant="destructive"
+                                                className="text-lg font-bold"
+                                            >
+                                                {emp.total_points} pts
+                                            </Badge>
                                         </div>
-                                        <Badge variant="destructive" className="text-lg font-bold">
-                                            {emp.total_points} pts
-                                        </Badge>
-                                    </div>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="text-sm text-muted-foreground">
-                                        {emp.violations_count} active violations
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        ))
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="text-sm text-muted-foreground">
+                                            {emp.violations_count} active
+                                            violations
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            ),
+                        )
                     )}
                 </div>
             </DetailDialog>
@@ -595,40 +924,76 @@ export const PresenceInsightsTab: React.FC<PresenceInsightsTabProps> = ({
                 title="Employee Violation Details"
             >
                 {(() => {
-                    const emp = presenceInsights?.attendancePoints.high_risk_employees.find(e => e.user_id.toString() === selectedVacantSite);
+                    const emp =
+                        presenceInsights?.attendancePoints.high_risk_employees.find(
+                            (e) => e.user_id.toString() === selectedVacantSite,
+                        );
                     if (!emp) return <div>Employee not found</div>;
                     return (
                         <div className="space-y-4">
                             <div className="flex items-start justify-between">
                                 <div>
-                                    <div className="text-lg font-semibold">{emp.user_name}</div>
-                                    <div className="text-sm text-muted-foreground">{emp.user_role}</div>
+                                    <div className="text-lg font-semibold">
+                                        {emp.user_name}
+                                    </div>
+                                    <div className="text-sm text-muted-foreground">
+                                        {emp.user_role}
+                                    </div>
                                 </div>
-                                <Badge variant="destructive" className="text-xl font-bold px-4 py-2">
+                                <Badge
+                                    variant="destructive"
+                                    className="px-4 py-2 text-xl font-bold"
+                                >
                                     {emp.total_points} points
                                 </Badge>
                             </div>
                             <Separator />
                             <div>
-                                <div className="text-sm font-medium mb-2">Total Violations: {emp.violations_count}</div>
-                                <div className="text-sm text-muted-foreground mb-3">Recent violations (up to 5 shown):</div>
+                                <div className="mb-2 text-sm font-medium">
+                                    Total Violations: {emp.violations_count}
+                                </div>
+                                <div className="mb-3 text-sm text-muted-foreground">
+                                    Recent violations (up to 5 shown):
+                                </div>
                                 <div className="space-y-2">
                                     {emp.points.map((point) => (
-                                        <div key={point.id} className="p-3 border rounded-lg space-y-1">
+                                        <div
+                                            key={point.id}
+                                            className="space-y-1 rounded-lg border p-3"
+                                        >
                                             <div className="flex items-start justify-between">
-                                                <div className="font-medium text-sm">
-                                                    {point.point_type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                                <div className="text-sm font-medium">
+                                                    {point.point_type
+                                                        .replace(/_/g, ' ')
+                                                        .replace(/\b\w/g, (l) =>
+                                                            l.toUpperCase(),
+                                                        )}
                                                 </div>
-                                                <Badge variant="outline">{point.points} pts</Badge>
+                                                <Badge variant="outline">
+                                                    {point.points} pts
+                                                </Badge>
                                             </div>
                                             <div className="text-xs text-muted-foreground">
-                                                {new Date(point.shift_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                                {new Date(
+                                                    point.shift_date,
+                                                ).toLocaleDateString('en-US', {
+                                                    month: 'short',
+                                                    day: 'numeric',
+                                                    year: 'numeric',
+                                                })}
                                             </div>
                                             <div className="text-xs text-muted-foreground">
                                                 {point.violation_details}
                                             </div>
                                             <div className="text-xs text-muted-foreground">
-                                                Expires: {new Date(point.expires_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                                Expires:{' '}
+                                                {new Date(
+                                                    point.expires_at,
+                                                ).toLocaleDateString('en-US', {
+                                                    month: 'short',
+                                                    day: 'numeric',
+                                                    year: 'numeric',
+                                                })}
                                             </div>
                                         </div>
                                     ))}
@@ -637,7 +1002,14 @@ export const PresenceInsightsTab: React.FC<PresenceInsightsTabProps> = ({
                             <Button
                                 variant="outline"
                                 className="w-full"
-                                onClick={() => router.get(attendancePointsShow({ user: emp.user_id }, { query: { show_all: 1 } }).url)}
+                                onClick={() =>
+                                    router.get(
+                                        attendancePointsShow(
+                                            { user: emp.user_id },
+                                            { query: { show_all: 1 } },
+                                        ).url,
+                                    )
+                                }
                             >
                                 View Full History
                             </Button>
@@ -667,34 +1039,81 @@ export const PresenceInsightsTab: React.FC<PresenceInsightsTabProps> = ({
                         <>
                             <div className="grid gap-3">
                                 {[
-                                    { key: 'whole_day_absence', label: 'Whole Day Absence (NCNS/FTN)', color: 'bg-red-500' },
-                                    { key: 'half_day_absence', label: 'Half Day Absence', color: 'bg-orange-500' },
-                                    { key: 'tardy', label: 'Tardy', color: 'bg-yellow-500' },
-                                    { key: 'undertime', label: 'Undertime (≤1 hour)', color: 'bg-blue-500' },
-                                    { key: 'undertime_more_than_hour', label: 'Undertime (>1 hour)', color: 'bg-purple-500' },
+                                    {
+                                        key: 'whole_day_absence',
+                                        label: 'Whole Day Absence (NCNS/FTN)',
+                                        color: 'bg-red-500',
+                                    },
+                                    {
+                                        key: 'half_day_absence',
+                                        label: 'Half Day Absence',
+                                        color: 'bg-orange-500',
+                                    },
+                                    {
+                                        key: 'tardy',
+                                        label: 'Tardy',
+                                        color: 'bg-yellow-500',
+                                    },
+                                    {
+                                        key: 'undertime',
+                                        label: 'Undertime (≤1 hour)',
+                                        color: 'bg-blue-500',
+                                    },
+                                    {
+                                        key: 'undertime_more_than_hour',
+                                        label: 'Undertime (>1 hour)',
+                                        color: 'bg-purple-500',
+                                    },
                                 ].map(({ key, label, color }) => {
-                                    const value = presenceInsights.attendancePoints.by_type[key as keyof typeof presenceInsights.attendancePoints.by_type];
-                                    const percentage = presenceInsights.attendancePoints.total_active_points > 0
-                                        ? ((value / presenceInsights.attendancePoints.total_active_points) * 100).toFixed(1)
-                                        : '0.0';
+                                    const value =
+                                        presenceInsights.attendancePoints
+                                            .by_type[
+                                            key as keyof typeof presenceInsights.attendancePoints.by_type
+                                        ];
+                                    const percentage =
+                                        presenceInsights.attendancePoints
+                                            .total_active_points > 0
+                                            ? (
+                                                  (value /
+                                                      presenceInsights
+                                                          .attendancePoints
+                                                          .total_active_points) *
+                                                  100
+                                              ).toFixed(1)
+                                            : '0.0';
                                     return (
-                                        <div key={key} className="flex items-center justify-between p-3 border rounded-lg">
+                                        <div
+                                            key={key}
+                                            className="flex items-center justify-between rounded-lg border p-3"
+                                        >
                                             <div className="flex items-center gap-3">
-                                                <div className={`h-3 w-3 rounded-full ${color}`} />
-                                                <span className="text-sm font-medium">{label}</span>
+                                                <div
+                                                    className={`h-3 w-3 rounded-full ${color}`}
+                                                />
+                                                <span className="text-sm font-medium">
+                                                    {label}
+                                                </span>
                                             </div>
                                             <div className="text-right">
-                                                <div className="font-bold">{value.toFixed(1)} pts</div>
-                                                <div className="text-xs text-muted-foreground">{percentage}%</div>
+                                                <div className="font-bold">
+                                                    {value.toFixed(1)} pts
+                                                </div>
+                                                <div className="text-xs text-muted-foreground">
+                                                    {percentage}%
+                                                </div>
                                             </div>
                                         </div>
                                     );
                                 })}
                             </div>
                             <Separator />
-                            <div className="flex items-center justify-between p-3 bg-muted rounded-lg font-semibold">
+                            <div className="flex items-center justify-between rounded-lg bg-muted p-3 font-semibold">
                                 <span>Total Active Points</span>
-                                <span className="text-lg">{presenceInsights.attendancePoints.total_active_points.toFixed(1)}</span>
+                                <span className="text-lg">
+                                    {presenceInsights.attendancePoints.total_active_points.toFixed(
+                                        1,
+                                    )}
+                                </span>
                             </div>
                         </>
                     )}
@@ -707,45 +1126,82 @@ export const PresenceInsightsTab: React.FC<PresenceInsightsTabProps> = ({
                 title="Attendance Points Trend"
                 description="Monthly trend of attendance points over the last 6 months"
             >
-                <div className="space-y-4 max-h-[calc(80vh-200px)] overflow-y-auto">
+                <div className="max-h-[calc(80vh-200px)] space-y-4 overflow-y-auto">
                     <ChartContainer
                         config={{
                             total_points: {
-                                label: "Total Points",
-                                color: "hsl(25, 95%, 53%)",
+                                label: 'Total Points',
+                                color: 'hsl(25, 95%, 53%)',
                             },
                             violations_count: {
-                                label: "Violations",
-                                color: "hsl(221, 83%, 53%)",
+                                label: 'Violations',
+                                color: 'hsl(221, 83%, 53%)',
                             },
                         }}
                         className="h-62.5 w-full"
                     >
                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={presenceInsights?.attendancePoints.trend || []} margin={{ left: 0, right: 0, top: 5, bottom: 5 }}>
-                                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                            <BarChart
+                                data={
+                                    presenceInsights?.attendancePoints.trend ||
+                                    []
+                                }
+                                margin={{
+                                    left: 0,
+                                    right: 0,
+                                    top: 5,
+                                    bottom: 5,
+                                }}
+                            >
+                                <CartesianGrid
+                                    strokeDasharray="3 3"
+                                    className="stroke-muted"
+                                />
                                 <XAxis
                                     dataKey="label"
                                     tick={{ fontSize: 11 }}
                                     className="text-muted-foreground"
                                 />
-                                <YAxis tick={{ fontSize: 11 }} className="text-muted-foreground" width={40} />
-                                <ChartTooltip content={<ChartTooltipContent />} />
-                                <Bar dataKey="total_points" fill="hsl(25, 95%, 53%)" radius={[4, 4, 0, 0]} />
+                                <YAxis
+                                    tick={{ fontSize: 11 }}
+                                    className="text-muted-foreground"
+                                    width={40}
+                                />
+                                <ChartTooltip
+                                    content={<ChartTooltipContent />}
+                                />
+                                <Bar
+                                    dataKey="total_points"
+                                    fill="hsl(25, 95%, 53%)"
+                                    radius={[4, 4, 0, 0]}
+                                />
                             </BarChart>
                         </ResponsiveContainer>
                     </ChartContainer>
                     <Separator />
                     <div>
-                        <h4 className="text-sm font-semibold mb-3">Monthly Breakdown</h4>
+                        <h4 className="mb-3 text-sm font-semibold">
+                            Monthly Breakdown
+                        </h4>
                         <div className="grid grid-cols-2 gap-3">
-                            {presenceInsights?.attendancePoints.trend?.map((item) => (
-                                <div key={item.month} className="p-3 border rounded-lg">
-                                    <div className="text-sm font-medium">{item.label}</div>
-                                    <div className="text-2xl font-bold text-orange-600">{item.total_points}</div>
-                                    <div className="text-xs text-muted-foreground">{item.violations_count} violations</div>
-                                </div>
-                            ))}
+                            {presenceInsights?.attendancePoints.trend?.map(
+                                (item) => (
+                                    <div
+                                        key={item.month}
+                                        className="rounded-lg border p-3"
+                                    >
+                                        <div className="text-sm font-medium">
+                                            {item.label}
+                                        </div>
+                                        <div className="text-2xl font-bold text-orange-600">
+                                            {item.total_points}
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                            {item.violations_count} violations
+                                        </div>
+                                    </div>
+                                ),
+                            )}
                         </div>
                     </div>
                 </div>
@@ -754,99 +1210,217 @@ export const PresenceInsightsTab: React.FC<PresenceInsightsTabProps> = ({
             {/* ─── Phase 4: Campaign-Level Analytics (Super Admin / Admin) ─────── */}
 
             {/* Campaign Presence Comparison */}
-            {!isRestrictedRole && campaignPresence && campaignPresence.length > 0 && (
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <Users className="h-5 w-5 text-indigo-500" />
-                            Campaign Presence Comparison
-                        </CardTitle>
-                        <CardDescription>Today's presence rate by campaign</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <ChartContainer
-                            config={{
-                                present: { label: 'Present', color: 'hsl(142, 71%, 45%)' },
-                                absent: { label: 'Absent', color: 'hsl(0, 84%, 60%)' },
-                                on_leave: { label: 'On Leave', color: 'hsl(221, 83%, 53%)' },
-                            }}
-                            className="h-75 w-full"
-                        >
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={campaignPresence} layout="vertical" margin={{ left: 0, right: 10, top: 5, bottom: 5 }}>
-                                    <CartesianGrid strokeDasharray="3 3" />
-                                    <XAxis type="number" tickLine={false} axisLine={false} fontSize={12} />
-                                    <YAxis type="category" dataKey="campaign_name" width={120} tickLine={false} axisLine={false} fontSize={11} />
-                                    <ChartTooltip content={<ChartTooltipContent />} />
-                                    <Bar dataKey="present" stackId="a" fill="hsl(142, 71%, 45%)" radius={[0, 0, 0, 0]} />
-                                    <Bar dataKey="absent" stackId="a" fill="hsl(0, 84%, 60%)" radius={[0, 0, 0, 0]} />
-                                    <Bar dataKey="on_leave" stackId="a" fill="hsl(221, 83%, 53%)" radius={[0, 4, 4, 0]} />
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </ChartContainer>
-                        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                            {campaignPresence.map((cp) => (
-                                <div key={cp.campaign_id} className="flex items-center justify-between rounded-lg border p-3">
-                                    <div>
-                                        <p className="text-sm font-medium">{cp.campaign_name}</p>
-                                        <p className="text-xs text-muted-foreground">{cp.total_scheduled} scheduled</p>
+            {!isRestrictedRole &&
+                campaignPresence &&
+                campaignPresence.length > 0 && (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <Users className="h-5 w-5 text-indigo-500" />
+                                Campaign Presence Comparison
+                            </CardTitle>
+                            <CardDescription>
+                                Today's presence rate by campaign
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <ChartContainer
+                                config={{
+                                    present: {
+                                        label: 'Present',
+                                        color: 'hsl(142, 71%, 45%)',
+                                    },
+                                    absent: {
+                                        label: 'Absent',
+                                        color: 'hsl(0, 84%, 60%)',
+                                    },
+                                    on_leave: {
+                                        label: 'On Leave',
+                                        color: 'hsl(221, 83%, 53%)',
+                                    },
+                                }}
+                                className="h-75 w-full"
+                            >
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart
+                                        data={campaignPresence}
+                                        layout="vertical"
+                                        margin={{
+                                            left: 0,
+                                            right: 10,
+                                            top: 5,
+                                            bottom: 5,
+                                        }}
+                                    >
+                                        <CartesianGrid strokeDasharray="3 3" />
+                                        <XAxis
+                                            type="number"
+                                            tickLine={false}
+                                            axisLine={false}
+                                            fontSize={12}
+                                        />
+                                        <YAxis
+                                            type="category"
+                                            dataKey="campaign_name"
+                                            width={120}
+                                            tickLine={false}
+                                            axisLine={false}
+                                            fontSize={11}
+                                        />
+                                        <ChartTooltip
+                                            content={<ChartTooltipContent />}
+                                        />
+                                        <Bar
+                                            dataKey="present"
+                                            stackId="a"
+                                            fill="hsl(142, 71%, 45%)"
+                                            radius={[0, 0, 0, 0]}
+                                        />
+                                        <Bar
+                                            dataKey="absent"
+                                            stackId="a"
+                                            fill="hsl(0, 84%, 60%)"
+                                            radius={[0, 0, 0, 0]}
+                                        />
+                                        <Bar
+                                            dataKey="on_leave"
+                                            stackId="a"
+                                            fill="hsl(221, 83%, 53%)"
+                                            radius={[0, 4, 4, 0]}
+                                        />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </ChartContainer>
+                            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                {campaignPresence.map((cp) => (
+                                    <div
+                                        key={cp.campaign_id}
+                                        className="flex items-center justify-between rounded-lg border p-3"
+                                    >
+                                        <div>
+                                            <p className="text-sm font-medium">
+                                                {cp.campaign_name}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground">
+                                                {cp.total_scheduled} scheduled
+                                            </p>
+                                        </div>
+                                        <Badge
+                                            variant={
+                                                cp.presence_rate >= 80
+                                                    ? 'default'
+                                                    : cp.presence_rate >= 60
+                                                      ? 'secondary'
+                                                      : 'destructive'
+                                            }
+                                        >
+                                            {cp.presence_rate}%
+                                        </Badge>
                                     </div>
-                                    <Badge variant={cp.presence_rate >= 80 ? 'default' : cp.presence_rate >= 60 ? 'secondary' : 'destructive'}>
-                                        {cp.presence_rate}%
-                                    </Badge>
-                                </div>
-                            ))}
-                        </div>
-                    </CardContent>
-                </Card>
-            )}
+                                ))}
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
 
             {/* Points Distribution by Campaign */}
-            {!isRestrictedRole && pointsByCampaign && pointsByCampaign.length > 0 && (
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <AlertTriangle className="h-5 w-5 text-orange-500" />
-                            Points by Campaign
-                        </CardTitle>
-                        <CardDescription>Active attendance points distribution across campaigns</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <ChartContainer
-                            config={{
-                                total_points: { label: 'Total Points', color: 'hsl(25, 95%, 53%)' },
-                                high_risk_count: { label: 'High Risk', color: 'hsl(0, 84%, 60%)' },
-                            }}
-                            className="h-70 w-full"
-                        >
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={pointsByCampaign} margin={{ left: 0, right: 10, top: 5, bottom: 5 }}>
-                                    <CartesianGrid strokeDasharray="3 3" />
-                                    <XAxis dataKey="campaign_name" tickLine={false} axisLine={false} fontSize={11} />
-                                    <YAxis width={35} tickLine={false} axisLine={false} fontSize={12} />
-                                    <ChartTooltip content={<ChartTooltipContent />} />
-                                    <Bar dataKey="total_points" fill="hsl(25, 95%, 53%)" radius={[4, 4, 0, 0]} barSize={30} name="Total Points" />
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </ChartContainer>
-                        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            {pointsByCampaign.map((pc) => (
-                                <div key={pc.campaign_id} className="rounded-lg border p-3 space-y-1">
-                                    <p className="text-sm font-medium">{pc.campaign_name}</p>
-                                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                                        <span>{pc.total_points} pts</span>
-                                        <span>{pc.violations_count} violations</span>
-                                        <span>{pc.employees_with_points} employees</span>
+            {!isRestrictedRole &&
+                pointsByCampaign &&
+                pointsByCampaign.length > 0 && (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <AlertTriangle className="h-5 w-5 text-orange-500" />
+                                Points by Campaign
+                            </CardTitle>
+                            <CardDescription>
+                                Active attendance points distribution across
+                                campaigns
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <ChartContainer
+                                config={{
+                                    total_points: {
+                                        label: 'Total Points',
+                                        color: 'hsl(25, 95%, 53%)',
+                                    },
+                                    high_risk_count: {
+                                        label: 'High Risk',
+                                        color: 'hsl(0, 84%, 60%)',
+                                    },
+                                }}
+                                className="h-70 w-full"
+                            >
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart
+                                        data={pointsByCampaign}
+                                        margin={{
+                                            left: 0,
+                                            right: 10,
+                                            top: 5,
+                                            bottom: 5,
+                                        }}
+                                    >
+                                        <CartesianGrid strokeDasharray="3 3" />
+                                        <XAxis
+                                            dataKey="campaign_name"
+                                            tickLine={false}
+                                            axisLine={false}
+                                            fontSize={11}
+                                        />
+                                        <YAxis
+                                            width={35}
+                                            tickLine={false}
+                                            axisLine={false}
+                                            fontSize={12}
+                                        />
+                                        <ChartTooltip
+                                            content={<ChartTooltipContent />}
+                                        />
+                                        <Bar
+                                            dataKey="total_points"
+                                            fill="hsl(25, 95%, 53%)"
+                                            radius={[4, 4, 0, 0]}
+                                            barSize={30}
+                                            name="Total Points"
+                                        />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </ChartContainer>
+                            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                {pointsByCampaign.map((pc) => (
+                                    <div
+                                        key={pc.campaign_id}
+                                        className="space-y-1 rounded-lg border p-3"
+                                    >
+                                        <p className="text-sm font-medium">
+                                            {pc.campaign_name}
+                                        </p>
+                                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                                            <span>{pc.total_points} pts</span>
+                                            <span>
+                                                {pc.violations_count} violations
+                                            </span>
+                                            <span>
+                                                {pc.employees_with_points}{' '}
+                                                employees
+                                            </span>
+                                        </div>
+                                        {pc.high_risk_count > 0 && (
+                                            <Badge
+                                                variant="destructive"
+                                                className="text-xs"
+                                            >
+                                                {pc.high_risk_count} high risk
+                                            </Badge>
+                                        )}
                                     </div>
-                                    {pc.high_risk_count > 0 && (
-                                        <Badge variant="destructive" className="text-xs">{pc.high_risk_count} high risk</Badge>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    </CardContent>
-                </Card>
-            )}
+                                ))}
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
         </>
     );
 };

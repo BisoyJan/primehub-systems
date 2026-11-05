@@ -15,7 +15,9 @@ interface AppShellProps {
  */
 function getClientSidebarState(): boolean | null {
     if (typeof document === 'undefined') return null;
-    const match = document.cookie.split(';').find((c) => c.trim().startsWith('sidebar_state='));
+    const match = document.cookie
+        .split(';')
+        .find((c) => c.trim().startsWith('sidebar_state='));
     if (!match) return null;
     return match.split('=')[1]?.trim() !== 'false';
 }

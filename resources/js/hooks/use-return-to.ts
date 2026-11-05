@@ -6,14 +6,21 @@ const RETURN_TO_PARAM = 'return_to';
  * Accept only same-origin relative paths (e.g. "/stations?page=2").
  * Mirrors the backend validation in RedirectsWithFlashMessages::safeReturnTo().
  */
-export function sanitizeReturnTo(value: string | null | undefined): string | null {
+export function sanitizeReturnTo(
+    value: string | null | undefined,
+): string | null {
     if (!value) {
         return null;
     }
 
     const url = value.trim();
 
-    if (!url.startsWith('/') || url.startsWith('//') || url.includes('\\') || url.includes('://')) {
+    if (
+        !url.startsWith('/') ||
+        url.startsWith('//') ||
+        url.includes('\\') ||
+        url.includes('://')
+    ) {
         return null;
     }
 
@@ -35,7 +42,10 @@ export function currentLocationPath(): string | null {
  * Append `return_to=<current path+query>` to a URL so the destination page can come back
  * to the same filtered list. Safe to call with URLs that already contain a query string.
  */
-export function withReturnTo(url: string, returnTo: string | null = currentLocationPath()): string {
+export function withReturnTo(
+    url: string,
+    returnTo: string | null = currentLocationPath(),
+): string {
     const safe = sanitizeReturnTo(returnTo);
 
     if (!safe) {
@@ -55,7 +65,9 @@ export function readReturnTo(): string | null {
         return null;
     }
 
-    return sanitizeReturnTo(new URLSearchParams(window.location.search).get(RETURN_TO_PARAM));
+    return sanitizeReturnTo(
+        new URLSearchParams(window.location.search).get(RETURN_TO_PARAM),
+    );
 }
 
 /**
@@ -64,7 +76,10 @@ export function readReturnTo(): string | null {
  * - `returnTo`: validated `return_to` from the URL, or null. Send as `_return_to` with the form.
  * - `backUrl`: `returnTo` when present, otherwise the given fallback (usually the index route).
  */
-export function useReturnTo(fallbackUrl: string): { returnTo: string | null; backUrl: string } {
+export function useReturnTo(fallbackUrl: string): {
+    returnTo: string | null;
+    backUrl: string;
+} {
     return useMemo(() => {
         const returnTo = readReturnTo();
 

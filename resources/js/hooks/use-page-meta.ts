@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
 import type { BreadcrumbItem } from '@/types';
+import { useMemo } from 'react';
 
 interface PageMetaOptions {
     title: string;
@@ -30,13 +30,16 @@ export function usePageMeta(options: PageMetaOptions) {
     const { title, breadcrumbs = [], description } = options;
 
     // Memoize to prevent unnecessary re-renders
-    const meta = useMemo(() => ({
-        title,
-        breadcrumbs,
-        description,
-        // Generate page heading from title if not explicitly provided
-        heading: title,
-    }), [title, breadcrumbs, description]);
+    const meta = useMemo(
+        () => ({
+            title,
+            breadcrumbs,
+            description,
+            // Generate page heading from title if not explicitly provided
+            heading: title,
+        }),
+        [title, breadcrumbs, description],
+    );
 
     return meta;
 }

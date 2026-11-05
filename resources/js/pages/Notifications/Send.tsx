@@ -1,20 +1,15 @@
-import React, { useState } from 'react';
-import { Head, router, useForm } from '@inertiajs/react';
-import AppLayout from '@/layouts/app-layout';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { PageHeader } from '@/components/PageHeader';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from '@/components/ui/card';
 import {
     Command,
     CommandEmpty,
@@ -23,24 +18,46 @@ import {
     CommandItem,
     CommandList,
 } from '@/components/ui/command';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
     Popover,
     PopoverContent,
     PopoverTrigger,
 } from '@/components/ui/popover';
-import { Badge } from '@/components/ui/badge';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { X, ChevronsUpDown, Check, Send, AlertCircle, Clock, Eye } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Textarea } from '@/components/ui/textarea';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
-import { LoadingOverlay } from '@/components/LoadingOverlay';
+import AppLayout from '@/layouts/app-layout';
+import { cn } from '@/lib/utils';
+import {
+    index as notificationsIndexRoute,
+    store as notificationsStoreRoute,
+} from '@/routes/notifications';
 import type { BreadcrumbItem } from '@/types';
-import { index as notificationsIndexRoute, store as notificationsStoreRoute } from '@/routes/notifications';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Head, router, useForm } from '@inertiajs/react';
+import {
+    AlertCircle,
+    Check,
+    ChevronsUpDown,
+    Clock,
+    Eye,
+    Send,
+    X,
+} from 'lucide-react';
+import React, { useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Notifications', href: notificationsIndexRoute().url },
-    { title: 'Send Notification', href: '#' }
+    { title: 'Send Notification', href: '#' },
 ];
 
 interface User {
@@ -64,7 +81,7 @@ interface Props {
 export default function SendNotification({ users, roles }: Props) {
     const { title } = usePageMeta({
         title: 'Send Notification',
-        breadcrumbs
+        breadcrumbs,
     });
     useFlashMessage();
     const isLoading = usePageLoading();
@@ -106,23 +123,29 @@ export default function SendNotification({ users, roles }: Props) {
     };
 
     const toggleUserSelection = (user: User) => {
-        const isSelected = selectedUsers.some(u => u.id === user.id);
+        const isSelected = selectedUsers.some((u) => u.id === user.id);
         let newSelection: User[];
 
         if (isSelected) {
-            newSelection = selectedUsers.filter(u => u.id !== user.id);
+            newSelection = selectedUsers.filter((u) => u.id !== user.id);
         } else {
             newSelection = [...selectedUsers, user];
         }
 
         setSelectedUsers(newSelection);
-        setData('user_ids', newSelection.map(u => u.id));
+        setData(
+            'user_ids',
+            newSelection.map((u) => u.id),
+        );
     };
 
     const removeSelectedUser = (userId: number) => {
-        const newSelection = selectedUsers.filter(u => u.id !== userId);
+        const newSelection = selectedUsers.filter((u) => u.id !== userId);
         setSelectedUsers(newSelection);
-        setData('user_ids', newSelection.map(u => u.id));
+        setData(
+            'user_ids',
+            newSelection.map((u) => u.id),
+        );
     };
 
     const getRecipientCount = () => {
@@ -130,7 +153,9 @@ export default function SendNotification({ users, roles }: Props) {
             case 'all':
                 return users.length;
             case 'role':
-                return data.role ? users.filter(u => u.role === data.role).length : 0;
+                return data.role
+                    ? users.filter((u) => u.role === data.role).length
+                    : 0;
             case 'specific_users':
                 return selectedUsers.length;
             case 'single_user':
@@ -140,14 +165,14 @@ export default function SendNotification({ users, roles }: Props) {
         }
     };
 
-    const selectedSingleUser = users.find(u => u.id === data.user_id);
+    const selectedSingleUser = users.find((u) => u.id === data.user_id);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={title} />
             <LoadingOverlay isLoading={isLoading} />
 
-            <div className="container mx-auto py-6 max-w-4xl">
+            <div className="container mx-auto max-w-4xl py-6">
                 <PageHeader
                     title="Send Notification"
                     description="Send a notification to users in the system"
@@ -158,7 +183,8 @@ export default function SendNotification({ users, roles }: Props) {
                         <CardHeader>
                             <CardTitle>Notification Details</CardTitle>
                             <CardDescription>
-                                Fill in the notification details and select recipients
+                                Fill in the notification details and select
+                                recipients
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-6">
@@ -168,12 +194,18 @@ export default function SendNotification({ users, roles }: Props) {
                                 <Input
                                     id="title"
                                     value={data.title}
-                                    onChange={(e) => setData('title', e.target.value)}
+                                    onChange={(e) =>
+                                        setData('title', e.target.value)
+                                    }
                                     placeholder="Enter notification title"
-                                    className={errors.title ? 'border-destructive' : ''}
+                                    className={
+                                        errors.title ? 'border-destructive' : ''
+                                    }
                                 />
                                 {errors.title && (
-                                    <p className="text-sm text-destructive">{errors.title}</p>
+                                    <p className="text-sm text-destructive">
+                                        {errors.title}
+                                    </p>
                                 )}
                             </div>
 
@@ -183,13 +215,21 @@ export default function SendNotification({ users, roles }: Props) {
                                 <Textarea
                                     id="message"
                                     value={data.message}
-                                    onChange={(e) => setData('message', e.target.value)}
+                                    onChange={(e) =>
+                                        setData('message', e.target.value)
+                                    }
                                     placeholder="Enter notification message"
                                     rows={5}
-                                    className={errors.message ? 'border-destructive' : ''}
+                                    className={
+                                        errors.message
+                                            ? 'border-destructive'
+                                            : ''
+                                    }
                                 />
                                 {errors.message && (
-                                    <p className="text-sm text-destructive">{errors.message}</p>
+                                    <p className="text-sm text-destructive">
+                                        {errors.message}
+                                    </p>
                                 )}
                             </div>
 
@@ -198,18 +238,30 @@ export default function SendNotification({ users, roles }: Props) {
                                 <Label htmlFor="type">Notification Type</Label>
                                 <Select
                                     value={data.type}
-                                    onValueChange={(value) => setData('type', value)}
+                                    onValueChange={(value) =>
+                                        setData('type', value)
+                                    }
                                     defaultValue="system"
                                 >
                                     <SelectTrigger id="type">
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="system">System</SelectItem>
-                                        <SelectItem value="announcement">Announcement</SelectItem>
-                                        <SelectItem value="reminder">Reminder</SelectItem>
-                                        <SelectItem value="alert">Alert</SelectItem>
-                                        <SelectItem value="custom">Custom</SelectItem>
+                                        <SelectItem value="system">
+                                            System
+                                        </SelectItem>
+                                        <SelectItem value="announcement">
+                                            Announcement
+                                        </SelectItem>
+                                        <SelectItem value="reminder">
+                                            Reminder
+                                        </SelectItem>
+                                        <SelectItem value="alert">
+                                            Alert
+                                        </SelectItem>
+                                        <SelectItem value="custom">
+                                            Custom
+                                        </SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -223,31 +275,54 @@ export default function SendNotification({ users, roles }: Props) {
                                 >
                                     <div className="flex items-center space-x-2">
                                         <RadioGroupItem value="all" id="all" />
-                                        <Label htmlFor="all" className="font-normal cursor-pointer">
+                                        <Label
+                                            htmlFor="all"
+                                            className="cursor-pointer font-normal"
+                                        >
                                             All Users ({users.length} users)
                                         </Label>
                                     </div>
                                     <div className="flex items-center space-x-2">
-                                        <RadioGroupItem value="role" id="role" />
-                                        <Label htmlFor="role" className="font-normal cursor-pointer">
+                                        <RadioGroupItem
+                                            value="role"
+                                            id="role"
+                                        />
+                                        <Label
+                                            htmlFor="role"
+                                            className="cursor-pointer font-normal"
+                                        >
                                             By Role
                                         </Label>
                                     </div>
                                     <div className="flex items-center space-x-2">
-                                        <RadioGroupItem value="specific_users" id="specific_users" />
-                                        <Label htmlFor="specific_users" className="font-normal cursor-pointer">
+                                        <RadioGroupItem
+                                            value="specific_users"
+                                            id="specific_users"
+                                        />
+                                        <Label
+                                            htmlFor="specific_users"
+                                            className="cursor-pointer font-normal"
+                                        >
                                             Multiple Specific Users
                                         </Label>
                                     </div>
                                     <div className="flex items-center space-x-2">
-                                        <RadioGroupItem value="single_user" id="single_user" />
-                                        <Label htmlFor="single_user" className="font-normal cursor-pointer">
+                                        <RadioGroupItem
+                                            value="single_user"
+                                            id="single_user"
+                                        />
+                                        <Label
+                                            htmlFor="single_user"
+                                            className="cursor-pointer font-normal"
+                                        >
                                             Single User
                                         </Label>
                                     </div>
                                 </RadioGroup>
                                 {errors.recipient_type && (
-                                    <p className="text-sm text-destructive">{errors.recipient_type}</p>
+                                    <p className="text-sm text-destructive">
+                                        {errors.recipient_type}
+                                    </p>
                                 )}
                             </div>
 
@@ -255,20 +330,37 @@ export default function SendNotification({ users, roles }: Props) {
                             {data.recipient_type === 'role' && (
                                 <div className="space-y-2">
                                     <Label htmlFor="role">Select Role *</Label>
-                                    <Select value={data.role} onValueChange={(value) => setData('role', value)}>
-                                        <SelectTrigger className={errors.role ? 'border-destructive' : ''}>
+                                    <Select
+                                        value={data.role}
+                                        onValueChange={(value) =>
+                                            setData('role', value)
+                                        }
+                                    >
+                                        <SelectTrigger
+                                            className={
+                                                errors.role
+                                                    ? 'border-destructive'
+                                                    : ''
+                                            }
+                                        >
                                             <SelectValue placeholder="Select a role" />
                                         </SelectTrigger>
                                         <SelectContent>
                                             {roles.map((role) => (
-                                                <SelectItem key={role.value} value={role.value}>
-                                                    {role.label} ({role.count} users)
+                                                <SelectItem
+                                                    key={role.value}
+                                                    value={role.value}
+                                                >
+                                                    {role.label} ({role.count}{' '}
+                                                    users)
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
                                     </Select>
                                     {errors.role && (
-                                        <p className="text-sm text-destructive">{errors.role}</p>
+                                        <p className="text-sm text-destructive">
+                                            {errors.role}
+                                        </p>
                                     )}
                                 </div>
                             )}
@@ -277,7 +369,10 @@ export default function SendNotification({ users, roles }: Props) {
                             {data.recipient_type === 'single_user' && (
                                 <div className="space-y-2">
                                     <Label>Select User *</Label>
-                                    <Popover open={openUserSelect} onOpenChange={setOpenUserSelect}>
+                                    <Popover
+                                        open={openUserSelect}
+                                        onOpenChange={setOpenUserSelect}
+                                    >
                                         <PopoverTrigger asChild>
                                             <Button
                                                 variant="outline"
@@ -285,7 +380,8 @@ export default function SendNotification({ users, roles }: Props) {
                                                 aria-expanded={openUserSelect}
                                                 className={cn(
                                                     'w-full justify-between',
-                                                    errors.user_id && 'border-destructive'
+                                                    errors.user_id &&
+                                                        'border-destructive',
                                                 )}
                                             >
                                                 {selectedSingleUser
@@ -298,27 +394,47 @@ export default function SendNotification({ users, roles }: Props) {
                                             <Command>
                                                 <CommandInput placeholder="Search users..." />
                                                 <CommandList>
-                                                    <CommandEmpty>No user found.</CommandEmpty>
+                                                    <CommandEmpty>
+                                                        No user found.
+                                                    </CommandEmpty>
                                                     <CommandGroup>
                                                         {users.map((user) => (
                                                             <CommandItem
                                                                 key={user.id}
                                                                 value={`${user.name} ${user.email}`}
                                                                 onSelect={() => {
-                                                                    setData('user_id', user.id);
-                                                                    setOpenUserSelect(false);
+                                                                    setData(
+                                                                        'user_id',
+                                                                        user.id,
+                                                                    );
+                                                                    setOpenUserSelect(
+                                                                        false,
+                                                                    );
                                                                 }}
                                                             >
                                                                 <Check
                                                                     className={cn(
                                                                         'mr-2 h-4 w-4',
-                                                                        data.user_id === user.id ? 'opacity-100' : 'opacity-0'
+                                                                        data.user_id ===
+                                                                            user.id
+                                                                            ? 'opacity-100'
+                                                                            : 'opacity-0',
                                                                     )}
                                                                 />
                                                                 <div className="flex flex-col">
-                                                                    <span>{user.name}</span>
+                                                                    <span>
+                                                                        {
+                                                                            user.name
+                                                                        }
+                                                                    </span>
                                                                     <span className="text-xs text-muted-foreground">
-                                                                        {user.email} • {user.role}
+                                                                        {
+                                                                            user.email
+                                                                        }{' '}
+                                                                        •{' '}
+                                                                        {
+                                                                            user.role
+                                                                        }
                                                                     </span>
                                                                 </div>
                                                             </CommandItem>
@@ -329,7 +445,9 @@ export default function SendNotification({ users, roles }: Props) {
                                         </PopoverContent>
                                     </Popover>
                                     {errors.user_id && (
-                                        <p className="text-sm text-destructive">{errors.user_id}</p>
+                                        <p className="text-sm text-destructive">
+                                            {errors.user_id}
+                                        </p>
                                     )}
                                 </div>
                             )}
@@ -338,15 +456,21 @@ export default function SendNotification({ users, roles }: Props) {
                             {data.recipient_type === 'specific_users' && (
                                 <div className="space-y-2">
                                     <Label>Select Users *</Label>
-                                    <Popover open={openMultiUserSelect} onOpenChange={setOpenMultiUserSelect}>
+                                    <Popover
+                                        open={openMultiUserSelect}
+                                        onOpenChange={setOpenMultiUserSelect}
+                                    >
                                         <PopoverTrigger asChild>
                                             <Button
                                                 variant="outline"
                                                 role="combobox"
-                                                aria-expanded={openMultiUserSelect}
+                                                aria-expanded={
+                                                    openMultiUserSelect
+                                                }
                                                 className={cn(
                                                     'w-full justify-between',
-                                                    errors.user_ids && 'border-destructive'
+                                                    errors.user_ids &&
+                                                        'border-destructive',
                                                 )}
                                             >
                                                 {selectedUsers.length > 0
@@ -359,26 +483,51 @@ export default function SendNotification({ users, roles }: Props) {
                                             <Command>
                                                 <CommandInput placeholder="Search users..." />
                                                 <CommandList>
-                                                    <CommandEmpty>No user found.</CommandEmpty>
+                                                    <CommandEmpty>
+                                                        No user found.
+                                                    </CommandEmpty>
                                                     <CommandGroup>
                                                         {users.map((user) => {
-                                                            const isSelected = selectedUsers.some(u => u.id === user.id);
+                                                            const isSelected =
+                                                                selectedUsers.some(
+                                                                    (u) =>
+                                                                        u.id ===
+                                                                        user.id,
+                                                                );
                                                             return (
                                                                 <CommandItem
-                                                                    key={user.id}
+                                                                    key={
+                                                                        user.id
+                                                                    }
                                                                     value={`${user.name} ${user.email}`}
-                                                                    onSelect={() => toggleUserSelection(user)}
+                                                                    onSelect={() =>
+                                                                        toggleUserSelection(
+                                                                            user,
+                                                                        )
+                                                                    }
                                                                 >
                                                                     <Check
                                                                         className={cn(
                                                                             'mr-2 h-4 w-4',
-                                                                            isSelected ? 'opacity-100' : 'opacity-0'
+                                                                            isSelected
+                                                                                ? 'opacity-100'
+                                                                                : 'opacity-0',
                                                                         )}
                                                                     />
                                                                     <div className="flex flex-col">
-                                                                        <span>{user.name}</span>
+                                                                        <span>
+                                                                            {
+                                                                                user.name
+                                                                            }
+                                                                        </span>
                                                                         <span className="text-xs text-muted-foreground">
-                                                                            {user.email} • {user.role}
+                                                                            {
+                                                                                user.email
+                                                                            }{' '}
+                                                                            •{' '}
+                                                                            {
+                                                                                user.role
+                                                                            }
                                                                         </span>
                                                                     </div>
                                                                 </CommandItem>
@@ -392,13 +541,21 @@ export default function SendNotification({ users, roles }: Props) {
 
                                     {/* Selected Users Badges */}
                                     {selectedUsers.length > 0 && (
-                                        <div className="flex flex-wrap gap-2 mt-2">
+                                        <div className="mt-2 flex flex-wrap gap-2">
                                             {selectedUsers.map((user) => (
-                                                <Badge key={user.id} variant="secondary" className="gap-1">
+                                                <Badge
+                                                    key={user.id}
+                                                    variant="secondary"
+                                                    className="gap-1"
+                                                >
                                                     {user.name}
                                                     <Button
                                                         type="button"
-                                                        onClick={() => removeSelectedUser(user.id)}
+                                                        onClick={() =>
+                                                            removeSelectedUser(
+                                                                user.id,
+                                                            )
+                                                        }
                                                         className="ml-1 hover:text-destructive"
                                                     >
                                                         <X className="h-3 w-3" />
@@ -409,7 +566,9 @@ export default function SendNotification({ users, roles }: Props) {
                                     )}
 
                                     {errors.user_ids && (
-                                        <p className="text-sm text-destructive">{errors.user_ids}</p>
+                                        <p className="text-sm text-destructive">
+                                            {errors.user_ids}
+                                        </p>
                                     )}
                                 </div>
                             )}
@@ -419,8 +578,12 @@ export default function SendNotification({ users, roles }: Props) {
                                 <Alert>
                                     <AlertCircle className="h-4 w-4" />
                                     <AlertDescription>
-                                        This notification will be {scheduleEnabled ? 'scheduled for' : 'sent to'}{' '}
-                                        <strong>{getRecipientCount()}</strong> user(s).
+                                        This notification will be{' '}
+                                        {scheduleEnabled
+                                            ? 'scheduled for'
+                                            : 'sent to'}{' '}
+                                        <strong>{getRecipientCount()}</strong>{' '}
+                                        user(s).
                                     </AlertDescription>
                                 </Alert>
                             )}
@@ -435,7 +598,10 @@ export default function SendNotification({ users, roles }: Props) {
                                     <Clock className="h-5 w-5" />
                                     <div>
                                         <CardTitle>Schedule</CardTitle>
-                                        <CardDescription>Send this notification at a later time</CardDescription>
+                                        <CardDescription>
+                                            Send this notification at a later
+                                            time
+                                        </CardDescription>
                                     </div>
                                 </div>
                                 <Switch
@@ -452,17 +618,32 @@ export default function SendNotification({ users, roles }: Props) {
                         {scheduleEnabled && (
                             <CardContent>
                                 <div className="space-y-2">
-                                    <Label htmlFor="scheduled_at">Schedule Date & Time</Label>
+                                    <Label htmlFor="scheduled_at">
+                                        Schedule Date & Time
+                                    </Label>
                                     <Input
                                         id="scheduled_at"
                                         type="datetime-local"
                                         value={data.scheduled_at}
-                                        onChange={(e) => setData('scheduled_at', e.target.value)}
-                                        min={new Date().toISOString().slice(0, 16)}
-                                        className={errors.scheduled_at ? 'border-destructive' : ''}
+                                        onChange={(e) =>
+                                            setData(
+                                                'scheduled_at',
+                                                e.target.value,
+                                            )
+                                        }
+                                        min={new Date()
+                                            .toISOString()
+                                            .slice(0, 16)}
+                                        className={
+                                            errors.scheduled_at
+                                                ? 'border-destructive'
+                                                : ''
+                                        }
                                     />
                                     {errors.scheduled_at && (
-                                        <p className="text-sm text-destructive">{errors.scheduled_at}</p>
+                                        <p className="text-sm text-destructive">
+                                            {errors.scheduled_at}
+                                        </p>
                                     )}
                                 </div>
                             </CardContent>
@@ -489,24 +670,38 @@ export default function SendNotification({ users, roles }: Props) {
                         </CardHeader>
                         {showPreview && (
                             <CardContent>
-                                <div className="rounded-lg border p-4 space-y-2">
+                                <div className="space-y-2 rounded-lg border p-4">
                                     <div className="flex items-center gap-2">
-                                        <Badge variant="outline">{data.type}</Badge>
-                                        {scheduleEnabled && data.scheduled_at && (
-                                            <Badge variant="secondary">
-                                                <Clock className="mr-1 h-3 w-3" />
-                                                {new Date(data.scheduled_at).toLocaleString()}
-                                            </Badge>
-                                        )}
+                                        <Badge variant="outline">
+                                            {data.type}
+                                        </Badge>
+                                        {scheduleEnabled &&
+                                            data.scheduled_at && (
+                                                <Badge variant="secondary">
+                                                    <Clock className="mr-1 h-3 w-3" />
+                                                    {new Date(
+                                                        data.scheduled_at,
+                                                    ).toLocaleString()}
+                                                </Badge>
+                                            )}
                                     </div>
                                     <h4 className="font-semibold">
-                                        {data.title || <span className="text-muted-foreground italic">No title</span>}
+                                        {data.title || (
+                                            <span className="text-muted-foreground italic">
+                                                No title
+                                            </span>
+                                        )}
                                     </h4>
-                                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                                        {data.message || <span className="italic">No message</span>}
+                                    <p className="text-sm whitespace-pre-wrap text-muted-foreground">
+                                        {data.message || (
+                                            <span className="italic">
+                                                No message
+                                            </span>
+                                        )}
                                     </p>
                                     <p className="text-xs text-muted-foreground">
-                                        Recipients: {getRecipientCount()} user(s)
+                                        Recipients: {getRecipientCount()}{' '}
+                                        user(s)
                                     </p>
                                 </div>
                             </CardContent>
@@ -514,25 +709,34 @@ export default function SendNotification({ users, roles }: Props) {
                     </Card>
 
                     {/* Submit Buttons */}
-                    <div className="flex justify-end gap-3 mt-6">
+                    <div className="mt-6 flex justify-end gap-3">
                         <Button
                             type="button"
                             variant="outline"
-                            onClick={() => router.visit(notificationsIndexRoute().url)}
+                            onClick={() =>
+                                router.visit(notificationsIndexRoute().url)
+                            }
                             disabled={processing}
                         >
                             Cancel
                         </Button>
-                        <Button type="submit" disabled={processing || getRecipientCount() === 0}>
+                        <Button
+                            type="submit"
+                            disabled={processing || getRecipientCount() === 0}
+                        >
                             {scheduleEnabled ? (
                                 <>
                                     <Clock className="mr-2 h-4 w-4" />
-                                    {processing ? 'Scheduling...' : 'Schedule Notification'}
+                                    {processing
+                                        ? 'Scheduling...'
+                                        : 'Schedule Notification'}
                                 </>
                             ) : (
                                 <>
                                     <Send className="mr-2 h-4 w-4" />
-                                    {processing ? 'Sending...' : 'Send Notification'}
+                                    {processing
+                                        ? 'Sending...'
+                                        : 'Send Notification'}
                                 </>
                             )}
                         </Button>

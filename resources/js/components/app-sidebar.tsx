@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useCallback, useState } from 'react';
 //import { NavFooter } from '@/components/nav-footer';
 import { NavGroup } from '@/components/nav-group';
 import { NavUser } from '@/components/nav-user';
@@ -13,24 +13,57 @@ import {
     useSidebar,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
-import { index as processorIndex } from '@/routes/processorspecs'
-import { index as pcIndex } from '@/routes/pcspecs'
-import { index as stationIndex } from '@/routes/stations'
+import { index as pcIndex } from '@/routes/pcspecs';
+import { index as processorIndex } from '@/routes/processorspecs';
+import { index as stationIndex } from '@/routes/stations';
 
-import { index as medicationRequestsIndex } from '@/routes/medication-requests'
-import { index as attendanceToolsIndex } from '@/routes/attendance-tools'
-import { dashboard as coachingDashboard, settings as coachingSettings } from '@/routes/coaching'
-import { index as coachingSessionsIndex } from '@/routes/coaching/sessions'
-import { index as breakTimerIndex, dashboard as breakDashboard, reports as breakReports } from '@/routes/break-timer'
-import { index as breakPoliciesIndex } from '@/routes/break-timer/policies'
-import { index as databaseBackupsIndex } from '@/routes/database-backups'
-import { Link } from '@inertiajs/react';
-import { ArrowUpDown, CalendarCheck, ClipboardCheck, Computer, CpuIcon, CreditCard, Database, DatabaseBackup, LayoutGrid, Microchip, User, Wrench, Clock, Award, Plane, LucideIcon, AlertCircle, Pill, Activity, Settings, Shield, FileText, Timer, BarChart3, Coffee, UserMinus, Trophy } from 'lucide-react';
-import AppLogo from './app-logo';
 import { usePermission } from '@/hooks/useAuthorization';
-import type { NavItem } from '@/types';
-import { usePage } from '@inertiajs/react';
-import type { SharedData } from '@/types';
+import { index as attendanceToolsIndex } from '@/routes/attendance-tools';
+import {
+    dashboard as breakDashboard,
+    reports as breakReports,
+    index as breakTimerIndex,
+} from '@/routes/break-timer';
+import { index as breakPoliciesIndex } from '@/routes/break-timer/policies';
+import {
+    dashboard as coachingDashboard,
+    settings as coachingSettings,
+} from '@/routes/coaching';
+import { index as coachingSessionsIndex } from '@/routes/coaching/sessions';
+import { index as databaseBackupsIndex } from '@/routes/database-backups';
+import { index as medicationRequestsIndex } from '@/routes/medication-requests';
+import type { NavItem, SharedData } from '@/types';
+import { Link, usePage } from '@inertiajs/react';
+import {
+    Activity,
+    AlertCircle,
+    ArrowUpDown,
+    Award,
+    BarChart3,
+    CalendarCheck,
+    ClipboardCheck,
+    Clock,
+    Coffee,
+    Computer,
+    CpuIcon,
+    CreditCard,
+    Database,
+    DatabaseBackup,
+    FileText,
+    LayoutGrid,
+    LucideIcon,
+    Microchip,
+    Pill,
+    Plane,
+    Settings,
+    Shield,
+    Timer,
+    Trophy,
+    User,
+    UserMinus,
+    Wrench,
+} from 'lucide-react';
+import AppLogo from './app-logo';
 
 // Internal navigation item type with permission
 interface NavItemConfig {
@@ -42,7 +75,11 @@ interface NavItemConfig {
 }
 
 // Navigation configuration function that takes auth user
-const getNavigationConfig = (userId: number, userRole: string, coachingPendingAck: number = 0) => {
+const getNavigationConfig = (
+    userId: number,
+    userRole: string,
+    coachingPendingAck: number = 0,
+) => {
     // Restricted roles should go to their own show page
     const restrictedRoles = ['Agent', 'IT', 'Utility'];
     const isRestrictedUser = restrictedRoles.includes(userRole);
@@ -81,7 +118,7 @@ const getNavigationConfig = (userId: number, userRole: string, coachingPendingAc
                     href: pcIndex.url(),
                     icon: Microchip,
                     permission: 'hardware.view',
-                }
+                },
             ],
         },
         station: {
@@ -135,7 +172,9 @@ const getNavigationConfig = (userId: number, userRole: string, coachingPendingAc
                     permission: 'attendance.view',
                 },
                 {
-                    title: isRestrictedUser ? 'My Streak' : 'Streak Leaderboard',
+                    title: isRestrictedUser
+                        ? 'My Streak'
+                        : 'Streak Leaderboard',
                     href: isRestrictedUser
                         ? `/attendance-points/${userId}/streak`
                         : '/attendance-points/leaderboard',
@@ -157,14 +196,22 @@ const getNavigationConfig = (userId: number, userRole: string, coachingPendingAc
                     title: 'Dashboard',
                     href: coachingDashboard.url(),
                     icon: ClipboardCheck,
-                    permission: ['coaching.view_own', 'coaching.view_team', 'coaching.view_all'],
+                    permission: [
+                        'coaching.view_own',
+                        'coaching.view_team',
+                        'coaching.view_all',
+                    ],
                     badge: coachingPendingAck,
                 },
                 {
                     title: 'Sessions',
                     href: coachingSessionsIndex.url(),
                     icon: FileText,
-                    permission: ['coaching.view_own', 'coaching.view_team', 'coaching.view_all'],
+                    permission: [
+                        'coaching.view_own',
+                        'coaching.view_team',
+                        'coaching.view_all',
+                    ],
                 },
                 {
                     title: 'Exclusions',
@@ -317,12 +364,18 @@ export function AppSidebar() {
     }, []);
 
     // Get navigation config based on current user
-    const navigationConfig = getNavigationConfig(auth.user.id, auth.user.role, (coachingPendingAck as number) ?? 0);
+    const navigationConfig = getNavigationConfig(
+        auth.user.id,
+        auth.user.role,
+        (coachingPendingAck as number) ?? 0,
+    );
 
     // Filter navigation items based on permissions
-    const filterItemsByPermission = (items: readonly NavItemConfig[]): NavItem[] => {
+    const filterItemsByPermission = (
+        items: readonly NavItemConfig[],
+    ): NavItem[] => {
         return items
-            .filter(item => {
+            .filter((item) => {
                 // If no permission specified, show the item (e.g., Dashboard)
                 if (!item.permission) return true;
                 // Check if user has any of the required permissions (array) or a single permission
@@ -331,12 +384,13 @@ export function AppSidebar() {
                 }
                 return canAny([...item.permission]);
             })
-            .map(item => {
-                const href = typeof item.href === 'string'
-                    ? item.href
-                    : typeof item.href === 'function'
-                        ? item.href()
-                        : item.href.url;
+            .map((item) => {
+                const href =
+                    typeof item.href === 'string'
+                        ? item.href
+                        : typeof item.href === 'function'
+                          ? item.href()
+                          : item.href.url;
 
                 return {
                     title: item.title,
@@ -403,7 +457,7 @@ export function AppSidebar() {
                 </SidebarMenu>
             </SidebarHeader>
 
-            <SidebarContent className="overflow-y-auto! min-h-0">
+            <SidebarContent className="min-h-0 overflow-y-auto!">
                 <NavGroup
                     groupId="main"
                     label={filteredNavigation.main.label}

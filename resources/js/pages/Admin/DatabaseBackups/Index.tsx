@@ -1,20 +1,10 @@
-import React, { useState, useEffect } from "react";
-import { Head, useForm, usePage, router } from "@inertiajs/react";
-import type { PageProps as InertiaPageProps } from "@inertiajs/core";
+import type { PageProps as InertiaPageProps } from '@inertiajs/core';
+import { Head, router, useForm, usePage } from '@inertiajs/react';
+import { useEffect, useState } from 'react';
 
-import AppLayout from "@/layouts/app-layout";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table";
+import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
     Dialog,
     DialogContent,
@@ -23,27 +13,44 @@ import {
     DialogHeader,
     DialogTitle,
     DialogTrigger,
-} from "@/components/ui/dialog";
-import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Progress } from '@/components/ui/progress';
 import {
-    Search,
-    Filter,
-    Plus,
-    Download,
-    Trash2,
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table';
+import AppLayout from '@/layouts/app-layout';
+import {
     Database,
-    RefreshCw,
+    Download,
+    Filter,
     Loader2,
-} from "lucide-react";
+    Plus,
+    RefreshCw,
+    Search,
+    Trash2,
+} from 'lucide-react';
 
-import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
-import { PageHeader } from "@/components/PageHeader";
-import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
-import { Can } from "@/components/authorization";
-import { LoadingOverlay } from "@/components/LoadingOverlay";
-import { TableSkeleton } from "@/components/TableSkeleton";
+import { Can } from '@/components/authorization';
+import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { PageHeader } from '@/components/PageHeader';
+import { TableSkeleton } from '@/components/TableSkeleton';
+import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
 
-import { index, store, destroy, progress, download, cleanOld } from "@/routes/database-backups";
+import {
+    cleanOld,
+    destroy,
+    download,
+    index,
+    progress,
+    store,
+} from '@/routes/database-backups';
 
 interface Creator {
     id: number;
@@ -57,7 +64,7 @@ interface DatabaseBackup {
     path: string;
     size: number;
     formatted_size: string;
-    status: "pending" | "in_progress" | "completed" | "failed";
+    status: 'pending' | 'in_progress' | 'completed' | 'failed';
     error_message: string | null;
     created_by: number;
     creator: Creator | null;
@@ -82,28 +89,28 @@ interface Props extends InertiaPageProps {
 
 const statusVariant = (status: string) => {
     switch (status) {
-        case "completed":
-            return "default";
-        case "pending":
-        case "in_progress":
-            return "secondary";
-        case "failed":
-            return "destructive";
+        case 'completed':
+            return 'default';
+        case 'pending':
+        case 'in_progress':
+            return 'secondary';
+        case 'failed':
+            return 'destructive';
         default:
-            return "outline";
+            return 'outline';
     }
 };
 
 const statusLabel = (status: string) => {
     switch (status) {
-        case "in_progress":
-            return "In Progress";
-        case "completed":
-            return "Completed";
-        case "pending":
-            return "Pending";
-        case "failed":
-            return "Failed";
+        case 'in_progress':
+            return 'In Progress';
+        case 'completed':
+            return 'Completed';
+        case 'pending':
+            return 'Pending';
+        case 'failed':
+            return 'Failed';
         default:
             return status;
     }
@@ -115,17 +122,23 @@ export default function DatabaseBackupsIndex() {
     const form = useForm({});
 
     const { title, breadcrumbs } = usePageMeta({
-        title: "Database Backups",
-        breadcrumbs: [{ title: "Database Backups", href: index().url }],
+        title: 'Database Backups',
+        breadcrumbs: [{ title: 'Database Backups', href: index().url }],
     });
 
     useFlashMessage();
     const isLoading = usePageLoading();
 
-    const [searchQuery, setSearchQuery] = useState(initialSearch || "");
+    const [searchQuery, setSearchQuery] = useState(initialSearch || '');
     const [activeJobId, setActiveJobId] = useState<string | null>(null);
-    const [jobProgress, setJobProgress] = useState({ percent: 0, status: "Waiting...", finished: false, error: false, queue_warning: false });
-    const [cleanDays, setCleanDays] = useState("30");
+    const [jobProgress, setJobProgress] = useState({
+        percent: 0,
+        status: 'Waiting...',
+        finished: false,
+        error: false,
+        queue_warning: false,
+    });
+    const [cleanDays, setCleanDays] = useState('30');
     const [cleanDialogOpen, setCleanDialogOpen] = useState(false);
     const [cleaningOld, setCleaningOld] = useState(false);
 
@@ -149,7 +162,7 @@ export default function DatabaseBackupsIndex() {
                 if (data.finished) {
                     clearInterval(interval);
                     setActiveJobId(null);
-                    router.reload({ only: ["backups"] });
+                    router.reload({ only: ['backups'] });
                 }
             } catch {
                 // Silently ignore fetch errors during polling
@@ -160,11 +173,15 @@ export default function DatabaseBackupsIndex() {
     }, [activeJobId]);
 
     const handleFilter = () => {
-        router.get(index().url, { search: searchQuery }, { preserveState: true, preserveScroll: true });
+        router.get(
+            index().url,
+            { search: searchQuery },
+            { preserveState: true, preserveScroll: true },
+        );
     };
 
     const handleReset = () => {
-        setSearchQuery("");
+        setSearchQuery('');
         router.get(index().url);
     };
 
@@ -178,15 +195,19 @@ export default function DatabaseBackupsIndex() {
 
     const handleCleanOld = () => {
         setCleaningOld(true);
-        router.post(cleanOld().url, { days: parseInt(cleanDays) }, {
-            preserveScroll: true,
-            onSuccess: () => setCleanDialogOpen(false),
-            onFinish: () => setCleaningOld(false),
-        });
+        router.post(
+            cleanOld().url,
+            { days: parseInt(cleanDays) },
+            {
+                preserveScroll: true,
+                onSuccess: () => setCleanDialogOpen(false),
+                onFinish: () => setCleaningOld(false),
+            },
+        );
     };
 
     const formatDate = (dateStr: string | null) => {
-        if (!dateStr) return "-";
+        if (!dateStr) return '-';
         return new Date(dateStr).toLocaleString();
     };
 
@@ -194,7 +215,7 @@ export default function DatabaseBackupsIndex() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={title} />
 
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3 relative">
+            <div className="relative flex h-full flex-1 flex-col gap-4 rounded-xl p-3">
                 <LoadingOverlay isLoading={isLoading} />
 
                 <PageHeader
@@ -204,17 +225,26 @@ export default function DatabaseBackupsIndex() {
 
                 {/* Progress Banner */}
                 {activeJobId && !jobProgress.finished && (
-                    <div className={`border rounded-lg p-4 ${jobProgress.queue_warning ? 'bg-yellow-50 dark:bg-yellow-950 border-yellow-200 dark:border-yellow-800' : 'bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800'}`}>
-                        <div className="flex items-center gap-3 mb-2">
-                            <Loader2 className={`h-4 w-4 animate-spin ${jobProgress.queue_warning ? 'text-yellow-600' : 'text-blue-600'}`} />
-                            <span className={`text-sm font-medium ${jobProgress.queue_warning ? 'text-yellow-800 dark:text-yellow-200' : 'text-blue-800 dark:text-blue-200'}`}>
+                    <div
+                        className={`rounded-lg border p-4 ${jobProgress.queue_warning ? 'border-yellow-200 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-950' : 'border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950'}`}
+                    >
+                        <div className="mb-2 flex items-center gap-3">
+                            <Loader2
+                                className={`h-4 w-4 animate-spin ${jobProgress.queue_warning ? 'text-yellow-600' : 'text-blue-600'}`}
+                            />
+                            <span
+                                className={`text-sm font-medium ${jobProgress.queue_warning ? 'text-yellow-800 dark:text-yellow-200' : 'text-blue-800 dark:text-blue-200'}`}
+                            >
                                 {jobProgress.status}
                             </span>
                         </div>
                         {!jobProgress.queue_warning && (
                             <>
-                                <Progress value={jobProgress.percent} className="h-2" />
-                                <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                                <Progress
+                                    value={jobProgress.percent}
+                                    className="h-2"
+                                />
+                                <div className="mt-1 text-xs text-blue-600 dark:text-blue-400">
                                     {jobProgress.percent}% complete
                                 </div>
                             </>
@@ -223,67 +253,97 @@ export default function DatabaseBackupsIndex() {
                 )}
 
                 <div className="flex flex-col gap-4">
-                    <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
-                        <div className="w-full sm:w-auto flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+                        <div className="grid w-full flex-1 grid-cols-1 gap-3 sm:w-auto sm:grid-cols-2 lg:grid-cols-4">
                             <div className="relative">
-                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Search className="absolute top-2.5 left-2.5 h-4 w-4 text-muted-foreground" />
                                 <Input
                                     placeholder="Search backups..."
                                     value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    onKeyDown={(e) => e.key === "Enter" && handleFilter()}
+                                    onChange={(e) =>
+                                        setSearchQuery(e.target.value)
+                                    }
+                                    onKeyDown={(e) =>
+                                        e.key === 'Enter' && handleFilter()
+                                    }
                                     className="pl-8"
                                 />
                             </div>
                         </div>
 
-                        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-                            <Button onClick={handleFilter} className="flex-1 sm:flex-none">
+                        <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+                            <Button
+                                onClick={handleFilter}
+                                className="flex-1 sm:flex-none"
+                            >
                                 <Filter className="mr-2 h-4 w-4" />
                                 Filter
                             </Button>
-                            <Button variant="outline" onClick={handleReset} className="flex-1 sm:flex-none">
+                            <Button
+                                variant="outline"
+                                onClick={handleReset}
+                                className="flex-1 sm:flex-none"
+                            >
                                 Reset
                             </Button>
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => router.reload({ only: ["backups"] })}
+                                onClick={() =>
+                                    router.reload({ only: ['backups'] })
+                                }
                                 title="Refresh"
                             >
                                 <RefreshCw className="h-4 w-4" />
                             </Button>
 
                             <Can permission="database_backups.clean">
-                                <Dialog open={cleanDialogOpen} onOpenChange={setCleanDialogOpen}>
+                                <Dialog
+                                    open={cleanDialogOpen}
+                                    onOpenChange={setCleanDialogOpen}
+                                >
                                     <DialogTrigger asChild>
-                                        <Button variant="outline" className="flex-1 sm:flex-none">
+                                        <Button
+                                            variant="outline"
+                                            className="flex-1 sm:flex-none"
+                                        >
                                             <Trash2 className="mr-2 h-4 w-4" />
                                             Clean Old
                                         </Button>
                                     </DialogTrigger>
                                     <DialogContent className="max-w-[90vw] sm:max-w-md">
                                         <DialogHeader>
-                                            <DialogTitle>Clean Old Backups</DialogTitle>
+                                            <DialogTitle>
+                                                Clean Old Backups
+                                            </DialogTitle>
                                             <DialogDescription>
-                                                Delete backups older than the specified number of days.
+                                                Delete backups older than the
+                                                specified number of days.
                                             </DialogDescription>
                                         </DialogHeader>
                                         <div className="py-4">
                                             <label className="text-sm font-medium">
-                                                Delete backups older than (days):
+                                                Delete backups older than
+                                                (days):
                                             </label>
                                             <Input
                                                 type="number"
                                                 min="1"
                                                 max="365"
                                                 value={cleanDays}
-                                                onChange={(e) => setCleanDays(e.target.value)}
+                                                onChange={(e) =>
+                                                    setCleanDays(e.target.value)
+                                                }
                                                 className="mt-2"
                                             />
                                         </div>
                                         <DialogFooter>
-                                            <Button variant="outline" onClick={() => setCleanDialogOpen(false)}>
+                                            <Button
+                                                variant="outline"
+                                                onClick={() =>
+                                                    setCleanDialogOpen(false)
+                                                }
+                                            >
                                                 Cancel
                                             </Button>
                                             <Button
@@ -291,7 +351,9 @@ export default function DatabaseBackupsIndex() {
                                                 onClick={handleCleanOld}
                                                 disabled={cleaningOld}
                                             >
-                                                {cleaningOld ? "Cleaning..." : "Clean Old Backups"}
+                                                {cleaningOld
+                                                    ? 'Cleaning...'
+                                                    : 'Clean Old Backups'}
                                             </Button>
                                         </DialogFooter>
                                     </DialogContent>
@@ -309,13 +371,17 @@ export default function DatabaseBackupsIndex() {
                                     ) : (
                                         <Plus className="mr-2 h-4 w-4" />
                                     )}
-                                    {form.processing ? "Starting..." : activeJobId ? "Backup Running..." : "Create Backup"}
+                                    {form.processing
+                                        ? 'Starting...'
+                                        : activeJobId
+                                          ? 'Backup Running...'
+                                          : 'Create Backup'}
                                 </Button>
                             </Can>
                         </div>
                     </div>
 
-                    <div className="flex justify-between items-center text-sm">
+                    <div className="flex items-center justify-between text-sm">
                         <div className="text-muted-foreground">
                             Showing {backups.data.length} records
                         </div>
@@ -323,7 +389,7 @@ export default function DatabaseBackupsIndex() {
                 </div>
 
                 {/* Desktop Table View */}
-                <div className="hidden md:block shadow rounded-md overflow-hidden">
+                <div className="hidden overflow-hidden rounded-md shadow md:block">
                     {isLoading ? (
                         <TableSkeleton columns={8} rows={8} />
                     ) : (
@@ -331,21 +397,27 @@ export default function DatabaseBackupsIndex() {
                             <Table>
                                 <TableHeader>
                                     <TableRow className="bg-muted/50">
-                                        <TableHead className="hidden lg:table-cell">ID</TableHead>
+                                        <TableHead className="hidden lg:table-cell">
+                                            ID
+                                        </TableHead>
                                         <TableHead>Filename</TableHead>
                                         <TableHead>Status</TableHead>
                                         <TableHead>Size</TableHead>
                                         <TableHead>Created By</TableHead>
                                         <TableHead>Created At</TableHead>
                                         <TableHead>Completed</TableHead>
-                                        <TableHead className="text-center">Actions</TableHead>
+                                        <TableHead className="text-center">
+                                            Actions
+                                        </TableHead>
                                     </TableRow>
                                 </TableHeader>
 
                                 <TableBody>
                                     {backups.data.map((backup) => (
                                         <TableRow key={backup.id}>
-                                            <TableCell className="hidden lg:table-cell">{backup.id}</TableCell>
+                                            <TableCell className="hidden lg:table-cell">
+                                                {backup.id}
+                                            </TableCell>
                                             <TableCell className="font-medium">
                                                 <div className="flex items-center gap-2">
                                                     <Database className="h-4 w-4 text-muted-foreground" />
@@ -353,25 +425,57 @@ export default function DatabaseBackupsIndex() {
                                                 </div>
                                             </TableCell>
                                             <TableCell>
-                                                <Badge variant={statusVariant(backup.status)}>
+                                                <Badge
+                                                    variant={statusVariant(
+                                                        backup.status,
+                                                    )}
+                                                >
                                                     {statusLabel(backup.status)}
                                                 </Badge>
                                                 {backup.error_message && (
-                                                    <p className="text-xs text-red-500 mt-1 max-w-[200px] truncate" title={backup.error_message}>
+                                                    <p
+                                                        className="mt-1 max-w-[200px] truncate text-xs text-red-500"
+                                                        title={
+                                                            backup.error_message
+                                                        }
+                                                    >
                                                         {backup.error_message}
                                                     </p>
                                                 )}
                                             </TableCell>
-                                            <TableCell>{backup.status === "completed" ? backup.formatted_size : "-"}</TableCell>
-                                            <TableCell>{backup.creator?.name ?? "System"}</TableCell>
-                                            <TableCell>{formatDate(backup.created_at)}</TableCell>
-                                            <TableCell>{formatDate(backup.completed_at)}</TableCell>
+                                            <TableCell>
+                                                {backup.status === 'completed'
+                                                    ? backup.formatted_size
+                                                    : '-'}
+                                            </TableCell>
+                                            <TableCell>
+                                                {backup.creator?.name ??
+                                                    'System'}
+                                            </TableCell>
+                                            <TableCell>
+                                                {formatDate(backup.created_at)}
+                                            </TableCell>
+                                            <TableCell>
+                                                {formatDate(
+                                                    backup.completed_at,
+                                                )}
+                                            </TableCell>
                                             <TableCell>
                                                 <div className="flex items-center justify-center gap-2">
                                                     <Can permission="database_backups.download">
-                                                        {backup.status === "completed" && (
-                                                            <a href={download(backup.id).url}>
-                                                                <Button variant="outline" size="sm">
+                                                        {backup.status ===
+                                                            'completed' && (
+                                                            <a
+                                                                href={
+                                                                    download(
+                                                                        backup.id,
+                                                                    ).url
+                                                                }
+                                                            >
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="sm"
+                                                                >
                                                                     <Download className="mr-1 h-3 w-3" />
                                                                     Download
                                                                 </Button>
@@ -381,7 +485,11 @@ export default function DatabaseBackupsIndex() {
 
                                                     <Can permission="database_backups.delete">
                                                         <DeleteConfirmDialog
-                                                            onConfirm={() => handleDelete(backup.id)}
+                                                            onConfirm={() =>
+                                                                handleDelete(
+                                                                    backup.id,
+                                                                )
+                                                            }
                                                             title="Delete Backup"
                                                             description={`Are you sure you want to delete backup "${backup.filename}"? This action cannot be undone.`}
                                                         />
@@ -392,8 +500,12 @@ export default function DatabaseBackupsIndex() {
                                     ))}
                                     {backups.data.length === 0 && (
                                         <TableRow>
-                                            <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
-                                                No backups found. Create your first backup to get started.
+                                            <TableCell
+                                                colSpan={8}
+                                                className="h-24 text-center text-muted-foreground"
+                                            >
+                                                No backups found. Create your
+                                                first backup to get started.
                                             </TableCell>
                                         </TableRow>
                                     )}
@@ -404,13 +516,18 @@ export default function DatabaseBackupsIndex() {
                 </div>
 
                 {/* Mobile Card View */}
-                <div className="md:hidden space-y-4">
+                <div className="space-y-4 md:hidden">
                     {backups.data.map((backup) => (
-                        <div key={backup.id} className="bg-card border rounded-lg p-4 shadow-sm space-y-3">
-                            <div className="flex justify-between items-start">
+                        <div
+                            key={backup.id}
+                            className="space-y-3 rounded-lg border bg-card p-4 shadow-sm"
+                        >
+                            <div className="flex items-start justify-between">
                                 <div className="flex items-center gap-2">
                                     <Database className="h-4 w-4 text-muted-foreground" />
-                                    <div className="text-sm font-semibold truncate max-w-[200px]">{backup.filename}</div>
+                                    <div className="max-w-[200px] truncate text-sm font-semibold">
+                                        {backup.filename}
+                                    </div>
                                 </div>
                                 <Badge variant={statusVariant(backup.status)}>
                                     {statusLabel(backup.status)}
@@ -418,37 +535,63 @@ export default function DatabaseBackupsIndex() {
                             </div>
 
                             {backup.error_message && (
-                                <p className="text-xs text-red-500 truncate" title={backup.error_message}>
+                                <p
+                                    className="truncate text-xs text-red-500"
+                                    title={backup.error_message}
+                                >
                                     {backup.error_message}
                                 </p>
                             )}
 
                             <div className="grid grid-cols-2 gap-2 text-sm">
                                 <div>
-                                    <span className="text-muted-foreground">Size:</span>{" "}
+                                    <span className="text-muted-foreground">
+                                        Size:
+                                    </span>{' '}
                                     <span className="font-medium">
-                                        {backup.status === "completed" ? backup.formatted_size : "-"}
+                                        {backup.status === 'completed'
+                                            ? backup.formatted_size
+                                            : '-'}
                                     </span>
                                 </div>
                                 <div>
-                                    <span className="text-muted-foreground">By:</span>{" "}
-                                    <span className="font-medium">{backup.creator?.name ?? "System"}</span>
+                                    <span className="text-muted-foreground">
+                                        By:
+                                    </span>{' '}
+                                    <span className="font-medium">
+                                        {backup.creator?.name ?? 'System'}
+                                    </span>
                                 </div>
                                 <div>
-                                    <span className="text-muted-foreground">Created:</span>{" "}
-                                    <span className="font-medium">{formatDate(backup.created_at)}</span>
+                                    <span className="text-muted-foreground">
+                                        Created:
+                                    </span>{' '}
+                                    <span className="font-medium">
+                                        {formatDate(backup.created_at)}
+                                    </span>
                                 </div>
                                 <div>
-                                    <span className="text-muted-foreground">Completed:</span>{" "}
-                                    <span className="font-medium">{formatDate(backup.completed_at)}</span>
+                                    <span className="text-muted-foreground">
+                                        Completed:
+                                    </span>{' '}
+                                    <span className="font-medium">
+                                        {formatDate(backup.completed_at)}
+                                    </span>
                                 </div>
                             </div>
 
-                            <div className="flex gap-2 pt-2 border-t">
+                            <div className="flex gap-2 border-t pt-2">
                                 <Can permission="database_backups.download">
-                                    {backup.status === "completed" && (
-                                        <a href={download(backup.id).url} className="flex-1">
-                                            <Button variant="outline" size="sm" className="w-full">
+                                    {backup.status === 'completed' && (
+                                        <a
+                                            href={download(backup.id).url}
+                                            className="flex-1"
+                                        >
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="w-full"
+                                            >
                                                 <Download className="mr-1 h-3 w-3" />
                                                 Download
                                             </Button>
@@ -458,7 +601,9 @@ export default function DatabaseBackupsIndex() {
                                 <Can permission="database_backups.delete">
                                     <div className="flex-1">
                                         <DeleteConfirmDialog
-                                            onConfirm={() => handleDelete(backup.id)}
+                                            onConfirm={() =>
+                                                handleDelete(backup.id)
+                                            }
                                             title="Delete Backup"
                                             description={`Are you sure you want to delete "${backup.filename}"?`}
                                         />
@@ -468,8 +613,9 @@ export default function DatabaseBackupsIndex() {
                         </div>
                     ))}
                     {backups.data.length === 0 && (
-                        <div className="py-12 text-center text-gray-500 border rounded-lg bg-card">
-                            No backups found. Create your first backup to get started.
+                        <div className="rounded-lg border bg-card py-12 text-center text-gray-500">
+                            No backups found. Create your first backup to get
+                            started.
                         </div>
                     )}
                 </div>

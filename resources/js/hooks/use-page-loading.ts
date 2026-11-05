@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
 import { router } from '@inertiajs/react';
+import { useEffect, useState } from 'react';
 
 /**
  * Custom hook to track page loading state using Inertia's progress events
@@ -58,7 +58,9 @@ export function usePageLoading() {
  * }
  * ```
  */
-export function useLocalLoading(initialState = false): [boolean, (loading: boolean) => void] {
+export function useLocalLoading(
+    initialState = false,
+): [boolean, (loading: boolean) => void] {
     const [isLoading, setIsLoading] = useState(initialState);
 
     const setLoading = (loading: boolean) => {

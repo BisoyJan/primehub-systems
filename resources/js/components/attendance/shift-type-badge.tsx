@@ -1,10 +1,12 @@
-import React from 'react';
 import { Badge } from '@/components/ui/badge';
 
 /**
  * Shift type configuration - Single source of truth for all shift type badges
  */
-export const SHIFT_TYPE_CONFIG: Record<string, { label: string; className: string }> = {
+export const SHIFT_TYPE_CONFIG: Record<
+    string,
+    { label: string; className: string }
+> = {
     day_shift: { label: 'Day Shift', className: 'bg-sky-500' },
     night_shift: { label: 'Night Shift', className: 'bg-indigo-500' },
     mid_shift: { label: 'Mid Shift', className: 'bg-violet-500' },

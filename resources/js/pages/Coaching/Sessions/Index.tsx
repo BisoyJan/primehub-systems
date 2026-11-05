@@ -1,23 +1,11 @@
-import { useState, useMemo } from 'react';
-import { Head, Link, useForm, usePage, router } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
+import { useMemo, useState } from 'react';
 
-import AppLayout from '@/layouts/app-layout';
+import PaginationNav, {
+    type PaginationLink,
+} from '@/components/pagination-nav';
 import { Button } from '@/components/ui/button';
-import { formatDate } from '@/lib/utils';
-import { Input } from '@/components/ui/input';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from '@/components/ui/popover';
 import {
     Command,
     CommandEmpty,
@@ -26,6 +14,19 @@ import {
     CommandItem,
     CommandList,
 } from '@/components/ui/command';
+import { Input } from '@/components/ui/input';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import {
     Table,
     TableBody,
@@ -35,38 +36,53 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import PaginationNav, { type PaginationLink } from '@/components/pagination-nav';
-import { Check, ChevronsUpDown, Copy, FileText, Filter, Eye, Pencil, Trash2 } from 'lucide-react';
+import AppLayout from '@/layouts/app-layout';
+import { formatDate } from '@/lib/utils';
+import {
+    Check,
+    ChevronsUpDown,
+    Copy,
+    Eye,
+    FileText,
+    Filter,
+    Pencil,
+    Trash2,
+} from 'lucide-react';
 
-import { usePageMeta, useFlashMessage, usePageLoading, usePermission } from '@/hooks';
-import { PageHeader } from '@/components/PageHeader';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { PageHeader } from '@/components/PageHeader';
 import { TableSkeleton } from '@/components/TableSkeleton';
+import { CoachingSessionCard } from '@/components/coaching/CoachingSessionCard';
 import {
-    CoachingStatusBadge,
     AckStatusBadge,
+    CoachingStatusBadge,
     ComplianceStatusBadge,
     SeverityBadge,
 } from '@/components/coaching/CoachingStatusBadge';
-import { CoachingSessionCard } from '@/components/coaching/CoachingSessionCard';
+import {
+    useFlashMessage,
+    usePageLoading,
+    usePageMeta,
+    usePermission,
+} from '@/hooks';
 
 import {
-    index as sessionsIndex,
     create as sessionsCreate,
-    show as sessionsShow,
-    edit as sessionsEdit,
     destroy as sessionsDestroy,
+    edit as sessionsEdit,
+    index as sessionsIndex,
+    show as sessionsShow,
 } from '@/routes/coaching/sessions';
 
+import { MultiSelectFilter } from '@/components/multi-select-filter';
 import type {
+    Campaign,
+    CoachingPurposeLabels,
     CoachingSession,
     CoachingSummary,
-    CoachingPurposeLabels,
-    Campaign,
     User,
 } from '@/types';
-import { MultiSelectFilter } from '@/components/multi-select-filter';
 
 interface PaginatedSessions {
     data: CoachingSession[];
@@ -120,8 +136,13 @@ const toLocalMidnight = (dateStr: string): Date => {
     return new Date(+p[0], +p[1] - 1, +p[2]);
 };
 
-const getAgingLabel = (dateStr: string): { text: string; className: string } => {
-    const days = Math.floor((Date.now() - toLocalMidnight(dateStr).getTime()) / (1000 * 60 * 60 * 24));
+const getAgingLabel = (
+    dateStr: string,
+): { text: string; className: string } => {
+    const days = Math.floor(
+        (Date.now() - toLocalMidnight(dateStr).getTime()) /
+            (1000 * 60 * 60 * 24),
+    );
     if (days <= 2) return { text: `${days}d ago`, className: 'text-green-600' };
     if (days <= 5) return { text: `${days}d ago`, className: 'text-amber-600' };
     return { text: `${days}d ago`, className: 'text-red-600 font-semibold' };
@@ -129,9 +150,14 @@ const getAgingLabel = (dateStr: string): { text: string; className: string } => 
 
 const getReviewAgingClass = (session: CoachingSession): string => {
     if (session.compliance_status !== 'For_Review') return '';
-    const days = Math.floor((Date.now() - toLocalMidnight(session.session_date).getTime()) / (1000 * 60 * 60 * 24));
-    if (days > 5) return 'bg-red-50/50 dark:bg-red-950/20 border-l-2 border-l-red-400';
-    if (days > 2) return 'bg-amber-50/50 dark:bg-amber-950/20 border-l-2 border-l-amber-400';
+    const days = Math.floor(
+        (Date.now() - toLocalMidnight(session.session_date).getTime()) /
+            (1000 * 60 * 60 * 24),
+    );
+    if (days > 5)
+        return 'bg-red-50/50 dark:bg-red-950/20 border-l-2 border-l-red-400';
+    if (days > 2)
+        return 'bg-amber-50/50 dark:bg-amber-950/20 border-l-2 border-l-amber-400';
     return 'border-l-2 border-l-transparent';
 };
 
@@ -156,7 +182,9 @@ export default function CoachingSessionsIndex() {
 
     const { title, breadcrumbs } = usePageMeta({
         title: 'Coaching Sessions',
-        breadcrumbs: [{ title: 'Coaching Sessions', href: sessionsIndex().url }],
+        breadcrumbs: [
+            { title: 'Coaching Sessions', href: sessionsIndex().url },
+        ],
     });
     useFlashMessage();
     const isLoading = usePageLoading();
@@ -165,33 +193,52 @@ export default function CoachingSessionsIndex() {
     const [search, setSearch] = useState(initialFilters.search || '');
     const [agentSearchOpen, setAgentSearchOpen] = useState(false);
     const [agentSearchQuery, setAgentSearchQuery] = useState('');
-    const [teamLeadId, setTeamLeadId] = useState(initialFilters.team_lead_id || '');
+    const [teamLeadId, setTeamLeadId] = useState(
+        initialFilters.team_lead_id || '',
+    );
     const [teamLeadSearchOpen, setTeamLeadSearchOpen] = useState(false);
     const [teamLeadSearchQuery, setTeamLeadSearchQuery] = useState('');
     const [coachId, setCoachId] = useState(initialFilters.coach_id || '');
     const [coachSearchOpen, setCoachSearchOpen] = useState(false);
     const [coachSearchQuery, setCoachSearchQuery] = useState('');
     const [ackStatus, setAckStatus] = useState(initialFilters.ack_status || '');
-    const [complianceStatus, setComplianceStatus] = useState(initialFilters.compliance_status || '');
+    const [complianceStatus, setComplianceStatus] = useState(
+        initialFilters.compliance_status || '',
+    );
     const [purpose, setPurpose] = useState(initialFilters.purpose || '');
     const [campaignIds, setCampaignIds] = useState<string[]>(() => {
         const v = initialFilters.campaign_id;
         if (!v) return [];
         return String(v).split(',').filter(Boolean);
     });
-    const campaignIdsParam = campaignIds.length > 0 ? campaignIds.join(',') : undefined;
+    const campaignIdsParam =
+        campaignIds.length > 0 ? campaignIds.join(',') : undefined;
     const [dateFrom, setDateFrom] = useState(initialFilters.date_from || '');
     const [dateTo, setDateTo] = useState(initialFilters.date_to || '');
-    const [coacheeRole, setCoacheeRole] = useState(initialFilters.coachee_role || '');
+    const [coacheeRole, setCoacheeRole] = useState(
+        initialFilters.coachee_role || '',
+    );
 
     const deleteForm = useForm({});
 
-    const activeFilterCount = [search, ackStatus, complianceStatus, purpose, campaignIds.length > 0 ? '1' : '', coacheeRole, teamLeadId, coachId, dateFrom, dateTo].filter(Boolean).length;
+    const activeFilterCount = [
+        search,
+        ackStatus,
+        complianceStatus,
+        purpose,
+        campaignIds.length > 0 ? '1' : '',
+        coacheeRole,
+        teamLeadId,
+        coachId,
+        dateFrom,
+        dateTo,
+    ].filter(Boolean).length;
 
     const statusSummary = useMemo(() => {
         const counts: Record<string, number> = {};
         sessions.data.forEach((s) => {
-            counts[s.compliance_status] = (counts[s.compliance_status] || 0) + 1;
+            counts[s.compliance_status] =
+                (counts[s.compliance_status] || 0) + 1;
         });
         return counts;
     }, [sessions.data]);
@@ -228,18 +275,23 @@ export default function CoachingSessionsIndex() {
     };
 
     const getAgentCampaign = (agent: User): string | null => {
-        const schedule = (agent as Record<string, unknown>).active_schedule as { campaign?: { name?: string } } | null;
+        const schedule = (agent as Record<string, unknown>).active_schedule as {
+            campaign?: { name?: string };
+        } | null;
         return schedule?.campaign?.name ?? null;
     };
 
     const getAgentCampaignId = (agent: User): number | null => {
-        const schedule = (agent as Record<string, unknown>).active_schedule as { campaign?: { id?: number } } | null;
+        const schedule = (agent as Record<string, unknown>).active_schedule as {
+            campaign?: { id?: number };
+        } | null;
         return schedule?.campaign?.id ?? null;
     };
 
     const selectedTeamLeadCampaignIds = useMemo<number[] | null>(() => {
         if (!teamLeadId) return null;
-        const tl = teamLeads.find((t) => String(t.id) === teamLeadId) as (User & { campaign_ids?: number[] }) | undefined;
+        const tl = teamLeads.find((t) => String(t.id) === teamLeadId) as
+            (User & { campaign_ids?: number[] }) | undefined;
         return tl?.campaign_ids ?? [];
     }, [teamLeads, teamLeadId]);
 
@@ -254,13 +306,20 @@ export default function CoachingSessionsIndex() {
 
     const filteredAgents = useMemo(() => {
         if (!agentSearchQuery) return agentsInScope.slice(0, 50);
-        const tokens = agentSearchQuery.toLowerCase().split(/\s+/).filter(Boolean);
+        const tokens = agentSearchQuery
+            .toLowerCase()
+            .split(/\s+/)
+            .filter(Boolean);
         return agentsInScope
             .filter((a) => {
-                const middle = (a as Record<string, unknown>).middle_name as string | null | undefined;
-                const name = `${a.first_name} ${middle ?? ''} ${a.last_name}`.toLowerCase();
+                const middle = (a as Record<string, unknown>).middle_name as
+                    string | null | undefined;
+                const name =
+                    `${a.first_name} ${middle ?? ''} ${a.last_name}`.toLowerCase();
                 const campaign = getAgentCampaign(a)?.toLowerCase() ?? '';
-                return tokens.every((t) => name.includes(t) || campaign.includes(t));
+                return tokens.every(
+                    (t) => name.includes(t) || campaign.includes(t),
+                );
             })
             .slice(0, 50);
     }, [agentsInScope, agentSearchQuery]);
@@ -269,7 +328,9 @@ export default function CoachingSessionsIndex() {
         if (!teamLeadSearchQuery) return teamLeads.slice(0, 50);
         const q = teamLeadSearchQuery.toLowerCase();
         return teamLeads
-            .filter((tl) => `${tl.first_name} ${tl.last_name}`.toLowerCase().includes(q))
+            .filter((tl) =>
+                `${tl.first_name} ${tl.last_name}`.toLowerCase().includes(q),
+            )
             .slice(0, 50);
     }, [teamLeads, teamLeadSearchQuery]);
 
@@ -278,13 +339,22 @@ export default function CoachingSessionsIndex() {
         const q = coachSearchQuery.toLowerCase();
 
         return roleOrder
-            .map((role) => [
-                role,
-                coaches
-                    .filter((coach) => coach.role === role)
-                    .filter((coach) => !q || `${coach.first_name} ${coach.last_name}`.toLowerCase().includes(q))
-                    .slice(0, 50),
-            ] as const)
+            .map(
+                (role) =>
+                    [
+                        role,
+                        coaches
+                            .filter((coach) => coach.role === role)
+                            .filter(
+                                (coach) =>
+                                    !q ||
+                                    `${coach.first_name} ${coach.last_name}`
+                                        .toLowerCase()
+                                        .includes(q),
+                            )
+                            .slice(0, 50),
+                    ] as const,
+            )
             .filter(([, roleCoaches]) => roleCoaches.length > 0);
     }, [coaches, coachSearchQuery]);
 
@@ -307,7 +377,8 @@ export default function CoachingSessionsIndex() {
 
         // Clear agent search if the currently-searched agent is not under the new team lead's scope
         if (newTeamLeadId && search) {
-            const tl = teamLeads.find((t) => String(t.id) === newTeamLeadId) as (User & { campaign_ids?: number[] }) | undefined;
+            const tl = teamLeads.find((t) => String(t.id) === newTeamLeadId) as
+                (User & { campaign_ids?: number[] }) | undefined;
             const allowed = new Set(tl?.campaign_ids ?? []);
             const stillInScope = allAgents.some((a) => {
                 const name = `${a.first_name} ${a.last_name}`;
@@ -324,7 +395,9 @@ export default function CoachingSessionsIndex() {
         router.get(
             sessionsIndex().url,
             {
-                ...((isTeamLead || isAdmin) && activeTab ? { tab: activeTab } : {}),
+                ...((isTeamLead || isAdmin) && activeTab
+                    ? { tab: activeTab }
+                    : {}),
                 search: search || undefined,
                 ack_status: ackStatus || undefined,
                 compliance_status: complianceStatus || undefined,
@@ -352,7 +425,10 @@ export default function CoachingSessionsIndex() {
         setCoacheeRole('');
         setTeamLeadId('');
         setCoachId('');
-        router.get(sessionsIndex().url, (isTeamLead || isAdmin) && activeTab ? { tab: activeTab } : {});
+        router.get(
+            sessionsIndex().url,
+            (isTeamLead || isAdmin) && activeTab ? { tab: activeTab } : {},
+        );
     };
 
     const handleTabChange = (tab: string) => {
@@ -383,13 +459,17 @@ export default function CoachingSessionsIndex() {
             onSuccess: () => {
                 // Navigate to previous page if we just deleted the last item on this page
                 if (sessions.data.length === 1 && sessions.current_page > 1) {
-                    router.reload({ data: { page: sessions.current_page - 1 } });
+                    router.reload({
+                        data: { page: sessions.current_page - 1 },
+                    });
                 }
             },
         });
     };
 
-    const formatName = (user?: { first_name: string; last_name: string } | null) => {
+    const formatName = (
+        user?: { first_name: string; last_name: string } | null,
+    ) => {
         if (!user) return 'N/A';
         return `${user.first_name} ${user.last_name}`;
     };
@@ -403,20 +483,33 @@ export default function CoachingSessionsIndex() {
 
                 <PageHeader
                     title="Coaching Sessions"
-                    description={isAgent ? 'Your coaching session history' : 'Manage coaching sessions'}
-                    createLink={can('coaching.create') ? sessionsCreate().url : undefined}
+                    description={
+                        isAgent
+                            ? 'Your coaching session history'
+                            : 'Manage coaching sessions'
+                    }
+                    createLink={
+                        can('coaching.create')
+                            ? sessionsCreate().url
+                            : undefined
+                    }
                     createLabel="New Session"
                 />
 
                 {/* Team Lead Tabs */}
                 {isTeamLead && (
-                    <Tabs value={activeTab || 'team'} onValueChange={handleTabChange}>
+                    <Tabs
+                        value={activeTab || 'team'}
+                        onValueChange={handleTabChange}
+                    >
                         <TabsList>
-                            <TabsTrigger value="team">Team Sessions</TabsTrigger>
+                            <TabsTrigger value="team">
+                                Team Sessions
+                            </TabsTrigger>
                             <TabsTrigger value="my">
                                 My Sessions
                                 {(pendingAckCount ?? 0) > 0 && (
-                                    <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white">
+                                    <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] leading-none font-bold text-white">
                                         {pendingAckCount}
                                     </span>
                                 )}
@@ -424,7 +517,7 @@ export default function CoachingSessionsIndex() {
                             <TabsTrigger value="drafts">
                                 Drafts
                                 {(draftCount ?? 0) > 0 && (
-                                    <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold leading-none text-white">
+                                    <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] leading-none font-bold text-white">
                                         {draftCount}
                                     </span>
                                 )}
@@ -435,13 +528,16 @@ export default function CoachingSessionsIndex() {
 
                 {/* Admin Tabs */}
                 {isAdmin && (
-                    <Tabs value={activeTab || 'all'} onValueChange={handleTabChange}>
+                    <Tabs
+                        value={activeTab || 'all'}
+                        onValueChange={handleTabChange}
+                    >
                         <TabsList>
                             <TabsTrigger value="all">All Sessions</TabsTrigger>
                             <TabsTrigger value="needs_review">
                                 Needs Review
                                 {(pendingReviewCount ?? 0) > 0 && (
-                                    <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white">
+                                    <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] leading-none font-bold text-white">
                                         {pendingReviewCount}
                                     </span>
                                 )}
@@ -449,7 +545,7 @@ export default function CoachingSessionsIndex() {
                             <TabsTrigger value="drafts">
                                 Drafts
                                 {(draftCount ?? 0) > 0 && (
-                                    <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold leading-none text-white">
+                                    <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] leading-none font-bold text-white">
                                         {draftCount}
                                     </span>
                                 )}
@@ -463,19 +559,35 @@ export default function CoachingSessionsIndex() {
                     <div className="rounded-lg border bg-card p-4 shadow-sm">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <div className="flex items-center gap-3">
-                                <span className="text-sm text-muted-foreground">My Coaching Status:</span>
-                                <CoachingStatusBadge status={agentSummary.coaching_status} size="md" />
+                                <span className="text-sm text-muted-foreground">
+                                    My Coaching Status:
+                                </span>
+                                <CoachingStatusBadge
+                                    status={agentSummary.coaching_status}
+                                    size="md"
+                                />
                             </div>
                             <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                                 <span>
-                                    Last: <strong>{agentSummary.last_coached_date ? formatDate(agentSummary.last_coached_date) : 'N/A'}</strong>
+                                    Last:{' '}
+                                    <strong>
+                                        {agentSummary.last_coached_date
+                                            ? formatDate(
+                                                  agentSummary.last_coached_date,
+                                              )
+                                            : 'N/A'}
+                                    </strong>
                                 </span>
                                 <span>
-                                    Sessions: <strong>{agentSummary.total_sessions}</strong>
+                                    Sessions:{' '}
+                                    <strong>
+                                        {agentSummary.total_sessions}
+                                    </strong>
                                 </span>
                                 {agentSummary.pending_acknowledgements > 0 && (
                                     <span className="font-medium text-amber-600">
-                                        {agentSummary.pending_acknowledgements} Pending Ack
+                                        {agentSummary.pending_acknowledgements}{' '}
+                                        Pending Ack
                                     </span>
                                 )}
                             </div>
@@ -488,19 +600,35 @@ export default function CoachingSessionsIndex() {
                     <div className="rounded-lg border bg-card p-4 shadow-sm">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <div className="flex items-center gap-3">
-                                <span className="text-sm text-muted-foreground">Coaching Status:</span>
-                                <CoachingStatusBadge status={agentSummary.coaching_status} size="md" />
+                                <span className="text-sm text-muted-foreground">
+                                    Coaching Status:
+                                </span>
+                                <CoachingStatusBadge
+                                    status={agentSummary.coaching_status}
+                                    size="md"
+                                />
                             </div>
                             <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                                 <span>
-                                    Last: <strong>{agentSummary.last_coached_date ? formatDate(agentSummary.last_coached_date) : 'N/A'}</strong>
+                                    Last:{' '}
+                                    <strong>
+                                        {agentSummary.last_coached_date
+                                            ? formatDate(
+                                                  agentSummary.last_coached_date,
+                                              )
+                                            : 'N/A'}
+                                    </strong>
                                 </span>
                                 <span>
-                                    Sessions: <strong>{agentSummary.total_sessions}</strong>
+                                    Sessions:{' '}
+                                    <strong>
+                                        {agentSummary.total_sessions}
+                                    </strong>
                                 </span>
                                 {agentSummary.pending_acknowledgements > 0 && (
                                     <span className="font-medium text-amber-600">
-                                        {agentSummary.pending_acknowledgements} Pending Ack
+                                        {agentSummary.pending_acknowledgements}{' '}
+                                        Pending Ack
                                     </span>
                                 )}
                             </div>
@@ -512,7 +640,10 @@ export default function CoachingSessionsIndex() {
                 <div className="flex flex-col gap-3">
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                         {!isAgent && activeTab !== 'my' && (
-                            <Popover open={agentSearchOpen} onOpenChange={setAgentSearchOpen}>
+                            <Popover
+                                open={agentSearchOpen}
+                                onOpenChange={setAgentSearchOpen}
+                            >
                                 <PopoverTrigger asChild>
                                     <Button
                                         variant="outline"
@@ -526,7 +657,10 @@ export default function CoachingSessionsIndex() {
                                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                     </Button>
                                 </PopoverTrigger>
-                                <PopoverContent className="w-full p-0" align="start">
+                                <PopoverContent
+                                    className="w-full p-0"
+                                    align="start"
+                                >
                                     <Command shouldFilter={false}>
                                         <CommandInput
                                             placeholder="Search agent..."
@@ -534,13 +668,17 @@ export default function CoachingSessionsIndex() {
                                             onValueChange={setAgentSearchQuery}
                                         />
                                         <CommandList>
-                                            <CommandEmpty>No agent found.</CommandEmpty>
+                                            <CommandEmpty>
+                                                No agent found.
+                                            </CommandEmpty>
                                             <CommandGroup>
                                                 <CommandItem
                                                     value="all"
                                                     onSelect={() => {
                                                         setSearch('');
-                                                        setAgentSearchOpen(false);
+                                                        setAgentSearchOpen(
+                                                            false,
+                                                        );
                                                         setAgentSearchQuery('');
                                                     }}
                                                     className="cursor-pointer"
@@ -552,15 +690,22 @@ export default function CoachingSessionsIndex() {
                                                 </CommandItem>
                                                 {filteredAgents.map((agent) => {
                                                     const name = `${agent.first_name} ${agent.last_name}`;
-                                                    const campaign = getAgentCampaign(agent);
+                                                    const campaign =
+                                                        getAgentCampaign(agent);
                                                     return (
                                                         <CommandItem
                                                             key={agent.id}
-                                                            value={String(agent.id)}
+                                                            value={String(
+                                                                agent.id,
+                                                            )}
                                                             onSelect={() => {
                                                                 setSearch(name);
-                                                                setAgentSearchOpen(false);
-                                                                setAgentSearchQuery('');
+                                                                setAgentSearchOpen(
+                                                                    false,
+                                                                );
+                                                                setAgentSearchQuery(
+                                                                    '',
+                                                                );
                                                             }}
                                                             className="cursor-pointer"
                                                         >
@@ -568,9 +713,15 @@ export default function CoachingSessionsIndex() {
                                                                 className={`mr-2 h-4 w-4 ${search === name ? 'opacity-100' : 'opacity-0'}`}
                                                             />
                                                             <div className="flex flex-col">
-                                                                <span>{name}</span>
+                                                                <span>
+                                                                    {name}
+                                                                </span>
                                                                 {campaign && (
-                                                                    <span className="text-xs text-muted-foreground">{campaign}</span>
+                                                                    <span className="text-xs text-muted-foreground">
+                                                                        {
+                                                                            campaign
+                                                                        }
+                                                                    </span>
                                                                 )}
                                                             </div>
                                                         </CommandItem>
@@ -583,7 +734,10 @@ export default function CoachingSessionsIndex() {
                             </Popover>
                         )}
                         {isAdmin && !isSuperAdmin && (
-                            <Popover open={teamLeadSearchOpen} onOpenChange={setTeamLeadSearchOpen}>
+                            <Popover
+                                open={teamLeadSearchOpen}
+                                onOpenChange={setTeamLeadSearchOpen}
+                            >
                                 <PopoverTrigger asChild>
                                     <Button
                                         variant="outline"
@@ -592,20 +746,28 @@ export default function CoachingSessionsIndex() {
                                         className="w-full justify-between font-normal"
                                     >
                                         <span className="truncate">
-                                            {selectedTeamLeadName || 'All Team Leads'}
+                                            {selectedTeamLeadName ||
+                                                'All Team Leads'}
                                         </span>
                                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                     </Button>
                                 </PopoverTrigger>
-                                <PopoverContent className="w-full p-0" align="start">
+                                <PopoverContent
+                                    className="w-full p-0"
+                                    align="start"
+                                >
                                     <Command shouldFilter={false}>
                                         <CommandInput
                                             placeholder="Search team lead..."
                                             value={teamLeadSearchQuery}
-                                            onValueChange={setTeamLeadSearchQuery}
+                                            onValueChange={
+                                                setTeamLeadSearchQuery
+                                            }
                                         />
                                         <CommandList>
-                                            <CommandEmpty>No team lead found.</CommandEmpty>
+                                            <CommandEmpty>
+                                                No team lead found.
+                                            </CommandEmpty>
                                             <CommandGroup>
                                                 <CommandItem
                                                     value="all"
@@ -614,7 +776,9 @@ export default function CoachingSessionsIndex() {
                                                     }}
                                                     className="cursor-pointer"
                                                 >
-                                                    <Check className={`mr-2 h-4 w-4 ${!teamLeadId ? 'opacity-100' : 'opacity-0'}`} />
+                                                    <Check
+                                                        className={`mr-2 h-4 w-4 ${!teamLeadId ? 'opacity-100' : 'opacity-0'}`}
+                                                    />
                                                     All Team Leads
                                                 </CommandItem>
                                                 {filteredTeamLeads.map((tl) => {
@@ -622,13 +786,21 @@ export default function CoachingSessionsIndex() {
                                                     return (
                                                         <CommandItem
                                                             key={tl.id}
-                                                            value={String(tl.id)}
+                                                            value={String(
+                                                                tl.id,
+                                                            )}
                                                             onSelect={() => {
-                                                                selectTeamLead(String(tl.id));
+                                                                selectTeamLead(
+                                                                    String(
+                                                                        tl.id,
+                                                                    ),
+                                                                );
                                                             }}
                                                             className="cursor-pointer"
                                                         >
-                                                            <Check className={`mr-2 h-4 w-4 ${teamLeadId === String(tl.id) ? 'opacity-100' : 'opacity-0'}`} />
+                                                            <Check
+                                                                className={`mr-2 h-4 w-4 ${teamLeadId === String(tl.id) ? 'opacity-100' : 'opacity-0'}`}
+                                                            />
                                                             {name}
                                                         </CommandItem>
                                                     );
@@ -640,7 +812,10 @@ export default function CoachingSessionsIndex() {
                             </Popover>
                         )}
                         {isSuperAdmin && (
-                            <Popover open={coachSearchOpen} onOpenChange={setCoachSearchOpen}>
+                            <Popover
+                                open={coachSearchOpen}
+                                onOpenChange={setCoachSearchOpen}
+                            >
                                 <PopoverTrigger asChild>
                                     <Button
                                         variant="outline"
@@ -654,7 +829,10 @@ export default function CoachingSessionsIndex() {
                                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                     </Button>
                                 </PopoverTrigger>
-                                <PopoverContent className="w-full p-0" align="start">
+                                <PopoverContent
+                                    className="w-full p-0"
+                                    align="start"
+                                >
                                     <Command shouldFilter={false}>
                                         <CommandInput
                                             placeholder="Search coach..."
@@ -662,60 +840,98 @@ export default function CoachingSessionsIndex() {
                                             onValueChange={setCoachSearchQuery}
                                         />
                                         <CommandList>
-                                            <CommandEmpty>No coach found.</CommandEmpty>
+                                            <CommandEmpty>
+                                                No coach found.
+                                            </CommandEmpty>
                                             <CommandGroup>
                                                 <CommandItem
                                                     value="all"
                                                     onSelect={() => {
                                                         setCoachId('');
-                                                        setCoachSearchOpen(false);
+                                                        setCoachSearchOpen(
+                                                            false,
+                                                        );
                                                         setCoachSearchQuery('');
                                                     }}
                                                     className="cursor-pointer"
                                                 >
-                                                    <Check className={`mr-2 h-4 w-4 ${!coachId ? 'opacity-100' : 'opacity-0'}`} />
+                                                    <Check
+                                                        className={`mr-2 h-4 w-4 ${!coachId ? 'opacity-100' : 'opacity-0'}`}
+                                                    />
                                                     All Coaches
                                                 </CommandItem>
                                             </CommandGroup>
-                                            {groupedCoaches.map(([role, roleCoaches]) => (
-                                                <CommandGroup key={role} heading={role}>
-                                                    {roleCoaches.map((coach) => {
-                                                        const name = `${coach.first_name} ${coach.last_name}`;
-                                                        return (
-                                                            <CommandItem
-                                                                key={coach.id}
-                                                                value={String(coach.id)}
-                                                                onSelect={() => {
-                                                                    setCoachId(String(coach.id));
-                                                                    setCoachSearchOpen(false);
-                                                                    setCoachSearchQuery('');
-                                                                }}
-                                                                className="cursor-pointer"
-                                                            >
-                                                                <Check
-                                                                    className={`mr-2 h-4 w-4 ${coachId === String(coach.id) ? 'opacity-100' : 'opacity-0'}`}
-                                                                />
-                                                                {name}
-                                                            </CommandItem>
-                                                        );
-                                                    })}
-                                                </CommandGroup>
-                                            ))}
+                                            {groupedCoaches.map(
+                                                ([role, roleCoaches]) => (
+                                                    <CommandGroup
+                                                        key={role}
+                                                        heading={role}
+                                                    >
+                                                        {roleCoaches.map(
+                                                            (coach) => {
+                                                                const name = `${coach.first_name} ${coach.last_name}`;
+                                                                return (
+                                                                    <CommandItem
+                                                                        key={
+                                                                            coach.id
+                                                                        }
+                                                                        value={String(
+                                                                            coach.id,
+                                                                        )}
+                                                                        onSelect={() => {
+                                                                            setCoachId(
+                                                                                String(
+                                                                                    coach.id,
+                                                                                ),
+                                                                            );
+                                                                            setCoachSearchOpen(
+                                                                                false,
+                                                                            );
+                                                                            setCoachSearchQuery(
+                                                                                '',
+                                                                            );
+                                                                        }}
+                                                                        className="cursor-pointer"
+                                                                    >
+                                                                        <Check
+                                                                            className={`mr-2 h-4 w-4 ${coachId === String(coach.id) ? 'opacity-100' : 'opacity-0'}`}
+                                                                        />
+                                                                        {name}
+                                                                    </CommandItem>
+                                                                );
+                                                            },
+                                                        )}
+                                                    </CommandGroup>
+                                                ),
+                                            )}
                                         </CommandList>
                                     </Command>
                                 </PopoverContent>
                             </Popover>
                         )}
-                        <Select value={complianceStatus} onValueChange={setComplianceStatus}>
+                        <Select
+                            value={complianceStatus}
+                            onValueChange={setComplianceStatus}
+                        >
                             <SelectTrigger>
                                 <SelectValue placeholder="Compliance Status" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="Awaiting_Agent_Ack">Awaiting Ack</SelectItem>
-                                <SelectItem value="For_Review">For Review</SelectItem>
-                                <SelectItem value="Verified">Verified</SelectItem>
-                                <SelectItem value="Rejected">Rejected</SelectItem>
-                                <SelectItem value="Archived">Archived</SelectItem>
+                                <SelectItem value="Awaiting_Agent_Ack">
+                                    Awaiting Ack
+                                </SelectItem>
+                                <SelectItem value="For_Review">
+                                    For Review
+                                </SelectItem>
+                                <SelectItem value="Verified">
+                                    Verified
+                                </SelectItem>
+                                <SelectItem value="Rejected">
+                                    Rejected
+                                </SelectItem>
+                                <SelectItem value="Archived">
+                                    Archived
+                                </SelectItem>
                             </SelectContent>
                         </Select>
                         <Select value={purpose} onValueChange={setPurpose}>
@@ -723,11 +939,13 @@ export default function CoachingSessionsIndex() {
                                 <SelectValue placeholder="Purpose" />
                             </SelectTrigger>
                             <SelectContent>
-                                {Object.entries(purposes).map(([val, label]) => (
-                                    <SelectItem key={val} value={val}>
-                                        {label}
-                                    </SelectItem>
-                                ))}
+                                {Object.entries(purposes).map(
+                                    ([val, label]) => (
+                                        <SelectItem key={val} value={val}>
+                                            {label}
+                                        </SelectItem>
+                                    ),
+                                )}
                             </SelectContent>
                         </Select>
                     </div>
@@ -735,7 +953,10 @@ export default function CoachingSessionsIndex() {
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
                         {(isAdmin || isTeamLead) && activeTab !== 'my' && (
                             <MultiSelectFilter
-                                options={campaigns.map((c) => ({ label: c.name, value: String(c.id) }))}
+                                options={campaigns.map((c) => ({
+                                    label: c.name,
+                                    value: String(c.id),
+                                }))}
                                 value={campaignIds}
                                 onChange={setCampaignIds}
                                 placeholder="Campaign"
@@ -743,39 +964,66 @@ export default function CoachingSessionsIndex() {
                             />
                         )}
                         {isAdmin && (
-                            <Select value={coacheeRole} onValueChange={setCoacheeRole}>
+                            <Select
+                                value={coacheeRole}
+                                onValueChange={setCoacheeRole}
+                            >
                                 <SelectTrigger>
                                     <SelectValue placeholder="Coachee Role" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="Team Lead">Team Lead</SelectItem>
+                                    <SelectItem value="Team Lead">
+                                        Team Lead
+                                    </SelectItem>
                                     <SelectItem value="Agent">Agent</SelectItem>
                                 </SelectContent>
                             </Select>
                         )}
                         {isAdmin && (
-                            <Select value={ackStatus} onValueChange={setAckStatus}>
+                            <Select
+                                value={ackStatus}
+                                onValueChange={setAckStatus}
+                            >
                                 <SelectTrigger>
                                     <SelectValue placeholder="Ack Status" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="Pending">Pending</SelectItem>
-                                    <SelectItem value="Acknowledged">Acknowledged</SelectItem>
-                                    <SelectItem value="Disputed">Disputed</SelectItem>
-                                    <SelectItem value="Archived">Archived</SelectItem>
+                                    <SelectItem value="Pending">
+                                        Pending
+                                    </SelectItem>
+                                    <SelectItem value="Acknowledged">
+                                        Acknowledged
+                                    </SelectItem>
+                                    <SelectItem value="Disputed">
+                                        Disputed
+                                    </SelectItem>
+                                    <SelectItem value="Archived">
+                                        Archived
+                                    </SelectItem>
                                 </SelectContent>
                             </Select>
                         )}
                         {!isAdmin && (
-                            <Select value={ackStatus} onValueChange={setAckStatus}>
+                            <Select
+                                value={ackStatus}
+                                onValueChange={setAckStatus}
+                            >
                                 <SelectTrigger>
                                     <SelectValue placeholder="Ack Status" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="Pending">Pending</SelectItem>
-                                    <SelectItem value="Acknowledged">Acknowledged</SelectItem>
-                                    <SelectItem value="Disputed">Disputed</SelectItem>
-                                    <SelectItem value="Archived">Archived</SelectItem>
+                                    <SelectItem value="Pending">
+                                        Pending
+                                    </SelectItem>
+                                    <SelectItem value="Acknowledged">
+                                        Acknowledged
+                                    </SelectItem>
+                                    <SelectItem value="Disputed">
+                                        Disputed
+                                    </SelectItem>
+                                    <SelectItem value="Archived">
+                                        Archived
+                                    </SelectItem>
                                 </SelectContent>
                             </Select>
                         )}
@@ -800,7 +1048,11 @@ export default function CoachingSessionsIndex() {
                                     </span>
                                 )}
                             </Button>
-                            <Button variant="outline" onClick={handleReset} className="flex-1">
+                            <Button
+                                variant="outline"
+                                onClick={handleReset}
+                                className="flex-1"
+                            >
                                 Reset
                             </Button>
                         </div>
@@ -814,7 +1066,13 @@ export default function CoachingSessionsIndex() {
                             { key: '30days', label: 'Last 30 Days' },
                             { key: 'quarter', label: 'This Quarter' },
                         ].map((p) => (
-                            <Button key={p.key} variant="outline" size="sm" className="h-7 text-xs" onClick={() => setDatePreset(p.key)}>
+                            <Button
+                                key={p.key}
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs"
+                                onClick={() => setDatePreset(p.key)}
+                            >
                                 {p.label}
                             </Button>
                         ))}
@@ -823,15 +1081,28 @@ export default function CoachingSessionsIndex() {
 
                 {/* Status Count Summary */}
                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                    <span>Showing {sessions.data.length} of {sessions.total} sessions</span>
+                    <span>
+                        Showing {sessions.data.length} of {sessions.total}{' '}
+                        sessions
+                    </span>
                     {Object.keys(statusSummary).length > 0 && (
                         <>
                             <span className="text-muted-foreground/40">|</span>
-                            {Object.entries(statusSummary).map(([status, count]) => (
-                                <span key={status} className="inline-flex items-center gap-1">
-                                    <ComplianceStatusBadge status={status} /> <span className="font-medium">{count}</span>
-                                </span>
-                            ))}
+                            {Object.entries(statusSummary).map(
+                                ([status, count]) => (
+                                    <span
+                                        key={status}
+                                        className="inline-flex items-center gap-1"
+                                    >
+                                        <ComplianceStatusBadge
+                                            status={status}
+                                        />{' '}
+                                        <span className="font-medium">
+                                            {count}
+                                        </span>
+                                    </span>
+                                ),
+                            )}
                         </>
                     )}
                 </div>
@@ -846,100 +1117,190 @@ export default function CoachingSessionsIndex() {
                                 <TableHeader className="sticky top-0 z-10">
                                     <TableRow className="bg-muted/50">
                                         <TableHead>Date</TableHead>
-                                        {!isAgent && activeTab !== 'my' && <TableHead>Coachee</TableHead>}
-                                        {(isAdmin || activeTab === 'my') && <TableHead>Coach</TableHead>}
+                                        {!isAgent && activeTab !== 'my' && (
+                                            <TableHead>Coachee</TableHead>
+                                        )}
+                                        {(isAdmin || activeTab === 'my') && (
+                                            <TableHead>Coach</TableHead>
+                                        )}
                                         <TableHead>Purpose</TableHead>
                                         <TableHead>Severity</TableHead>
                                         <TableHead>Ack Status</TableHead>
                                         <TableHead>Compliance</TableHead>
                                         <TableHead>Age</TableHead>
-                                        <TableHead className="text-center">Actions</TableHead>
+                                        <TableHead className="text-center">
+                                            Actions
+                                        </TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {sessions.data.length === 0 ? (
                                         <TableRow>
-                                            <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
+                                            <TableCell
+                                                colSpan={9}
+                                                className="py-8 text-center text-muted-foreground"
+                                            >
                                                 <FileText className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
                                                 No coaching sessions found.
                                             </TableCell>
                                         </TableRow>
                                     ) : (
                                         sessions.data.map((session) => (
-                                            <TableRow key={session.id} className={getReviewAgingClass(session)}>
+                                            <TableRow
+                                                key={session.id}
+                                                className={getReviewAgingClass(
+                                                    session,
+                                                )}
+                                            >
                                                 <TableCell className="whitespace-nowrap">
-                                                    {formatDate(session.session_date)}
+                                                    {formatDate(
+                                                        session.session_date,
+                                                    )}
                                                     {session.is_draft && (
                                                         <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
                                                             Draft
                                                         </span>
                                                     )}
                                                 </TableCell>
-                                                {!isAgent && activeTab !== 'my' && (
-                                                    <TableCell className="font-medium">
-                                                        {formatName(session.coachee)}
+                                                {!isAgent &&
+                                                    activeTab !== 'my' && (
+                                                        <TableCell className="font-medium">
+                                                            {formatName(
+                                                                session.coachee,
+                                                            )}
+                                                        </TableCell>
+                                                    )}
+                                                {(isAdmin ||
+                                                    activeTab === 'my') && (
+                                                    <TableCell>
+                                                        {formatName(
+                                                            session.coach,
+                                                        )}
                                                     </TableCell>
                                                 )}
-                                                {(isAdmin || activeTab === 'my') && <TableCell>{formatName(session.coach)}</TableCell>}
                                                 <TableCell className="max-w-[200px] truncate">
-                                                    {purposes[session.purpose] ?? session.purpose}
+                                                    {purposes[
+                                                        session.purpose
+                                                    ] ?? session.purpose}
                                                 </TableCell>
                                                 <TableCell>
-                                                    <SeverityBadge flag={session.severity_flag} />
+                                                    <SeverityBadge
+                                                        flag={
+                                                            session.severity_flag
+                                                        }
+                                                    />
                                                 </TableCell>
                                                 <TableCell>
-                                                    <AckStatusBadge status={session.ack_status} />
+                                                    <AckStatusBadge
+                                                        status={
+                                                            session.ack_status
+                                                        }
+                                                    />
                                                 </TableCell>
                                                 <TableCell>
-                                                    <ComplianceStatusBadge status={session.compliance_status} />
+                                                    <ComplianceStatusBadge
+                                                        status={
+                                                            session.compliance_status
+                                                        }
+                                                    />
                                                 </TableCell>
                                                 <TableCell>
-                                                    {session.compliance_status === 'For_Review' ? (
-                                                        <span className={`text-xs font-medium ${getAgingLabel(session.session_date).className}`}>
-                                                            {getAgingLabel(session.session_date).text}
+                                                    {session.compliance_status ===
+                                                    'For_Review' ? (
+                                                        <span
+                                                            className={`text-xs font-medium ${getAgingLabel(session.session_date).className}`}
+                                                        >
+                                                            {
+                                                                getAgingLabel(
+                                                                    session.session_date,
+                                                                ).text
+                                                            }
                                                         </span>
                                                     ) : (
-                                                        <span className="text-xs text-muted-foreground">—</span>
+                                                        <span className="text-xs text-muted-foreground">
+                                                            —
+                                                        </span>
                                                     )}
                                                 </TableCell>
                                                 <TableCell>
                                                     <div className="flex items-center justify-center gap-1">
-                                                        <Link href={sessionsShow.url(session.id)}>
-                                                            <Button variant="ghost" size="icon" title="View">
+                                                        <Link
+                                                            href={sessionsShow.url(
+                                                                session.id,
+                                                            )}
+                                                        >
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                title="View"
+                                                            >
                                                                 <Eye className="h-4 w-4" />
                                                             </Button>
                                                         </Link>
-                                                        {can('coaching.edit') && (
-                                                            <Link href={sessionsEdit.url(session.id)}>
-                                                                <Button variant="ghost" size="icon" title="Edit">
+                                                        {can(
+                                                            'coaching.edit',
+                                                        ) && (
+                                                            <Link
+                                                                href={sessionsEdit.url(
+                                                                    session.id,
+                                                                )}
+                                                            >
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    title="Edit"
+                                                                >
                                                                     <Pencil className="h-4 w-4" />
                                                                 </Button>
                                                             </Link>
                                                         )}
-                                                        {can('coaching.create') && (
-                                                            <Link href={sessionsCreate().url + `?clone_from=${session.id}`}>
-                                                                <Button variant="ghost" size="icon" title="Clone as new">
+                                                        {can(
+                                                            'coaching.create',
+                                                        ) && (
+                                                            <Link
+                                                                href={
+                                                                    sessionsCreate()
+                                                                        .url +
+                                                                    `?clone_from=${session.id}`
+                                                                }
+                                                            >
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    title="Clone as new"
+                                                                >
                                                                     <Copy className="h-4 w-4" />
                                                                 </Button>
                                                             </Link>
                                                         )}
-                                                        {can('coaching.delete') && (isAdmin || (session.compliance_status === 'Awaiting_Agent_Ack' && session.ack_status === 'Pending')) && (
-                                                            <DeleteConfirmDialog
-                                                                title="Delete Coaching Session"
-                                                                description="Are you sure you want to delete this coaching session? This action cannot be undone."
-                                                                onConfirm={() => handleDelete(session.id)}
-                                                                trigger={
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="icon"
-                                                                        title="Delete"
-                                                                        className="text-red-600 hover:text-red-700"
-                                                                    >
-                                                                        <Trash2 className="h-4 w-4" />
-                                                                    </Button>
-                                                                }
-                                                            />
-                                                        )}
+                                                        {can(
+                                                            'coaching.delete',
+                                                        ) &&
+                                                            (isAdmin ||
+                                                                (session.compliance_status ===
+                                                                    'Awaiting_Agent_Ack' &&
+                                                                    session.ack_status ===
+                                                                        'Pending')) && (
+                                                                <DeleteConfirmDialog
+                                                                    title="Delete Coaching Session"
+                                                                    description="Are you sure you want to delete this coaching session? This action cannot be undone."
+                                                                    onConfirm={() =>
+                                                                        handleDelete(
+                                                                            session.id,
+                                                                        )
+                                                                    }
+                                                                    trigger={
+                                                                        <Button
+                                                                            variant="ghost"
+                                                                            size="icon"
+                                                                            title="Delete"
+                                                                            className="text-red-600 hover:text-red-700"
+                                                                        >
+                                                                            <Trash2 className="h-4 w-4" />
+                                                                        </Button>
+                                                                    }
+                                                                />
+                                                            )}
                                                     </div>
                                                 </TableCell>
                                             </TableRow>
@@ -972,7 +1333,9 @@ export default function CoachingSessionsIndex() {
                 </div>
 
                 {/* Pagination */}
-                {sessions.links && sessions.links.length > 3 && <PaginationNav links={sessions.links} />}
+                {sessions.links && sessions.links.length > 3 && (
+                    <PaginationNav links={sessions.links} />
+                )}
             </div>
         </AppLayout>
     );

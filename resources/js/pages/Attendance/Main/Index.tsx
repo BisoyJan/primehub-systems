@@ -1,34 +1,14 @@
-import React, { useEffect, useState, useRef } from "react";
-import { Head, router, usePage } from "@inertiajs/react";
-import AppLayout from "@/layouts/app-layout";
-import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
-import { PageHeader } from "@/components/PageHeader";
-import { LoadingOverlay } from "@/components/LoadingOverlay";
-import { TableSkeleton } from "@/components/TableSkeleton";
-import { type SharedData, type UserRole } from "@/types";
-import { formatTime, formatDate, formatDateTime, formatWorkDuration, formatTimeAdjustment } from "@/lib/utils";
-import { Can } from "@/components/authorization";
-import { usePermission } from "@/hooks/useAuthorization";
-import { Button } from "@/components/ui/button";
-import { DatePicker } from "@/components/ui/date-picker";
-import { MultiSelectFilter, parseMultiSelectParam, multiSelectToParam } from "@/components/multi-select-filter";
+import { getShiftTypeBadge, getStatusBadges } from '@/components/attendance';
+import { Can } from '@/components/authorization';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue
-} from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { getStatusBadges, getShiftTypeBadge } from "@/components/attendance";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { AlertCircle, Trash2, RefreshCw, Search, Play, Pause, Edit, Upload, Check, X, CheckCircle } from "lucide-react";
-import { Calendar as CalendarIcon } from "lucide-react";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Card, CardContent } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
+    MultiSelectFilter,
+    multiSelectToParam,
+    parseMultiSelectParam,
+} from '@/components/multi-select-filter';
+import { PageHeader } from '@/components/PageHeader';
+import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
+import { TableSkeleton } from '@/components/TableSkeleton';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -38,25 +18,79 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+} from '@/components/ui/alert-dialog';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { DatePicker } from '@/components/ui/date-picker';
 import {
     Dialog,
     DialogContent,
     DialogDescription,
     DialogHeader,
     DialogTitle,
-} from "@/components/ui/dialog";
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import {
-    index as attendanceIndex,
-    hub as attendanceHub,
-    calendar as attendanceCalendar,
-    importMethod as attendanceImport,
-    review as attendanceReview,
-    dailyRoster as attendanceDailyRoster,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
+import { usePermission } from '@/hooks/useAuthorization';
+import AppLayout from '@/layouts/app-layout';
+import {
+    formatDate,
+    formatDateTime,
+    formatTime,
+    formatTimeAdjustment,
+    formatWorkDuration,
+} from '@/lib/utils';
+import {
     bulkDelete as attendanceBulkDelete,
     bulkQuickApprove as attendanceBulkQuickApprove,
+    calendar as attendanceCalendar,
+    dailyRoster as attendanceDailyRoster,
+    hub as attendanceHub,
+    importMethod as attendanceImport,
+    index as attendanceIndex,
     quickApprove as attendanceQuickApprove,
-} from "@/routes/attendance";
+    review as attendanceReview,
+} from '@/routes/attendance';
+import { type SharedData, type UserRole } from '@/types';
+import { Head, router, usePage } from '@inertiajs/react';
+import {
+    AlertCircle,
+    Calendar as CalendarIcon,
+    Check,
+    CheckCircle,
+    Edit,
+    Pause,
+    Play,
+    RefreshCw,
+    Search,
+    Trash2,
+    Upload,
+    X,
+} from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 
 interface User {
     id: number;
@@ -118,7 +152,12 @@ interface AttendanceRecord {
     admin_verified: boolean;
     verification_notes?: string;
     notes?: string;
-    warnings?: { type: string; message: string; severity: string; raised_at: string }[];
+    warnings?: {
+        type: string;
+        message: string;
+        severity: string;
+        raised_at: string;
+    }[];
 }
 
 interface Meta {
@@ -164,7 +203,15 @@ const DEFAULT_META: Meta = {
 // formatDateTime, formatDate, formatTime are now imported from @/lib/utils
 
 export default function AttendanceIndex() {
-    const { attendances, users = [], sites = [], campaigns = [], teamLeadCampaignIds, filters, auth } = usePage<PageProps>().props;
+    const {
+        attendances,
+        users = [],
+        sites = [],
+        campaigns = [],
+        teamLeadCampaignIds,
+        filters,
+        auth,
+    } = usePage<PageProps>().props;
 
     // Ensure we have proper data structure
     const attendanceData = {
@@ -177,10 +224,10 @@ export default function AttendanceIndex() {
     const isTeamLead = userRole === 'Team Lead';
 
     const { title, breadcrumbs } = usePageMeta({
-        title: "Attendance Records",
+        title: 'Attendance Records',
         breadcrumbs: [
-            { title: "Attendance", href: attendanceHub().url },
-            { title: "Records" }
+            { title: 'Attendance', href: attendanceHub().url },
+            { title: 'Records' },
         ],
     });
 
@@ -191,24 +238,35 @@ export default function AttendanceIndex() {
     const [loading, setLoading] = useState(false);
     // Multi-select state for employees
     const [selectedUserIds, setSelectedUserIds] = useState<string[]>(() =>
-        parseMultiSelectParam(appliedFilters.user_id)
+        parseMultiSelectParam(appliedFilters.user_id),
     );
-    const [selectedSiteIds, setSelectedSiteIds] = useState<string[]>(parseMultiSelectParam(appliedFilters.site_id));
+    const [selectedSiteIds, setSelectedSiteIds] = useState<string[]>(
+        parseMultiSelectParam(appliedFilters.site_id),
+    );
     // Multi-select state for campaigns - auto-select Team Lead's campaign if no filter is applied
-    const [selectedCampaignIds, setSelectedCampaignIds] = useState<string[]>(() => {
-        const fromFilter = parseMultiSelectParam(appliedFilters.campaign_id);
-        if (fromFilter.length > 0) return fromFilter;
-        if (isTeamLead && teamLeadCampaignIds?.length) return teamLeadCampaignIds.map(String);
-        return [];
-    });
+    const [selectedCampaignIds, setSelectedCampaignIds] = useState<string[]>(
+        () => {
+            const fromFilter = parseMultiSelectParam(
+                appliedFilters.campaign_id,
+            );
+            if (fromFilter.length > 0) return fromFilter;
+            if (isTeamLead && teamLeadCampaignIds?.length)
+                return teamLeadCampaignIds.map(String);
+            return [];
+        },
+    );
     // Multi-select state for status
     const [selectedStatuses, setSelectedStatuses] = useState<string[]>(() =>
-        parseMultiSelectParam(appliedFilters.status)
+        parseMultiSelectParam(appliedFilters.status),
     );
-    const [startDate, setStartDate] = useState(appliedFilters.start_date || "");
-    const [endDate, setEndDate] = useState(appliedFilters.end_date || "");
-    const [needsVerification, setNeedsVerification] = useState(appliedFilters.needs_verification || false);
-    const [verifiedFilter, setVerifiedFilter] = useState(appliedFilters.verified_status || "all");
+    const [startDate, setStartDate] = useState(appliedFilters.start_date || '');
+    const [endDate, setEndDate] = useState(appliedFilters.end_date || '');
+    const [needsVerification, setNeedsVerification] = useState(
+        appliedFilters.needs_verification || false,
+    );
+    const [verifiedFilter, setVerifiedFilter] = useState(
+        appliedFilters.verified_status || 'all',
+    );
 
     // LocalStorage keys for persisting selection
     const LOCAL_STORAGE_KEY = 'attendance_selected_ids';
@@ -239,7 +297,8 @@ export default function AttendanceIndex() {
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
     const [noteDialogOpen, setNoteDialogOpen] = useState(false);
-    const [selectedNoteRecord, setSelectedNoteRecord] = useState<AttendanceRecord | null>(null);
+    const [selectedNoteRecord, setSelectedNoteRecord] =
+        useState<AttendanceRecord | null>(null);
 
     // Helper to display notes - show dialog with both notes and verification notes
     const NotesDisplay = ({ record }: { record: AttendanceRecord }) => {
@@ -256,9 +315,11 @@ export default function AttendanceIndex() {
                     setSelectedNoteRecord(record);
                     setNoteDialogOpen(true);
                 }}
-                className="text-sm text-primary hover:underline cursor-pointer text-left"
+                className="cursor-pointer text-left text-sm text-primary hover:underline"
             >
-                {preview.length > 10 ? `${preview.substring(0, 10)}...` : preview}
+                {preview.length > 10
+                    ? `${preview.substring(0, 10)}...`
+                    : preview}
             </button>
         );
     };
@@ -267,8 +328,14 @@ export default function AttendanceIndex() {
     useEffect(() => {
         try {
             if (selectedRecords.length > 0) {
-                localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(selectedRecords));
-                localStorage.setItem(LOCAL_STORAGE_TIMESTAMP_KEY, Date.now().toString());
+                localStorage.setItem(
+                    LOCAL_STORAGE_KEY,
+                    JSON.stringify(selectedRecords),
+                );
+                localStorage.setItem(
+                    LOCAL_STORAGE_TIMESTAMP_KEY,
+                    Date.now().toString(),
+                );
             } else {
                 localStorage.removeItem(LOCAL_STORAGE_KEY);
                 localStorage.removeItem(LOCAL_STORAGE_TIMESTAMP_KEY);
@@ -283,7 +350,9 @@ export default function AttendanceIndex() {
         setSelectedUserIds(parseMultiSelectParam(appliedFilters.user_id));
         setSelectedSiteIds(parseMultiSelectParam(appliedFilters.site_id));
         // For Team Leads, default to their campaign if no filter is applied
-        const campaignFromFilter = parseMultiSelectParam(appliedFilters.campaign_id);
+        const campaignFromFilter = parseMultiSelectParam(
+            appliedFilters.campaign_id,
+        );
         if (campaignFromFilter.length > 0) {
             setSelectedCampaignIds(campaignFromFilter);
         } else if (isTeamLead && teamLeadCampaignIds?.length) {
@@ -292,12 +361,23 @@ export default function AttendanceIndex() {
             setSelectedCampaignIds([]);
         }
         setSelectedStatuses(parseMultiSelectParam(appliedFilters.status));
-        setStartDate(appliedFilters.start_date || "");
-        setEndDate(appliedFilters.end_date || "");
+        setStartDate(appliedFilters.start_date || '');
+        setEndDate(appliedFilters.end_date || '');
         setNeedsVerification(appliedFilters.needs_verification || false);
-        setVerifiedFilter(appliedFilters.verified_status || "all");
+        setVerifiedFilter(appliedFilters.verified_status || 'all');
         // Don't clear selections when filters change
-    }, [appliedFilters.user_id, appliedFilters.site_id, appliedFilters.campaign_id, appliedFilters.status, appliedFilters.start_date, appliedFilters.end_date, appliedFilters.needs_verification, appliedFilters.verified_status, isTeamLead, teamLeadCampaignIds]);
+    }, [
+        appliedFilters.user_id,
+        appliedFilters.site_id,
+        appliedFilters.campaign_id,
+        appliedFilters.status,
+        appliedFilters.start_date,
+        appliedFilters.end_date,
+        appliedFilters.needs_verification,
+        appliedFilters.verified_status,
+        isTeamLead,
+        teamLeadCampaignIds,
+    ]);
 
     const userId = auth.user?.id;
     // Roles that should only see their own attendance records
@@ -315,13 +395,17 @@ export default function AttendanceIndex() {
             params.user_id = multiSelectToParam(selectedUserIds);
         }
 
-        if (selectedSiteIds.length > 0) params.site_id = multiSelectToParam(selectedSiteIds);
-        if (selectedCampaignIds.length > 0) params.campaign_id = multiSelectToParam(selectedCampaignIds);
-        if (selectedStatuses.length > 0) params.status = multiSelectToParam(selectedStatuses);
+        if (selectedSiteIds.length > 0)
+            params.site_id = multiSelectToParam(selectedSiteIds);
+        if (selectedCampaignIds.length > 0)
+            params.campaign_id = multiSelectToParam(selectedCampaignIds);
+        if (selectedStatuses.length > 0)
+            params.status = multiSelectToParam(selectedStatuses);
         if (startDate) params.start_date = startDate;
         if (endDate) params.end_date = endDate;
-        if (needsVerification) params.needs_verification = "1";
-        if (verifiedFilter && verifiedFilter !== "all") params.verified_status = verifiedFilter;
+        if (needsVerification) params.needs_verification = '1';
+        if (verifiedFilter && verifiedFilter !== 'all')
+            params.verified_status = verifiedFilter;
 
         setLoading(true);
         router.get(attendanceIndex().url, params, {
@@ -352,13 +436,17 @@ export default function AttendanceIndex() {
                 params.user_id = multiSelectToParam(selectedUserIds);
             }
 
-            if (selectedSiteIds.length > 0) params.site_id = multiSelectToParam(selectedSiteIds);
-            if (selectedCampaignIds.length > 0) params.campaign_id = multiSelectToParam(selectedCampaignIds);
-            if (selectedStatuses.length > 0) params.status = multiSelectToParam(selectedStatuses);
+            if (selectedSiteIds.length > 0)
+                params.site_id = multiSelectToParam(selectedSiteIds);
+            if (selectedCampaignIds.length > 0)
+                params.campaign_id = multiSelectToParam(selectedCampaignIds);
+            if (selectedStatuses.length > 0)
+                params.status = multiSelectToParam(selectedStatuses);
             if (startDate) params.start_date = startDate;
             if (endDate) params.end_date = endDate;
-            if (needsVerification) params.needs_verification = "1";
-            if (verifiedFilter && verifiedFilter !== "all") params.verified_status = verifiedFilter;
+            if (needsVerification) params.needs_verification = '1';
+            if (verifiedFilter && verifiedFilter !== 'all')
+                params.verified_status = verifiedFilter;
 
             router.get(attendanceIndex().url, params, {
                 preserveState: true,
@@ -366,12 +454,26 @@ export default function AttendanceIndex() {
                 replace: true,
                 only: ['attendances'],
                 onSuccess: () => setLastRefresh(new Date()),
-                onFinish: () => { isPollingRef.current = false; },
+                onFinish: () => {
+                    isPollingRef.current = false;
+                },
             });
         }, 30000);
 
         return () => clearInterval(interval);
-    }, [autoRefreshEnabled, selectedUserIds, selectedSiteIds, selectedCampaignIds, selectedStatuses, startDate, endDate, needsVerification, verifiedFilter, isRestrictedUser, userId]);
+    }, [
+        autoRefreshEnabled,
+        selectedUserIds,
+        selectedSiteIds,
+        selectedCampaignIds,
+        selectedStatuses,
+        startDate,
+        endDate,
+        needsVerification,
+        verifiedFilter,
+        isRestrictedUser,
+        userId,
+    ]);
 
     // Compute default dates (yesterday & today) for comparison
     const getDefaultDates = () => {
@@ -391,7 +493,7 @@ export default function AttendanceIndex() {
         selectedUserIds.length > 0 ||
         selectedSiteIds.length > 0 ||
         selectedCampaignIds.length > 0 ||
-        (verifiedFilter && verifiedFilter !== "all");
+        (verifiedFilter && verifiedFilter !== 'all');
 
     const clearFilters = () => {
         setSelectedUserIds([]);
@@ -401,40 +503,50 @@ export default function AttendanceIndex() {
         setStartDate(defaultFrom);
         setEndDate(defaultTo);
         setNeedsVerification(false);
-        setVerifiedFilter("all");
+        setVerifiedFilter('all');
 
         // Trigger reload with cleared filters
         setLoading(true);
-        router.get(attendanceIndex().url, {}, {
-            preserveState: true,
-            preserveScroll: true,
-            replace: true,
-            onSuccess: () => setLastRefresh(new Date()),
-            onFinish: () => setLoading(false),
-        });
+        router.get(
+            attendanceIndex().url,
+            {},
+            {
+                preserveState: true,
+                preserveScroll: true,
+                replace: true,
+                onSuccess: () => setLastRefresh(new Date()),
+                onFinish: () => setLoading(false),
+            },
+        );
     };
 
     const toggleSelectAll = () => {
-        const currentPageIds = attendanceData.data.map(record => record.id);
-        const allCurrentSelected = currentPageIds.every(id => selectedRecords.includes(id));
+        const currentPageIds = attendanceData.data.map((record) => record.id);
+        const allCurrentSelected = currentPageIds.every((id) =>
+            selectedRecords.includes(id),
+        );
 
         if (allCurrentSelected) {
             // Deselect all on current page
-            setSelectedRecords(prev => prev.filter(id => !currentPageIds.includes(id)));
+            setSelectedRecords((prev) =>
+                prev.filter((id) => !currentPageIds.includes(id)),
+            );
         } else {
             // Select all on current page
-            setSelectedRecords(prev => {
-                const newIds = currentPageIds.filter(id => !prev.includes(id));
+            setSelectedRecords((prev) => {
+                const newIds = currentPageIds.filter(
+                    (id) => !prev.includes(id),
+                );
                 return [...prev, ...newIds];
             });
         }
     };
 
     const toggleSelectRecord = (recordId: number) => {
-        setSelectedRecords(prev =>
+        setSelectedRecords((prev) =>
             prev.includes(recordId)
-                ? prev.filter(id => id !== recordId)
-                : [...prev, recordId]
+                ? prev.filter((id) => id !== recordId)
+                : [...prev, recordId],
         );
     };
 
@@ -460,36 +572,43 @@ export default function AttendanceIndex() {
 
         // Filter only eligible records
         const eligibleRecords = attendanceData.data
-            .filter(record => selectedRecords.includes(record.id))
+            .filter((record) => selectedRecords.includes(record.id))
             .filter(canQuickApprove);
 
         if (eligibleRecords.length === 0) {
             return;
         }
 
-        router.post(attendanceBulkQuickApprove().url, {
-            ids: eligibleRecords.map(r => r.id),
-        }, {
-            preserveScroll: true,
-            preserveState: true,
-            onSuccess: () => {
-                setSelectedRecords([]);
+        router.post(
+            attendanceBulkQuickApprove().url,
+            {
+                ids: eligibleRecords.map((r) => r.id),
             },
-        });
+            {
+                preserveScroll: true,
+                preserveState: true,
+                onSuccess: () => {
+                    setSelectedRecords([]);
+                },
+            },
+        );
     };
 
     const getEligibleQuickApproveCount = () => {
         return attendanceData.data
-            .filter(record => selectedRecords.includes(record.id))
-            .filter(canQuickApprove)
-            .length;
+            .filter((record) => selectedRecords.includes(record.id))
+            .filter(canQuickApprove).length;
     };
 
     const handleQuickApprove = (recordId: number) => {
-        router.post(attendanceQuickApprove({ attendance: recordId }).url, {}, {
-            preserveScroll: true,
-            preserveState: true,
-        });
+        router.post(
+            attendanceQuickApprove({ attendance: recordId }).url,
+            {},
+            {
+                preserveScroll: true,
+                preserveState: true,
+            },
+        );
     };
 
     const canQuickApprove = (record: AttendanceRecord) => {
@@ -500,7 +619,9 @@ export default function AttendanceIndex() {
         return (
             record.status === 'on_time' &&
             !record.admin_verified &&
-            (!record.overtime_minutes || record.overtime_minutes <= 30 || record.overtime_approved)
+            (!record.overtime_minutes ||
+                record.overtime_minutes <= 30 ||
+                record.overtime_approved)
         );
     };
 
@@ -517,7 +638,7 @@ export default function AttendanceIndex() {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={title} />
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3 relative">
+            <div className="relative flex h-full flex-1 flex-col gap-4 rounded-xl p-3">
                 <LoadingOverlay isLoading={isPageLoading || loading} />
 
                 <PageHeader
@@ -529,18 +650,21 @@ export default function AttendanceIndex() {
                 <Card>
                     <CardContent className="pt-6">
                         <div className="space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                                 {/* Employee Multi-Select */}
                                 {!isRestrictedUser && (
                                     <div className="space-y-2">
                                         <Label>Employee</Label>
                                         <MultiSelectFilter
-                                            options={users.map(u => ({ label: u.name, value: u.id.toString() }))}
+                                            options={users.map((u) => ({
+                                                label: u.name,
+                                                value: u.id.toString(),
+                                            }))}
                                             value={selectedUserIds}
                                             onChange={setSelectedUserIds}
                                             placeholder="Select employees..."
                                             emptyMessage="No employee found."
-                                            className="w-full min-h-9"
+                                            className="min-h-9 w-full"
                                         />
                                     </div>
                                 )}
@@ -550,24 +674,54 @@ export default function AttendanceIndex() {
                                     <Label>Status</Label>
                                     <MultiSelectFilter
                                         options={[
-                                            { label: "On Time", value: "on_time" },
-                                            { label: "Tardy", value: "tardy" },
-                                            { label: "Half Day Absence", value: "half_day_absence" },
-                                            { label: "Advised Absence", value: "advised_absence" },
-                                            { label: "NCNS", value: "ncns" },
-                                            { label: "Undertime", value: "undertime" },
-                                            { label: "Undertime (>1hr)", value: "undertime_more_than_hour" },
-                                            { label: "Failed Bio In", value: "failed_bio_in" },
-                                            { label: "Failed Bio Out", value: "failed_bio_out" },
-                                            { label: "Present (No Bio)", value: "present_no_bio" },
-                                            { label: "Needs Review", value: "needs_manual_review" },
-                                            { label: "On Leave", value: "on_leave" },
+                                            {
+                                                label: 'On Time',
+                                                value: 'on_time',
+                                            },
+                                            { label: 'Tardy', value: 'tardy' },
+                                            {
+                                                label: 'Half Day Absence',
+                                                value: 'half_day_absence',
+                                            },
+                                            {
+                                                label: 'Advised Absence',
+                                                value: 'advised_absence',
+                                            },
+                                            { label: 'NCNS', value: 'ncns' },
+                                            {
+                                                label: 'Undertime',
+                                                value: 'undertime',
+                                            },
+                                            {
+                                                label: 'Undertime (>1hr)',
+                                                value: 'undertime_more_than_hour',
+                                            },
+                                            {
+                                                label: 'Failed Bio In',
+                                                value: 'failed_bio_in',
+                                            },
+                                            {
+                                                label: 'Failed Bio Out',
+                                                value: 'failed_bio_out',
+                                            },
+                                            {
+                                                label: 'Present (No Bio)',
+                                                value: 'present_no_bio',
+                                            },
+                                            {
+                                                label: 'Needs Review',
+                                                value: 'needs_manual_review',
+                                            },
+                                            {
+                                                label: 'On Leave',
+                                                value: 'on_leave',
+                                            },
                                         ]}
                                         value={selectedStatuses}
                                         onChange={setSelectedStatuses}
                                         placeholder="Select status..."
                                         emptyMessage="No status found."
-                                        className="w-full min-h-9"
+                                        className="min-h-9 w-full"
                                     />
                                 </div>
 
@@ -583,8 +737,10 @@ export default function AttendanceIndex() {
                                         onChange={setSelectedSiteIds}
                                         placeholder="All Sites"
                                         emptyMessage="No site found."
-                                        className="w-full min-h-9"
-                                        multipleSelectionLabel={(n) => `${n} sites selected`}
+                                        className="min-h-9 w-full"
+                                        multipleSelectionLabel={(n) =>
+                                            `${n} sites selected`
+                                        }
                                     />
                                 </div>
 
@@ -592,29 +748,45 @@ export default function AttendanceIndex() {
                                 <div className="space-y-2">
                                     <Label>Campaign</Label>
                                     <MultiSelectFilter
-                                        options={(teamLeadCampaignIds?.length ? campaigns.filter(c => teamLeadCampaignIds.includes(c.id)) : campaigns).map(c => ({
+                                        options={(teamLeadCampaignIds?.length
+                                            ? campaigns.filter((c) =>
+                                                  teamLeadCampaignIds.includes(
+                                                      c.id,
+                                                  ),
+                                              )
+                                            : campaigns
+                                        ).map((c) => ({
                                             label: c.name,
-                                            value: c.id.toString()
+                                            value: c.id.toString(),
                                         }))}
                                         value={selectedCampaignIds}
                                         onChange={setSelectedCampaignIds}
                                         placeholder="Select campaigns..."
                                         emptyMessage="No campaign found."
-                                        className="w-full min-h-9"
+                                        className="min-h-9 w-full"
                                     />
                                 </div>
 
                                 {/* Verification Status Filter */}
                                 <div className="space-y-2">
                                     <Label>Verification Status</Label>
-                                    <Select value={verifiedFilter} onValueChange={setVerifiedFilter}>
+                                    <Select
+                                        value={verifiedFilter}
+                                        onValueChange={setVerifiedFilter}
+                                    >
                                         <SelectTrigger>
                                             <SelectValue placeholder="All Records" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="all">All Records</SelectItem>
-                                            <SelectItem value="pending">Pending Verification</SelectItem>
-                                            <SelectItem value="verified">Verified</SelectItem>
+                                            <SelectItem value="all">
+                                                All Records
+                                            </SelectItem>
+                                            <SelectItem value="pending">
+                                                Pending Verification
+                                            </SelectItem>
+                                            <SelectItem value="verified">
+                                                Verified
+                                            </SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -650,12 +822,22 @@ export default function AttendanceIndex() {
                                 <div className="space-y-2">
                                     <Label>Needs Review</Label>
                                     <Button
-                                        variant={needsVerification ? "default" : "outline"}
-                                        onClick={() => setNeedsVerification(!needsVerification)}
+                                        variant={
+                                            needsVerification
+                                                ? 'default'
+                                                : 'outline'
+                                        }
+                                        onClick={() =>
+                                            setNeedsVerification(
+                                                !needsVerification,
+                                            )
+                                        }
                                         className="w-full justify-start"
                                     >
-                                        <AlertCircle className="h-4 w-4 mr-2" />
-                                        {needsVerification ? "Showing Flagged" : "Show Flagged Only"}
+                                        <AlertCircle className="mr-2 h-4 w-4" />
+                                        {needsVerification
+                                            ? 'Showing Flagged'
+                                            : 'Show Flagged Only'}
                                     </Button>
                                 </div>
                             </div>
@@ -663,23 +845,48 @@ export default function AttendanceIndex() {
                             {/* Action Buttons */}
                             <div className="flex flex-wrap gap-2">
                                 <Button onClick={handleSearch}>
-                                    <Search className="h-4 w-4 mr-2" />
+                                    <Search className="mr-2 h-4 w-4" />
                                     Search
                                 </Button>
-                                <Button variant="ghost" size="icon" onClick={handleManualRefresh} disabled={loading} title="Refresh">
-                                    <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={handleManualRefresh}
+                                    disabled={loading}
+                                    title="Refresh"
+                                >
+                                    <RefreshCw
+                                        className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`}
+                                    />
                                 </Button>
                                 <Button
-                                    variant={autoRefreshEnabled ? "default" : "ghost"}
+                                    variant={
+                                        autoRefreshEnabled ? 'default' : 'ghost'
+                                    }
                                     size="icon"
-                                    onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
-                                    title={autoRefreshEnabled ? "Disable auto-refresh" : "Enable auto-refresh (30s)"}
+                                    onClick={() =>
+                                        setAutoRefreshEnabled(
+                                            !autoRefreshEnabled,
+                                        )
+                                    }
+                                    title={
+                                        autoRefreshEnabled
+                                            ? 'Disable auto-refresh'
+                                            : 'Enable auto-refresh (30s)'
+                                    }
                                 >
-                                    {autoRefreshEnabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                                    {autoRefreshEnabled ? (
+                                        <Pause className="h-4 w-4" />
+                                    ) : (
+                                        <Play className="h-4 w-4" />
+                                    )}
                                 </Button>
                                 {showClearFilters && (
-                                    <Button variant="outline" onClick={clearFilters}>
-                                        <X className="h-4 w-4 mr-2" />
+                                    <Button
+                                        variant="outline"
+                                        onClick={clearFilters}
+                                    >
+                                        <X className="mr-2 h-4 w-4" />
                                         Clear Filters
                                     </Button>
                                 )}
@@ -690,16 +897,27 @@ export default function AttendanceIndex() {
 
                 {/* Actions Row */}
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex justify-between items-center text-sm">
+                    <div className="flex items-center justify-between text-sm">
                         <div className="text-muted-foreground">
-                            Showing {attendanceData.meta.total === 0 ? '0' : `${attendanceData.data.length}`} of {attendanceData.meta.total} record
-                            {attendanceData.meta.total === 1 ? "" : "s"}
-                            {showClearFilters ? " (filtered)" : ""}
+                            Showing{' '}
+                            {attendanceData.meta.total === 0
+                                ? '0'
+                                : `${attendanceData.data.length}`}{' '}
+                            of {attendanceData.meta.total} record
+                            {attendanceData.meta.total === 1 ? '' : 's'}
+                            {showClearFilters ? ' (filtered)' : ''}
                         </div>
                         <div className="flex items-center gap-4">
                             {selectedRecords.length > 0 && (
-                                <Badge variant="secondary" className="font-normal">
-                                    {selectedRecords.length} record{selectedRecords.length === 1 ? "" : "s"} selected
+                                <Badge
+                                    variant="secondary"
+                                    className="font-normal"
+                                >
+                                    {selectedRecords.length} record
+                                    {selectedRecords.length === 1
+                                        ? ''
+                                        : 's'}{' '}
+                                    selected
                                 </Badge>
                             )}
                             <div className="text-xs text-muted-foreground">
@@ -707,19 +925,21 @@ export default function AttendanceIndex() {
                             </div>
                         </div>
                     </div>
-                    <div className="flex flex-wrap gap-2 justify-end">
-                        {selectedRecords.length > 0 && getEligibleQuickApproveCount() > 0 && (
-                            <Can permission="attendance.approve">
-                                <Button
-                                    onClick={handleBulkQuickApprove}
-                                    variant="outline"
-                                    size="sm"
-                                >
-                                    <Check className="mr-2 h-4 w-4" />
-                                    Quick Approve ({getEligibleQuickApproveCount()})
-                                </Button>
-                            </Can>
-                        )}
+                    <div className="flex flex-wrap justify-end gap-2">
+                        {selectedRecords.length > 0 &&
+                            getEligibleQuickApproveCount() > 0 && (
+                                <Can permission="attendance.approve">
+                                    <Button
+                                        onClick={handleBulkQuickApprove}
+                                        variant="outline"
+                                        size="sm"
+                                    >
+                                        <Check className="mr-2 h-4 w-4" />
+                                        Quick Approve (
+                                        {getEligibleQuickApproveCount()})
+                                    </Button>
+                                </Can>
+                            )}
                         {selectedRecords.length > 0 && (
                             <Can permission="attendance.delete">
                                 <Button
@@ -742,7 +962,9 @@ export default function AttendanceIndex() {
                         </Button>
                         <Can permission="attendance.import">
                             <Button
-                                onClick={() => router.get(attendanceImport().url)}
+                                onClick={() =>
+                                    router.get(attendanceImport().url)
+                                }
                                 size="sm"
                                 variant="outline"
                             >
@@ -752,7 +974,9 @@ export default function AttendanceIndex() {
                         </Can>
                         <Can permission="attendance.create">
                             <Button
-                                onClick={() => router.get(attendanceDailyRoster().url)}
+                                onClick={() =>
+                                    router.get(attendanceDailyRoster().url)
+                                }
                                 size="sm"
                                 variant="outline"
                             >
@@ -762,7 +986,9 @@ export default function AttendanceIndex() {
                         </Can>
                         <Can permission="attendance.review">
                             <Button
-                                onClick={() => router.get(attendanceReview().url)}
+                                onClick={() =>
+                                    router.get(attendanceReview().url)
+                                }
                                 size="sm"
                                 variant="outline"
                             >
@@ -773,7 +999,7 @@ export default function AttendanceIndex() {
                     </div>
                 </div>
 
-                <div className="hidden md:block shadow rounded-md overflow-hidden">
+                <div className="hidden overflow-hidden rounded-md shadow md:block">
                     {isPageLoading ? (
                         <TableSkeleton columns={11} rows={8} />
                     ) : (
@@ -784,10 +1010,18 @@ export default function AttendanceIndex() {
                                         <TableHead className="w-12">
                                             <Checkbox
                                                 checked={
-                                                    attendanceData.data.length > 0 &&
-                                                    attendanceData.data.every(record => selectedRecords.includes(record.id))
+                                                    attendanceData.data.length >
+                                                        0 &&
+                                                    attendanceData.data.every(
+                                                        (record) =>
+                                                            selectedRecords.includes(
+                                                                record.id,
+                                                            ),
+                                                    )
                                                 }
-                                                onCheckedChange={toggleSelectAll}
+                                                onCheckedChange={
+                                                    toggleSelectAll
+                                                }
                                             />
                                         </TableHead>
                                         <TableHead>Employee</TableHead>
@@ -799,16 +1033,33 @@ export default function AttendanceIndex() {
                                         <TableHead>Status</TableHead>
                                         <TableHead>Tardy/UT/OT</TableHead>
                                         <TableHead>Notes</TableHead>
-                                        {(can('attendance.approve') || can('attendance.verify') || can('attendance.delete')) && <TableHead>Actions</TableHead>}
+                                        {(can('attendance.approve') ||
+                                            can('attendance.verify') ||
+                                            can('attendance.delete')) && (
+                                            <TableHead>Actions</TableHead>
+                                        )}
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {attendanceData.data.map(record => (
-                                        <TableRow key={record.id} className={record.is_cross_site_bio ? "bg-orange-50/30 dark:bg-orange-950/10" : ""}>
+                                    {attendanceData.data.map((record) => (
+                                        <TableRow
+                                            key={record.id}
+                                            className={
+                                                record.is_cross_site_bio
+                                                    ? 'bg-orange-50/30 dark:bg-orange-950/10'
+                                                    : ''
+                                            }
+                                        >
                                             <TableCell>
                                                 <Checkbox
-                                                    checked={selectedRecords.includes(record.id)}
-                                                    onCheckedChange={() => toggleSelectRecord(record.id)}
+                                                    checked={selectedRecords.includes(
+                                                        record.id,
+                                                    )}
+                                                    onCheckedChange={() =>
+                                                        toggleSelectRecord(
+                                                            record.id,
+                                                        )
+                                                    }
                                                 />
                                             </TableCell>
                                             <TableCell className="font-medium">
@@ -816,124 +1067,245 @@ export default function AttendanceIndex() {
                                             </TableCell>
                                             <TableCell>
                                                 <div>
-                                                    <div className="font-medium truncate">
-                                                        {record.employee_schedule?.site?.name || record.user.active_schedule?.site?.name || 'No site'}
+                                                    <div className="truncate font-medium">
+                                                        {record
+                                                            .employee_schedule
+                                                            ?.site?.name ||
+                                                            record.user
+                                                                .active_schedule
+                                                                ?.site?.name ||
+                                                            'No site'}
                                                         {record.is_cross_site_bio && (
-                                                            <Badge variant="outline" className="ml-2 text-orange-600 border-orange-600 text-xs">
-                                                                Cross-Site {record.bio_in_site?.name && `@ ${record.bio_in_site.name}`}
+                                                            <Badge
+                                                                variant="outline"
+                                                                className="ml-2 border-orange-600 text-xs text-orange-600"
+                                                            >
+                                                                Cross-Site{' '}
+                                                                {record
+                                                                    .bio_in_site
+                                                                    ?.name &&
+                                                                    `@ ${record.bio_in_site.name}`}
                                                             </Badge>
                                                         )}
                                                     </div>
-                                                    {(record.employee_schedule?.campaign?.name || record.user.active_schedule?.campaign?.name) && (
+                                                    {(record.employee_schedule
+                                                        ?.campaign?.name ||
+                                                        record.user
+                                                            .active_schedule
+                                                            ?.campaign
+                                                            ?.name) && (
                                                         <div className="text-xs text-muted-foreground">
-                                                            {record.employee_schedule?.campaign?.name || record.user.active_schedule?.campaign?.name}
+                                                            {record
+                                                                .employee_schedule
+                                                                ?.campaign
+                                                                ?.name ||
+                                                                record.user
+                                                                    .active_schedule
+                                                                    ?.campaign
+                                                                    ?.name}
                                                         </div>
                                                     )}
                                                 </div>
                                             </TableCell>
                                             <TableCell>
                                                 <div>
-                                                    <div>{formatDate(record.shift_date)}</div>
-                                                    <div className="text-xs text-muted-foreground">
-                                                        {record.employee_schedule?.shift_type ? (
-                                                            getShiftTypeBadge(record.employee_schedule.shift_type)
-                                                        ) : (
-                                                            "-"
+                                                    <div>
+                                                        {formatDate(
+                                                            record.shift_date,
                                                         )}
+                                                    </div>
+                                                    <div className="text-xs text-muted-foreground">
+                                                        {record
+                                                            .employee_schedule
+                                                            ?.shift_type
+                                                            ? getShiftTypeBadge(
+                                                                  record
+                                                                      .employee_schedule
+                                                                      .shift_type,
+                                                              )
+                                                            : '-'}
                                                     </div>
                                                 </div>
                                             </TableCell>
                                             <TableCell className="text-sm">
                                                 {record.employee_schedule ? (
                                                     <div className="whitespace-nowrap">
-                                                        {formatTime(record.employee_schedule.scheduled_time_in)} - {formatTime(record.employee_schedule.scheduled_time_out)}
+                                                        {formatTime(
+                                                            record
+                                                                .employee_schedule
+                                                                .scheduled_time_in,
+                                                        )}{' '}
+                                                        -{' '}
+                                                        {formatTime(
+                                                            record
+                                                                .employee_schedule
+                                                                .scheduled_time_out,
+                                                        )}
                                                     </div>
                                                 ) : (
-                                                    "-"
+                                                    '-'
                                                 )}
                                             </TableCell>
                                             <TableCell className="text-sm">
                                                 <div>
                                                     <div>
-                                                        {formatDateTime(record.actual_time_in) || '-'}
+                                                        {formatDateTime(
+                                                            record.actual_time_in,
+                                                        ) || '-'}
                                                     </div>
                                                     <div className="text-muted-foreground">
-                                                        {formatDateTime(record.actual_time_out) || '-'}
+                                                        {formatDateTime(
+                                                            record.actual_time_out,
+                                                        ) || '-'}
                                                     </div>
                                                 </div>
                                             </TableCell>
                                             <TableCell className="text-sm">
-                                                <span className="font-medium">{formatWorkDuration(record.total_minutes_worked)}</span>
+                                                <span className="font-medium">
+                                                    {formatWorkDuration(
+                                                        record.total_minutes_worked,
+                                                    )}
+                                                </span>
                                             </TableCell>
-                                            <TableCell>{getStatusBadges(record)}</TableCell>
+                                            <TableCell>
+                                                {getStatusBadges(record)}
+                                            </TableCell>
                                             <TableCell className="text-sm">
                                                 <div className="space-y-1">
-                                                    {record.tardy_minutes !== null && record.tardy_minutes !== undefined && record.tardy_minutes > 0 && (
-                                                        <div className="text-xs text-orange-600">
-                                                            +{formatTimeAdjustment(record.tardy_minutes)} T
-                                                        </div>
-                                                    )}
-                                                    {record.undertime_minutes !== null && record.undertime_minutes !== undefined && record.undertime_minutes > 0 && (
-                                                        <div className="text-xs text-orange-600">
-                                                            {formatTimeAdjustment(record.undertime_minutes)} UT
-                                                        </div>
-                                                    )}
-                                                    {(!record.tardy_minutes || record.tardy_minutes === 0) &&
-                                                        (!record.undertime_minutes || record.undertime_minutes === 0) &&
-                                                        (!record.overtime_minutes || record.overtime_minutes <= 30) && (
+                                                    {record.tardy_minutes !==
+                                                        null &&
+                                                        record.tardy_minutes !==
+                                                            undefined &&
+                                                        record.tardy_minutes >
+                                                            0 && (
+                                                            <div className="text-xs text-orange-600">
+                                                                +
+                                                                {formatTimeAdjustment(
+                                                                    record.tardy_minutes,
+                                                                )}{' '}
+                                                                T
+                                                            </div>
+                                                        )}
+                                                    {record.undertime_minutes !==
+                                                        null &&
+                                                        record.undertime_minutes !==
+                                                            undefined &&
+                                                        record.undertime_minutes >
+                                                            0 && (
+                                                            <div className="text-xs text-orange-600">
+                                                                {formatTimeAdjustment(
+                                                                    record.undertime_minutes,
+                                                                )}{' '}
+                                                                UT
+                                                            </div>
+                                                        )}
+                                                    {(!record.tardy_minutes ||
+                                                        record.tardy_minutes ===
+                                                            0) &&
+                                                        (!record.undertime_minutes ||
+                                                            record.undertime_minutes ===
+                                                                0) &&
+                                                        (!record.overtime_minutes ||
+                                                            record.overtime_minutes <=
+                                                                30) && (
                                                             <div>-</div>
                                                         )}
-                                                    {record.overtime_minutes !== null && record.overtime_minutes !== undefined && record.overtime_minutes > 30 && (
-                                                        <div className="text-xs flex items-center gap-1">
-                                                            <span className={record.overtime_approved ? 'text-green-600' : 'text-red-600'}>
-                                                                +{formatTimeAdjustment(record.overtime_minutes)} OT
-                                                            </span>
-                                                            {record.overtime_approved ? (
-                                                                <CheckCircle className="h-3 w-3 text-green-600" />
-                                                            ) : record.admin_verified ? (
-                                                                <X className="h-3 w-3 text-red-600" />
-                                                            ) : null}
-                                                        </div>
-                                                    )}
+                                                    {record.overtime_minutes !==
+                                                        null &&
+                                                        record.overtime_minutes !==
+                                                            undefined &&
+                                                        record.overtime_minutes >
+                                                            30 && (
+                                                            <div className="flex items-center gap-1 text-xs">
+                                                                <span
+                                                                    className={
+                                                                        record.overtime_approved
+                                                                            ? 'text-green-600'
+                                                                            : 'text-red-600'
+                                                                    }
+                                                                >
+                                                                    +
+                                                                    {formatTimeAdjustment(
+                                                                        record.overtime_minutes,
+                                                                    )}{' '}
+                                                                    OT
+                                                                </span>
+                                                                {record.overtime_approved ? (
+                                                                    <CheckCircle className="h-3 w-3 text-green-600" />
+                                                                ) : record.admin_verified ? (
+                                                                    <X className="h-3 w-3 text-red-600" />
+                                                                ) : null}
+                                                            </div>
+                                                        )}
                                                 </div>
                                             </TableCell>
                                             <TableCell>
                                                 <NotesDisplay record={record} />
                                             </TableCell>
-                                            {(can('attendance.approve') || can('attendance.verify') || can('attendance.delete')) && (
+                                            {(can('attendance.approve') ||
+                                                can('attendance.verify') ||
+                                                can('attendance.delete')) && (
                                                 <TableCell>
                                                     <div className="flex items-center gap-2">
                                                         <Can permission="attendance.approve">
-                                                            {canQuickApprove(record) ? (
+                                                            {canQuickApprove(
+                                                                record,
+                                                            ) ? (
                                                                 <TooltipProvider>
                                                                     <Tooltip>
-                                                                        <TooltipTrigger asChild>
+                                                                        <TooltipTrigger
+                                                                            asChild
+                                                                        >
                                                                             <Button
                                                                                 size="icon"
                                                                                 variant="outline"
-                                                                                onClick={() => handleQuickApprove(record.id)}
+                                                                                onClick={() =>
+                                                                                    handleQuickApprove(
+                                                                                        record.id,
+                                                                                    )
+                                                                                }
                                                                                 className="h-8 w-8"
                                                                             >
                                                                                 <Check className="h-4 w-4 text-green-600" />
                                                                             </Button>
                                                                         </TooltipTrigger>
-                                                                        <TooltipContent>Approve</TooltipContent>
+                                                                        <TooltipContent>
+                                                                            Approve
+                                                                        </TooltipContent>
                                                                     </Tooltip>
                                                                 </TooltipProvider>
-                                                            ) : needsReview(record) ? (
+                                                            ) : needsReview(
+                                                                  record,
+                                                              ) ? (
                                                                 <TooltipProvider>
                                                                     <Tooltip>
-                                                                        <TooltipTrigger asChild>
+                                                                        <TooltipTrigger
+                                                                            asChild
+                                                                        >
                                                                             <Button
                                                                                 size="icon"
                                                                                 variant="outline"
-                                                                                onClick={() => window.open(attendanceReview({ query: { verify: record.id } }).url, '_blank')}
+                                                                                onClick={() =>
+                                                                                    window.open(
+                                                                                        attendanceReview(
+                                                                                            {
+                                                                                                query: {
+                                                                                                    verify: record.id,
+                                                                                                },
+                                                                                            },
+                                                                                        )
+                                                                                            .url,
+                                                                                        '_blank',
+                                                                                    )
+                                                                                }
                                                                                 className="h-8 w-8 border-amber-600 text-amber-600"
                                                                             >
                                                                                 <AlertCircle className="h-4 w-4" />
                                                                             </Button>
                                                                         </TooltipTrigger>
-                                                                        <TooltipContent>Review</TooltipContent>
+                                                                        <TooltipContent>
+                                                                            Review
+                                                                        </TooltipContent>
                                                                     </Tooltip>
                                                                 </TooltipProvider>
                                                             ) : null}
@@ -942,17 +1314,33 @@ export default function AttendanceIndex() {
                                                             {!record.admin_verified && (
                                                                 <TooltipProvider>
                                                                     <Tooltip>
-                                                                        <TooltipTrigger asChild>
+                                                                        <TooltipTrigger
+                                                                            asChild
+                                                                        >
                                                                             <Button
                                                                                 size="icon"
                                                                                 variant="outline"
-                                                                                onClick={() => window.open(attendanceReview({ query: { verify: record.id } }).url, '_blank')}
+                                                                                onClick={() =>
+                                                                                    window.open(
+                                                                                        attendanceReview(
+                                                                                            {
+                                                                                                query: {
+                                                                                                    verify: record.id,
+                                                                                                },
+                                                                                            },
+                                                                                        )
+                                                                                            .url,
+                                                                                        '_blank',
+                                                                                    )
+                                                                                }
                                                                                 className="h-8 w-8"
                                                                             >
                                                                                 <Edit className="h-4 w-4" />
                                                                             </Button>
                                                                         </TooltipTrigger>
-                                                                        <TooltipContent>Verify</TooltipContent>
+                                                                        <TooltipContent>
+                                                                            Verify
+                                                                        </TooltipContent>
                                                                     </Tooltip>
                                                                 </TooltipProvider>
                                                             )}
@@ -962,131 +1350,238 @@ export default function AttendanceIndex() {
                                             )}
                                         </TableRow>
                                     ))}
-                                    {attendanceData.data.length === 0 && !loading && (
-                                        <TableRow>
-                                            <TableCell colSpan={14} className="h-24 text-center text-muted-foreground">
-                                                No attendance records found
-                                            </TableCell>
-                                        </TableRow>
-                                    )}
+                                    {attendanceData.data.length === 0 &&
+                                        !loading && (
+                                            <TableRow>
+                                                <TableCell
+                                                    colSpan={14}
+                                                    className="h-24 text-center text-muted-foreground"
+                                                >
+                                                    No attendance records found
+                                                </TableCell>
+                                            </TableRow>
+                                        )}
                                 </TableBody>
                             </Table>
                         </div>
                     )}
                 </div>
 
-                <div className="md:hidden space-y-4">
-                    {attendanceData.data.map(record => (
-                        <div key={record.id} className={`bg-card border rounded-lg p-4 shadow-sm space-y-3 ${record.is_cross_site_bio ? "border-orange-300" : ""}`}>
+                <div className="space-y-4 md:hidden">
+                    {attendanceData.data.map((record) => (
+                        <div
+                            key={record.id}
+                            className={`space-y-3 rounded-lg border bg-card p-4 shadow-sm ${record.is_cross_site_bio ? 'border-orange-300' : ''}`}
+                        >
                             <div className="flex items-start gap-3">
                                 <Checkbox
-                                    checked={selectedRecords.includes(record.id)}
-                                    onCheckedChange={() => toggleSelectRecord(record.id)}
+                                    checked={selectedRecords.includes(
+                                        record.id,
+                                    )}
+                                    onCheckedChange={() =>
+                                        toggleSelectRecord(record.id)
+                                    }
                                     className="mt-1"
                                 />
                                 <div className="flex-1">
-                                    <div className="flex justify-between items-start">
+                                    <div className="flex items-start justify-between">
                                         <div>
                                             <div className="text-lg font-semibold">
                                                 {record.user.name}
                                                 {record.is_cross_site_bio && (
-                                                    <Badge variant="outline" className="ml-2 text-orange-600 border-orange-600 text-xs">
-                                                        Cross-Site {record.bio_in_site?.name && `@ ${record.bio_in_site.name}`}
+                                                    <Badge
+                                                        variant="outline"
+                                                        className="ml-2 border-orange-600 text-xs text-orange-600"
+                                                    >
+                                                        Cross-Site{' '}
+                                                        {record.bio_in_site
+                                                            ?.name &&
+                                                            `@ ${record.bio_in_site.name}`}
                                                     </Badge>
                                                 )}
                                             </div>
-                                            <div className="text-sm text-muted-foreground flex items-center gap-2">
+                                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                                 {formatDate(record.shift_date)}
-                                                {record.employee_schedule?.shift_type && (
-                                                    <span>{getShiftTypeBadge(record.employee_schedule.shift_type)}</span>
+                                                {record.employee_schedule
+                                                    ?.shift_type && (
+                                                    <span>
+                                                        {getShiftTypeBadge(
+                                                            record
+                                                                .employee_schedule
+                                                                .shift_type,
+                                                        )}
+                                                    </span>
                                                 )}
                                             </div>
                                         </div>
                                         {getStatusBadges(record)}
                                     </div>
 
-                                    <div className="space-y-2 text-sm mt-3">
+                                    <div className="mt-3 space-y-2 text-sm">
                                         <div>
-                                            <span className="font-medium">Site / Campaign:</span>{" "}
-                                            {record.employee_schedule?.site?.name || record.user.active_schedule?.site?.name || 'No site'}
+                                            <span className="font-medium">
+                                                Site / Campaign:
+                                            </span>{' '}
+                                            {record.employee_schedule?.site
+                                                ?.name ||
+                                                record.user.active_schedule
+                                                    ?.site?.name ||
+                                                'No site'}
                                             {record.is_cross_site_bio && (
-                                                <Badge variant="outline" className="ml-2 text-orange-600 border-orange-600 text-xs">
-                                                    Cross-Site {record.bio_in_site?.name && `@ ${record.bio_in_site.name}`}
+                                                <Badge
+                                                    variant="outline"
+                                                    className="ml-2 border-orange-600 text-xs text-orange-600"
+                                                >
+                                                    Cross-Site{' '}
+                                                    {record.bio_in_site?.name &&
+                                                        `@ ${record.bio_in_site.name}`}
                                                 </Badge>
                                             )}
-                                            {(record.employee_schedule?.campaign?.name || record.user.active_schedule?.campaign?.name) && (
+                                            {(record.employee_schedule?.campaign
+                                                ?.name ||
+                                                record.user.active_schedule
+                                                    ?.campaign?.name) && (
                                                 <span className="text-muted-foreground">
-                                                    {" / "}{record.employee_schedule?.campaign?.name || record.user.active_schedule?.campaign?.name}
+                                                    {' / '}
+                                                    {record.employee_schedule
+                                                        ?.campaign?.name ||
+                                                        record.user
+                                                            .active_schedule
+                                                            ?.campaign?.name}
                                                 </span>
                                             )}
                                         </div>
                                         <div>
-                                            <span className="font-medium">Schedule:</span>{" "}
+                                            <span className="font-medium">
+                                                Schedule:
+                                            </span>{' '}
                                             {record.employee_schedule ? (
-                                                <span>{formatTime(record.employee_schedule.scheduled_time_in)} - {formatTime(record.employee_schedule.scheduled_time_out)}</span>
+                                                <span>
+                                                    {formatTime(
+                                                        record.employee_schedule
+                                                            .scheduled_time_in,
+                                                    )}{' '}
+                                                    -{' '}
+                                                    {formatTime(
+                                                        record.employee_schedule
+                                                            .scheduled_time_out,
+                                                    )}
+                                                </span>
                                             ) : (
-                                                "-"
+                                                '-'
                                             )}
                                         </div>
                                         <div>
-                                            <span className="font-medium">Time In / Out:</span>{" "}
-                                            {formatDateTime(record.actual_time_in) || '-'}
-                                            {" → "}
-                                            {formatDateTime(record.actual_time_out) || '-'}
+                                            <span className="font-medium">
+                                                Time In / Out:
+                                            </span>{' '}
+                                            {formatDateTime(
+                                                record.actual_time_in,
+                                            ) || '-'}
+                                            {' → '}
+                                            {formatDateTime(
+                                                record.actual_time_out,
+                                            ) || '-'}
                                         </div>
                                         <div>
-                                            <span className="font-medium">Total Hours:</span>{" "}
-                                            <span className="font-medium">{formatWorkDuration(record.total_minutes_worked)}</span>
+                                            <span className="font-medium">
+                                                Total Hours:
+                                            </span>{' '}
+                                            <span className="font-medium">
+                                                {formatWorkDuration(
+                                                    record.total_minutes_worked,
+                                                )}
+                                            </span>
                                         </div>
-                                        {record.tardy_minutes !== null && record.tardy_minutes !== undefined && record.tardy_minutes > 0 && (
+                                        {record.tardy_minutes !== null &&
+                                            record.tardy_minutes !==
+                                                undefined &&
+                                            record.tardy_minutes > 0 && (
+                                                <div>
+                                                    <span className="font-medium">
+                                                        Tardy:
+                                                    </span>{' '}
+                                                    <span className="text-orange-600">
+                                                        +
+                                                        {formatTimeAdjustment(
+                                                            record.tardy_minutes,
+                                                        )}{' '}
+                                                        T
+                                                    </span>
+                                                </div>
+                                            )}
+                                        {record.undertime_minutes !== null &&
+                                            record.undertime_minutes !==
+                                                undefined &&
+                                            record.undertime_minutes > 0 && (
+                                                <div>
+                                                    <span className="font-medium">
+                                                        Undertime:
+                                                    </span>{' '}
+                                                    <span className="text-orange-600">
+                                                        {formatTimeAdjustment(
+                                                            record.undertime_minutes,
+                                                        )}{' '}
+                                                        UT
+                                                    </span>
+                                                </div>
+                                            )}
+                                        {record.overtime_minutes !== null &&
+                                            record.overtime_minutes !==
+                                                undefined &&
+                                            record.overtime_minutes > 30 && (
+                                                <div className="flex items-center gap-1">
+                                                    <span className="font-medium">
+                                                        Overtime:
+                                                    </span>{' '}
+                                                    <span
+                                                        className={
+                                                            record.overtime_approved
+                                                                ? 'text-green-600'
+                                                                : 'text-red-600'
+                                                        }
+                                                    >
+                                                        +
+                                                        {formatTimeAdjustment(
+                                                            record.overtime_minutes,
+                                                        )}{' '}
+                                                        OT
+                                                    </span>
+                                                    {record.overtime_approved ? (
+                                                        <CheckCircle className="h-3 w-3 text-green-600" />
+                                                    ) : record.admin_verified ? (
+                                                        <X className="h-3 w-3 text-red-600" />
+                                                    ) : null}
+                                                </div>
+                                            )}
+                                        {(record.notes ||
+                                            record.verification_notes) && (
                                             <div>
-                                                <span className="font-medium">Tardy:</span>{" "}
-                                                <span className="text-orange-600">
-                                                    +{formatTimeAdjustment(record.tardy_minutes)} T
-                                                </span>
-                                            </div>
-                                        )}
-                                        {record.undertime_minutes !== null && record.undertime_minutes !== undefined && record.undertime_minutes > 0 && (
-                                            <div>
-                                                <span className="font-medium">Undertime:</span>{" "}
-                                                <span className="text-orange-600">
-                                                    {formatTimeAdjustment(record.undertime_minutes)} UT
-                                                </span>
-                                            </div>
-                                        )}
-                                        {record.overtime_minutes !== null && record.overtime_minutes !== undefined && record.overtime_minutes > 30 && (
-                                            <div className="flex items-center gap-1">
-                                                <span className="font-medium">Overtime:</span>{" "}
-                                                <span className={record.overtime_approved ? 'text-green-600' : 'text-red-600'}>
-                                                    +{formatTimeAdjustment(record.overtime_minutes)} OT
-                                                </span>
-                                                {record.overtime_approved ? (
-                                                    <CheckCircle className="h-3 w-3 text-green-600" />
-                                                ) : record.admin_verified ? (
-                                                    <X className="h-3 w-3 text-red-600" />
-                                                ) : null}
-                                            </div>
-                                        )}
-                                        {(record.notes || record.verification_notes) && (
-                                            <div>
-                                                <span className="font-medium">Notes:</span>{" "}
+                                                <span className="font-medium">
+                                                    Notes:
+                                                </span>{' '}
                                                 <NotesDisplay record={record} />
                                             </div>
                                         )}
                                     </div>
 
                                     {/* Mobile Action Buttons */}
-                                    {(can('attendance.approve') || can('attendance.verify')) && (
-                                        <div className="mt-3 pt-3 border-t flex flex-wrap gap-2">
+                                    {(can('attendance.approve') ||
+                                        can('attendance.verify')) && (
+                                        <div className="mt-3 flex flex-wrap gap-2 border-t pt-3">
                                             <Can permission="attendance.approve">
                                                 {canQuickApprove(record) && (
                                                     <Button
                                                         size="sm"
                                                         variant="outline"
-                                                        onClick={() => handleQuickApprove(record.id)}
+                                                        onClick={() =>
+                                                            handleQuickApprove(
+                                                                record.id,
+                                                            )
+                                                        }
                                                         className="flex-1"
                                                     >
-                                                        <Check className="h-3 w-3 mr-1" />
+                                                        <Check className="mr-1 h-3 w-3" />
                                                         Approve
                                                     </Button>
                                                 )}
@@ -1094,10 +1589,21 @@ export default function AttendanceIndex() {
                                                     <Button
                                                         size="sm"
                                                         variant="outline"
-                                                        onClick={() => window.open(attendanceReview({ query: { verify: record.id } }).url, '_blank')}
-                                                        className="flex-1 text-amber-600 border-amber-600"
+                                                        onClick={() =>
+                                                            window.open(
+                                                                attendanceReview(
+                                                                    {
+                                                                        query: {
+                                                                            verify: record.id,
+                                                                        },
+                                                                    },
+                                                                ).url,
+                                                                '_blank',
+                                                            )
+                                                        }
+                                                        className="flex-1 border-amber-600 text-amber-600"
                                                     >
-                                                        <AlertCircle className="h-3 w-3 mr-1" />
+                                                        <AlertCircle className="mr-1 h-3 w-3" />
                                                         Review
                                                     </Button>
                                                 )}
@@ -1107,10 +1613,21 @@ export default function AttendanceIndex() {
                                                     <Button
                                                         size="sm"
                                                         variant="outline"
-                                                        onClick={() => window.open(attendanceReview({ query: { verify: record.id } }).url, '_blank')}
+                                                        onClick={() =>
+                                                            window.open(
+                                                                attendanceReview(
+                                                                    {
+                                                                        query: {
+                                                                            verify: record.id,
+                                                                        },
+                                                                    },
+                                                                ).url,
+                                                                '_blank',
+                                                            )
+                                                        }
                                                         className="flex-1"
                                                     >
-                                                        <Edit className="h-3 w-3 mr-1" />
+                                                        <Edit className="mr-1 h-3 w-3" />
                                                         Verify
                                                     </Button>
                                                 )}
@@ -1123,31 +1640,45 @@ export default function AttendanceIndex() {
                     ))}
 
                     {attendanceData.data.length === 0 && !loading && (
-                        <div className="py-12 text-center text-gray-500 border rounded-lg bg-card">
+                        <div className="rounded-lg border bg-card py-12 text-center text-gray-500">
                             No attendance records found
                         </div>
                     )}
                 </div>
 
-                <div className="flex justify-center mt-4">
-                    {attendanceData.links && attendanceData.links.length > 0 && (
-                        <PaginationNav links={attendanceData.links} only={["attendances"]} />
-                    )}
+                <div className="mt-4 flex justify-center">
+                    {attendanceData.links &&
+                        attendanceData.links.length > 0 && (
+                            <PaginationNav
+                                links={attendanceData.links}
+                                only={['attendances']}
+                            />
+                        )}
                 </div>
             </div>
 
-            <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+            <AlertDialog
+                open={showDeleteConfirm}
+                onOpenChange={setShowDeleteConfirm}
+            >
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Delete Selected Records</AlertDialogTitle>
+                        <AlertDialogTitle>
+                            Delete Selected Records
+                        </AlertDialogTitle>
                         <AlertDialogDescription>
-                            Are you sure you want to delete {selectedRecords.length} attendance record
-                            {selectedRecords.length === 1 ? "" : "s"}? This action cannot be undone.
+                            Are you sure you want to delete{' '}
+                            {selectedRecords.length} attendance record
+                            {selectedRecords.length === 1 ? '' : 's'}? This
+                            action cannot be undone.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={confirmBulkDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                        <AlertDialogAction
+                            onClick={confirmBulkDelete}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
                             Delete
                         </AlertDialogAction>
                     </AlertDialogFooter>
@@ -1160,7 +1691,10 @@ export default function AttendanceIndex() {
                         <DialogTitle>Attendance Notes</DialogTitle>
                         <DialogDescription>
                             {selectedNoteRecord && (
-                                <span>{selectedNoteRecord.user.name} - {formatDate(selectedNoteRecord.shift_date)}</span>
+                                <span>
+                                    {selectedNoteRecord.user.name} -{' '}
+                                    {formatDate(selectedNoteRecord.shift_date)}
+                                </span>
                             )}
                         </DialogDescription>
                     </DialogHeader>
@@ -1168,22 +1702,35 @@ export default function AttendanceIndex() {
                         <div className="space-y-4">
                             {/* Employee Notes */}
                             <div>
-                                <h4 className="text-sm font-semibold mb-2">Employee Notes</h4>
-                                <div className="p-3 bg-muted rounded-md">
+                                <h4 className="mb-2 text-sm font-semibold">
+                                    Employee Notes
+                                </h4>
+                                <div className="rounded-md bg-muted p-3">
                                     <p className="text-sm whitespace-pre-wrap">
-                                        {selectedNoteRecord.notes || <span className="text-muted-foreground italic">No notes</span>}
+                                        {selectedNoteRecord.notes || (
+                                            <span className="text-muted-foreground italic">
+                                                No notes
+                                            </span>
+                                        )}
                                     </p>
                                 </div>
                             </div>
                             {/* Admin Verification Notes */}
                             <div>
-                                <h4 className="text-sm font-semibold mb-2">Admin Verification Notes</h4>
-                                <div className="p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-md">
+                                <h4 className="mb-2 text-sm font-semibold">
+                                    Admin Verification Notes
+                                </h4>
+                                <div className="rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-950/30">
                                     <p className="text-sm whitespace-pre-wrap">
                                         {selectedNoteRecord.verification_notes ||
-                                            selectedNoteRecord.leave_request?.admin_review_notes ||
-                                            selectedNoteRecord.leave_request?.hr_review_notes ||
-                                            <span className="text-muted-foreground italic">Not verified yet</span>}
+                                            selectedNoteRecord.leave_request
+                                                ?.admin_review_notes ||
+                                            selectedNoteRecord.leave_request
+                                                ?.hr_review_notes || (
+                                                <span className="text-muted-foreground italic">
+                                                    Not verified yet
+                                                </span>
+                                            )}
                                     </p>
                                 </div>
                             </div>

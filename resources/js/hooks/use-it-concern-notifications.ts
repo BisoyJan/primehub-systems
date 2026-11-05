@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef } from 'react';
-import { router } from '@inertiajs/react';
 import { getEcho } from '@/echo';
 import { usePermission } from '@/hooks/use-permission';
+import { router } from '@inertiajs/react';
+import { useCallback, useEffect, useRef } from 'react';
 
 interface ItConcernBroadcast {
     id: number;
@@ -26,14 +26,20 @@ interface UseItConcernNotificationsOptions {
  * focused. Mounted globally so IT staff are notified regardless of the page
  * they are on. Gated by the same permission that authorizes the channel.
  */
-export function useItConcernNotifications({ onConcern }: UseItConcernNotificationsOptions = {}): void {
+export function useItConcernNotifications({
+    onConcern,
+}: UseItConcernNotificationsOptions = {}): void {
     const { can } = usePermission();
     const enabled = can('it_concerns.resolve');
     const onConcernRef = useRef(onConcern);
     onConcernRef.current = onConcern;
 
     const showNotification = useCallback((concern: ItConcernBroadcast) => {
-        if (typeof window === 'undefined' || !('Notification' in window) || Notification.permission !== 'granted') {
+        if (
+            typeof window === 'undefined' ||
+            !('Notification' in window) ||
+            Notification.permission !== 'granted'
+        ) {
             return;
         }
 

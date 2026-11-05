@@ -1,25 +1,32 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { motion } from 'framer-motion';
-import { Link } from '@inertiajs/react';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
-    Calendar,
-    ClipboardCheck,
-    Wrench,
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import { Link } from '@inertiajs/react';
+import { motion } from 'framer-motion';
+import {
     AlertTriangle,
+    ArrowRight,
+    Bell,
+    Calendar,
+    CheckCircle2,
+    ClipboardCheck,
     Clock,
-    Users,
-    Pill,
-    Package,
     Loader,
     MessageSquare,
-    Bell,
-    CheckCircle2,
-    ArrowRight,
+    Package,
+    Pill,
+    Users,
+    Wrench,
 } from 'lucide-react';
+import React, { useCallback, useEffect, useState } from 'react';
 
 export interface LoginDigestItem {
     key: string;
@@ -37,24 +44,36 @@ export interface LoginDigest {
 }
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
-    'calendar': Calendar,
+    calendar: Calendar,
     'clipboard-check': ClipboardCheck,
-    'wrench': Wrench,
+    wrench: Wrench,
     'alert-triangle': AlertTriangle,
-    'clock': Clock,
-    'users': Users,
-    'pill': Pill,
-    'package': Package,
-    'loader': Loader,
+    clock: Clock,
+    users: Users,
+    pill: Pill,
+    package: Package,
+    loader: Loader,
     'message-square': MessageSquare,
-    'bell': Bell,
+    bell: Bell,
 };
 
 const PRIORITY_STYLES: Record<string, { badge: string; border: string }> = {
-    critical: { badge: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400', border: 'border-l-red-500' },
-    high: { badge: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400', border: 'border-l-orange-500' },
-    medium: { badge: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400', border: 'border-l-yellow-500' },
-    low: { badge: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400', border: 'border-l-blue-500' },
+    critical: {
+        badge: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+        border: 'border-l-red-500',
+    },
+    high: {
+        badge: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
+        border: 'border-l-orange-500',
+    },
+    medium: {
+        badge: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
+        border: 'border-l-yellow-500',
+    },
+    low: {
+        badge: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
+        border: 'border-l-blue-500',
+    },
 };
 
 const ROUTE_MAP: Record<string, string> = {
@@ -97,7 +116,10 @@ export function LoginDigestDialog({ digest }: LoginDigestDialogProps) {
         sessionStorage.setItem(SESSION_KEY, 'true');
 
         if (dontShowToday) {
-            localStorage.setItem(LOCAL_STORAGE_KEY, new Date().toISOString().slice(0, 10));
+            localStorage.setItem(
+                LOCAL_STORAGE_KEY,
+                new Date().toISOString().slice(0, 10),
+            );
         }
     }, [dontShowToday]);
 
@@ -107,14 +129,20 @@ export function LoginDigestDialog({ digest }: LoginDigestDialogProps) {
 
     return (
         <Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
-            <DialogContent className="max-w-[90vw] sm:max-w-lg max-h-[80vh] overflow-y-auto">
+            <DialogContent className="max-h-[80vh] max-w-[90vw] overflow-y-auto sm:max-w-lg">
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3, type: 'spring', stiffness: 200 }}
+                    transition={{
+                        duration: 0.3,
+                        type: 'spring',
+                        stiffness: 200,
+                    }}
                 >
                     <DialogHeader>
-                        <DialogTitle className="text-lg">{digest.greeting}</DialogTitle>
+                        <DialogTitle className="text-lg">
+                            {digest.greeting}
+                        </DialogTitle>
                         <DialogDescription>
                             {hasItems
                                 ? `You have ${digest.total_actionable} item${digest.total_actionable !== 1 ? 's' : ''} that need${digest.total_actionable === 1 ? 's' : ''} your attention.`
@@ -125,13 +153,22 @@ export function LoginDigestDialog({ digest }: LoginDigestDialogProps) {
                     <div className="mt-4 space-y-2">
                         {hasItems ? (
                             digest.items.map((item, index) => (
-                                <DigestItem key={item.key} item={item} index={index} onNavigate={handleClose} />
+                                <DigestItem
+                                    key={item.key}
+                                    item={item}
+                                    index={index}
+                                    onNavigate={handleClose}
+                                />
                             ))
                         ) : (
                             <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-                                <CheckCircle2 className="size-12 text-green-500 mb-3" />
-                                <p className="text-sm font-medium">All caught up!</p>
-                                <p className="text-xs mt-1">No pending items to address.</p>
+                                <CheckCircle2 className="mb-3 size-12 text-green-500" />
+                                <p className="text-sm font-medium">
+                                    All caught up!
+                                </p>
+                                <p className="mt-1 text-xs">
+                                    No pending items to address.
+                                </p>
                             </div>
                         )}
                     </div>
@@ -142,14 +179,23 @@ export function LoginDigestDialog({ digest }: LoginDigestDialogProps) {
                                 <Checkbox
                                     id="dont-show-today"
                                     checked={dontShowToday}
-                                    onCheckedChange={(checked) => setDontShowToday(checked === true)}
+                                    onCheckedChange={(checked) =>
+                                        setDontShowToday(checked === true)
+                                    }
                                 />
-                                <label htmlFor="dont-show-today" className="text-xs text-muted-foreground cursor-pointer">
+                                <label
+                                    htmlFor="dont-show-today"
+                                    className="cursor-pointer text-xs text-muted-foreground"
+                                >
                                     Don&apos;t show again today
                                 </label>
                             </div>
                         )}
-                        <Button variant="outline" onClick={handleClose} className="w-full sm:w-auto">
+                        <Button
+                            variant="outline"
+                            onClick={handleClose}
+                            className="w-full sm:w-auto"
+                        >
                             Dismiss
                         </Button>
                     </DialogFooter>
@@ -159,7 +205,15 @@ export function LoginDigestDialog({ digest }: LoginDigestDialogProps) {
     );
 }
 
-function DigestItem({ item, index, onNavigate }: { item: LoginDigestItem; index: number; onNavigate: () => void }) {
+function DigestItem({
+    item,
+    index,
+    onNavigate,
+}: {
+    item: LoginDigestItem;
+    index: number;
+    onNavigate: () => void;
+}) {
     const IconComponent = ICON_MAP[item.icon] || AlertTriangle;
     const styles = PRIORITY_STYLES[item.priority] || PRIORITY_STYLES.low;
     const href = ROUTE_MAP[item.route] || '/dashboard';
@@ -173,19 +227,24 @@ function DigestItem({ item, index, onNavigate }: { item: LoginDigestItem; index:
             <Link
                 href={href}
                 onClick={onNavigate}
-                className={`flex items-center justify-between gap-3 rounded-lg border border-l-4 ${styles.border} bg-card p-3 transition-colors hover:bg-accent/50 group`}
+                className={`flex items-center justify-between gap-3 rounded-lg border border-l-4 ${styles.border} group bg-card p-3 transition-colors hover:bg-accent/50`}
             >
-                <div className="flex items-center gap-3 min-w-0">
+                <div className="flex min-w-0 items-center gap-3">
                     <div className="flex-shrink-0">
                         <IconComponent className="size-4 text-muted-foreground" />
                     </div>
-                    <span className="text-sm font-medium truncate">{item.label}</span>
+                    <span className="truncate text-sm font-medium">
+                        {item.label}
+                    </span>
                 </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                    <Badge variant="secondary" className={`text-xs font-semibold ${styles.badge}`}>
+                <div className="flex flex-shrink-0 items-center gap-2">
+                    <Badge
+                        variant="secondary"
+                        className={`text-xs font-semibold ${styles.badge}`}
+                    >
                         {item.count}
                     </Badge>
-                    <ArrowRight className="size-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <ArrowRight className="size-3.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
                 </div>
             </Link>
         </motion.div>

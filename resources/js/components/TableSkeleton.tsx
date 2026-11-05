@@ -1,4 +1,3 @@
-import React from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
     Table,
@@ -37,7 +36,7 @@ export function TableSkeleton({
     showHeader = true,
 }: TableSkeletonProps) {
     return (
-        <div className={cn('rounded-md border overflow-hidden', className)}>
+        <div className={cn('overflow-hidden rounded-md border', className)}>
             <Table>
                 {showHeader && (
                     <TableHeader>
@@ -53,16 +52,22 @@ export function TableSkeleton({
                 <TableBody>
                     {Array.from({ length: rows }).map((_, rowIdx) => (
                         <TableRow key={rowIdx}>
-                            {Array.from({ length: columns }).map((_, colIdx) => (
-                                <TableCell key={colIdx}>
-                                    <Skeleton
-                                        className={cn(
-                                            'h-4',
-                                            colIdx === 0 ? 'w-12' : colIdx === columns - 1 ? 'w-16' : 'w-24',
-                                        )}
-                                    />
-                                </TableCell>
-                            ))}
+                            {Array.from({ length: columns }).map(
+                                (_, colIdx) => (
+                                    <TableCell key={colIdx}>
+                                        <Skeleton
+                                            className={cn(
+                                                'h-4',
+                                                colIdx === 0
+                                                    ? 'w-12'
+                                                    : colIdx === columns - 1
+                                                      ? 'w-16'
+                                                      : 'w-24',
+                                            )}
+                                        />
+                                    </TableCell>
+                                ),
+                            )}
                         </TableRow>
                     ))}
                 </TableBody>

@@ -1,55 +1,73 @@
-import { Head, Link } from "@inertiajs/react";
-import AppLayout from "@/layouts/app-layout";
-import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
-import { PageHeader } from "@/components/PageHeader";
-import { LoadingOverlay } from "@/components/LoadingOverlay";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Can } from "@/components/authorization";
+import { Can } from '@/components/authorization';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { PageHeader } from '@/components/PageHeader';
 import {
-    index as attendanceIndex,
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from '@/components/ui/card';
+import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
+import AppLayout from '@/layouts/app-layout';
+import {
     calendar as attendanceCalendar,
-    importMethod as attendanceImport,
     dailyRoster as attendanceDailyRoster,
+    importMethod as attendanceImport,
+    index as attendanceIndex,
     review as attendanceReview,
     spreadsheet as attendanceSpreadsheet,
-} from "@/routes/attendance";
+} from '@/routes/attendance';
+import { Head, Link } from '@inertiajs/react';
 import {
+    AlertCircle,
+    AlertTriangle,
+    Calendar,
     CalendarDays,
     ClipboardList,
-    Upload,
-    AlertCircle,
-    Calendar,
-    Table2,
     Clock,
-    AlertTriangle,
     Grid3x3,
+    Table2,
+    Upload,
     type LucideIcon,
-} from "lucide-react";
+} from 'lucide-react';
 
 interface ActionCardProps {
     title: string;
     description: string;
     icon: LucideIcon;
     href: string;
-    variant?: "default" | "primary" | "warning";
+    variant?: 'default' | 'primary' | 'warning';
 }
 
-function ActionCard({ title, description, icon: Icon, href, variant = "default" }: ActionCardProps) {
+function ActionCard({
+    title,
+    description,
+    icon: Icon,
+    href,
+    variant = 'default',
+}: ActionCardProps) {
     const variantStyles = {
-        default: "hover:border-primary/50",
-        primary: "border-primary/30 hover:border-primary/50",
-        warning: "border-orange-500/30 hover:border-orange-500/50",
+        default: 'hover:border-primary/50',
+        primary: 'border-primary/30 hover:border-primary/50',
+        warning: 'border-orange-500/30 hover:border-orange-500/50',
     };
 
     return (
         <Link href={href} className="block">
-            <Card className={`h-full cursor-pointer transition-all hover:shadow-lg ${variantStyles[variant]}`}>
+            <Card
+                className={`h-full cursor-pointer transition-all hover:shadow-lg ${variantStyles[variant]}`}
+            >
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">{title}</CardTitle>
+                    <CardTitle className="text-sm font-medium">
+                        {title}
+                    </CardTitle>
                     <Icon className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                    <CardDescription className="text-sm">{description}</CardDescription>
+                    <CardDescription className="text-sm">
+                        {description}
+                    </CardDescription>
                 </CardContent>
             </Card>
         </Link>
@@ -58,8 +76,8 @@ function ActionCard({ title, description, icon: Icon, href, variant = "default" 
 
 export default function AttendanceHub() {
     const { title, breadcrumbs } = usePageMeta({
-        title: "Attendance",
-        breadcrumbs: [{ title: "Attendance" }],
+        title: 'Attendance',
+        breadcrumbs: [{ title: 'Attendance' }],
     });
 
     useFlashMessage();
@@ -77,7 +95,7 @@ export default function AttendanceHub() {
                 />
 
                 {/* Primary Actions */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     <ActionCard
                         title="Calendar View"
                         description="View attendance in a calendar format with daily status overview"
@@ -100,7 +118,6 @@ export default function AttendanceHub() {
                         href={attendanceSpreadsheet().url}
                         variant="primary"
                     />
-
 
                     <Can permission="attendance.import">
                         <ActionCard
@@ -134,34 +151,52 @@ export default function AttendanceHub() {
                 {/* Quick Filters */}
                 <Card>
                     <CardHeader className="pb-3">
-                        <CardTitle className="text-sm font-medium">Quick Filters</CardTitle>
+                        <CardTitle className="text-sm font-medium">
+                            Quick Filters
+                        </CardTitle>
                     </CardHeader>
                     <CardContent className="pt-0">
                         <div className="flex flex-wrap gap-2">
                             <Link
-                                href={attendanceIndex({ query: { needs_verification: "1" } }).url}
-                                className="inline-flex items-center gap-2 px-3 py-2 text-sm bg-muted hover:bg-muted/80 rounded-md transition-colors"
+                                href={
+                                    attendanceIndex({
+                                        query: { needs_verification: '1' },
+                                    }).url
+                                }
+                                className="inline-flex items-center gap-2 rounded-md bg-muted px-3 py-2 text-sm transition-colors hover:bg-muted/80"
                             >
                                 <ClipboardList className="h-4 w-4" />
                                 Pending Verification
                             </Link>
                             <Link
-                                href={attendanceIndex({ query: { status: "ncns" } }).url}
-                                className="inline-flex items-center gap-2 px-3 py-2 text-sm bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/30 rounded-md transition-colors"
+                                href={
+                                    attendanceIndex({
+                                        query: { status: 'ncns' },
+                                    }).url
+                                }
+                                className="inline-flex items-center gap-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-600 transition-colors hover:bg-red-100 dark:bg-red-950/20 dark:text-red-400 dark:hover:bg-red-950/30"
                             >
                                 <AlertTriangle className="h-4 w-4" />
                                 NCNS Records
                             </Link>
                             <Link
-                                href={attendanceIndex({ query: { status: "tardy" } }).url}
-                                className="inline-flex items-center gap-2 px-3 py-2 text-sm bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-950/30 rounded-md transition-colors"
+                                href={
+                                    attendanceIndex({
+                                        query: { status: 'tardy' },
+                                    }).url
+                                }
+                                className="inline-flex items-center gap-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-600 transition-colors hover:bg-amber-100 dark:bg-amber-950/20 dark:text-amber-400 dark:hover:bg-amber-950/30"
                             >
                                 <Clock className="h-4 w-4" />
                                 Tardy Records
                             </Link>
                             <Link
-                                href={attendanceIndex({ query: { verified_status: "pending" } }).url}
-                                className="inline-flex items-center gap-2 px-3 py-2 text-sm bg-muted hover:bg-muted/80 rounded-md transition-colors"
+                                href={
+                                    attendanceIndex({
+                                        query: { verified_status: 'pending' },
+                                    }).url
+                                }
+                                className="inline-flex items-center gap-2 rounded-md bg-muted px-3 py-2 text-sm transition-colors hover:bg-muted/80"
                             >
                                 <AlertCircle className="h-4 w-4" />
                                 Unverified Records

@@ -1,20 +1,44 @@
-import React, { useState, useMemo, useEffect, useRef } from "react";
-import { Head, router, usePage } from "@inertiajs/react";
-import AppLayout from "@/layouts/app-layout";
-import { type SharedData } from "@/types";
-import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
-import { PageHeader } from "@/components/PageHeader";
-import { LoadingOverlay } from "@/components/LoadingOverlay";
-import { formatTime, formatDateShort } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { DatePicker } from "@/components/ui/date-picker";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { Database, Calendar, Clock, Trash2, Eye, RefreshCw, Search, Play, Pause } from "lucide-react";
-import { index as biometricRecordsIndex, show as biometricRecordsShow } from "@/routes/biometric-records";
-import { MultiSelectFilter, parseMultiSelectParam, multiSelectToParam } from "@/components/multi-select-filter";
+import { LoadingOverlay } from '@/components/LoadingOverlay';
+import {
+    MultiSelectFilter,
+    multiSelectToParam,
+    parseMultiSelectParam,
+} from '@/components/multi-select-filter';
+import { PageHeader } from '@/components/PageHeader';
+import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { DatePicker } from '@/components/ui/date-picker';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table';
+import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
+import AppLayout from '@/layouts/app-layout';
+import { formatDateShort, formatTime } from '@/lib/utils';
+import {
+    index as biometricRecordsIndex,
+    show as biometricRecordsShow,
+} from '@/routes/biometric-records';
+import { type SharedData } from '@/types';
+import { Head, router, usePage } from '@inertiajs/react';
+import {
+    Calendar,
+    Clock,
+    Database,
+    Eye,
+    Pause,
+    Play,
+    RefreshCw,
+    Search,
+    Trash2,
+} from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 interface User {
     id: number;
@@ -88,17 +112,23 @@ export default function BiometricRecordsIndex() {
     const { records, stats, filters } = usePage<PageProps>().props;
 
     const { title, breadcrumbs } = usePageMeta({
-        title: "Biometric Records",
-        breadcrumbs: [{ title: "Biometric Records", href: biometricRecordsIndex().url }],
+        title: 'Biometric Records',
+        breadcrumbs: [
+            { title: 'Biometric Records', href: biometricRecordsIndex().url },
+        ],
     });
 
     useFlashMessage();
     const isPageLoading = usePageLoading();
 
-    const [selectedUserIds, setSelectedUserIds] = useState<string[]>(parseMultiSelectParam(filters?.user_id));
-    const [selectedSiteIds, setSelectedSiteIds] = useState<string[]>(parseMultiSelectParam(filters?.site_id));
-    const [dateFrom, setDateFrom] = useState(filters?.date_from || "");
-    const [dateTo, setDateTo] = useState(filters?.date_to || "");
+    const [selectedUserIds, setSelectedUserIds] = useState<string[]>(
+        parseMultiSelectParam(filters?.user_id),
+    );
+    const [selectedSiteIds, setSelectedSiteIds] = useState<string[]>(
+        parseMultiSelectParam(filters?.site_id),
+    );
+    const [dateFrom, setDateFrom] = useState(filters?.date_from || '');
+    const [dateTo, setDateTo] = useState(filters?.date_to || '');
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
 
@@ -117,8 +147,8 @@ export default function BiometricRecordsIndex() {
             per_page: records?.per_page ?? 50,
             total: records?.total ?? 0,
             from: records?.from ?? 0,
-            to: records?.to ?? 0
-        }
+            to: records?.to ?? 0,
+        },
     };
 
     const handleFilter = () => {
@@ -128,12 +158,12 @@ export default function BiometricRecordsIndex() {
                 user_id: multiSelectToParam(selectedUserIds),
                 site_id: multiSelectToParam(selectedSiteIds),
                 date_from: dateFrom,
-                date_to: dateTo
+                date_to: dateTo,
             },
             {
                 preserveState: true,
-                onSuccess: () => setLastRefresh(new Date())
-            }
+                onSuccess: () => setLastRefresh(new Date()),
+            },
         );
     };
 
@@ -154,7 +184,7 @@ export default function BiometricRecordsIndex() {
                     user_id: multiSelectToParam(selectedUserIds),
                     site_id: multiSelectToParam(selectedSiteIds),
                     date_from: dateFrom,
-                    date_to: dateTo
+                    date_to: dateTo,
                 },
                 {
                     preserveState: true,
@@ -162,19 +192,27 @@ export default function BiometricRecordsIndex() {
                     replace: true,
                     only: ['records', 'stats'],
                     onSuccess: () => setLastRefresh(new Date()),
-                    onFinish: () => { isPollingRef.current = false; },
-                }
+                    onFinish: () => {
+                        isPollingRef.current = false;
+                    },
+                },
             );
         }, 30000);
 
         return () => clearInterval(interval);
-    }, [autoRefreshEnabled, selectedUserIds, selectedSiteIds, dateFrom, dateTo]);
+    }, [
+        autoRefreshEnabled,
+        selectedUserIds,
+        selectedSiteIds,
+        dateFrom,
+        dateTo,
+    ]);
 
     const handleReset = () => {
         setSelectedUserIds([]);
         setSelectedSiteIds([]);
-        setDateFrom("");
-        setDateTo("");
+        setDateFrom('');
+        setDateTo('');
         router.get(biometricRecordsIndex().url);
     };
 
@@ -182,7 +220,11 @@ export default function BiometricRecordsIndex() {
         router.get(biometricRecordsShow({ user: userId, date }).url);
     };
 
-    const showClearFilters = selectedUserIds.length > 0 || selectedSiteIds.length > 0 || dateFrom || dateTo;
+    const showClearFilters =
+        selectedUserIds.length > 0 ||
+        selectedSiteIds.length > 0 ||
+        dateFrom ||
+        dateTo;
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -198,11 +240,15 @@ export default function BiometricRecordsIndex() {
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium">Total Records</CardTitle>
+                            <CardTitle className="text-sm font-medium">
+                                Total Records
+                            </CardTitle>
                             <Database className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">{stats?.total.toLocaleString() || 0}</div>
+                            <div className="text-2xl font-bold">
+                                {stats?.total.toLocaleString() || 0}
+                            </div>
                             <p className="text-xs text-muted-foreground">
                                 Across all uploads
                             </p>
@@ -211,24 +257,33 @@ export default function BiometricRecordsIndex() {
 
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium">This Month</CardTitle>
+                            <CardTitle className="text-sm font-medium">
+                                This Month
+                            </CardTitle>
                             <Calendar className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">{stats?.this_month.toLocaleString() || 0}</div>
+                            <div className="text-2xl font-bold">
+                                {stats?.this_month.toLocaleString() || 0}
+                            </div>
                             <p className="text-xs text-muted-foreground">
-                                {stats?.today || 0} today, {stats?.this_week || 0} this week
+                                {stats?.today || 0} today,{' '}
+                                {stats?.this_week || 0} this week
                             </p>
                         </CardContent>
                     </Card>
 
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium">Date Range</CardTitle>
+                            <CardTitle className="text-sm font-medium">
+                                Date Range
+                            </CardTitle>
                             <Clock className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-sm font-medium">{stats?.oldest_date || 'N/A'}</div>
+                            <div className="text-sm font-medium">
+                                {stats?.oldest_date || 'N/A'}
+                            </div>
                             <p className="text-xs text-muted-foreground">
                                 to {stats?.newest_date || 'N/A'}
                             </p>
@@ -237,11 +292,16 @@ export default function BiometricRecordsIndex() {
 
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium">Auto Cleanup</CardTitle>
+                            <CardTitle className="text-sm font-medium">
+                                Auto Cleanup
+                            </CardTitle>
                             <Trash2 className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-sm font-medium">{stats?.old_records.toLocaleString() || 0} eligible</div>
+                            <div className="text-sm font-medium">
+                                {stats?.old_records.toLocaleString() || 0}{' '}
+                                eligible
+                            </div>
                             <p className="text-xs text-muted-foreground">
                                 Next: {stats?.next_cleanup || 'N/A'}
                             </p>
@@ -251,29 +311,41 @@ export default function BiometricRecordsIndex() {
 
                 {/* Filters */}
                 <div className="flex flex-col gap-3">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                         <MultiSelectFilter
-                            options={filteredEmployees.map((u) => ({ label: u.name, value: String(u.id) }))}
+                            options={filteredEmployees.map((u) => ({
+                                label: u.name,
+                                value: String(u.id),
+                            }))}
                             value={selectedUserIds}
                             onChange={setSelectedUserIds}
                             placeholder="All Employees"
                             emptyMessage="No employee found."
-                            className="w-full min-h-9"
-                            multipleSelectionLabel={(n) => `${n} employees selected`}
+                            className="min-h-9 w-full"
+                            multipleSelectionLabel={(n) =>
+                                `${n} employees selected`
+                            }
                         />
 
                         <MultiSelectFilter
-                            options={(filters?.sites ?? []).map((site) => ({ label: site.name, value: String(site.id) }))}
+                            options={(filters?.sites ?? []).map((site) => ({
+                                label: site.name,
+                                value: String(site.id),
+                            }))}
                             value={selectedSiteIds}
                             onChange={setSelectedSiteIds}
                             placeholder="All Sites"
                             emptyMessage="No site found."
-                            className="w-full min-h-9"
-                            multipleSelectionLabel={(n) => `${n} sites selected`}
+                            className="min-h-9 w-full"
+                            multipleSelectionLabel={(n) =>
+                                `${n} sites selected`
+                            }
                         />
 
                         <div className="flex items-center gap-2 text-sm">
-                            <span className="text-muted-foreground text-xs">From:</span>
+                            <span className="text-xs text-muted-foreground">
+                                From:
+                            </span>
                             <DatePicker
                                 value={dateFrom}
                                 onChange={(value) => setDateFrom(value)}
@@ -283,7 +355,9 @@ export default function BiometricRecordsIndex() {
                         </div>
 
                         <div className="flex items-center gap-2 text-sm">
-                            <span className="text-muted-foreground text-xs">To:</span>
+                            <span className="text-xs text-muted-foreground">
+                                To:
+                            </span>
                             <DatePicker
                                 value={dateTo}
                                 onChange={(value) => setDateTo(value)}
@@ -294,28 +368,53 @@ export default function BiometricRecordsIndex() {
                     </div>
 
                     <div className="flex flex-wrap gap-3 sm:flex-row sm:items-center sm:justify-end">
-                        <Button variant="default" onClick={handleFilter} className="flex-1 sm:flex-none">
+                        <Button
+                            variant="default"
+                            onClick={handleFilter}
+                            className="flex-1 sm:flex-none"
+                        >
                             <Search className="mr-2 h-4 w-4" />
                             Apply Filters
                         </Button>
 
                         {showClearFilters && (
-                            <Button variant="outline" onClick={handleReset} className="flex-1 sm:flex-none">
+                            <Button
+                                variant="outline"
+                                onClick={handleReset}
+                                className="flex-1 sm:flex-none"
+                            >
                                 Clear Filters
                             </Button>
                         )}
 
                         <div className="flex gap-2">
-                            <Button variant="ghost" size="icon" onClick={handleManualRefresh} title="Refresh">
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={handleManualRefresh}
+                                title="Refresh"
+                            >
                                 <RefreshCw className="h-4 w-4" />
                             </Button>
                             <Button
-                                variant={autoRefreshEnabled ? "default" : "ghost"}
+                                variant={
+                                    autoRefreshEnabled ? 'default' : 'ghost'
+                                }
                                 size="icon"
-                                onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
-                                title={autoRefreshEnabled ? "Disable auto-refresh" : "Enable auto-refresh (30s)"}
+                                onClick={() =>
+                                    setAutoRefreshEnabled(!autoRefreshEnabled)
+                                }
+                                title={
+                                    autoRefreshEnabled
+                                        ? 'Disable auto-refresh'
+                                        : 'Enable auto-refresh (30s)'
+                                }
                             >
-                                {autoRefreshEnabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                                {autoRefreshEnabled ? (
+                                    <Pause className="h-4 w-4" />
+                                ) : (
+                                    <Play className="h-4 w-4" />
+                                )}
                             </Button>
                         </div>
                     </div>
@@ -323,9 +422,10 @@ export default function BiometricRecordsIndex() {
 
                 <div className="flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        Showing {recordsData.meta.from} to {recordsData.meta.to} of {recordsData.meta.total} record
-                        {recordsData.meta.total === 1 ? "" : "s"}
-                        {showClearFilters ? " (filtered)" : ""}
+                        Showing {recordsData.meta.from} to {recordsData.meta.to}{' '}
+                        of {recordsData.meta.total} record
+                        {recordsData.meta.total === 1 ? '' : 's'}
+                        {showClearFilters ? ' (filtered)' : ''}
                     </div>
                     <div className="text-xs">
                         Last updated: {lastRefresh.toLocaleTimeString()}
@@ -333,7 +433,7 @@ export default function BiometricRecordsIndex() {
                 </div>
 
                 {/* Desktop Table */}
-                <div className="hidden md:block shadow rounded-md overflow-hidden">
+                <div className="hidden overflow-hidden rounded-md shadow md:block">
                     <div className="overflow-x-auto">
                         <Table>
                             <TableHeader>
@@ -343,13 +443,18 @@ export default function BiometricRecordsIndex() {
                                     <TableHead>Device Name</TableHead>
                                     <TableHead>Site</TableHead>
                                     <TableHead>Upload Date</TableHead>
-                                    <TableHead className="text-right">Actions</TableHead>
+                                    <TableHead className="text-right">
+                                        Actions
+                                    </TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {recordsData.data.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                                        <TableCell
+                                            colSpan={6}
+                                            className="h-24 text-center text-muted-foreground"
+                                        >
                                             No biometric records found
                                         </TableCell>
                                     </TableRow>
@@ -359,37 +464,59 @@ export default function BiometricRecordsIndex() {
                                             <TableCell>
                                                 <div className="flex flex-col">
                                                     <span className="font-medium">
-                                                        {formatDate(record.record_date)}
+                                                        {formatDate(
+                                                            record.record_date,
+                                                        )}
                                                     </span>
                                                     <span className="text-sm text-muted-foreground">
-                                                        {formatTime(record.record_time)}
+                                                        {formatTime(
+                                                            record.record_time,
+                                                        )}
                                                     </span>
                                                 </div>
                                             </TableCell>
                                             <TableCell>
                                                 <div className="flex flex-col">
-                                                    <span className="font-medium">{record.user.name}</span>
-                                                    {record.employee_name !== record.user.name && (
+                                                    <span className="font-medium">
+                                                        {record.user.name}
+                                                    </span>
+                                                    {record.employee_name !==
+                                                        record.user.name && (
                                                         <span className="text-xs text-muted-foreground">
-                                                            Device: {record.employee_name}
+                                                            Device:{' '}
+                                                            {
+                                                                record.employee_name
+                                                            }
                                                         </span>
                                                     )}
                                                 </div>
                                             </TableCell>
-                                            <TableCell>{record.employee_name}</TableCell>
                                             <TableCell>
-                                                <Badge variant="outline">{record.site.name}</Badge>
+                                                {record.employee_name}
+                                            </TableCell>
+                                            <TableCell>
+                                                <Badge variant="outline">
+                                                    {record.site.name}
+                                                </Badge>
                                             </TableCell>
                                             <TableCell className="text-sm text-muted-foreground">
-                                                {formatDate(record.attendance_upload.shift_date)}
+                                                {formatDate(
+                                                    record.attendance_upload
+                                                        .shift_date,
+                                                )}
                                             </TableCell>
                                             <TableCell className="text-right">
                                                 <Button
                                                     size="sm"
                                                     variant="ghost"
-                                                    onClick={() => viewUserRecords(record.user.id, record.record_date)}
+                                                    onClick={() =>
+                                                        viewUserRecords(
+                                                            record.user.id,
+                                                            record.record_date,
+                                                        )
+                                                    }
                                                 >
-                                                    <Eye className="h-4 w-4 mr-1" />
+                                                    <Eye className="mr-1 h-4 w-4" />
                                                     View All
                                                 </Button>
                                             </TableCell>
@@ -402,41 +529,62 @@ export default function BiometricRecordsIndex() {
                 </div>
 
                 {/* Mobile Cards */}
-                <div className="md:hidden space-y-4">
+                <div className="space-y-4 md:hidden">
                     {recordsData.data.length === 0 ? (
-                        <div className="py-12 text-center text-gray-500 border rounded-lg bg-card">
+                        <div className="rounded-lg border bg-card py-12 text-center text-gray-500">
                             No biometric records found
                         </div>
                     ) : (
                         recordsData.data.map((record) => (
-                            <div key={record.id} className="bg-card border rounded-lg p-4 shadow-sm space-y-3">
-                                <div className="flex justify-between items-start">
+                            <div
+                                key={record.id}
+                                className="space-y-3 rounded-lg border bg-card p-4 shadow-sm"
+                            >
+                                <div className="flex items-start justify-between">
                                     <div>
-                                        <div className="text-lg font-semibold">{record.user.name}</div>
+                                        <div className="text-lg font-semibold">
+                                            {record.user.name}
+                                        </div>
                                         <div className="text-sm text-muted-foreground">
-                                            {formatDate(record.record_date)} at {formatTime(record.record_time)}
+                                            {formatDate(record.record_date)} at{' '}
+                                            {formatTime(record.record_time)}
                                         </div>
                                     </div>
-                                    <Badge variant="outline">{record.site.name}</Badge>
+                                    <Badge variant="outline">
+                                        {record.site.name}
+                                    </Badge>
                                 </div>
                                 <div className="space-y-2 text-sm">
                                     <div>
-                                        <span className="font-medium">Device:</span> {record.employee_name}
+                                        <span className="font-medium">
+                                            Device:
+                                        </span>{' '}
+                                        {record.employee_name}
                                     </div>
                                     <div>
-                                        <span className="font-medium">Upload:</span>{" "}
+                                        <span className="font-medium">
+                                            Upload:
+                                        </span>{' '}
                                         <span className="text-muted-foreground">
-                                            {formatDate(record.attendance_upload.shift_date)}
+                                            {formatDate(
+                                                record.attendance_upload
+                                                    .shift_date,
+                                            )}
                                         </span>
                                     </div>
                                 </div>
                                 <Button
                                     size="sm"
                                     variant="outline"
-                                    onClick={() => viewUserRecords(record.user.id, record.record_date)}
+                                    onClick={() =>
+                                        viewUserRecords(
+                                            record.user.id,
+                                            record.record_date,
+                                        )
+                                    }
                                     className="w-full"
                                 >
-                                    <Eye className="h-4 w-4 mr-2" />
+                                    <Eye className="mr-2 h-4 w-4" />
                                     View All Scans
                                 </Button>
                             </div>
@@ -444,7 +592,7 @@ export default function BiometricRecordsIndex() {
                     )}
                 </div>
 
-                <div className="flex justify-center mt-4">
+                <div className="mt-4 flex justify-center">
                     {recordsData.links && recordsData.links.length > 0 && (
                         <PaginationNav links={recordsData.links} />
                     )}

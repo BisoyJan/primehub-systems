@@ -1,17 +1,17 @@
-import React from 'react';
-import { motion } from 'framer-motion';
-import { Link } from '@inertiajs/react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Link } from '@inertiajs/react';
+import { motion } from 'framer-motion';
 import {
     AlertTriangle,
-    MapPin,
-    Timer,
-    Copy,
-    Clock,
-    Repeat,
     ChevronRight,
+    Clock,
+    Copy,
+    MapPin,
+    Repeat,
+    Timer,
 } from 'lucide-react';
+import React from 'react';
 import type { BiometricAnomalies } from '../types';
 
 export interface BiometricAnomalyWidgetProps {
@@ -50,15 +50,23 @@ export const BiometricAnomalyWidget: React.FC<BiometricAnomalyWidgetProps> = ({
                 <CardHeader className="pb-3">
                     <CardTitle className="flex items-center justify-between text-sm">
                         <span className="flex items-center gap-2">
-                            <AlertTriangle className={`h-4 w-4 ${hasAnomalies ? 'text-yellow-500' : 'text-muted-foreground'}`} />
+                            <AlertTriangle
+                                className={`h-4 w-4 ${hasAnomalies ? 'text-yellow-500' : 'text-muted-foreground'}`}
+                            />
                             Biometric Anomalies
                         </span>
                         {hasAnomalies ? (
-                            <Badge variant="outline" className="bg-yellow-500/10 text-yellow-700 border-yellow-500/30 text-[10px] px-1.5">
+                            <Badge
+                                variant="outline"
+                                className="border-yellow-500/30 bg-yellow-500/10 px-1.5 text-[10px] text-yellow-700"
+                            >
                                 {total}
                             </Badge>
                         ) : (
-                            <Badge variant="outline" className="bg-green-500/10 text-green-700 border-green-500/30 text-[10px] px-1.5">
+                            <Badge
+                                variant="outline"
+                                className="border-green-500/30 bg-green-500/10 px-1.5 text-[10px] text-green-700"
+                            >
                                 Clear
                             </Badge>
                         )}
@@ -73,10 +81,14 @@ export const BiometricAnomalyWidget: React.FC<BiometricAnomalyWidgetProps> = ({
                                 className="flex items-center justify-between text-xs"
                             >
                                 <span className="flex items-center gap-2 text-muted-foreground">
-                                    <Icon className={`h-3.5 w-3.5 ${count > 0 ? 'text-yellow-500' : ''}`} />
+                                    <Icon
+                                        className={`h-3.5 w-3.5 ${count > 0 ? 'text-yellow-500' : ''}`}
+                                    />
                                     {label}
                                 </span>
-                                <span className={`font-medium ${count > 0 ? 'text-yellow-700' : 'text-muted-foreground'}`}>
+                                <span
+                                    className={`font-medium ${count > 0 ? 'text-yellow-700' : 'text-muted-foreground'}`}
+                                >
                                     {count}
                                 </span>
                             </div>
@@ -86,7 +98,7 @@ export const BiometricAnomalyWidget: React.FC<BiometricAnomalyWidgetProps> = ({
                     {hasAnomalies && (
                         <Link
                             href="/attendance/anomalies"
-                            className="flex items-center justify-center gap-1 text-xs text-primary hover:underline pt-2"
+                            className="flex items-center justify-center gap-1 pt-2 text-xs text-primary hover:underline"
                         >
                             View Details
                             <ChevronRight className="h-3 w-3" />

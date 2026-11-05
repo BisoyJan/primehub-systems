@@ -37,7 +37,12 @@ export default function Login({ status, canResetPassword }: LoginProps) {
                     <>
                         <div className="grid gap-6">
                             <div className="grid gap-2">
-                                <Label htmlFor="email" className="text-gray-400 dark:text-white font-semibold">Email address</Label>
+                                <Label
+                                    htmlFor="email"
+                                    className="font-semibold text-gray-400 dark:text-white"
+                                >
+                                    Email address
+                                </Label>
                                 <Input
                                     id="email"
                                     type="email"
@@ -54,7 +59,12 @@ export default function Login({ status, canResetPassword }: LoginProps) {
 
                             <div className="grid gap-2">
                                 <div className="flex items-center">
-                                    <Label htmlFor="password" className="text-gray-400 dark:text-white font-semibold">Password</Label>
+                                    <Label
+                                        htmlFor="password"
+                                        className="font-semibold text-gray-400 dark:text-white"
+                                    >
+                                        Password
+                                    </Label>
                                     {canResetPassword && (
                                         <TextLink
                                             href={request()}
@@ -68,19 +78,27 @@ export default function Login({ status, canResetPassword }: LoginProps) {
                                 <div className="relative">
                                     <Input
                                         id="password"
-                                        type={showPassword ? 'text' : 'password'}
+                                        type={
+                                            showPassword ? 'text' : 'password'
+                                        }
                                         name="password"
                                         required
                                         tabIndex={2}
                                         autoComplete="current-password"
                                         placeholder="Password"
-                                        className="text-white pr-10"
+                                        className="pr-10 text-white"
                                     />
                                     <button
                                         type="button"
-                                        onClick={() => setShowPassword(!showPassword)}
-                                        aria-label={showPassword ? 'Hide password' : 'Show password'}
-                                        className="absolute right-3 top-1/2 -translate-y-1/2 rounded-sm p-1 text-gray-400 outline-none transition-colors hover:text-gray-700 focus-visible:ring-2 focus-visible:ring-ring dark:text-gray-300 dark:hover:text-white"
+                                        onClick={() =>
+                                            setShowPassword(!showPassword)
+                                        }
+                                        aria-label={
+                                            showPassword
+                                                ? 'Hide password'
+                                                : 'Show password'
+                                        }
+                                        className="absolute top-1/2 right-3 -translate-y-1/2 rounded-sm p-1 text-gray-400 transition-colors outline-none hover:text-gray-700 focus-visible:ring-2 focus-visible:ring-ring dark:text-gray-300 dark:hover:text-white"
                                     >
                                         {showPassword ? (
                                             <EyeOff className="h-4 w-4" />
@@ -98,7 +116,12 @@ export default function Login({ status, canResetPassword }: LoginProps) {
                                     name="remember"
                                     tabIndex={3}
                                 />
-                                <Label htmlFor="remember" className="text-gray-400 dark:text-white font-semibold">Remember me</Label>
+                                <Label
+                                    htmlFor="remember"
+                                    className="font-semibold text-gray-400 dark:text-white"
+                                >
+                                    Remember me
+                                </Label>
                             </div>
 
                             <Button

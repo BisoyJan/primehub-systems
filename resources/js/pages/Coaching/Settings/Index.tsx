@@ -1,14 +1,14 @@
-import { Head, usePage, useForm } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
-import { Settings, Save, RotateCcw } from 'lucide-react';
+import { Head, useForm, usePage } from '@inertiajs/react';
+import { RotateCcw, Save, Settings } from 'lucide-react';
 
-import AppLayout from '@/layouts/app-layout';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { PageHeader } from '@/components/PageHeader';
-import { LoadingOverlay } from '@/components/LoadingOverlay';
-import { usePageMeta, useFlashMessage, usePageLoading } from '@/hooks';
+import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
+import AppLayout from '@/layouts/app-layout';
 
 import { settings as coachingSettings } from '@/routes/coaching';
 import { update as settingsUpdate } from '@/routes/coaching/settings';
@@ -71,11 +71,26 @@ export default function CoachingSettingsIndex() {
     };
 
     // Status labels to display based on threshold order
-    const statusDescriptions: Record<string, { status: string; color: string }> = {
-        coaching_done_max_days: { status: 'Coaching Done', color: 'text-green-600 dark:text-green-400' },
-        needs_coaching_max_days: { status: 'Needs Coaching', color: 'text-yellow-600 dark:text-yellow-400' },
-        badly_needs_coaching_max_days: { status: 'Badly Needs Coaching', color: 'text-orange-600 dark:text-orange-400' },
-        no_record_days: { status: 'No Record / ASAP', color: 'text-red-600 dark:text-red-400' },
+    const statusDescriptions: Record<
+        string,
+        { status: string; color: string }
+    > = {
+        coaching_done_max_days: {
+            status: 'Coaching Done',
+            color: 'text-green-600 dark:text-green-400',
+        },
+        needs_coaching_max_days: {
+            status: 'Needs Coaching',
+            color: 'text-yellow-600 dark:text-yellow-400',
+        },
+        badly_needs_coaching_max_days: {
+            status: 'Badly Needs Coaching',
+            color: 'text-orange-600 dark:text-orange-400',
+        },
+        no_record_days: {
+            status: 'No Record / ASAP',
+            color: 'text-red-600 dark:text-red-400',
+        },
     };
 
     return (
@@ -92,11 +107,15 @@ export default function CoachingSettingsIndex() {
 
                 <form onSubmit={handleSubmit} className="space-y-6">
                     {/* Threshold explanation */}
-                    <div className="rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground space-y-1">
-                        <p className="font-medium text-foreground">How thresholds work:</p>
+                    <div className="space-y-1 rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground">
+                        <p className="font-medium text-foreground">
+                            How thresholds work:
+                        </p>
                         <p>
-                            Each setting defines the maximum days since last coaching session for that status.
-                            If the days exceed all thresholds, the status becomes <strong>"Please Coach ASAP"</strong>.
+                            Each setting defines the maximum days since last
+                            coaching session for that status. If the days exceed
+                            all thresholds, the status becomes{' '}
+                            <strong>"Please Coach ASAP"</strong>.
                         </p>
                     </div>
 
@@ -107,20 +126,31 @@ export default function CoachingSettingsIndex() {
                             const desc = statusDescriptions[setting.key];
 
                             return (
-                                <div key={setting.key} className="rounded-lg border bg-card p-4 shadow-sm">
+                                <div
+                                    key={setting.key}
+                                    className="rounded-lg border bg-card p-4 shadow-sm"
+                                >
                                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                         <div className="flex-1">
-                                            <Label htmlFor={`setting-${setting.key}`} className="flex items-center gap-2">
+                                            <Label
+                                                htmlFor={`setting-${setting.key}`}
+                                                className="flex items-center gap-2"
+                                            >
                                                 <Settings className="h-4 w-4 text-muted-foreground" />
-                                                {defaultConfig?.label ?? setting.key}
+                                                {defaultConfig?.label ??
+                                                    setting.key}
                                             </Label>
                                             {desc && (
-                                                <p className={`mt-0.5 text-xs font-medium ${desc.color}`}>
+                                                <p
+                                                    className={`mt-0.5 text-xs font-medium ${desc.color}`}
+                                                >
                                                     Status: {desc.status}
                                                 </p>
                                             )}
                                             <p className="mt-0.5 text-xs text-muted-foreground">
-                                                Default: {defaultConfig?.value ?? '—'} days
+                                                Default:{' '}
+                                                {defaultConfig?.value ?? '—'}{' '}
+                                                days
                                             </p>
                                         </div>
                                         <div className="flex items-center gap-2 sm:w-32">
@@ -130,15 +160,28 @@ export default function CoachingSettingsIndex() {
                                                 min={1}
                                                 max={365}
                                                 value={setting.value}
-                                                onChange={(e) => updateSettingValue(index, e.target.value)}
+                                                onChange={(e) =>
+                                                    updateSettingValue(
+                                                        index,
+                                                        e.target.value,
+                                                    )
+                                                }
                                                 className="text-center"
                                             />
-                                            <span className="text-xs text-muted-foreground whitespace-nowrap">days</span>
+                                            <span className="text-xs whitespace-nowrap text-muted-foreground">
+                                                days
+                                            </span>
                                         </div>
                                     </div>
-                                    {form.errors[`settings.${index}.value` as keyof typeof form.errors] && (
+                                    {form.errors[
+                                        `settings.${index}.value` as keyof typeof form.errors
+                                    ] && (
                                         <p className="mt-1 text-sm text-red-600">
-                                            {form.errors[`settings.${index}.value` as keyof typeof form.errors]}
+                                            {
+                                                form.errors[
+                                                    `settings.${index}.value` as keyof typeof form.errors
+                                                ]
+                                            }
                                         </p>
                                     )}
                                 </div>
@@ -148,8 +191,14 @@ export default function CoachingSettingsIndex() {
 
                     {/* Actions */}
                     <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-                        <Button type="button" variant="outline" onClick={handleReset} disabled={form.processing}>
-                            <RotateCcw className="mr-2 h-4 w-4" /> Reset to Defaults
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={handleReset}
+                            disabled={form.processing}
+                        >
+                            <RotateCcw className="mr-2 h-4 w-4" /> Reset to
+                            Defaults
                         </Button>
                         <Button type="submit" disabled={form.processing}>
                             <Save className="mr-2 h-4 w-4" />

@@ -2,14 +2,14 @@
 // Shared components for consistent attendance-related UI across the application
 
 export {
+    AttendanceStatusBadges,
     STATUS_CONFIG,
     getStatusBadge,
     getStatusBadges,
-    AttendanceStatusBadges,
 } from './status-badges';
 
 export {
     SHIFT_TYPE_CONFIG,
-    getShiftTypeBadge,
     ShiftTypeBadge,
+    getShiftTypeBadge,
 } from './shift-type-badge';
