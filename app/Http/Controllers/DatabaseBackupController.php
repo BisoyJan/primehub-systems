@@ -210,7 +210,9 @@ class DatabaseBackupController extends Controller
                 $filename = basename($path);
                 $absolute = $disk->path($path);
                 $size = file_exists($absolute) ? filesize($absolute) : 0;
-                $mtime = file_exists($absolute) ? Carbon::createFromTimestamp(filemtime($absolute)) : now();
+                $mtime = file_exists($absolute)
+                    ? Carbon::createFromTimestamp(filemtime($absolute), config('app.timezone'))
+                    : now();
 
                 $row = DatabaseBackup::create([
                     'filename' => $filename,

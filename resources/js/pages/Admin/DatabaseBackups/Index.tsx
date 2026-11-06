@@ -147,7 +147,7 @@ export default function DatabaseBackupsIndex() {
         if (props.flash?.backup_job_id) {
             setActiveJobId(props.flash.backup_job_id);
         }
-    }, [props]);
+    }, [props.flash?.backup_job_id]);
 
     // Poll for backup progress
     useEffect(() => {

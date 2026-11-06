@@ -66,6 +66,7 @@ class HandleInertiaRequests extends Middleware
             'flash' => [
                 'message' => fn () => $request->session()->get('message'),
                 'type' => fn () => $request->session()->get('type'),
+                'backup_job_id' => fn () => $request->session()->get('backup_job_id'),
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'coachingPendingAck' => fn () => $user

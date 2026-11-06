@@ -1,8 +1,11 @@
 <?php
 
+use App\Services\NotificationService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schedule;
+use Illuminate\Support\Stringable;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
@@ -23,10 +26,25 @@ Artisan::command('inspire', function () {
 // Uses Spatie backup:run with --only-db (dump config in config/database.php)
 // --disable-notifications matches the manual UI-triggered job (RunDatabaseBackup)
 // so a broken/unavailable mail transport can't mark an otherwise-successful backup as failed.
+// Because Spatie notifications are disabled, failures are surfaced via onFailureWithOutput:
+// the captured output is logged and Super Admins get an in-app 'system' notification.
 Schedule::command('backup:run --only-db --disable-notifications')
     ->dailyAt('08:00')
     ->withoutOverlapping()
-    ->onOneServer();
+    ->onOneServer()
+    ->onFailureWithOutput(function (Stringable $output, NotificationService $notificationService): void {
+        Log::error('Scheduled database backup failed', [
+            'output' => $output->trim()->substr(-2000)->toString(),
+        ]);
+
+        $notificationService->notifyUsersByRole(
+            'Super Admin',
+            'system',
+            'Scheduled Database Backup Failed',
+            "Today's automatic database backup did not complete. Check the application log for details and create a manual backup from Database Backups.",
+            ['link' => route('database-backups.index')]
+        );
+    });
 
 // Clean old backups based on retention strategy in config/backup.php at 8:03 AM
 Schedule::command('backup:clean')

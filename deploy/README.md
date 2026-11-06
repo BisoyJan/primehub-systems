@@ -51,6 +51,32 @@ The script uses Certbot with Nginx to obtain/renew SSL. Ensure DNS is correct an
 - Queue: managed via Supervisor (`primehub-queue`). Logs in `/var/log/supervisor/primehub-queue.log`.
 - Scheduler: cron entry runs `php artisan schedule:run` every minute.
 
+### Database backups
+- The scheduler creates a database-only backup daily at **08:00 Asia/Manila**,
+  cleans retained backups at **08:03**, and checks backup health at **08:55**.
+- Confirm the deployed cron user's crontab contains the entry from `crontab.txt`,
+  the cron service is running, and that user can run PHP, `mysqldump`, and `gzip`
+  and write to `storage/` and `bootstrap/cache`.
+- Apply migrations during deployment (`php artisan migrate --force`), including
+  the nullable backup creator migration, so scheduled ZIPs can appear as
+  **System** backups on `/database-backups`.
+- Failed scheduled runs log their output and send in-app system notifications
+  to Super Admins with system notifications enabled. Email for `backup:run` is
+  disabled; health-monitor emails require working mail settings and
+  `BACKUP_NOTIFICATION_EMAIL`.
+- Manual backups require the queue worker; scheduled backups run directly.
+  For database queues, set `DB_QUEUE_RETRY_AFTER` above the backup job's
+  1800-second timeout (for example, 1860), rebuild cached configuration, and
+  restart workers after changing it.
+- Check `php artisan schedule:list` for configuration and
+  `php artisan backup:list` for freshness. Neither proves cron ran every day;
+  inspect cron logs and recent backup timestamps as well.
+- Backups use the server's local disk only. A completed status does not replace
+  archive validation or an isolated restore test.
+- Locally on Windows, add `C:\Program Files\Git\usr\bin` to the user's `PATH`
+  for `gzip`, then restart the dev processes. `composer run dev` runs the local
+  scheduler only while the dev stack remains running.
+
 ## Nginx Config
 Template available in `deploy/nginx.conf`. The provision script writes a similar config to `/etc/nginx/sites-available/primehub-systems.conf`.
 
