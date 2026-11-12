@@ -1,5 +1,9 @@
 import { PageHeader } from '@/components/PageHeader';
 import {
+    ActiveItStaffPanel,
+    ConcernViewerBanner,
+} from '@/components/it-concern-presence';
+import {
     AlertDialog,
     AlertDialogAction,
     AlertDialogCancel,
@@ -22,6 +26,7 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { usePageMeta } from '@/hooks';
+import { useItConcernPresence } from '@/hooks/use-it-concern-presence';
 import { usePermission } from '@/hooks/useAuthorization';
 import AppLayout from '@/layouts/app-layout';
 import type { SharedData } from '@/types';
@@ -39,7 +44,7 @@ import {
     User,
     XCircle,
 } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 interface UserType {
     id: number;
@@ -169,6 +174,20 @@ export default function Show() {
         concern.resolution_notes || '',
     );
 
+    // Tell other IT staff we are on this ticket; escalate to "resolving" while
+    // the status dialog is open so nobody else starts working on it.
+    const {
+        enabled: presenceEnabled,
+        selfId,
+        activeUsers,
+        viewersByConcern,
+        setFocus,
+    } = useItConcernPresence();
+    useEffect(() => {
+        setFocus(concern.id, updateDialogOpen ? 'resolving' : 'viewing');
+    }, [concern.id, updateDialogOpen, setFocus]);
+    const concernViewers = viewersByConcern[concern.id] ?? [];
+
     const { title, breadcrumbs } = usePageMeta({
         title: `IT Concern #${concern.id}`,
         breadcrumbs: [
@@ -248,10 +267,20 @@ export default function Show() {
                     </div>
                 </div>
 
-                <PageHeader
-                    title={`IT Concern #${concern.id}`}
-                    description="View IT concern details"
-                />
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                    <PageHeader
+                        title={`IT Concern #${concern.id}`}
+                        description="View IT concern details"
+                    />
+                    {presenceEnabled && (
+                        <ActiveItStaffPanel
+                            users={activeUsers}
+                            selfId={selfId}
+                        />
+                    )}
+                </div>
+
+                <ConcernViewerBanner viewers={concernViewers} />
 
                 <div className="grid gap-4 md:grid-cols-2">
                     <Card>
@@ -364,6 +393,9 @@ export default function Show() {
                             </AlertDialogTitle>
                             <AlertDialogDescription asChild>
                                 <div className="mt-4 space-y-3">
+                                    <ConcernViewerBanner
+                                        viewers={concernViewers}
+                                    />
                                     <div>
                                         <span className="font-medium text-foreground">
                                             Station:

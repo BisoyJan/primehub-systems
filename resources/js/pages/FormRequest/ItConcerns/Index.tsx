@@ -3,12 +3,18 @@ import { PageHeader } from '@/components/PageHeader';
 import { TableSkeleton } from '@/components/TableSkeleton';
 import { Can } from '@/components/authorization';
 import {
+    ActiveItStaffPanel,
+    ConcernViewerAvatars,
+    ConcernViewerBanner,
+} from '@/components/it-concern-presence';
+import {
     useDebounce,
     useFlashMessage,
     usePageLoading,
     usePageMeta,
     withReturnTo,
 } from '@/hooks';
+import { useItConcernPresence } from '@/hooks/use-it-concern-presence';
 import { usePermission } from '@/hooks/useAuthorization';
 import AppLayout from '@/layouts/app-layout';
 import type { SharedData } from '@/types';
@@ -281,6 +287,23 @@ export default function ItConcernsIndex() {
     const [concernToCancel, setConcernToCancel] = useState<ItConcern | null>(
         null,
     );
+
+    // Live presence: announce which ticket we have open in the resolve dialog
+    // and show which tickets other IT staff are viewing / resolving.
+    const {
+        enabled: presenceEnabled,
+        selfId,
+        activeUsers,
+        viewersByConcern,
+        setFocus,
+    } = useItConcernPresence();
+    useEffect(() => {
+        if (resolveDialogOpen && concernToResolve) {
+            setFocus(concernToResolve.id, 'resolving');
+        } else {
+            setFocus(null);
+        }
+    }, [resolveDialogOpen, concernToResolve, setFocus]);
 
     // Auto-refresh every 30 seconds to check for new concerns
     const isPollingRef = useRef(false);
@@ -583,10 +606,18 @@ export default function ItConcernsIndex() {
             <div className="relative flex h-full flex-1 flex-col gap-4 rounded-xl p-3">
                 <LoadingOverlay isLoading={isPageLoading || loading} />
 
-                <PageHeader
-                    title="IT Concerns"
-                    description="Submit and track IT issues reported by agents"
-                />
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                    <PageHeader
+                        title="IT Concerns"
+                        description="Submit and track IT issues reported by agents"
+                    />
+                    {presenceEnabled && (
+                        <ActiveItStaffPanel
+                            users={activeUsers}
+                            selfId={selfId}
+                        />
+                    )}
+                </div>
 
                 <div className="flex flex-col gap-4">
                     <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
@@ -855,7 +886,18 @@ export default function ItConcernsIndex() {
                                                 {concern.description}
                                             </TableCell>
                                             <TableCell>
-                                                {getStatusBadge(concern.status)}
+                                                <div className="flex items-center gap-2">
+                                                    {getStatusBadge(
+                                                        concern.status,
+                                                    )}
+                                                    <ConcernViewerAvatars
+                                                        viewers={
+                                                            viewersByConcern[
+                                                                concern.id
+                                                            ] ?? []
+                                                        }
+                                                    />
+                                                </div>
                                             </TableCell>
                                             <TableCell className="text-sm">
                                                 {concern.resolved_by?.name ||
@@ -999,9 +1041,14 @@ export default function ItConcernsIndex() {
                                         {concern.site.name}
                                     </div>
                                 </div>
-                                <div className="flex flex-col gap-1">
+                                <div className="flex flex-col items-end gap-1">
                                     {getPriorityBadge(concern.priority)}
                                     {getStatusBadge(concern.status)}
+                                    <ConcernViewerAvatars
+                                        viewers={
+                                            viewersByConcern[concern.id] ?? []
+                                        }
+                                    />
                                 </div>
                             </div>
 
@@ -1159,9 +1206,16 @@ export default function ItConcernsIndex() {
                             <AlertDialogTitle>
                                 Resolve IT Concern
                             </AlertDialogTitle>
-                            <AlertDialogDescription>
-                                {concernToResolve && (
+                            <AlertDialogDescription asChild>
+                                {concernToResolve ? (
                                     <div className="mt-4 space-y-3">
+                                        <ConcernViewerBanner
+                                            viewers={
+                                                viewersByConcern[
+                                                    concernToResolve.id
+                                                ] ?? []
+                                            }
+                                        />
                                         <div>
                                             <span className="font-medium">
                                                 Station:
@@ -1276,6 +1330,8 @@ export default function ItConcernsIndex() {
                                             />
                                         </div>
                                     </div>
+                                ) : (
+                                    <div />
                                 )}
                             </AlertDialogDescription>
                         </AlertDialogHeader>

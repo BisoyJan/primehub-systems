@@ -36,3 +36,19 @@ Broadcast::channel('attendance.spreadsheet.presence', function (User $user) {
         'avatar_url' => $user->avatar_url,
     ];
 });
+
+// Presence channel: tracks which IT staff are currently on the IT concerns
+// pages and carries `concern-focus` whispers so everyone can see who is
+// viewing or resolving a given ticket. Gated by the same permission as the
+// `it-concerns` private channel so only resolvers see each other.
+Broadcast::channel('it-concerns.presence', function (User $user) {
+    if (! $user->hasPermission('it_concerns.resolve')) {
+        return null;
+    }
+
+    return [
+        'id' => $user->id,
+        'name' => $user->name,
+        'avatar_url' => $user->avatar_url,
+    ];
+});

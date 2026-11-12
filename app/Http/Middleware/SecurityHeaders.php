@@ -53,6 +53,10 @@ class SecurityHeaders
 
             $connectSources .= ' '.$viteHosts;
             $scriptSources .= ' '.$viteHosts;
+
+            // Local Reverb daemon (Echo connects straight to it; in production
+            // nginx proxies /app/* on the same origin so 'self' covers it).
+            $connectSources .= ' '.$this->localReverbHosts();
         }
 
         $basePolicy = implode('; ', [
@@ -75,5 +79,17 @@ class SecurityHeaders
         }
 
         return $basePolicy;
+    }
+
+    protected function localReverbHosts(): string
+    {
+        $options = (array) config('broadcasting.connections.reverb.options', []);
+        $host = $options['host'] ?? 'localhost';
+        $port = (int) ($options['port'] ?? 8080);
+        $hosts = array_unique([$host, 'localhost', '127.0.0.1']);
+
+        return collect($hosts)
+            ->flatMap(fn (string $h) => ["ws://{$h}:{$port}", "wss://{$h}:{$port}"])
+            ->implode(' ');
     }
 }
