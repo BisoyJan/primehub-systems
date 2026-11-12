@@ -30,6 +30,7 @@ import {
     BreakTypeIcon,
     formatBreakType,
     formatClockTime,
+    formatHumanDuration,
     formatTime,
     fullName,
     LiveDot,
@@ -43,6 +44,31 @@ import {
 } from './live-breaks-core';
 
 export const TAB_ORDER: Tone[] = ['active', 'overbreak', 'paused'];
+
+/**
+ * Row order within each tab, most urgent first: least time left for running
+ * and paused breaks, largest overage for overbreaks. Ties fall back to the
+ * earliest start so the order stays stable between ticks.
+ */
+const TAB_SORT: Record<Tone, (a: LiveBreakEntry, b: LiveBreakEntry) => number> =
+    {
+        active: (a, b) => a.timing.remaining - b.timing.remaining,
+        paused: (a, b) => a.timing.remaining - b.timing.remaining,
+        overbreak: (a, b) => b.timing.overage - a.timing.overage,
+    };
+
+function byStartedAt(a: LiveBreakEntry, b: LiveBreakEntry): number {
+    return (a.item.started_at ?? '').localeCompare(b.item.started_at ?? '');
+}
+
+export function sortEntriesForTab(
+    entries: LiveBreakEntry[],
+    tone: Tone,
+): LiveBreakEntry[] {
+    return entries
+        .filter(({ timing }) => timing.tone === tone)
+        .sort((a, b) => TAB_SORT[tone](a, b) || byStartedAt(a, b));
+}
 
 const TAB_META: Record<
     Tone,
@@ -213,10 +239,10 @@ export function BreakListRow({
                     <MetaItem icon={<Hourglass />}>
                         ends {formatClockTime(item.expected_end_at)}
                     </MetaItem>
-                    {item.total_paused_seconds > 0 && (
+                    {timing.totalPaused > 0 && (
                         <MetaItem icon={<Clock />}>
-                            <span className="font-mono tabular-nums">
-                                {formatTime(item.total_paused_seconds)}
+                            <span className="font-medium text-foreground/80">
+                                {formatHumanDuration(timing.totalPaused)}
                             </span>{' '}
                             paused total
                         </MetaItem>
@@ -373,9 +399,7 @@ export function LiveBreaksDialog({
                     </div>
 
                     {TAB_ORDER.map((tone) => {
-                        const rows = entries.filter(
-                            ({ timing }) => timing.tone === tone,
-                        );
+                        const rows = sortEntriesForTab(entries, tone);
                         return (
                             <TabsContent
                                 key={tone}

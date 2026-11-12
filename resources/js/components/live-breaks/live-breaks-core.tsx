@@ -34,6 +34,7 @@ export interface LiveTiming {
     remaining: number;
     overage: number;
     pausedFor: number;
+    totalPaused: number;
     progress: number;
 }
 
@@ -100,6 +101,32 @@ export function formatBreakType(type: string): string {
     return type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+/**
+ * Humanised duration such as "1 hour 30 mins", "45 mins" or "20 secs".
+ * Rounds to the nearest minute once past a minute.
+ */
+export function formatHumanDuration(totalSeconds: number): string {
+    const safe = Math.max(0, Math.floor(totalSeconds));
+
+    if (safe < 60) {
+        return `${safe} ${safe === 1 ? 'sec' : 'secs'}`;
+    }
+
+    const totalMinutes = Math.round(safe / 60);
+    const hours = Math.floor(totalMinutes / 60);
+    const mins = totalMinutes % 60;
+    const parts: string[] = [];
+
+    if (hours > 0) {
+        parts.push(`${hours} ${hours === 1 ? 'hour' : 'hours'}`);
+    }
+    if (mins > 0) {
+        parts.push(`${mins} ${mins === 1 ? 'min' : 'mins'}`);
+    }
+
+    return parts.join(' ');
+}
+
 export function formatClockTime(value: string | null): string {
     if (!value) {
         return '—';
@@ -134,6 +161,7 @@ export function computeTiming(item: LiveBreak, elapsed: number): LiveTiming {
             remaining,
             overage: Math.max(0, item.overage_seconds),
             pausedFor: Math.max(0, item.paused_for_seconds + elapsed),
+            totalPaused: Math.max(0, item.total_paused_seconds + elapsed),
             progress:
                 duration > 0
                     ? Math.min(1, (duration - remaining) / duration)
@@ -150,6 +178,7 @@ export function computeTiming(item: LiveBreak, elapsed: number): LiveTiming {
         remaining,
         overage,
         pausedFor: 0,
+        totalPaused: Math.max(0, item.total_paused_seconds),
         progress:
             duration > 0 ? Math.min(1, (duration - remaining) / duration) : 1,
     };
