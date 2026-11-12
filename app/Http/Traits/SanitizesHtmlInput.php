@@ -73,7 +73,7 @@ trait SanitizesHtmlInput
                 // Keep formatting and bounded spacing while dropping font-family and
                 // other layout-breaking styles.
                 $value = preg_replace_callback(
-                    '/<(ol|li|span|p|div|strong|b|em|i|u|s|h[1-6]|blockquote|a|sub|sup)\b([^>]*?)>/i',
+                    '/<(ol|ul|li|span|p|div|strong|b|em|i|u|s|h[1-6]|blockquote|a|sub|sup)\b([^>]*?)>/i',
                     function ($matches) {
                         $tag = strtolower($matches[1]);
                         $attrs = $matches[2];
@@ -81,9 +81,13 @@ trait SanitizesHtmlInput
                         // Collect safe styles to preserve
                         $safeStyles = $this->extractSafeStyles($attrs);
 
-                        // Preserve list-style-type on <ol> (used for nested list styles)
-                        if ($tag === 'ol' && preg_match('/list-style-type\s*:\s*([^;"]+)/i', $attrs, $m)) {
-                            $safeStyles[] = 'list-style-type: '.trim($m[1]);
+                        // Preserve list-style-type on lists (nested numbering styles, dash bullets).
+                        // Quoted markers arrive as &quot;- &quot;, so treat the entity as one token.
+                        if (($tag === 'ol' || $tag === 'ul') && preg_match('/list-style-type\s*:\s*((?:&quot;|[^;"])+)/i', $attrs, $m)) {
+                            $listStyle = trim($m[1]);
+                            if ($this->isSafeListStyleType($listStyle)) {
+                                $safeStyles[] = 'list-style-type: '.$listStyle;
+                            }
                         }
 
                         if ($tag === 'a') {
@@ -201,6 +205,23 @@ trait SanitizesHtmlInput
             'em', 'rem' => $num <= 6,
             default => false,
         };
+    }
+
+    /**
+     * Allow list-style-type keywords (disc, lower-alpha, ...) or a short quoted string marker
+     * such as "- " for dash bullets (browsers serialize the quotes as &quot;).
+     */
+    private function isSafeListStyleType(string $value): bool
+    {
+        if (! $this->isSafeStyleValue($value)) {
+            return false;
+        }
+
+        if (preg_match('/^[a-z-]+$/i', $value)) {
+            return true;
+        }
+
+        return (bool) preg_match('/^(?:"|&quot;)[^"&<>]{1,4}(?:"|&quot;)$/u', $value);
     }
 
     /**

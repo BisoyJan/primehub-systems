@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import {
     Baseline,
     Bold,
+    ChevronDown,
     IndentDecrease,
     IndentIncrease,
     Italic,
@@ -131,6 +132,25 @@ const GMAIL_COLORS = [
 
 // Ordered list style cycle: 1. -> a. -> i. (like MS Word)
 const OL_STYLES = ['decimal', 'lower-alpha', 'lower-roman'] as const;
+
+// Dash bullet as a CSS string marker (browsers serialize it as list-style-type: "- ").
+const DASH_BULLET = '"- "';
+
+// Bullet library offered next to the bulleted-list button (like MS Word).
+const UL_STYLES = [
+    { label: 'Disc', value: 'disc', glyph: '•' },
+    { label: 'Circle', value: 'circle', glyph: '◦' },
+    { label: 'Square', value: 'square', glyph: '▪' },
+    { label: 'Dash', value: DASH_BULLET, glyph: '-' },
+] as const;
+
+// list-style-type values allowed to survive paste/sync: CSS keywords or a short quoted marker.
+const SAFE_LIST_STYLE = /^(?:[a-z-]+|"[^"<>&]{1,4}")$/u;
+
+/** True for a list-style-type keyword or a short quoted string marker such as "- ". */
+function isSafeListStyleType(value: string): boolean {
+    return SAFE_LIST_STYLE.test(value.trim());
+}
 
 // Font size presets (in points, like MS Office) offered in the toolbar.
 const FONT_SIZES = [
@@ -338,6 +358,185 @@ function convertPlainTextToHtml(text: string): string {
     return joined.replace(/<br>$/, '');
 }
 
+interface WordListInfo {
+    level: number;
+    listId: string;
+    marker: string;
+    font: string;
+}
+
+/** Read the raw style attribute (CSSOM drops vendor props like mso-list). */
+function rawStyle(el: Element): string {
+    return el.getAttribute('style') || '';
+}
+
+/** Detect an MS Word list paragraph (`mso-list:l0 level1 lfo1`) and extract its marker. */
+function getWordListInfo(p: HTMLElement): WordListInfo | null {
+    const match = rawStyle(p).match(
+        /mso-list\s*:\s*(?:l\d+\s+)?level(\d+)(?:\s+(lfo\d+))?/i,
+    );
+    if (!match) return null;
+
+    let marker = '';
+    let font = '';
+    for (const span of Array.from(p.querySelectorAll('span'))) {
+        if (!/mso-list\s*:\s*ignore/i.test(rawStyle(span))) continue;
+        marker = (span.textContent || '').replace(/\s+/g, '');
+        let cur: Element | null = span;
+        while (cur && cur !== p && !font) {
+            const fontMatch = rawStyle(cur).match(
+                /font-family\s*:\s*"?([^;"]+)/i,
+            );
+            if (fontMatch) font = fontMatch[1].toLowerCase();
+            cur = cur.parentElement;
+        }
+        break;
+    }
+
+    return {
+        level: parseInt(match[1], 10) || 1,
+        listId: match[2] || 'lfo0',
+        marker,
+        font,
+    };
+}
+
+/** Roman numeral check used to tell "i." apart from "a." style markers. */
+function isRomanNumeral(token: string): boolean {
+    return /^m{0,3}(cm|cd|d?c{0,3})(xc|xl|l?x{0,3})(ix|iv|v?i{0,3})$/i.test(
+        token,
+    );
+}
+
+/** Map a Word marker glyph (+ its symbol font) to a list tag and list-style-type. */
+function wordMarkerToListStyle(
+    marker: string,
+    font: string,
+): { ordered: boolean; style: string } {
+    const numbered = marker.match(/^([0-9]+|[a-z]+)[.)]$/i);
+    if (numbered) {
+        const token = numbered[1];
+        const upper = token === token.toUpperCase() && /[a-z]/i.test(token);
+        if (/^\d+$/.test(token)) return { ordered: true, style: 'decimal' };
+        if (
+            isRomanNumeral(token) &&
+            (token.length > 1 || token.toLowerCase() === 'i')
+        ) {
+            return {
+                ordered: true,
+                style: upper ? 'upper-roman' : 'lower-roman',
+            };
+        }
+        return { ordered: true, style: upper ? 'upper-alpha' : 'lower-alpha' };
+    }
+
+    if (/^[-\u2013\u2014]$/.test(marker)) {
+        return { ordered: false, style: DASH_BULLET };
+    }
+    if (font.includes('wingdings')) {
+        const wingdings: Record<string, string> = {
+            '§': 'square',
+            n: 'square',
+            l: 'disc',
+            Ø: '"➢ "',
+            ü: '"✓ "',
+            v: '"❖ "',
+            q: '"❑ "',
+        };
+        return { ordered: false, style: wingdings[marker] || 'disc' };
+    }
+    if (marker === 'o' && font.includes('courier')) {
+        return { ordered: false, style: 'circle' };
+    }
+    if (marker === '·' || marker === '•' || font.includes('symbol')) {
+        return { ordered: false, style: 'disc' };
+    }
+    if (marker.length === 1 && !/[a-z0-9]/i.test(marker)) {
+        return { ordered: false, style: `"${marker} "` };
+    }
+    return { ordered: false, style: 'disc' };
+}
+
+/** Remove Word's `mso-list:Ignore` marker spans (and any wrappers left empty). */
+function stripWordListMarkers(p: HTMLElement): void {
+    for (const span of Array.from(p.querySelectorAll('span'))) {
+        if (!/mso-list\s*:\s*ignore/i.test(rawStyle(span))) continue;
+        let parent = span.parentElement;
+        span.remove();
+        while (parent && parent !== p && parent.childNodes.length === 0) {
+            const next = parent.parentElement;
+            parent.remove();
+            parent = next;
+        }
+    }
+}
+
+/**
+ * MS Word (desktop) copies lists as flat <p style="mso-list:..."> paragraphs with the
+ * bullet/number as literal text. Rebuild them as nested <ul>/<ol> so they paste as lists.
+ */
+function convertWordLists(root: HTMLElement): void {
+    const doc = root.ownerDocument;
+    const items = Array.from(root.querySelectorAll('p'))
+        .map((p) => ({ p, info: getWordListInfo(p) }))
+        .filter(
+            (item): item is { p: HTMLParagraphElement; info: WordListInfo } =>
+                item.info !== null,
+        );
+
+    let index = 0;
+    while (index < items.length) {
+        const group = [items[index]];
+        while (
+            index + 1 < items.length &&
+            items[index + 1].p ===
+                group[group.length - 1].p.nextElementSibling &&
+            items[index + 1].info.listId === group[0].info.listId
+        ) {
+            group.push(items[index + 1]);
+            index++;
+        }
+        index++;
+
+        const stack: { list: HTMLElement; level: number }[] = [];
+        for (const { p, info } of group) {
+            while (stack.length && stack[stack.length - 1].level > info.level) {
+                stack.pop();
+            }
+            let top = stack[stack.length - 1];
+            if (!top || top.level < info.level) {
+                const { ordered, style } = wordMarkerToListStyle(
+                    info.marker,
+                    info.font,
+                );
+                const list = doc.createElement(ordered ? 'ol' : 'ul');
+                list.style.listStyleType = style;
+                if (!top) {
+                    p.parentNode?.insertBefore(list, p);
+                } else {
+                    let host = top.list.lastElementChild;
+                    if (!host) {
+                        host = doc.createElement('li');
+                        top.list.appendChild(host);
+                    }
+                    host.appendChild(list);
+                }
+                top = { list, level: info.level };
+                stack.push(top);
+            }
+
+            stripWordListMarkers(p);
+            const li = doc.createElement('li');
+            copySafeStyles(p, li);
+            while (p.firstChild) {
+                li.appendChild(p.firstChild);
+            }
+            top.list.appendChild(li);
+            p.remove();
+        }
+    }
+}
+
 /** Toolbar icon button with tooltip */
 function ToolbarButton({
     onClick,
@@ -462,6 +661,38 @@ export function RichTextarea({
     const handleUnderline = () => exec('underline');
     const handleStrikethrough = () => exec('strikethrough');
     const handleBulletList = () => exec('insertUnorderedList');
+    const handleBulletStyle = (styleType: string) => {
+        const editor = editorRef.current;
+        if (!editor) return;
+        // The popover steals focus, so restore the saved selection before locating the list
+        restoreSelection();
+        const nearestList = () => {
+            const sel = window.getSelection();
+            if (!sel || sel.rangeCount === 0) return null;
+            let cur: Node | null = sel.anchorNode;
+            while (cur && cur !== editor) {
+                if (
+                    cur instanceof HTMLElement &&
+                    (cur.tagName === 'UL' || cur.tagName === 'OL')
+                ) {
+                    return cur;
+                }
+                cur = cur.parentNode;
+            }
+            return null;
+        };
+
+        let list = nearestList();
+        if (!list || list.tagName !== 'UL') {
+            document.execCommand('insertUnorderedList', false);
+            list = nearestList();
+        }
+        if (list && list.tagName === 'UL') {
+            list.style.listStyleType = styleType;
+        }
+        saveSelection();
+        emitChange();
+    };
     const handleNumberedList = () => exec('insertOrderedList');
     const handleIndent = () => {
         exec('indent');
@@ -636,6 +867,9 @@ export function RichTextarea({
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(html, 'text/html');
 
+                // Rebuild MS Word's flat "mso-list" paragraphs into real nested lists first
+                convertWordLists(doc.body);
+
                 // Tags we allow to keep (structural + basic formatting)
                 const ALLOWED = new Set([
                     'P',
@@ -689,6 +923,18 @@ export function RichTextarea({
                         return null;
                     }
 
+                    // Office namespaced wrappers (<o:p>, <w:sdt>, ...) carry no formatting: unwrap them
+                    if (tag.includes(':')) {
+                        const unwrapped = document.createDocumentFragment();
+                        for (const child of Array.from(el.childNodes)) {
+                            const cleaned = cleanNode(child);
+                            if (cleaned) {
+                                unwrapped.appendChild(cleaned);
+                            }
+                        }
+                        return unwrapped;
+                    }
+
                     let newEl: HTMLElement;
 
                     // Legacy <font> from some editors: convert to span, carry over color/size
@@ -730,8 +976,11 @@ export function RichTextarea({
                                 );
                             }
 
-                            // Preserve list-style-type on OL (used for nested list styles)
-                            if (tag === 'OL' && el.style.listStyleType) {
+                            // Preserve list-style-type on lists (nested styles, dash bullets)
+                            if (
+                                (tag === 'OL' || tag === 'UL') &&
+                                isSafeListStyleType(el.style.listStyleType)
+                            ) {
                                 newEl.style.listStyleType =
                                     el.style.listStyleType;
                             }
@@ -1273,6 +1522,51 @@ export function RichTextarea({
                     >
                         <List className={iconSize} />
                     </ToolbarButton>
+                    <Popover>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <PopoverTrigger asChild>
+                                    <button
+                                        type="button"
+                                        className="inline-flex h-7 w-4 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                                        aria-label="Bullet style"
+                                        onMouseDown={(e) => {
+                                            e.preventDefault();
+                                            saveSelection();
+                                        }}
+                                    >
+                                        <ChevronDown className="h-3 w-3" />
+                                    </button>
+                                </PopoverTrigger>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="text-xs">
+                                Bullet style
+                            </TooltipContent>
+                        </Tooltip>
+                        <PopoverContent
+                            className="w-32 p-1"
+                            align="start"
+                            side="top"
+                            onCloseAutoFocus={(e) => e.preventDefault()}
+                        >
+                            {UL_STYLES.map((style) => (
+                                <button
+                                    key={style.label}
+                                    type="button"
+                                    className="flex w-full items-center gap-2 rounded px-2 py-1 text-left text-sm text-foreground transition-colors hover:bg-accent"
+                                    onMouseDown={(e) => e.preventDefault()}
+                                    onClick={() =>
+                                        handleBulletStyle(style.value)
+                                    }
+                                >
+                                    <span className="inline-block w-4 text-center font-mono">
+                                        {style.glyph}
+                                    </span>
+                                    {style.label}
+                                </button>
+                            ))}
+                        </PopoverContent>
+                    </Popover>
 
                     <div className="mx-0.5 h-5 w-px bg-border" />
 

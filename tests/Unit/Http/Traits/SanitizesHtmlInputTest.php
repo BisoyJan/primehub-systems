@@ -145,6 +145,27 @@ class SanitizesHtmlInputTest extends TestCase
     }
 
     #[Test]
+    public function it_preserves_dash_bullet_marker_on_unordered_lists(): void
+    {
+        $result = $this->sanitize('<ul style="list-style-type: &quot;- &quot;;"><li>Item</li></ul>');
+
+        $this->assertStringContainsString('<ul style="list-style-type: &quot;- &quot;">', $result);
+    }
+
+    #[Test]
+    public function it_strips_unsafe_styles_from_unordered_lists(): void
+    {
+        $result = $this->sanitize(
+            '<ul style="position: fixed; list-style-type: url(x); margin-left: 9999px;" class="x"><li>Item</li></ul>'
+        );
+
+        $this->assertStringContainsString('<ul><li>Item</li></ul>', $result);
+        $this->assertStringNotContainsString('position', $result);
+        $this->assertStringNotContainsString('url(', $result);
+        $this->assertStringNotContainsString('class=', $result);
+    }
+
+    #[Test]
     public function it_converts_legacy_font_color_tags_to_span_style(): void
     {
         $result = $this->sanitize('<font color="#ff0000">Colored</font>');
