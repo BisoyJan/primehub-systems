@@ -37,7 +37,8 @@ class SecurityHeaders
 
     protected function buildContentSecurityPolicy(Request $request): string
     {
-        $connectSources = "'self'";
+        // Nager.Date powers the dashboard holiday calendar (CalendarWithHolidays.tsx).
+        $connectSources = "'self' https://date.nager.at";
         $scriptSources = "'self' 'unsafe-inline' 'unsafe-eval'";
 
         if (config('app.env') === 'local' || ! $request->isSecure()) {

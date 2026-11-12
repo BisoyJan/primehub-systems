@@ -46,4 +46,18 @@ class SecurityHeadersTest extends TestCase
         $this->assertStringContainsString('ws://localhost:9090', $connectSrc);
         $this->assertStringContainsString('ws://127.0.0.1:9090', $connectSrc);
     }
+
+    #[Test]
+    public function csp_allows_holiday_api_connections_for_the_dashboard_calendar(): void
+    {
+        $response = $this->get(route('login'));
+
+        $csp = $response->headers->get('Content-Security-Policy', '');
+        $connectSrc = collect(explode(';', $csp))
+            ->map(fn (string $directive) => trim($directive))
+            ->first(fn (string $directive) => str_starts_with($directive, 'connect-src'));
+
+        $this->assertNotNull($connectSrc);
+        $this->assertStringContainsString('https://date.nager.at', $connectSrc);
+    }
 }

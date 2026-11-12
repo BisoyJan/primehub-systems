@@ -29,6 +29,18 @@ const CalendarWithHolidays: React.FC<CalendarWithHolidaysProps> = ({
     width = 420,
     className,
 }) => {
+    // Nager.Date returns YYYY-MM-DD; parse/format in local time so
+    // UTC offsets (e.g. PH +08:00) don't shift days when matching.
+    const parseLocalDate = (iso: string): Date => {
+        const [y, m, d] = iso.split('-').map(Number);
+        return new Date(y, m - 1, d);
+    };
+    const toLocalISO = (date: Date): string => {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    };
     const [selectedDate, setSelectedDate] = useState<Date | undefined>(
         initialDate,
     );
@@ -77,7 +89,7 @@ const CalendarWithHolidays: React.FC<CalendarWithHolidaysProps> = ({
     // Holidays for the current visible month
     const monthHolidays = useMemo(() => {
         return holidays.filter((h) => {
-            const d = new Date(h.date);
+            const d = parseLocalDate(h.date);
             return (
                 d.getFullYear() === currentMonth.getFullYear() &&
                 d.getMonth() === currentMonth.getMonth()
@@ -90,9 +102,7 @@ const CalendarWithHolidays: React.FC<CalendarWithHolidaysProps> = ({
         maxWidth: '100%',
     };
 
-    const selectedISO = selectedDate
-        ? selectedDate.toISOString().slice(0, 10)
-        : null;
+    const selectedISO = selectedDate ? toLocalISO(selectedDate) : null;
     const selectedHolidays = selectedISO
         ? holidays.filter((h) => h.date === selectedISO)
         : [];
@@ -118,7 +128,9 @@ const CalendarWithHolidays: React.FC<CalendarWithHolidaysProps> = ({
                     onMonthChange={setCurrentMonth}
                     className="w-full rounded-lg border shadow-md"
                     modifiers={{
-                        holiday: monthHolidays.map((h) => new Date(h.date)),
+                        holiday: monthHolidays.map((h) =>
+                            parseLocalDate(h.date),
+                        ),
                     }}
                     modifiersClassNames={{
                         holiday:
@@ -127,7 +139,7 @@ const CalendarWithHolidays: React.FC<CalendarWithHolidaysProps> = ({
                     components={{
                         DayButton: ({ day, modifiers, ...props }) => {
                             const isHoliday = modifiers.holiday;
-                            const dateStr = day.date.toISOString().slice(0, 10);
+                            const dateStr = toLocalISO(day.date);
                             const dayHolidays = monthHolidays.filter(
                                 (h) => h.date === dateStr,
                             );
@@ -207,7 +219,7 @@ const CalendarWithHolidays: React.FC<CalendarWithHolidaysProps> = ({
                     ) : (
                         <div className="space-y-2">
                             {monthHolidays.map((h, idx) => {
-                                const holidayDate = new Date(h.date);
+                                const holidayDate = parseLocalDate(h.date);
                                 const formattedDate =
                                     holidayDate.toLocaleDateString('en-US', {
                                         weekday: 'short',

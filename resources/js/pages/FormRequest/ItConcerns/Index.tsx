@@ -57,6 +57,7 @@ import {
     CheckCircle,
     Clock,
     Edit,
+    Eye,
     Pause,
     Play,
     Plus,
@@ -906,6 +907,19 @@ export default function ItConcernsIndex() {
                                             {!isTeamLead && (
                                                 <TableCell>
                                                     <div className="flex gap-2">
+                                                        <Button
+                                                            variant="outline"
+                                                            size="icon"
+                                                            onClick={() =>
+                                                                router.get(
+                                                                    `/form-requests/it-concerns/${concern.id}`,
+                                                                )
+                                                            }
+                                                            title="View Concern"
+                                                        >
+                                                            <Eye className="h-4 w-4" />
+                                                        </Button>
+
                                                         {/* Resolve Button - IT/Admin */}
                                                         <Can permission="it_concerns.resolve">
                                                             {concern.status !==
@@ -1085,7 +1099,20 @@ export default function ItConcernsIndex() {
                             </div>
 
                             {!isTeamLead && (
-                                <div className="flex gap-2 border-t pt-2">
+                                <div className="flex flex-wrap gap-2 border-t pt-2">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() =>
+                                            router.get(
+                                                `/form-requests/it-concerns/${concern.id}`,
+                                            )
+                                        }
+                                    >
+                                        <Eye className="mr-2 h-4 w-4" />
+                                        View
+                                    </Button>
+
                                     <Can permission="it_concerns.resolve">
                                         {concern.status !== 'resolved' && (
                                             <Button
