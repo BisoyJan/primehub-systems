@@ -564,7 +564,7 @@ class BreakDashboardController extends Controller
     public function reimburse(Request $request, BreakSession $breakSession)
     {
         $request->validate([
-            'minutes' => ['required', 'integer', 'min:1', 'max:180'],
+            'minutes' => ['required', 'integer', 'min:1'],
             'reason' => ['required', 'string', 'min:3', 'max:500'],
         ]);
 

@@ -171,6 +171,34 @@ class BreakReimburseTest extends TestCase
     }
 
     #[Test]
+    public function it_allows_reimbursing_more_than_three_hours_when_within_consumed_time(): void
+    {
+        $session = BreakSession::factory()->overage()->create([
+            'user_id' => $this->agent->id,
+            'break_policy_id' => $this->policy->id,
+            'duration_seconds' => 5400,
+            'remaining_seconds' => 0,
+            'overage_seconds' => 14665,
+            'reimbursed_seconds' => 0,
+            'status' => 'overage',
+        ]);
+
+        $response = $this->actingAs($this->admin)
+            ->from(route('break-timer.dashboard'))
+            ->post("/break-timer/{$session->id}/reimburse", [
+                'minutes' => 244,
+                'reason' => 'Forgot to end due to system maintenance',
+            ]);
+
+        $response->assertSessionHasNoErrors();
+
+        $updated = $session->fresh();
+        $this->assertSame(244 * 60, $updated->reimbursed_seconds);
+        $this->assertSame(14665 - (244 * 60), $updated->overage_seconds);
+        $this->assertSame('paused', $updated->status);
+    }
+
+    #[Test]
     public function ending_an_active_session_after_reimburse_preserves_the_bumped_duration(): void
     {
         // Agent started 20 min ago on a 15-min break → 5 min overage right now.

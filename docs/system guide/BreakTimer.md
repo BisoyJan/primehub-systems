@@ -110,7 +110,7 @@ Columns: **Agent**, **Campaign**, **Station**, **Break Type**, **Status** (with 
   - Blocked if the agent already has another active or paused session that same day; end it first.
   - Team Leads and IT staff cannot restore their own sessions — only a Super Admin (or Admin) can restore for themselves.
 - **Void** (orange) — Voids the session and frees the break/lunch slot. Type the reason. *(Requires `break_timer.void_session` permission.)*
-- **Reimburse** (green) — Adds minutes back. Shows allotted time, current overage, already reimbursed, max reimbursable. Type minutes (1–180) and reason. *(Requires `break_timer.reimburse` permission.)*
+- **Reimburse** (green) — Adds minutes back. Shows allotted time, current overage, already reimbursed, max reimbursable. Type minutes (1 up to max reimbursable) and reason. *(Requires `break_timer.reimburse` permission.)*
   - Reimbursed minutes offset any existing overage first; only the leftover (if any) is added back as extra remaining time.
   - If the overage reaches zero, the session's status automatically flips from **Overage** back to **Completed**.
 

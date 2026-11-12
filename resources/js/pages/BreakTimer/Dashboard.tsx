@@ -375,8 +375,7 @@ export default function BreakTimerDashboard() {
             payload = { reason };
         } else if (actionDialog.kind === 'reimburse') {
             const minutes = parseInt(reimburseMinutes, 10);
-            if (!Number.isFinite(minutes) || minutes < 1 || minutes > 180)
-                return;
+            if (!Number.isFinite(minutes) || minutes < 1) return;
             const maxMin = Math.floor(
                 (actionDialog.session.max_reimbursable_seconds ?? 0) / 60,
             );
@@ -1581,7 +1580,6 @@ export default function BreakTimerDashboard() {
                                         return (
                                             !Number.isFinite(m) ||
                                             m < 1 ||
-                                            m > 180 ||
                                             m > maxMin
                                         );
                                     })())
