@@ -27,6 +27,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { usePageMeta } from '@/hooks';
 import { useItConcernPresence } from '@/hooks/use-it-concern-presence';
+import { useItConcernUpdates } from '@/hooks/use-it-concern-updates';
 import { usePermission } from '@/hooks/useAuthorization';
 import AppLayout from '@/layouts/app-layout';
 import type { SharedData } from '@/types';
@@ -45,6 +46,7 @@ import {
     XCircle,
 } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 
 interface UserType {
     id: number;
@@ -187,6 +189,43 @@ export default function Show() {
         setFocus(concern.id, updateDialogOpen ? 'resolving' : 'viewing');
     }, [concern.id, updateDialogOpen, setFocus]);
     const concernViewers = viewersByConcern[concern.id] ?? [];
+
+    // Keep the dialog's draft fields in step with the ticket whenever it is
+    // refreshed from the server, unless the user is mid-edit in the dialog.
+    useEffect(() => {
+        if (updateDialogOpen) return;
+        setStatus(concern.status);
+        setPriority(concern.priority);
+        setResolutionNotes(concern.resolution_notes || '');
+    }, [
+        concern.status,
+        concern.priority,
+        concern.resolution_notes,
+        updateDialogOpen,
+    ]);
+
+    // Live-refresh when another user changes this ticket. Our own writes are
+    // already reflected by the Inertia response, so skip those.
+    useItConcernUpdates(concern.id, (payload) => {
+        if (payload.updated_by.id === auth.user.id) return;
+
+        if (payload.action === 'deleted') {
+            toast.warning(
+                `${payload.updated_by.name} deleted this IT concern.`,
+            );
+            router.visit('/form-requests/it-concerns');
+            return;
+        }
+
+        const verb =
+            payload.action === 'resolved'
+                ? 'resolved'
+                : payload.action === 'cancelled'
+                  ? 'cancelled'
+                  : 'updated';
+        toast.info(`${payload.updated_by.name} ${verb} this IT concern.`);
+        router.reload({ only: ['concern'] });
+    });
 
     const { title, breadcrumbs } = usePageMeta({
         title: `IT Concern #${concern.id}`,

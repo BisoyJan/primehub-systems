@@ -1,4 +1,8 @@
 import { Can } from '@/components/authorization';
+import {
+    ActiveItStaffPanel,
+    ConcernViewerBanner,
+} from '@/components/it-concern-presence';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -25,10 +29,11 @@ import {
     usePageMeta,
     useReturnTo,
 } from '@/hooks';
+import { useItConcernPresence } from '@/hooks/use-it-concern-presence';
 import AppLayout from '@/layouts/app-layout';
 import type { SharedData } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
-import React from 'react';
+import React, { useEffect } from 'react';
 
 interface Site {
     id: number;
@@ -75,6 +80,20 @@ export default function ItConcernEdit() {
     const isPageLoading = usePageLoading();
     const { returnTo, backUrl } = useReturnTo('/form-requests/it-concerns');
 
+    // Announce that we are editing this ticket so other IT staff see it on
+    // the list / detail pages, and show who else is working on it here.
+    const {
+        enabled: presenceEnabled,
+        selfId,
+        activeUsers,
+        viewersByConcern,
+        setFocus,
+    } = useItConcernPresence();
+    useEffect(() => {
+        setFocus(concern.id, 'editing');
+    }, [concern.id, setFocus]);
+    const concernViewers = viewersByConcern[concern.id] ?? [];
+
     const { data, setData, put, processing, errors } = useForm({
         site_id: String(concern.site_id) || '',
         station_number: concern.station_number || '',
@@ -99,13 +118,22 @@ export default function ItConcernEdit() {
             <div className="relative flex h-full flex-1 flex-col gap-4 rounded-xl p-3">
                 <LoadingOverlay isLoading={isPageLoading || processing} />
 
-                <PageHeader
-                    title="Edit IT Concern"
-                    description="Update IT concern details and status"
-                />
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                    <PageHeader
+                        title="Edit IT Concern"
+                        description="Update IT concern details and status"
+                    />
+                    {presenceEnabled && (
+                        <ActiveItStaffPanel
+                            users={activeUsers}
+                            selfId={selfId}
+                        />
+                    )}
+                </div>
 
                 <div className="flex justify-center">
                     <div className="w-full max-w-2xl space-y-6">
+                        <ConcernViewerBanner viewers={concernViewers} />
                         <form onSubmit={handleSubmit} className="space-y-6">
                             <Card>
                                 <CardHeader>

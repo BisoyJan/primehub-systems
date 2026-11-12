@@ -164,6 +164,18 @@
     }
 }
 
+/* Soft expanding halo for live "on break" indicators */
+@keyframes live-pulse {
+    0% {
+        transform: scale(1);
+        opacity: 0.55;
+    }
+    100% {
+        transform: scale(1.7);
+        opacity: 0;
+    }
+}
+
 @layer utilities {
     .animate-collapsible-down {
         animation: collapsible-down 500ms ease-out forwards;
@@ -171,4 +183,8 @@
     .animate-collapsible-up {
         animation: collapsible-up 500ms ease-out forwards;
     }
+}
+
+@utility animate-live-pulse {
+    animation: live-pulse 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
 }

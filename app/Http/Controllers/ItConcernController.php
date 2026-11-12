@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Events\ItConcernCreated;
+use App\Events\ItConcernUpdated;
 use App\Http\Requests\ItConcernRequest;
 use App\Http\Traits\RedirectsWithFlashMessages;
 use App\Models\Campaign;
@@ -185,6 +186,21 @@ class ItConcernController extends Controller
     }
 
     /**
+     * Push a live update to anyone with the ticket open. A broadcast failure
+     * must never break the underlying write, so errors are only logged.
+     *
+     * @param  'updated'|'resolved'|'cancelled'|'deleted'  $action
+     */
+    protected function broadcastConcernChange(ItConcern $itConcern, string $action = 'updated'): void
+    {
+        try {
+            broadcast(new ItConcernUpdated($itConcern, auth()->user(), $action));
+        } catch (\Throwable $e) {
+            Log::warning('ItConcernUpdated broadcast failed: '.$e->getMessage());
+        }
+    }
+
+    /**
      * Display the specified IT concern.
      */
     public function show(ItConcern $itConcern)
@@ -257,6 +273,8 @@ class ItConcernController extends Controller
             );
         }
 
+        $this->broadcastConcernChange($itConcern, $itConcern->status === 'resolved' && $oldStatus !== 'resolved' ? 'resolved' : 'updated');
+
         return $this->redirectToIndexOrReturnUrl('it-concerns.index')
             ->with('flash', ['message' => 'IT concern updated successfully', 'type' => 'success']);
     }
@@ -275,6 +293,8 @@ class ItConcernController extends Controller
         $agentName = $user->name;
 
         $itConcern->delete();
+
+        $this->broadcastConcernChange($itConcern, 'deleted');
 
         return redirect()->route('it-concerns.index')
             ->with('flash', ['message' => 'IT concern deleted successfully', 'type' => 'success']);
@@ -307,6 +327,8 @@ class ItConcernController extends Controller
                 $itConcern->id
             );
         }
+
+        $this->broadcastConcernChange($itConcern, $request->status === 'resolved' && $oldStatus !== 'resolved' ? 'resolved' : 'updated');
 
         return redirect()->back()
             ->with('flash', ['message' => 'Status updated successfully', 'type' => 'success']);
@@ -358,6 +380,8 @@ class ItConcernController extends Controller
             );
         }
 
+        $this->broadcastConcernChange($itConcern, $itConcern->status === 'resolved' && $oldStatus !== 'resolved' ? 'resolved' : 'updated');
+
         return redirect()->back()
             ->with('flash', ['message' => 'IT concern updated successfully', 'type' => 'success']);
     }
@@ -389,6 +413,8 @@ class ItConcernController extends Controller
             $user->name,
             $itConcern->id
         );
+
+        $this->broadcastConcernChange($itConcern, 'cancelled');
 
         return redirect()->back()
             ->with('flash', ['message' => 'IT concern cancelled successfully', 'type' => 'success']);

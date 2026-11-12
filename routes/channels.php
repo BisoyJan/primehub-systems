@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Attendance;
+use App\Models\ItConcern;
 use App\Models\User;
 use Illuminate\Support\Facades\Broadcast;
 
@@ -20,6 +21,14 @@ Broadcast::channel('attendance.spreadsheet', function (User $user) {
 // so new IT staff are covered automatically without any code changes.
 Broadcast::channel('it-concerns', function (User $user) {
     return $user->hasPermission('it_concerns.resolve');
+});
+
+// Per-ticket channel carrying `concern.updated` so an open ticket page can
+// refresh when someone else edits/resolves it. Anyone allowed to view the
+// concern (the reporter, IT staff) may subscribe; missing tickets are denied
+// automatically by the implicit model binding.
+Broadcast::channel('it-concern.{concern}', function (User $user, ItConcern $concern) {
+    return $user->can('view', $concern);
 });
 
 // Presence channel: tracks who is currently viewing the spreadsheet and is

@@ -704,6 +704,9 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
         Route::get('/dashboard', [BreakDashboardController::class, 'index'])
             ->middleware('permission:break_timer.dashboard')
             ->name('dashboard');
+        Route::get('/live', [BreakDashboardController::class, 'live'])
+            ->middleware('permission:break_timer.dashboard')
+            ->name('live');
 
         // Admin actions on agent sessions
         Route::post('/{breakSession}/force-end', [BreakDashboardController::class, 'forceEnd'])

@@ -35,7 +35,7 @@ export function HeaderDateTime() {
     const timeString = date.toLocaleTimeString('en-US', timeOptions);
 
     return (
-        <div className="mr-4 hidden flex-col items-end text-xs text-muted-foreground md:flex">
+        <div className="mr-4 hidden flex-col items-end text-xs text-muted-foreground @3xl/header:flex">
             <span className="font-medium">{dateString}</span>
             <span>{timeString}</span>
         </div>

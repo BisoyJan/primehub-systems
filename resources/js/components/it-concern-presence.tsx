@@ -11,7 +11,7 @@ import type {
     PresenceUser,
 } from '@/hooks/use-it-concern-presence';
 import { cn } from '@/lib/utils';
-import { Eye, Wrench } from 'lucide-react';
+import { Eye, Pencil, Wrench } from 'lucide-react';
 
 const ACTION_META = {
     viewing: {
@@ -19,6 +19,12 @@ const ACTION_META = {
         ring: 'ring-sky-500',
         badge: 'bg-sky-500',
         Icon: Eye,
+    },
+    editing: {
+        label: 'is editing this ticket',
+        ring: 'ring-violet-500',
+        badge: 'bg-violet-500',
+        Icon: Pencil,
     },
     resolving: {
         label: 'is resolving this ticket',
@@ -123,9 +129,9 @@ interface ConcernViewerBannerProps {
 }
 
 /**
- * Inline notice for the concern detail page: lists who else is on the ticket
- * and highlights anyone already in the resolve dialog so two IT staff do not
- * work the same ticket at once.
+ * Inline notice for the concern detail / edit pages: lists who else is on the
+ * ticket and highlights anyone already editing or resolving it so two IT
+ * staff do not work the same ticket at once.
  */
 export function ConcernViewerBanner({
     viewers,
@@ -133,21 +139,21 @@ export function ConcernViewerBanner({
 }: ConcernViewerBannerProps) {
     if (viewers.length === 0) return null;
 
-    const resolving = viewers.filter((v) => v.action === 'resolving');
-    const others = viewers.filter((v) => v.action !== 'resolving');
+    const working = viewers.filter((v) => v.action !== 'viewing');
+    const watching = viewers.filter((v) => v.action === 'viewing');
 
     const names = (list: ConcernViewer[]) => list.map((v) => v.name).join(', ');
 
-    const message = resolving.length
-        ? `${names(resolving)} ${resolving.length === 1 ? 'is' : 'are'} resolving this ticket right now.`
-        : `${names(others)} ${others.length === 1 ? 'is' : 'are'} also viewing this ticket.`;
+    const message = working.length
+        ? `${working.map((v) => `${v.name} is ${v.action}`).join(', ')} this ticket right now.`
+        : `${names(watching)} ${watching.length === 1 ? 'is' : 'are'} also viewing this ticket.`;
 
     return (
         <div
             role="status"
             className={cn(
                 'flex items-center gap-3 rounded-md border px-3 py-2 text-sm',
-                resolving.length
+                working.length
                     ? 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100'
                     : 'border-sky-300 bg-sky-50 text-sky-900 dark:border-sky-700 dark:bg-sky-950/40 dark:text-sky-100',
                 className,

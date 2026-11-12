@@ -94,6 +94,91 @@ class BreakDashboardController extends Controller
         }
     }
 
+    /**
+     * Live (active or paused) break sessions for the current shift date,
+     * scoped to the viewer's campaigns. Always uses today's shift date so the
+     * indicator reflects who is on break right now regardless of date filter.
+     *
+     * @return array<int, array{
+     *     id: int,
+     *     user: array{id: int, first_name: string, last_name: string}|null,
+     *     campaign: ?string,
+     *     station: ?string,
+     *     type: string,
+     *     status: string,
+     *     duration_seconds: int,
+     *     started_at: ?string,
+     *     expected_end_at: ?string,
+     *     remaining_seconds: int,
+     *     overage_seconds: int,
+     *     is_overbreak_now: bool,
+     *     total_paused_seconds: int,
+     *     paused_at: ?string,
+     *     paused_for_seconds: int,
+     *     last_pause_reason: ?string
+     * }>
+     */
+    private function getLiveBreaks(string $shiftDate, array $campaignIds): array
+    {
+        $query = BreakSession::query()
+            ->with([
+                'user.activeSchedule.campaign',
+                'breakEvents' => fn ($q) => $q->where('action', 'pause')->orderByDesc('occurred_at'),
+            ])
+            ->where('shift_date', $shiftDate)
+            ->active()
+            ->orderByRaw("CASE status WHEN 'active' THEN 1 ELSE 2 END")
+            ->orderBy('started_at');
+
+        $this->scopeByCampaigns($query, $campaignIds);
+
+        return $query->get()->map(function (BreakSession $session) {
+            $timing = $this->breakTimerService->getSessionTimingSnapshot($session);
+            $pausedAt = $session->status === 'paused'
+                ? $session->breakEvents->first()?->occurred_at
+                : null;
+
+            return [
+                'id' => $session->id,
+                'user' => $session->user ? [
+                    'id' => $session->user->id,
+                    'first_name' => $session->user->first_name,
+                    'last_name' => $session->user->last_name,
+                ] : null,
+                'campaign' => $session->user?->activeSchedule?->campaign?->name,
+                'station' => $session->station,
+                'type' => $session->type,
+                'status' => $session->status,
+                'duration_seconds' => (int) $session->duration_seconds,
+                'started_at' => $session->started_at?->toDateTimeString(),
+                'expected_end_at' => $timing['expected_end_at']?->toDateTimeString(),
+                'remaining_seconds' => $timing['remaining_seconds'],
+                'overage_seconds' => $timing['overage_seconds'],
+                'is_overbreak_now' => $timing['is_overbreak_now'],
+                'total_paused_seconds' => $timing['total_paused_seconds'],
+                'paused_at' => $pausedAt?->toDateTimeString(),
+                'paused_for_seconds' => $pausedAt ? (int) $pausedAt->diffInSeconds(now(), absolute: true) : 0,
+                'last_pause_reason' => $session->last_pause_reason,
+            ];
+        })->values()->toArray();
+    }
+
+    /**
+     * JSON feed for the global header indicator: who is on break right now,
+     * scoped to the viewer's campaigns.
+     */
+    public function live()
+    {
+        $policy = $this->breakTimerService->getActivePolicy();
+        $shiftDate = $this->breakTimerService->getShiftDate($policy);
+
+        return response()->json([
+            'shift_date' => $shiftDate,
+            'server_time' => now()->toDateTimeString(),
+            'breaks' => $this->getLiveBreaks($shiftDate, $this->getTeamLeadCampaignIds()),
+        ]);
+    }
+
     public function index(Request $request)
     {
         $policy = $this->breakTimerService->getActivePolicy();

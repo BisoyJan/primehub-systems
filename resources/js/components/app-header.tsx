@@ -35,6 +35,7 @@ import { Link, usePage } from '@inertiajs/react';
 import { BookOpen, Folder, LayoutGrid, Menu, Search } from 'lucide-react';
 import AppLogo from './app-logo';
 import AppLogoIcon from './app-logo-icon';
+import { HeaderLiveBreaks } from './live-breaks/header-live-breaks';
 import { NotificationBell } from './notification-bell';
 
 const mainNavItems: NavItem[] = [
@@ -72,7 +73,7 @@ export function AppHeader({ breadcrumbs = [] }: AppHeaderProps) {
     return (
         <>
             <div className="border-b border-sidebar-border/80">
-                <div className="mx-auto flex h-16 items-center px-4 md:max-w-7xl">
+                <div className="@container/header mx-auto flex h-16 items-center px-4 md:max-w-7xl">
                     {/* Mobile Menu */}
                     <div className="lg:hidden">
                         <Sheet>
@@ -202,6 +203,9 @@ export function AppHeader({ breadcrumbs = [] }: AppHeaderProps) {
                                 <Search className="!size-5 opacity-80 group-hover:opacity-100" />
                             </Button>
 
+                            {/* Live breaks */}
+                            <HeaderLiveBreaks />
+
                             {/* Notification Bell */}
                             <NotificationBell />
 
@@ -271,7 +275,7 @@ export function AppHeader({ breadcrumbs = [] }: AppHeaderProps) {
             </div>
             {breadcrumbs.length > 1 && (
                 <div className="flex w-full border-b border-sidebar-border/70">
-                    <div className="mx-auto flex h-12 w-full items-center justify-start px-4 text-neutral-500 md:max-w-7xl">
+                    <div className="@container/header mx-auto flex h-12 w-full items-center justify-start px-4 text-neutral-500 md:max-w-7xl">
                         <Breadcrumbs breadcrumbs={breadcrumbs} />
                     </div>
                 </div>

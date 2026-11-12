@@ -10,7 +10,7 @@ export interface PresenceUser {
     avatar_url: string | null;
 }
 
-export type ConcernPresenceAction = 'viewing' | 'resolving';
+export type ConcernPresenceAction = 'viewing' | 'editing' | 'resolving';
 
 export interface ConcernViewer extends PresenceUser {
     action: ConcernPresenceAction;
@@ -79,14 +79,23 @@ function withoutUser(map: RawFocusMap, userId: number): RawFocusMap {
     return next;
 }
 
-/** Collapse per-tab entries to one row per user, preferring "resolving". */
+const ACTION_RANK: Record<ConcernPresenceAction, number> = {
+    viewing: 0,
+    editing: 1,
+    resolving: 2,
+};
+
+/** Collapse per-tab entries to one row per user, keeping the strongest action. */
 function collapseViewers(map: RawFocusMap): ConcernViewersMap {
     const out: ConcernViewersMap = {};
     for (const [key, clients] of Object.entries(map)) {
         const byUser = new Map<number, ConcernViewer>();
         for (const viewer of Object.values(clients)) {
             const existing = byUser.get(viewer.id);
-            if (!existing || viewer.action === 'resolving') {
+            if (
+                !existing ||
+                ACTION_RANK[viewer.action] > ACTION_RANK[existing.action]
+            ) {
                 byUser.set(viewer.id, viewer);
             }
         }

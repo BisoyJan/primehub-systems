@@ -3,6 +3,7 @@
 namespace Tests\Feature\Controllers\FormRequests;
 
 use App\Events\ItConcernCreated;
+use App\Events\ItConcernUpdated;
 use App\Models\EmployeeSchedule;
 use App\Models\ItConcern;
 use App\Models\Notification;
@@ -10,6 +11,7 @@ use App\Models\Site;
 use App\Models\User;
 use App\Services\NotificationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Event;
 use Inertia\Testing\AssertableInertia as Assert;
 use PHPUnit\Framework\Attributes\Test;
@@ -28,6 +30,7 @@ class ItConcernControllerTest extends TestCase
             $mock->shouldReceive('notifyItRolesAboutConcernUpdate')->andReturnNull();
             $mock->shouldReceive('notifyItConcernStatusChange')->andReturn(\Mockery::mock(Notification::class));
             $mock->shouldReceive('notifyItRolesAboutConcernDeletion')->andReturnNull();
+            $mock->shouldReceive('notifyItRolesAboutConcernCancellation')->andReturnNull();
         });
     }
 
@@ -317,5 +320,73 @@ class ItConcernControllerTest extends TestCase
         $this->assertDatabaseMissing('it_concerns', [
             'id' => $concern->id,
         ]);
+    }
+
+    #[Test]
+    public function it_broadcasts_it_concern_updated_event_when_resolved(): void
+    {
+        Event::fake([ItConcernUpdated::class]);
+
+        $itUser = User::factory()->create(['role' => 'IT', 'is_approved' => true]);
+        $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        $concern = ItConcern::factory()->create([
+            'user_id' => $agent->id,
+            'site_id' => Site::factory()->create()->id,
+            'status' => 'in_progress',
+        ]);
+
+        $this->actingAs($itUser)->post(route('it-concerns.resolve', $concern), [
+            'resolution_notes' => 'Replaced the headset',
+            'status' => 'resolved',
+        ]);
+
+        Event::assertDispatched(ItConcernUpdated::class, function (ItConcernUpdated $event) use ($concern, $itUser) {
+            $payload = $event->broadcastWith();
+
+            return $event->concern->id === $concern->id
+                && $event->action === 'resolved'
+                && $event->actor->id === $itUser->id
+                && $payload['status'] === 'resolved'
+                && $payload['updated_by']['id'] === $itUser->id
+                && collect($event->broadcastOn())->map(fn ($channel) => (string) $channel)->all()
+                    === ["private-it-concern.{$concern->id}", 'private-it-concerns'];
+        });
+    }
+
+    #[Test]
+    public function it_broadcasts_it_concern_updated_event_when_cancelled_and_deleted(): void
+    {
+        Event::fake([ItConcernUpdated::class]);
+
+        $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create(['user_id' => $agent->id]);
+        $site = Site::factory()->create();
+        $cancelled = ItConcern::factory()->create(['user_id' => $agent->id, 'site_id' => $site->id, 'status' => 'pending']);
+        $deleted = ItConcern::factory()->create(['user_id' => $agent->id, 'site_id' => $site->id, 'status' => 'pending']);
+
+        $this->actingAs($agent)->post(route('it-concerns.cancel', $cancelled));
+        $this->actingAs($agent)->delete(route('it-concerns.destroy', $deleted));
+
+        Event::assertDispatched(ItConcernUpdated::class, fn (ItConcernUpdated $e) => $e->concern->id === $cancelled->id && $e->action === 'cancelled');
+        Event::assertDispatched(ItConcernUpdated::class, fn (ItConcernUpdated $e) => $e->concern->id === $deleted->id && $e->action === 'deleted');
+    }
+
+    #[Test]
+    public function it_authorizes_per_concern_channel_for_owner_and_it_only(): void
+    {
+        $owner = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        $otherAgent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        $itUser = User::factory()->create(['role' => 'IT', 'is_approved' => true]);
+        $concern = ItConcern::factory()->create([
+            'user_id' => $owner->id,
+            'site_id' => Site::factory()->create()->id,
+        ]);
+
+        $callback = Broadcast::getChannels()->get('it-concern.{concern}');
+        $this->assertIsCallable($callback, 'it-concern.{concern} channel is not registered');
+
+        $this->assertTrue($callback($owner, $concern));
+        $this->assertTrue($callback($itUser, $concern));
+        $this->assertFalse($callback($otherAgent, $concern));
     }
 }

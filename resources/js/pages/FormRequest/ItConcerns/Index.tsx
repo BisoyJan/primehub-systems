@@ -15,6 +15,7 @@ import {
     withReturnTo,
 } from '@/hooks';
 import { useItConcernPresence } from '@/hooks/use-it-concern-presence';
+import { useItConcernListUpdates } from '@/hooks/use-it-concern-updates';
 import { usePermission } from '@/hooks/useAuthorization';
 import AppLayout from '@/layouts/app-layout';
 import type { SharedData } from '@/types';
@@ -305,6 +306,34 @@ export default function ItConcernsIndex() {
             setFocus(null);
         }
     }, [resolveDialogOpen, concernToResolve, setFocus]);
+
+    // Refresh the list as soon as any ticket changes elsewhere. Reloading the
+    // current URL keeps filters and pagination intact; a short debounce
+    // coalesces bursts of updates into one request.
+    const liveRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+        null,
+    );
+    useItConcernListUpdates(presenceEnabled, (payload) => {
+        if (payload.updated_by.id === auth.user.id) return;
+        if (liveRefreshTimerRef.current) {
+            clearTimeout(liveRefreshTimerRef.current);
+        }
+        liveRefreshTimerRef.current = setTimeout(() => {
+            liveRefreshTimerRef.current = null;
+            router.reload({
+                only: ['concerns'],
+                onSuccess: () => setLastRefresh(new Date()),
+            });
+        }, 500);
+    });
+    useEffect(
+        () => () => {
+            if (liveRefreshTimerRef.current) {
+                clearTimeout(liveRefreshTimerRef.current);
+            }
+        },
+        [],
+    );
 
     // Auto-refresh every 30 seconds to check for new concerns
     const isPollingRef = useRef(false);

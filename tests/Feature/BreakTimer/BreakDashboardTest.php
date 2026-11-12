@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\BreakTimer;
 
+use App\Models\BreakEvent;
 use App\Models\BreakPolicy;
 use App\Models\BreakSession;
 use App\Models\Campaign;
@@ -143,6 +144,180 @@ class BreakDashboardTest extends TestCase
                 ->component('BreakTimer/Dashboard')
                 ->has('sessions.data', 1)
             );
+    }
+
+    #[Test]
+    public function live_feed_includes_only_active_and_paused_sessions_with_live_timing(): void
+    {
+        $active = BreakSession::factory()->active()->create([
+            'break_policy_id' => $this->policy->id,
+            'shift_date' => now()->toDateString(),
+            'type' => '1st_break',
+            'started_at' => now()->subMinutes(5),
+            'duration_seconds' => 900,
+            'remaining_seconds' => 900,
+            'overage_seconds' => 0,
+            'total_paused_seconds' => 0,
+        ]);
+
+        $paused = BreakSession::factory()->paused()->create([
+            'break_policy_id' => $this->policy->id,
+            'shift_date' => now()->toDateString(),
+            'type' => 'lunch',
+            'started_at' => now()->subMinutes(10),
+            'duration_seconds' => 3600,
+            'remaining_seconds' => 3000,
+            'overage_seconds' => 0,
+            'total_paused_seconds' => 0,
+            'last_pause_reason' => 'Coaching',
+        ]);
+        BreakEvent::factory()->create([
+            'break_session_id' => $paused->id,
+            'action' => 'pause',
+            'reason' => 'Coaching',
+            'occurred_at' => now()->subMinutes(2),
+        ]);
+
+        BreakSession::factory()->create([
+            'break_policy_id' => $this->policy->id,
+            'status' => 'completed',
+            'shift_date' => now()->toDateString(),
+        ]);
+
+        $this->actingAs($this->admin)
+            ->getJson(route('break-timer.live'))
+            ->assertOk()
+            ->assertJsonCount(2, 'breaks')
+            ->assertJsonPath('breaks.0.id', $active->id)
+            ->assertJsonPath('breaks.0.status', 'active')
+            ->assertJsonPath('breaks.0.type', '1st_break')
+            ->assertJsonPath('breaks.0.remaining_seconds', 600)
+            ->assertJsonPath('breaks.0.overage_seconds', 0)
+            ->assertJsonPath('breaks.0.paused_for_seconds', 0)
+            ->assertJsonPath('breaks.0.paused_at', null)
+            ->assertJsonPath('breaks.1.id', $paused->id)
+            ->assertJsonPath('breaks.1.status', 'paused')
+            ->assertJsonPath('breaks.1.type', 'lunch')
+            ->assertJsonPath('breaks.1.remaining_seconds', 3000)
+            ->assertJsonPath('breaks.1.paused_for_seconds', 120)
+            ->assertJsonPath('breaks.1.paused_at', now()->subMinutes(2)->toDateTimeString())
+            ->assertJsonPath('breaks.1.last_pause_reason', 'Coaching');
+    }
+
+    #[Test]
+    public function dashboard_page_no_longer_exposes_live_breaks_prop(): void
+    {
+        BreakSession::factory()->active()->create([
+            'break_policy_id' => $this->policy->id,
+            'shift_date' => now()->toDateString(),
+        ]);
+
+        $this->actingAs($this->admin)
+            ->get(route('break-timer.dashboard'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('BreakTimer/Dashboard')
+                ->missing('liveBreaks')
+            );
+    }
+
+    #[Test]
+    public function team_lead_live_breaks_are_scoped_to_their_campaigns(): void
+    {
+        $campaignA = Campaign::factory()->create();
+        $campaignB = Campaign::factory()->create();
+
+        $teamLead = User::factory()->create([
+            'role' => 'Team Lead',
+            'is_approved' => true,
+        ]);
+        $teamLead->campaigns()->attach($campaignA);
+        EmployeeSchedule::factory()->create([
+            'user_id' => $teamLead->id,
+            'campaign_id' => $campaignA->id,
+        ]);
+
+        $agentA = User::factory()->create(['role' => 'agent', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create([
+            'user_id' => $agentA->id,
+            'campaign_id' => $campaignA->id,
+        ]);
+
+        $agentB = User::factory()->create(['role' => 'agent', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create([
+            'user_id' => $agentB->id,
+            'campaign_id' => $campaignB->id,
+        ]);
+
+        BreakSession::factory()->active()->create([
+            'user_id' => $agentA->id,
+            'break_policy_id' => $this->policy->id,
+            'shift_date' => now()->toDateString(),
+        ]);
+        BreakSession::factory()->paused()->create([
+            'user_id' => $agentB->id,
+            'break_policy_id' => $this->policy->id,
+            'shift_date' => now()->toDateString(),
+        ]);
+
+        $this->actingAs($teamLead)
+            ->getJson(route('break-timer.live'))
+            ->assertOk()
+            ->assertJsonCount(1, 'breaks')
+            ->assertJsonPath('breaks.0.user.id', $agentA->id)
+            ->assertJsonPath('breaks.0.campaign', $campaignA->name)
+            ->assertJsonPath('breaks.0.status', 'active');
+
+        $this->actingAs($this->admin)
+            ->getJson(route('break-timer.live'))
+            ->assertOk()
+            ->assertJsonCount(2, 'breaks')
+            ->assertJsonStructure(['shift_date', 'server_time', 'breaks']);
+    }
+
+    #[Test]
+    public function live_feed_returns_json_with_live_timing_for_current_shift_date(): void
+    {
+        $active = BreakSession::factory()->active()->create([
+            'break_policy_id' => $this->policy->id,
+            'shift_date' => now()->toDateString(),
+            'started_at' => now()->subMinutes(5),
+            'duration_seconds' => 900,
+            'remaining_seconds' => 900,
+            'overage_seconds' => 0,
+            'total_paused_seconds' => 0,
+        ]);
+        BreakSession::factory()->active()->create([
+            'break_policy_id' => $this->policy->id,
+            'shift_date' => now()->subDay()->toDateString(),
+        ]);
+        BreakSession::factory()->create([
+            'break_policy_id' => $this->policy->id,
+            'status' => 'completed',
+            'shift_date' => now()->toDateString(),
+        ]);
+
+        $this->actingAs($this->admin)
+            ->getJson(route('break-timer.live'))
+            ->assertOk()
+            ->assertJsonPath('shift_date', now()->toDateString())
+            ->assertJsonCount(1, 'breaks')
+            ->assertJsonPath('breaks.0.id', $active->id)
+            ->assertJsonPath('breaks.0.remaining_seconds', 600)
+            ->assertJsonPath('breaks.0.overage_seconds', 0);
+    }
+
+    #[Test]
+    public function agent_cannot_access_live_feed(): void
+    {
+        $agent = User::factory()->create([
+            'role' => 'agent',
+            'is_approved' => true,
+        ]);
+
+        $this->actingAs($agent)
+            ->getJson(route('break-timer.live'))
+            ->assertForbidden();
     }
 
     #[Test]
