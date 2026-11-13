@@ -4,7 +4,10 @@ namespace Tests\Feature\BreakTimer;
 
 use App\Models\BreakEvent;
 use App\Models\BreakPolicy;
+use App\Models\BreakRetentionPolicy;
 use App\Models\BreakSession;
+use App\Models\EmployeeSchedule;
+use App\Models\Site;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
@@ -18,6 +21,8 @@ class CleanOldBreakSessionsTest extends TestCase
 
     protected BreakPolicy $policy;
 
+    protected BreakRetentionPolicy $retentionPolicy;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -29,29 +34,109 @@ class CleanOldBreakSessionsTest extends TestCase
 
         $this->policy = BreakPolicy::factory()->create([
             'is_active' => true,
+        ]);
+
+        $this->retentionPolicy = BreakRetentionPolicy::factory()->create([
             'retention_months' => 3,
         ]);
     }
 
     #[Test]
-    public function it_skips_cleanup_when_no_policies_have_retention(): void
+    public function it_defaults_to_twelve_months_when_no_retention_policy_is_active(): void
     {
-        // Per-policy retention: skip when no policy has a retention period.
-        $this->policy->update(['retention_months' => null]);
+        $this->retentionPolicy->update(['is_active' => false]);
+
+        $expired = $this->sessionAgedMonths(13);
+        $kept = $this->sessionAgedMonths(11);
 
         $this->artisan('break-timer:clean-old-sessions --force')
-            ->expectsOutput('No break policies with retention configured. Skipping cleanup.')
             ->assertSuccessful();
+
+        $this->assertDatabaseMissing('break_sessions', ['id' => $expired->id]);
+        $this->assertDatabaseHas('break_sessions', ['id' => $kept->id]);
     }
 
     #[Test]
-    public function it_skips_cleanup_when_retention_months_is_null(): void
+    public function site_policy_overrides_the_global_policy(): void
     {
-        $this->policy->update(['retention_months' => null]);
+        $site = Site::factory()->create();
+        EmployeeSchedule::factory()->create([
+            'user_id' => $this->user->id,
+            'site_id' => $site->id,
+        ]);
+        BreakRetentionPolicy::factory()->forSite($site->id)->create(['retention_months' => 6]);
+
+        $siteSession = $this->sessionAgedMonths(4);
+        $otherSession = $this->sessionAgedMonths(4, ['user_id' => User::factory()->create()->id]);
 
         $this->artisan('break-timer:clean-old-sessions --force')
-            ->expectsOutput('No break policies with retention configured. Skipping cleanup.')
             ->assertSuccessful();
+
+        $this->assertDatabaseHas('break_sessions', ['id' => $siteSession->id]);
+        $this->assertDatabaseMissing('break_sessions', ['id' => $otherSession->id]);
+    }
+
+    #[Test]
+    public function break_type_policy_overrides_the_all_types_policy(): void
+    {
+        BreakRetentionPolicy::factory()->forBreakType('lunch')->create(['retention_months' => 6]);
+
+        $lunch = $this->sessionAgedMonths(4, ['type' => 'lunch']);
+        $break = $this->sessionAgedMonths(4, ['type' => '1st_break']);
+        $combinedBreak = $this->sessionAgedMonths(4, ['type' => 'combined_break', 'combined_break_count' => 2]);
+
+        $this->artisan('break-timer:clean-old-sessions --force')
+            ->assertSuccessful();
+
+        $this->assertDatabaseHas('break_sessions', ['id' => $lunch->id]);
+        $this->assertDatabaseMissing('break_sessions', ['id' => $break->id]);
+        $this->assertDatabaseMissing('break_sessions', ['id' => $combinedBreak->id]);
+    }
+
+    #[Test]
+    public function it_never_deletes_active_or_paused_sessions(): void
+    {
+        $active = BreakSession::factory()->active()->create([
+            'break_policy_id' => $this->policy->id,
+            'shift_date' => now()->subMonths(4)->toDateString(),
+        ]);
+        $paused = BreakSession::factory()->paused()->create([
+            'break_policy_id' => $this->policy->id,
+            'shift_date' => now()->subMonths(4)->toDateString(),
+        ]);
+
+        $this->artisan('break-timer:clean-old-sessions --force')
+            ->assertSuccessful();
+
+        $this->assertDatabaseHas('break_sessions', ['id' => $active->id]);
+        $this->assertDatabaseHas('break_sessions', ['id' => $paused->id]);
+    }
+
+    #[Test]
+    public function dry_run_reports_without_deleting(): void
+    {
+        $session = $this->sessionAgedMonths(4);
+        $event = BreakEvent::factory()->create(['break_session_id' => $session->id]);
+
+        $this->artisan('break-timer:clean-old-sessions --force --dry-run')
+            ->expectsOutput('Cleanup complete. Total sessions would be deleted: 1')
+            ->assertSuccessful();
+
+        $this->assertDatabaseHas('break_sessions', ['id' => $session->id]);
+        $this->assertDatabaseHas('break_events', ['id' => $event->id]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     */
+    protected function sessionAgedMonths(int $months, array $attributes = []): BreakSession
+    {
+        return BreakSession::factory()->create([
+            'user_id' => $this->user->id,
+            'break_policy_id' => $this->policy->id,
+            'shift_date' => now()->subMonths($months)->toDateString(),
+            ...$attributes,
+        ]);
     }
 
     #[Test]

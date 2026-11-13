@@ -23,7 +23,6 @@ class BreakPolicyRequest extends FormRequest
             'allowed_pause_reasons' => ['nullable', 'array'],
             'allowed_pause_reasons.*' => ['string', 'max:255'],
             'is_active' => ['boolean'],
-            'retention_months' => ['nullable', 'integer', 'min:1', 'max:120'],
             'shift_reset_time' => ['nullable', 'date_format:H:i'],
         ];
     }
@@ -37,7 +36,6 @@ class BreakPolicyRequest extends FormRequest
             'lunch_duration_minutes' => 'lunch duration',
             'grace_period_seconds' => 'grace period',
             'allowed_pause_reasons' => 'pause reasons',
-            'retention_months' => 'data retention',
         ];
     }
 }

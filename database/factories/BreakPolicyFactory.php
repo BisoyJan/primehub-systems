@@ -21,7 +21,6 @@ class BreakPolicyFactory extends Factory
             'grace_period_seconds' => 0,
             'allowed_pause_reasons' => ['Coaching', 'Team Huddle', 'System Issue', 'Supervisor Request', 'Other'],
             'is_active' => true,
-            'retention_months' => null,
         ];
     }
 

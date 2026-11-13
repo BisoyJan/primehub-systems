@@ -183,6 +183,7 @@ return [
         'break_timer.dashboard' => 'View Break Timer Dashboard',
         'break_timer.reports' => 'View Break Timer Reports',
         'break_timer.manage_policy' => 'Manage Break Policies',
+        'break_timer.retention' => 'Manage Break Timer Retention Policies',
         'break_timer.reset' => 'Reset Break Timer Shift',
         'break_timer.force_end' => 'Force End Agent Break Session',
         'break_timer.restore' => 'Restore Ended Break Session',
@@ -226,7 +227,7 @@ return [
             'form_requests.retention',
             'notifications.send', 'notifications.send_all',
             'coaching.view_all', 'coaching.create', 'coaching.edit', 'coaching.delete', 'coaching.review', 'coaching.export', 'coaching.settings', 'coaching.manage_exclusions',
-            'break_timer.view', 'break_timer.use', 'break_timer.dashboard', 'break_timer.reports', 'break_timer.manage_policy', 'break_timer.reset', 'break_timer.force_end', 'break_timer.restore', 'break_timer.void_session', 'break_timer.reimburse',
+            'break_timer.view', 'break_timer.use', 'break_timer.dashboard', 'break_timer.reports', 'break_timer.manage_policy', 'break_timer.retention', 'break_timer.reset', 'break_timer.force_end', 'break_timer.restore', 'break_timer.void_session', 'break_timer.reimburse',
             'settings.view', 'settings.account', 'settings.password',
         ],
 

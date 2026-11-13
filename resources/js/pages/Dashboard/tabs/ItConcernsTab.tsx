@@ -44,30 +44,37 @@ const CONCERN_STATUS_CONFIG = [
     { key: 'resolved', label: 'Resolved' },
 ];
 
+const IT_CONCERN_COLORS = {
+    total: 'hsl(280, 65%, 60%)',
+    pending: 'hsl(45, 93%, 47%)',
+    in_progress: 'hsl(221, 83%, 53%)',
+    resolved: 'hsl(142, 71%, 45%)',
+};
+
 const IT_TREND_SLIDES = [
     {
         key: 'total',
         label: 'All Concerns Trend',
         description: 'Overview of all IT concerns over time',
-        color: 'hsl(280, 65%, 60%)',
+        color: IT_CONCERN_COLORS.total,
     },
     {
         key: 'pending',
         label: 'Pending Trend',
         description: 'Monitors new issues awaiting action',
-        color: 'hsl(45, 93%, 47%)',
+        color: IT_CONCERN_COLORS.pending,
     },
     {
         key: 'in_progress',
         label: 'In-Progress Trend',
         description: 'Tracks workload currently being handled',
-        color: 'hsl(221, 83%, 53%)',
+        color: IT_CONCERN_COLORS.in_progress,
     },
     {
         key: 'resolved',
         label: 'Resolved Trend',
         description: 'Measures closure rate per month',
-        color: 'hsl(142, 71%, 45%)',
+        color: IT_CONCERN_COLORS.resolved,
     },
 ];
 
@@ -127,7 +134,7 @@ export const ItConcernsTab: React.FC<ItConcernsTabProps> = ({
                         icon={ClipboardList}
                         description="Click for per-site breakdown"
                         onClick={() => setActiveDialog('itConcernsBySite')}
-                        variant={totalConcerns > 0 ? 'success' : 'default'}
+                        borderColor={IT_CONCERN_COLORS.total}
                     />
                     <StatCard
                         title="Pending"
@@ -135,9 +142,7 @@ export const ItConcernsTab: React.FC<ItConcernsTabProps> = ({
                         icon={Clock}
                         description="Awaiting acknowledgement"
                         onClick={() => goToItConcerns('pending')}
-                        variant={
-                            concernStats.pending > 0 ? 'warning' : 'default'
-                        }
+                        borderColor={IT_CONCERN_COLORS.pending}
                     />
                     <StatCard
                         title="In Progress"
@@ -145,6 +150,7 @@ export const ItConcernsTab: React.FC<ItConcernsTabProps> = ({
                         icon={Loader2}
                         description="Currently being handled"
                         onClick={() => goToItConcerns('in_progress')}
+                        borderColor={IT_CONCERN_COLORS.in_progress}
                     />
                     <StatCard
                         title="Resolved"
@@ -152,7 +158,7 @@ export const ItConcernsTab: React.FC<ItConcernsTabProps> = ({
                         icon={CheckCircle2}
                         description="Closed this period"
                         onClick={() => goToItConcerns('resolved')}
-                        variant="success"
+                        borderColor={IT_CONCERN_COLORS.resolved}
                     />
                 </div>
 

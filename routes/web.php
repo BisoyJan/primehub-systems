@@ -13,6 +13,7 @@ use App\Http\Controllers\BiometricReprocessingController;
 use App\Http\Controllers\BiometricRetentionPolicyController;
 use App\Http\Controllers\BreakDashboardController;
 use App\Http\Controllers\BreakPolicyController;
+use App\Http\Controllers\BreakRetentionPolicyController;
 use App\Http\Controllers\BreakTimerController;
 use App\Http\Controllers\CoachingDashboardController;
 use App\Http\Controllers\CoachingExclusionsController;
@@ -746,9 +747,9 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
             ->middleware('permission:break_timer.reports')
             ->name('reports.export.download');
 
-        // Policy management
+        // Policy management (page hosts the break policy and retention policy tabs)
         Route::get('/policies', [BreakPolicyController::class, 'index'])
-            ->middleware('permission:break_timer.manage_policy')
+            ->middleware('permission:break_timer.manage_policy,break_timer.retention')
             ->name('policies.index');
         Route::post('/policies', [BreakPolicyController::class, 'store'])
             ->middleware('permission:break_timer.manage_policy')
@@ -762,6 +763,17 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
         Route::post('/policies/{breakPolicy}/toggle', [BreakPolicyController::class, 'toggle'])
             ->middleware('permission:break_timer.manage_policy')
             ->name('policies.toggle');
+
+        // Retention policies
+        Route::prefix('retention-policies')->name('retention-policies.')
+            ->middleware('permission:break_timer.retention')
+            ->group(function () {
+                Route::post('/', [BreakRetentionPolicyController::class, 'store'])->name('store');
+                Route::put('/{breakRetentionPolicy}', [BreakRetentionPolicyController::class, 'update'])->name('update');
+                Route::delete('/{breakRetentionPolicy}', [BreakRetentionPolicyController::class, 'destroy'])->name('destroy');
+                Route::post('/{breakRetentionPolicy}/toggle', [BreakRetentionPolicyController::class, 'toggle'])->name('toggle');
+                Route::get('/{breakRetentionPolicy}/preview', [BreakRetentionPolicyController::class, 'preview'])->name('preview');
+            });
     });
 
     // Database Backups

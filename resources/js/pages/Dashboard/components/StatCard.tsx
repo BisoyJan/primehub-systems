@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import React from 'react';
 
@@ -9,6 +10,8 @@ export interface StatCardProps {
     description?: string;
     onClick: () => void;
     variant?: 'default' | 'warning' | 'danger' | 'success';
+    /** Any CSS color. Takes precedence over the variant's border color. */
+    borderColor?: string;
     delay?: number;
 }
 
@@ -26,6 +29,7 @@ export const StatCard: React.FC<StatCardProps> = ({
     description,
     onClick,
     variant = 'default',
+    borderColor,
     delay = 0,
 }) => {
     return (
@@ -42,7 +46,19 @@ export const StatCard: React.FC<StatCardProps> = ({
             }}
         >
             <Card
-                className={`cursor-pointer transition-all hover:shadow-lg ${variantStyles[variant]}`}
+                className={cn(
+                    'cursor-pointer transition-all hover:shadow-lg',
+                    borderColor
+                        ? 'border-(--stat-card-border)/60 hover:border-(--stat-card-border)'
+                        : variantStyles[variant],
+                )}
+                style={
+                    borderColor
+                        ? ({
+                              '--stat-card-border': borderColor,
+                          } as React.CSSProperties)
+                        : undefined
+                }
                 onClick={onClick}
             >
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

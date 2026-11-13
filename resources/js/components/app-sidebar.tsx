@@ -287,7 +287,10 @@ const getNavigationConfig = (
                     title: 'Policies',
                     href: breakPoliciesIndex.url(),
                     icon: Settings,
-                    permission: 'break_timer.manage_policy',
+                    permission: [
+                        'break_timer.manage_policy',
+                        'break_timer.retention',
+                    ],
                 },
             ],
         },

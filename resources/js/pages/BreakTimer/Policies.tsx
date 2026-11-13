@@ -23,7 +23,9 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
+import { usePermission } from '@/hooks/use-permission';
 import AppLayout from '@/layouts/app-layout';
 import {
     destroy as destroyRoute,
@@ -34,6 +36,13 @@ import {
 import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { FormEvent, useState } from 'react';
+import RetentionPoliciesTab, {
+    type RetentionPolicy,
+    type RetentionSite,
+    type RetentionStats,
+} from './RetentionPoliciesTab';
+
+type PolicyTab = 'policies' | 'retention';
 
 interface BreakPolicyData {
     id: number;
@@ -45,12 +54,14 @@ interface BreakPolicyData {
     grace_period_seconds: number;
     allowed_pause_reasons: string[] | null;
     is_active: boolean;
-    retention_months: number | null;
     shift_reset_time: string;
 }
 
 interface PageProps extends Record<string, unknown> {
     policies: BreakPolicyData[];
+    retentionPolicies: RetentionPolicy[];
+    sites: RetentionSite[];
+    retentionStats: RetentionStats | null;
 }
 
 type PolicyForm = {
@@ -62,7 +73,6 @@ type PolicyForm = {
     grace_period_seconds: number;
     allowed_pause_reasons: string;
     is_active: boolean;
-    retention_months: number | string;
     shift_reset_time: string;
 };
 
@@ -75,12 +85,12 @@ const defaultForm: PolicyForm = {
     grace_period_seconds: 0,
     allowed_pause_reasons: '',
     is_active: true,
-    retention_months: '',
     shift_reset_time: '06:00',
 };
 
 export default function BreakTimerPolicies() {
-    const { policies } = usePage<PageProps>().props;
+    const page = usePage<PageProps>();
+    const { policies, retentionPolicies, sites, retentionStats } = page.props;
 
     const { title, breadcrumbs } = usePageMeta({
         title: 'Break Policies',
@@ -92,6 +102,19 @@ export default function BreakTimerPolicies() {
     });
     useFlashMessage();
     const isLoading = usePageLoading();
+    const { can } = usePermission();
+    const canManagePolicies = can('break_timer.manage_policy');
+    const canManageRetention = can('break_timer.retention');
+
+    const requestedTab = new URLSearchParams(page.url.split('?')[1] ?? '').get(
+        'tab',
+    );
+    const [activeTab, setActiveTab] = useState<PolicyTab>(
+        canManageRetention &&
+            (requestedTab === 'retention' || !canManagePolicies)
+            ? 'retention'
+            : 'policies',
+    );
 
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingPolicy, setEditingPolicy] = useState<BreakPolicyData | null>(
@@ -119,7 +142,6 @@ export default function BreakTimerPolicies() {
             allowed_pause_reasons:
                 policy.allowed_pause_reasons?.join(', ') ?? '',
             is_active: policy.is_active,
-            retention_months: policy.retention_months ?? '',
             shift_reset_time: policy.shift_reset_time ?? '06:00',
         });
         form.clearErrors();
@@ -131,10 +153,6 @@ export default function BreakTimerPolicies() {
 
         const payload = {
             ...form.data,
-            retention_months:
-                form.data.retention_months === ''
-                    ? null
-                    : Number(form.data.retention_months),
             allowed_pause_reasons: form.data.allowed_pause_reasons
                 ? form.data.allowed_pause_reasons
                       .split(',')
@@ -174,255 +192,292 @@ export default function BreakTimerPolicies() {
             <div className="space-y-6 p-4 md:p-6">
                 <PageHeader
                     title={title}
-                    description="Manage break time policies"
+                    description="Manage break time policies and data retention"
                     actions={
-                        <Can permission="break_timer.manage_policy">
-                            <Button size="sm" onClick={openCreate}>
-                                <Plus className="mr-1.5 h-3.5 w-3.5" />
-                                Add Policy
-                            </Button>
-                        </Can>
+                        activeTab === 'policies' && (
+                            <Can permission="break_timer.manage_policy">
+                                <Button size="sm" onClick={openCreate}>
+                                    <Plus className="mr-1.5 h-3.5 w-3.5" />
+                                    Add Policy
+                                </Button>
+                            </Can>
+                        )
                     }
                 />
 
-                {/* Desktop Table */}
-                <div className="hidden md:block">
-                    <Card>
-                        <CardContent className="p-0">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Name</TableHead>
-                                        <TableHead>Max Breaks</TableHead>
-                                        <TableHead>Break Duration</TableHead>
-                                        <TableHead>Max Lunch</TableHead>
-                                        <TableHead>Lunch Duration</TableHead>
-                                        <TableHead>Grace Period</TableHead>
-                                        <TableHead>Retention</TableHead>
-                                        <TableHead>Shift Reset</TableHead>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead className="text-right">
-                                            Actions
-                                        </TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {policies.length === 0 ? (
-                                        <TableRow>
-                                            <TableCell
-                                                colSpan={10}
-                                                className="py-8 text-center text-muted-foreground"
-                                            >
-                                                No policies configured.
-                                            </TableCell>
-                                        </TableRow>
-                                    ) : (
-                                        policies.map((policy) => (
-                                            <TableRow key={policy.id}>
-                                                <TableCell className="font-medium">
-                                                    {policy.name}
-                                                </TableCell>
-                                                <TableCell>
-                                                    {policy.max_breaks}
-                                                </TableCell>
-                                                <TableCell>
-                                                    {
-                                                        policy.break_duration_minutes
-                                                    }{' '}
-                                                    min
-                                                </TableCell>
-                                                <TableCell>
-                                                    {policy.max_lunch}
-                                                </TableCell>
-                                                <TableCell>
-                                                    {
-                                                        policy.lunch_duration_minutes
-                                                    }{' '}
-                                                    min
-                                                </TableCell>
-                                                <TableCell>
-                                                    {
-                                                        policy.grace_period_seconds
-                                                    }
-                                                    s
-                                                </TableCell>
-                                                <TableCell>
-                                                    {policy.retention_months
-                                                        ? `${policy.retention_months} mo`
-                                                        : 'Never'}
-                                                </TableCell>
-                                                <TableCell>
-                                                    {policy.shift_reset_time ??
-                                                        '06:00'}
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Badge
-                                                        variant={
-                                                            policy.is_active
-                                                                ? 'default'
-                                                                : 'secondary'
-                                                        }
+                <Tabs
+                    value={activeTab}
+                    onValueChange={(value) => setActiveTab(value as PolicyTab)}
+                    className="gap-6"
+                >
+                    {canManagePolicies && canManageRetention && (
+                        <TabsList>
+                            <TabsTrigger value="policies">
+                                Break Policies
+                            </TabsTrigger>
+                            <TabsTrigger value="retention">
+                                Retention
+                            </TabsTrigger>
+                        </TabsList>
+                    )}
+
+                    <TabsContent value="policies" className="space-y-6">
+                        {/* Desktop Table */}
+                        <div className="hidden md:block">
+                            <Card>
+                                <CardContent className="p-0">
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Name</TableHead>
+                                                <TableHead>
+                                                    Max Breaks
+                                                </TableHead>
+                                                <TableHead>
+                                                    Break Duration
+                                                </TableHead>
+                                                <TableHead>Max Lunch</TableHead>
+                                                <TableHead>
+                                                    Lunch Duration
+                                                </TableHead>
+                                                <TableHead>
+                                                    Grace Period
+                                                </TableHead>
+                                                <TableHead>
+                                                    Shift Reset
+                                                </TableHead>
+                                                <TableHead>Status</TableHead>
+                                                <TableHead className="text-right">
+                                                    Actions
+                                                </TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {policies.length === 0 ? (
+                                                <TableRow>
+                                                    <TableCell
+                                                        colSpan={9}
+                                                        className="py-8 text-center text-muted-foreground"
                                                     >
-                                                        {policy.is_active
-                                                            ? 'Active'
-                                                            : 'Inactive'}
-                                                    </Badge>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Can permission="break_timer.manage_policy">
-                                                        <div className="flex justify-end gap-2">
-                                                            <div
-                                                                className="inline-flex cursor-pointer items-center"
-                                                                onClick={() =>
-                                                                    handleToggle(
-                                                                        policy,
-                                                                    )
+                                                        No policies configured.
+                                                    </TableCell>
+                                                </TableRow>
+                                            ) : (
+                                                policies.map((policy) => (
+                                                    <TableRow key={policy.id}>
+                                                        <TableCell className="font-medium">
+                                                            {policy.name}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {policy.max_breaks}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {
+                                                                policy.break_duration_minutes
+                                                            }{' '}
+                                                            min
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {policy.max_lunch}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {
+                                                                policy.lunch_duration_minutes
+                                                            }{' '}
+                                                            min
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {
+                                                                policy.grace_period_seconds
+                                                            }
+                                                            s
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {policy.shift_reset_time ??
+                                                                '06:00'}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <Badge
+                                                                variant={
+                                                                    policy.is_active
+                                                                        ? 'default'
+                                                                        : 'secondary'
                                                                 }
                                                             >
-                                                                <Switch
-                                                                    checked={
-                                                                        policy.is_active
-                                                                    }
-                                                                />
-                                                            </div>
-                                                            <Button
-                                                                size="sm"
-                                                                variant="ghost"
-                                                                onClick={() =>
-                                                                    openEdit(
-                                                                        policy,
-                                                                    )
-                                                                }
-                                                            >
-                                                                <Pencil className="h-4 w-4" />
-                                                            </Button>
-                                                            <DeleteConfirmDialog
-                                                                onConfirm={() =>
-                                                                    handleDelete(
-                                                                        policy,
-                                                                    )
-                                                                }
-                                                                title="Delete Policy"
-                                                                description={`Are you sure you want to delete "${policy.name}"? This cannot be undone.`}
-                                                                trigger={
+                                                                {policy.is_active
+                                                                    ? 'Active'
+                                                                    : 'Inactive'}
+                                                            </Badge>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <Can permission="break_timer.manage_policy">
+                                                                <div className="flex justify-end gap-2">
+                                                                    <div
+                                                                        className="inline-flex cursor-pointer items-center"
+                                                                        onClick={() =>
+                                                                            handleToggle(
+                                                                                policy,
+                                                                            )
+                                                                        }
+                                                                    >
+                                                                        <Switch
+                                                                            checked={
+                                                                                policy.is_active
+                                                                            }
+                                                                        />
+                                                                    </div>
                                                                     <Button
                                                                         size="sm"
                                                                         variant="ghost"
-                                                                        className="text-red-500"
+                                                                        onClick={() =>
+                                                                            openEdit(
+                                                                                policy,
+                                                                            )
+                                                                        }
                                                                     >
-                                                                        <Trash2 className="h-4 w-4" />
+                                                                        <Pencil className="h-4 w-4" />
                                                                     </Button>
-                                                                }
-                                                            />
-                                                        </div>
-                                                    </Can>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))
-                                    )}
-                                </TableBody>
-                            </Table>
-                        </CardContent>
-                    </Card>
-                </div>
+                                                                    <DeleteConfirmDialog
+                                                                        onConfirm={() =>
+                                                                            handleDelete(
+                                                                                policy,
+                                                                            )
+                                                                        }
+                                                                        title="Delete Policy"
+                                                                        description={`Are you sure you want to delete "${policy.name}"? This cannot be undone.`}
+                                                                        trigger={
+                                                                            <Button
+                                                                                size="sm"
+                                                                                variant="ghost"
+                                                                                className="text-red-500"
+                                                                            >
+                                                                                <Trash2 className="h-4 w-4" />
+                                                                            </Button>
+                                                                        }
+                                                                    />
+                                                                </div>
+                                                            </Can>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))
+                                            )}
+                                        </TableBody>
+                                    </Table>
+                                </CardContent>
+                            </Card>
+                        </div>
 
-                {/* Mobile Card View */}
-                <div className="space-y-4 md:hidden">
-                    {policies.length === 0 ? (
-                        <Card>
-                            <CardContent className="py-8 text-center text-muted-foreground">
-                                No policies configured.
-                            </CardContent>
-                        </Card>
-                    ) : (
-                        policies.map((policy) => (
-                            <div
-                                key={policy.id}
-                                className="space-y-3 rounded-lg border bg-card p-4 shadow-sm"
-                            >
-                                <div className="flex items-center justify-between">
-                                    <span className="font-medium">
-                                        {policy.name}
-                                    </span>
-                                    <Badge
-                                        variant={
-                                            policy.is_active
-                                                ? 'default'
-                                                : 'secondary'
-                                        }
+                        {/* Mobile Card View */}
+                        <div className="space-y-4 md:hidden">
+                            {policies.length === 0 ? (
+                                <Card>
+                                    <CardContent className="py-8 text-center text-muted-foreground">
+                                        No policies configured.
+                                    </CardContent>
+                                </Card>
+                            ) : (
+                                policies.map((policy) => (
+                                    <div
+                                        key={policy.id}
+                                        className="space-y-3 rounded-lg border bg-card p-4 shadow-sm"
                                     >
-                                        {policy.is_active
-                                            ? 'Active'
-                                            : 'Inactive'}
-                                    </Badge>
-                                </div>
-                                <div className="grid grid-cols-2 gap-1 text-sm text-muted-foreground">
-                                    <span>
-                                        Breaks: {policy.max_breaks} x{' '}
-                                        {policy.break_duration_minutes}min
-                                    </span>
-                                    <span>
-                                        Lunch: {policy.max_lunch} x{' '}
-                                        {policy.lunch_duration_minutes}min
-                                    </span>
-                                    <span>
-                                        Grace: {policy.grace_period_seconds}s
-                                    </span>
-                                    <span>
-                                        Retention:{' '}
-                                        {policy.retention_months
-                                            ? `${policy.retention_months} mo`
-                                            : 'Never'}
-                                    </span>
-                                    <span>
-                                        Reset:{' '}
-                                        {policy.shift_reset_time ?? '06:00'}
-                                    </span>
-                                </div>
-                                <Can permission="break_timer.manage_policy">
-                                    <div className="flex gap-2">
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => handleToggle(policy)}
-                                            className="flex-1"
-                                        >
-                                            {policy.is_active
-                                                ? 'Deactivate'
-                                                : 'Activate'}
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => openEdit(policy)}
-                                            className="flex-1"
-                                        >
-                                            <Pencil className="mr-1 h-3 w-3" />{' '}
-                                            Edit
-                                        </Button>
-                                        <DeleteConfirmDialog
-                                            onConfirm={() =>
-                                                handleDelete(policy)
-                                            }
-                                            title="Delete Policy"
-                                            description={`Are you sure you want to delete "${policy.name}"? This cannot be undone.`}
-                                            trigger={
+                                        <div className="flex items-center justify-between">
+                                            <span className="font-medium">
+                                                {policy.name}
+                                            </span>
+                                            <Badge
+                                                variant={
+                                                    policy.is_active
+                                                        ? 'default'
+                                                        : 'secondary'
+                                                }
+                                            >
+                                                {policy.is_active
+                                                    ? 'Active'
+                                                    : 'Inactive'}
+                                            </Badge>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-1 text-sm text-muted-foreground">
+                                            <span>
+                                                Breaks: {policy.max_breaks} x{' '}
+                                                {policy.break_duration_minutes}
+                                                min
+                                            </span>
+                                            <span>
+                                                Lunch: {policy.max_lunch} x{' '}
+                                                {policy.lunch_duration_minutes}
+                                                min
+                                            </span>
+                                            <span>
+                                                Grace:{' '}
+                                                {policy.grace_period_seconds}s
+                                            </span>
+                                            <span>
+                                                Reset:{' '}
+                                                {policy.shift_reset_time ??
+                                                    '06:00'}
+                                            </span>
+                                        </div>
+                                        <Can permission="break_timer.manage_policy">
+                                            <div className="flex gap-2">
                                                 <Button
                                                     size="sm"
                                                     variant="outline"
-                                                    className="flex-1 text-red-500"
+                                                    onClick={() =>
+                                                        handleToggle(policy)
+                                                    }
+                                                    className="flex-1"
                                                 >
-                                                    <Trash2 className="mr-1 h-3 w-3" />{' '}
-                                                    Delete
+                                                    {policy.is_active
+                                                        ? 'Deactivate'
+                                                        : 'Activate'}
                                                 </Button>
-                                            }
-                                        />
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() =>
+                                                        openEdit(policy)
+                                                    }
+                                                    className="flex-1"
+                                                >
+                                                    <Pencil className="mr-1 h-3 w-3" />{' '}
+                                                    Edit
+                                                </Button>
+                                                <DeleteConfirmDialog
+                                                    onConfirm={() =>
+                                                        handleDelete(policy)
+                                                    }
+                                                    title="Delete Policy"
+                                                    description={`Are you sure you want to delete "${policy.name}"? This cannot be undone.`}
+                                                    trigger={
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="flex-1 text-red-500"
+                                                        >
+                                                            <Trash2 className="mr-1 h-3 w-3" />{' '}
+                                                            Delete
+                                                        </Button>
+                                                    }
+                                                />
+                                            </div>
+                                        </Can>
                                     </div>
-                                </Can>
-                            </div>
-                        ))
+                                ))
+                            )}
+                        </div>
+                    </TabsContent>
+
+                    {canManageRetention && (
+                        <TabsContent value="retention">
+                            <RetentionPoliciesTab
+                                policies={retentionPolicies}
+                                sites={sites}
+                                retentionStats={retentionStats}
+                            />
+                        </TabsContent>
                     )}
-                </div>
+                </Tabs>
             </div>
 
             {/* Create / Edit Dialog */}
@@ -597,34 +652,6 @@ export default function BreakTimerPolicies() {
                             {form.errors.shift_reset_time && (
                                 <p className="text-sm text-red-500">
                                     {form.errors.shift_reset_time}
-                                </p>
-                            )}
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label>Data Retention (months)</Label>
-                            <Input
-                                type="number"
-                                min={1}
-                                max={120}
-                                value={form.data.retention_months}
-                                onChange={(e) =>
-                                    form.setData(
-                                        'retention_months',
-                                        e.target.value === ''
-                                            ? ''
-                                            : parseInt(e.target.value) || '',
-                                    )
-                                }
-                                placeholder="Leave empty to keep forever"
-                            />
-                            <p className="text-[11px] text-muted-foreground">
-                                Sessions older than this will be automatically
-                                purged. Leave empty to disable.
-                            </p>
-                            {form.errors.retention_months && (
-                                <p className="text-sm text-red-500">
-                                    {form.errors.retention_months}
                                 </p>
                             )}
                         </div>

@@ -126,11 +126,11 @@ Shows all events in order (**Start**, **Pause**, **Resume**, **End**, **Time Up*
 
 [Insert Screenshot: 'Break Policies' Screen]
 
-Configure rules that control breaks and lunches.
+Configure rules that control breaks and lunches, and how long break session records are kept. The page has two tabs: **Break Policies** and **Retention**. Each tab is shown only to users holding its permission; the tab switcher appears when you hold both.
 
 ### Policies Table
 
-Columns: **Name**, **Max Breaks**, **Break Duration** (min), **Max Lunch**, **Lunch Duration** (min), **Grace Period** (sec), **Retention**, **Shift Reset**, **Status**, **Actions**.
+Columns: **Name**, **Max Breaks**, **Break Duration** (min), **Max Lunch**, **Lunch Duration** (min), **Grace Period** (sec), **Shift Reset**, **Status**, **Actions**.
 
 - Toggle the switch to activate/deactivate.
 - Click **Edit** (pencil) to modify.
@@ -148,10 +148,53 @@ Columns: **Name**, **Max Breaks**, **Break Duration** (min), **Max Lunch**, **Lu
 6. **Lunch Duration** — Minutes (1–240). Required. *(Helper text below the field recommends 1–180 minutes.)*
 7. **Grace Period** — Seconds (0–1800). Required.
 8. **Shift Reset Time** — 24-hour format.
-9. **Data Retention** — Months (1–120) or empty for forever.
-10. **Allowed Pause Reasons** — Comma-separated. Leave empty for free-text.
-11. **Active** — Toggle on/off.
-12. Click **Create** or **Update**.
+9. **Allowed Pause Reasons** — Comma-separated. Leave empty for free-text.
+10. **Active** — Toggle on/off.
+11. Click **Create** or **Update**.
+
+### Retention Policies
+
+*resources/js/pages/BreakTimer/RetentionPoliciesTab.tsx — (Requires `break_timer.retention` permission.)*
+
+Open the **Retention** tab (direct link: `/break-timer/policies?tab=retention`). Retention policies decide when old break sessions and their events are deleted. They replace the former **Data Retention** field on a break policy.
+
+**Which policy applies to a session** (first match wins; higher **Priority** breaks ties between policies at the same level):
+
+1. Active site policy for the session's break type
+2. Active global policy for the session's break type
+3. Active site policy for **All Types**
+4. Active global policy for **All Types**
+5. No match — sessions are kept for **12 months**
+
+- **Break Type** groups: **Breaks** (1st break, 2nd break, break, combined breaks), **Lunch**, **Combined** (break + lunch).
+- **Site** is the site of the user's active schedule. Users without one fall under global policies only.
+- Age is measured from the session's shift date. Active and paused sessions are never deleted.
+
+**Session Statistics by Age** — one card per break type with total sessions and counts per age range (0-3, 3-6, 6-12, 12-24, 24+ months).
+
+**Table** — Columns: **Name**, **Break Type**, **Retention Period**, **Applies To**, **Priority**, **Status**, **Actions**.
+
+- Toggle the switch to activate/deactivate.
+- Click **Preview** (eye) to see how many sessions the policy would delete, per break type, with the cutoff date.
+- Click **Edit** (pencil) to modify.
+- Click **Delete** (trash) to remove.
+
+**Add / Edit**
+
+1. Click **Add Retention Policy**.
+2. **Policy Name** — Required.
+3. **Description** — Optional.
+4. **Retention Period** — Months (1–120). Required.
+5. **Priority** — Higher number wins a tie. Default 100.
+6. **Break Type** — All Break Types, Breaks Only, Lunch Only, or Combined Only.
+7. **Applies To** — All Sites (Global) or Specific Site (then pick the **Site**).
+8. **Active** — Toggle on/off.
+9. Click **Create** or **Update**.
+
+**Automation**
+
+- `break-timer:clean-old-sessions` runs daily at 8:17 AM and deletes expired sessions. Options: `--dry-run` (report only), `--months=N` (ignore policies and use N months for all sessions), `--force` (skip confirmation).
+- `break-timer:check-expiry` runs daily at 8:46 AM and notifies Admin and Super Admin users about sessions that will be deleted within 7 days.
 
 ---
 

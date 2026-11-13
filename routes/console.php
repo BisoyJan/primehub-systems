@@ -91,7 +91,7 @@ Schedule::command('activitylog:clean')
     ->withoutOverlapping()
     ->onOneServer();
 
-// Clean break sessions based on active policy retention period - runs daily at 8:17 AM
+// Clean break sessions based on retention policies - runs daily at 8:17 AM
 // Priority: MEDIUM - Purges expired break sessions and events
 Schedule::command('break-timer:clean-old-sessions --force')
     ->dailyAt('08:17')
@@ -153,7 +153,7 @@ Schedule::command('break-timer:notify-overbreaks')
     ->onOneServer();
 
 // ============================================================================
-// EXPIRY NOTIFICATIONS (8:35 AM - 8:45 AM)
+// EXPIRY NOTIFICATIONS (8:35 AM - 8:46 AM)
 // ============================================================================
 
 // Check biometric retention policy expiry and notify admins - runs daily at 8:35 AM
@@ -181,6 +181,13 @@ Schedule::command('activitylog:check-expiry --days=7')
 // Priority: LOW - Quick check and notification only
 Schedule::command('notifications:check-expiry --days=7')
     ->dailyAt('08:44')
+    ->withoutOverlapping()
+    ->onOneServer();
+
+// Check break retention policy expiry and notify admins - runs daily at 8:46 AM
+// Priority: LOW - Quick check and notification only
+Schedule::command('break-timer:check-expiry --days=7')
+    ->dailyAt('08:46')
     ->withoutOverlapping()
     ->onOneServer();
 

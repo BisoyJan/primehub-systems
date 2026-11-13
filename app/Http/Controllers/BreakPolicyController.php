@@ -5,23 +5,40 @@ namespace App\Http\Controllers;
 use App\Http\Requests\BreakPolicyRequest;
 use App\Http\Traits\RedirectsWithFlashMessages;
 use App\Models\BreakPolicy;
+use App\Models\BreakRetentionPolicy;
+use App\Models\Site;
+use App\Services\BreakRetentionService;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
+use Inertia\Response;
 
 class BreakPolicyController extends Controller
 {
     use RedirectsWithFlashMessages;
 
-    public function index()
+    /**
+     * The page hosts two tabs, each guarded by its own permission, so only the
+     * data the user may manage is sent.
+     */
+    public function index(Request $request, BreakRetentionService $retention): Response
     {
-        $policies = BreakPolicy::query()
-            ->orderBy('is_active', 'desc')
-            ->orderBy('name')
-            ->get();
+        $user = $request->user();
+        $canManagePolicies = $user->hasPermission('break_timer.manage_policy');
+        $canManageRetention = $user->hasPermission('break_timer.retention');
 
         return Inertia::render('BreakTimer/Policies', [
-            'policies' => $policies,
+            'policies' => $canManagePolicies
+                ? BreakPolicy::query()->orderBy('is_active', 'desc')->orderBy('name')->get()
+                : [],
+            'retentionPolicies' => $canManageRetention
+                ? BreakRetentionPolicy::query()->with('site:id,name')->orderByDesc('priority')->get()
+                : [],
+            'sites' => $canManageRetention
+                ? Site::query()->select('id', 'name')->orderBy('name')->get()
+                : [],
+            'retentionStats' => $canManageRetention ? $retention->stats() : null,
         ]);
     }
 
