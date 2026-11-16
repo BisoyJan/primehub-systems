@@ -1,6 +1,11 @@
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import {
+    Collapsible,
+    CollapsibleContent,
+    CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import {
     Select,
     SelectContent,
     SelectItem,
@@ -13,6 +18,7 @@ import { format, parseISO } from 'date-fns';
 import {
     AlertTriangle,
     CheckCircle,
+    ChevronDown,
     ChevronUp,
     Info,
     MessageSquarePlus,
@@ -609,7 +615,11 @@ export default function DayStatusAssignment({
     );
 }
 
+/** Breakdowns longer than this are collapsed behind a toggle. */
+const COLLAPSE_AFTER_DAYS = 10;
+
 function ReadOnlyView({ records }: { records: ExistingDayRecord[] }) {
+    const [isExpanded, setIsExpanded] = useLocalState(false);
     const summary = useMemo(() => {
         const credited = records.filter(
             (r) =>
@@ -650,6 +660,90 @@ function ReadOnlyView({ records }: { records: ExistingDayRecord[] }) {
         };
     }, [records]);
 
+    const dayRecords = (
+        <div className="divide-y overflow-hidden rounded-lg border">
+            {records.map((record) => {
+                const statusOpt = getStatusOption(record.day_status);
+
+                return (
+                    <div
+                        key={record.id}
+                        className={cn(
+                            'transition-colors',
+                            (record.day_status === 'sl_credited' ||
+                                record.day_status === 'vl_credited' ||
+                                record.day_status === 'spl_credited' ||
+                                record.day_status === 'loa_credited') &&
+                                'bg-green-50/40 dark:bg-green-950/10',
+                            (record.day_status === 'ncns' ||
+                                record.day_status === 'absent') &&
+                                'bg-red-50/40 dark:bg-red-950/10',
+                            (record.day_status === 'advised_absence' ||
+                                record.day_status === 'upto' ||
+                                record.day_status === 'loa_unpaid') &&
+                                'bg-amber-50/40 dark:bg-amber-950/10',
+                        )}
+                    >
+                        <div className="flex items-center gap-2 px-3 py-2">
+                            {/* Color indicator */}
+                            <div
+                                className={cn(
+                                    'w-1 shrink-0 self-stretch rounded-full',
+                                    statusOpt?.dotColor ??
+                                        'bg-muted-foreground/30',
+                                )}
+                            />
+
+                            {/* Date */}
+                            <span className="min-w-0 shrink-0 text-sm font-medium">
+                                {format(parseISO(record.date), 'EEE, MMM d')}
+                            </span>
+
+                            {/* Status + Paid/Unpaid */}
+                            <div className="ml-auto flex items-center gap-2">
+                                <StatusBadge status={record.day_status} />
+                                {record.is_paid ? (
+                                    <Badge
+                                        variant="default"
+                                        className="h-5 bg-green-600 text-[10px]"
+                                    >
+                                        Paid
+                                    </Badge>
+                                ) : (
+                                    <Badge
+                                        variant="outline"
+                                        className="h-5 text-[10px] text-muted-foreground"
+                                    >
+                                        Unpaid
+                                    </Badge>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Notes + Assigned by — compact row */}
+                        {(record.notes || record.assigned_by) && (
+                            <div className="flex items-center gap-3 px-3 pb-1.5 pl-7 text-[11px] text-muted-foreground">
+                                {record.notes && (
+                                    <span
+                                        className="max-w-75 truncate italic"
+                                        title={record.notes}
+                                    >
+                                        {record.notes}
+                                    </span>
+                                )}
+                                {record.assigned_by && (
+                                    <span className="ml-auto shrink-0">
+                                        by {record.assigned_by}
+                                    </span>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                );
+            })}
+        </div>
+    );
+
     return (
         <div className="space-y-3">
             {/* Summary */}
@@ -689,91 +783,22 @@ function ReadOnlyView({ records }: { records: ExistingDayRecord[] }) {
                 )}
             </div>
 
-            {/* Per-Day Records — Compact */}
-            <div className="divide-y overflow-hidden rounded-lg border">
-                {records.map((record) => {
-                    const statusOpt = getStatusOption(record.day_status);
-
-                    return (
-                        <div
-                            key={record.id}
-                            className={cn(
-                                'transition-colors',
-                                (record.day_status === 'sl_credited' ||
-                                    record.day_status === 'vl_credited' ||
-                                    record.day_status === 'spl_credited' ||
-                                    record.day_status === 'loa_credited') &&
-                                    'bg-green-50/40 dark:bg-green-950/10',
-                                (record.day_status === 'ncns' ||
-                                    record.day_status === 'absent') &&
-                                    'bg-red-50/40 dark:bg-red-950/10',
-                                (record.day_status === 'advised_absence' ||
-                                    record.day_status === 'upto' ||
-                                    record.day_status === 'loa_unpaid') &&
-                                    'bg-amber-50/40 dark:bg-amber-950/10',
-                            )}
-                        >
-                            <div className="flex items-center gap-2 px-3 py-2">
-                                {/* Color indicator */}
-                                <div
-                                    className={cn(
-                                        'w-1 shrink-0 self-stretch rounded-full',
-                                        statusOpt?.dotColor ??
-                                            'bg-muted-foreground/30',
-                                    )}
-                                />
-
-                                {/* Date */}
-                                <span className="min-w-0 shrink-0 text-sm font-medium">
-                                    {format(
-                                        parseISO(record.date),
-                                        'EEE, MMM d',
-                                    )}
-                                </span>
-
-                                {/* Status + Paid/Unpaid */}
-                                <div className="ml-auto flex items-center gap-2">
-                                    <StatusBadge status={record.day_status} />
-                                    {record.is_paid ? (
-                                        <Badge
-                                            variant="default"
-                                            className="h-5 bg-green-600 text-[10px]"
-                                        >
-                                            Paid
-                                        </Badge>
-                                    ) : (
-                                        <Badge
-                                            variant="outline"
-                                            className="h-5 text-[10px] text-muted-foreground"
-                                        >
-                                            Unpaid
-                                        </Badge>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Notes + Assigned by — compact row */}
-                            {(record.notes || record.assigned_by) && (
-                                <div className="flex items-center gap-3 px-3 pb-1.5 pl-7 text-[11px] text-muted-foreground">
-                                    {record.notes && (
-                                        <span
-                                            className="max-w-75 truncate italic"
-                                            title={record.notes}
-                                        >
-                                            {record.notes}
-                                        </span>
-                                    )}
-                                    {record.assigned_by && (
-                                        <span className="ml-auto shrink-0">
-                                            by {record.assigned_by}
-                                        </span>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    );
-                })}
-            </div>
+            {/* Per-Day Records — Compact; long breakdowns collapse behind a toggle */}
+            {records.length > COLLAPSE_AFTER_DAYS ? (
+                <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
+                    <CollapsibleTrigger className="flex w-full items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground">
+                        <ChevronDown className="h-3.5 w-3.5 transition-transform duration-200 [[data-state=open]>&]:rotate-180" />
+                        {isExpanded
+                            ? 'Hide per-day details'
+                            : `Show all ${records.length} days`}
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="mt-2">
+                        {dayRecords}
+                    </CollapsibleContent>
+                </Collapsible>
+            ) : (
+                dayRecords
+            )}
         </div>
     );
 }
