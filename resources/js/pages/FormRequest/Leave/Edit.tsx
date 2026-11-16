@@ -58,7 +58,13 @@ import {
 } from '@/routes/leave-requests';
 import type { LeaveRequestDocument } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
-import { format, isBefore, parseISO, subMonths } from 'date-fns';
+import {
+    eachDayOfInterval,
+    format,
+    isBefore,
+    parseISO,
+    subMonths,
+} from 'date-fns';
 import {
     AlertCircle,
     AlertTriangle,
@@ -68,8 +74,12 @@ import {
     Info,
     Users,
 } from 'lucide-react';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import DayStatusAssignment, {
+    type DayStatus,
+    LOA_STATUS_OPTIONS,
+} from './Components/DayStatusAssignment';
 
 interface LeaveRequest {
     id: number;
@@ -119,6 +129,12 @@ interface Props {
     isApprovedLeave: boolean;
     existingLeaveRequests: ExistingLeaveRequest[];
     splDaySettings: { date: string; is_half_day: boolean }[];
+    /** Existing per-day statuses of an approved LOA. */
+    loaDayStatuses?: { date: string; status: string; notes: string | null }[];
+    /** Dates denied on a partially approved LOA (never assignable). */
+    loaDeniedDates?: string[];
+    /** Whole leave credits an admin may apply to specific LOA dates. */
+    loaAvailableCredits?: number;
 }
 
 export default function Edit({
@@ -135,23 +151,27 @@ export default function Edit({
     isApprovedLeave = false,
     existingLeaveRequests = [],
     splDaySettings = [],
+    loaDayStatuses = [],
+    loaDeniedDates = [],
+    loaAvailableCredits = 0,
 }: Props) {
-    const { data, setData, post, processing, errors, progress } = useForm({
-        leave_type: leaveRequest.leave_type,
-        start_date: leaveRequest.start_date,
-        end_date: leaveRequest.end_date,
-        reason: leaveRequest.reason,
-        campaign_department: leaveRequest.campaign_department,
-        medical_cert_submitted: leaveRequest.medical_cert_submitted,
-        medical_cert_files: [] as File[],
-        removed_documents: [] as number[],
-        date_modification_reason: '',
-        spl_day_settings: splDaySettings as {
-            date: string;
-            is_half_day: boolean;
-        }[],
-        _method: 'PUT', // For method spoofing
-    });
+    const { data, setData, post, processing, errors, progress, transform } =
+        useForm({
+            leave_type: leaveRequest.leave_type,
+            start_date: leaveRequest.start_date,
+            end_date: leaveRequest.end_date,
+            reason: leaveRequest.reason,
+            campaign_department: leaveRequest.campaign_department,
+            medical_cert_submitted: leaveRequest.medical_cert_submitted,
+            medical_cert_files: [] as File[],
+            removed_documents: [] as number[],
+            date_modification_reason: '',
+            spl_day_settings: splDaySettings as {
+                date: string;
+                is_half_day: boolean;
+            }[],
+            _method: 'PUT', // For method spoofing
+        });
 
     const [calculatedDays, setCalculatedDays] = useState<number>(
         leaveRequest.days_requested,
@@ -214,6 +234,66 @@ export default function Edit({
     const selectedCampaignAllowsWeekends =
         campaigns.find((c) => c.name === data.campaign_department)
             ?.allows_weekend_leave ?? false;
+
+    // Approved LOA: unpaid by default; admins may mark specific dates as LOA Credited
+    const showLoaCreditPicker =
+        isApprovedLeave && isAdmin && data.leave_type === 'LOA';
+    const [loaCreditInvalid, setLoaCreditInvalid] = useState(false);
+    const [loaDayOverrides, setLoaDayOverrides] = useState<
+        Record<string, DayStatus>
+    >(() =>
+        Object.fromEntries(
+            loaDayStatuses.map((day) => [
+                day.date,
+                {
+                    date: day.date,
+                    status: day.status as DayStatus['status'],
+                    notes: day.notes ?? '',
+                },
+            ]),
+        ),
+    );
+    const loaDays = useMemo<DayStatus[]>(() => {
+        if (!showLoaCreditPicker || !data.start_date || !data.end_date) {
+            return [];
+        }
+        try {
+            return eachDayOfInterval({
+                start: parseISO(data.start_date),
+                end: parseISO(data.end_date),
+            })
+                .map((day) => format(day, 'yyyy-MM-dd'))
+                .filter(
+                    (dateStr) =>
+                        (selectedCampaignAllowsWeekends ||
+                            !isWeekend(dateStr)) &&
+                        !loaDeniedDates.includes(dateStr),
+                )
+                .map(
+                    (dateStr) =>
+                        loaDayOverrides[dateStr] ?? {
+                            date: dateStr,
+                            status: 'loa_unpaid' as const,
+                            notes: '',
+                        },
+                );
+        } catch {
+            return [];
+        }
+    }, [
+        showLoaCreditPicker,
+        data.start_date,
+        data.end_date,
+        selectedCampaignAllowsWeekends,
+        loaDeniedDates,
+        loaDayOverrides,
+    ]);
+    const handleLoaDaysChange = (days: DayStatus[]) => {
+        setLoaDayOverrides((current) => ({
+            ...current,
+            ...Object.fromEntries(days.map((day) => [day.date, day])),
+        }));
+    };
 
     // Handle start date change with weekend validation
     const handleStartDateChange = (value: string) => {
@@ -619,6 +699,19 @@ export default function Edit({
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
+        transform((formData) => ({
+            ...formData,
+            ...(showLoaCreditPicker
+                ? {
+                      day_statuses: loaDays.map((day) => ({
+                          date: day.date,
+                          status: day.status,
+                          ...(day.notes ? { notes: day.notes } : {}),
+                      })),
+                  }
+                : {}),
+        }));
+
         post(leaveUpdateRoute({ leaveRequest: leaveRequest.id }).url, {
             forceFormData: true, // Required for file uploads
             onSuccess: () => {
@@ -722,6 +815,14 @@ export default function Edit({
                                     Leave credits will be adjusted automatically
                                     based on day difference
                                 </li>
+                                {data.leave_type === 'LOA' && (
+                                    <li>
+                                        LOA is unpaid by default — leave credits
+                                        are only used for dates you set to
+                                        &quot;LOA Credited&quot; under LOA Leave
+                                        Credit Usage
+                                    </li>
+                                )}
                                 <li>
                                     The employee will be notified of the changes
                                 </li>
@@ -2442,6 +2543,40 @@ export default function Edit({
                                 </p>
                             </div>
 
+                            {/* LOA: optional per-date leave credit usage (approved leave edits) */}
+                            {showLoaCreditPicker && loaDays.length > 0 && (
+                                <div className="space-y-2">
+                                    <Label className="text-sm font-medium">
+                                        LOA Leave Credit Usage (Optional)
+                                    </Label>
+                                    <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
+                                        <Info className="h-4 w-4 text-blue-600" />
+                                        <AlertDescription className="text-xs text-blue-800 dark:text-blue-200">
+                                            <strong>
+                                                LOA is unpaid by default
+                                            </strong>{' '}
+                                            and does not use leave credits. You
+                                            can optionally set specific dates to
+                                            &quot;LOA Credited&quot; to pay them
+                                            from the employee&apos;s leave
+                                            credits ({loaAvailableCredits}{' '}
+                                            available).
+                                        </AlertDescription>
+                                    </Alert>
+                                    <DayStatusAssignment
+                                        dayStatuses={loaDays}
+                                        onChange={handleLoaDaysChange}
+                                        creditPreviewInfo={{
+                                            availableCredits:
+                                                loaAvailableCredits,
+                                        }}
+                                        statusOptions={[...LOA_STATUS_OPTIONS]}
+                                        creditLabel="LOA"
+                                        onCreditValidation={setLoaCreditInvalid}
+                                    />
+                                </div>
+                            )}
+
                             {/* Modification Reason (Required for approved leave changes: dates, leave type, or reason) */}
                             {isApprovedLeave && fieldsChanged && (
                                 <div className="space-y-2">
@@ -2551,6 +2686,8 @@ export default function Edit({
                                         !!weekendError.start ||
                                         !!weekendError.end ||
                                         !!creditError ||
+                                        (showLoaCreditPicker &&
+                                            loaCreditInvalid) ||
                                         (isApprovedLeave &&
                                             fieldsChanged &&
                                             !data.date_modification_reason.trim())

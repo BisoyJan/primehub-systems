@@ -80,6 +80,7 @@ import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import DayStatusAssignment, {
     type DayStatus,
+    LOA_STATUS_OPTIONS,
     SL_STATUS_OPTIONS,
     VL_STATUS_OPTIONS,
 } from './Components/DayStatusAssignment';
@@ -292,6 +293,8 @@ interface Props {
     } | null;
     activeAttendancePoints?: ActiveAttendancePoint[];
     creditPreview?: CreditPreview | null;
+    /** Whole leave credits an admin may apply to specific LOA dates (LOA only). */
+    loaAvailableCredits?: number | null;
     splCreditPreview?: {
         should_deduct: boolean;
         credits_to_deduct: number;
@@ -338,6 +341,7 @@ export default function Show({
     blEligibility = null,
     activeAttendancePoints = [],
     creditPreview = null,
+    loaAvailableCredits = null,
     splCreditsSummary = null,
     leaveRequestDays = null,
     suggestedDayStatuses = null,
@@ -411,8 +415,13 @@ export default function Show({
     const isVl = leaveRequest.leave_type === 'VL';
     const isSpl = leaveRequest.leave_type === 'SPL';
     const isLoa = leaveRequest.leave_type === 'LOA';
-    const hasDayStatuses = isSl || isVl;
+    // LOA is unpaid by default; only Admin/HR may mark specific dates as LOA Credited
+    const hasDayStatuses = isSl || isVl || (isLoa && isAdmin);
     const hasDisplayableDayStatuses = hasDayStatuses || isLoa;
+    const defaultDayStatus: DayStatus['status'] = isLoa
+        ? 'loa_unpaid'
+        : 'pending';
+    const dayCreditLabel = isLoa ? 'LOA' : isVl ? 'VL' : 'SL';
 
     // SL with Undertime (partial-day absence) restricts options to "Partial-day Absence" only —
     // employee worked partial hours; existing attendance is preserved, no credits consumed,
@@ -423,6 +432,31 @@ export default function Show({
                   (o) => o.value === 'partial_day_absence',
               )
             : undefined;
+    const dayStatusOptions = isLoa
+        ? [...LOA_STATUS_OPTIONS]
+        : isVl
+          ? [...VL_STATUS_OPTIONS]
+          : slStatusOptions;
+    const availableDayCredits = isLoa
+        ? loaAvailableCredits
+        : creditPreview
+          ? Math.floor(creditPreview.credits_to_deduct ?? 0)
+          : null;
+    const dayCreditPreviewInfo =
+        availableDayCredits !== null
+            ? { availableCredits: availableDayCredits }
+            : null;
+    const loaCreditReminder = isLoa && isAdmin && (
+        <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
+            <Info className="h-4 w-4 text-blue-600" />
+            <AlertDescription className="text-xs text-blue-800 dark:text-blue-200">
+                <strong>LOA is unpaid by default</strong> and does not use leave
+                credits. You can optionally set specific dates to &quot;LOA
+                Credited&quot; to pay them from the employee&apos;s leave
+                credits ({loaAvailableCredits ?? 0} available).
+            </AlertDescription>
+        </Alert>
+    );
 
     // Check if there are pre-stored day statuses from a previous approver (TL/Admin)
     const hasPreStoredDayStatuses =
@@ -456,7 +490,7 @@ export default function Show({
                 notes: s.notes || '',
             }));
         }
-        // Fallback: build from workdays with 'pending' status
+        // Fallback: build from workdays with the default status ('pending', or unpaid for LOA)
         if (hasDayStatuses) {
             try {
                 const start = parseISO(leaveRequest.start_date);
@@ -465,7 +499,7 @@ export default function Show({
                     .filter((d) => allowsWeekendLeave || !isWeekend(d))
                     .map((d) => ({
                         date: format(d, 'yyyy-MM-dd'),
-                        status: 'pending' as const,
+                        status: defaultDayStatus,
                         notes: '',
                     }));
             } catch {
@@ -906,7 +940,7 @@ export default function Show({
                 existingMap.get(dateStr) ??
                 preStoredMap.get(dateStr) ?? {
                     date: dateStr,
-                    status: 'pending' as const,
+                    status: defaultDayStatus,
                     notes: '',
                 },
         );
@@ -972,12 +1006,18 @@ export default function Show({
                 preStoredMap.get(dateStr) ??
                 suggestedMap.get(dateStr) ?? {
                     date: dateStr,
-                    status: 'pending' as const,
+                    status: defaultDayStatus,
                     notes: '',
                 }
             );
         });
-    }, [hasDayStatuses, workDays, leaveRequestDays, suggestedDayStatuses]);
+    }, [
+        hasDayStatuses,
+        workDays,
+        leaveRequestDays,
+        suggestedDayStatuses,
+        defaultDayStatus,
+    ]);
 
     // Compute SPL credit coverage for each date (FIFO, accounting for half-days + admin overrides)
     const splCoverage = useMemo(() => {
@@ -2010,6 +2050,7 @@ export default function Show({
                                                 </Button>
                                             )}
                                     </div>
+                                    {canEditApproved && loaCreditReminder}
                                     <DayStatusAssignment
                                         dayStatuses={[]}
                                         onChange={() => {}}
@@ -3022,7 +3063,7 @@ export default function Show({
                             </div>
                         )}
 
-                        {/* SL/VL Per-Day Status Assignment */}
+                        {/* SL/VL/LOA Per-Day Status Assignment */}
                         {hasDayStatuses && slDayStatuses.length > 0 && (
                             <div className="space-y-3">
                                 <div>
@@ -3031,7 +3072,7 @@ export default function Show({
                                     </Label>
                                     <p className="mt-0.5 text-xs text-muted-foreground">
                                         Set the status for each day of this
-                                        leave. Only &quot;{isVl ? 'VL' : 'SL'}{' '}
+                                        leave. Only &quot;{dayCreditLabel}{' '}
                                         Credited&quot; days use leave credits.
                                         {creditPreview && (
                                             <span className="font-medium">
@@ -3056,25 +3097,13 @@ export default function Show({
                                         </AlertDescription>
                                     </Alert>
                                 )}
+                                {loaCreditReminder}
                                 <DayStatusAssignment
                                     dayStatuses={slDayStatuses}
                                     onChange={setSlDayStatuses}
-                                    creditPreviewInfo={
-                                        creditPreview
-                                            ? {
-                                                  availableCredits: Math.floor(
-                                                      creditPreview.credits_to_deduct ??
-                                                          0,
-                                                  ),
-                                              }
-                                            : null
-                                    }
-                                    statusOptions={
-                                        isVl
-                                            ? [...VL_STATUS_OPTIONS]
-                                            : slStatusOptions
-                                    }
-                                    creditLabel={isVl ? 'VL' : 'SL'}
+                                    creditPreviewInfo={dayCreditPreviewInfo}
+                                    statusOptions={dayStatusOptions}
+                                    creditLabel={dayCreditLabel}
                                     onCreditValidation={setDayStatusInvalid}
                                 />
                             </div>
@@ -3484,7 +3513,7 @@ export default function Show({
                                 </Alert>
                             )}
 
-                        {/* SL/VL Per-Day Status Assignment for approved dates */}
+                        {/* SL/VL/LOA Per-Day Status Assignment for approved dates */}
                         {hasDayStatuses &&
                             selectedApprovedDates.length > 0 &&
                             partialDenySlDayStatuses.length > 0 && (
@@ -3494,7 +3523,7 @@ export default function Show({
                                     </Label>
                                     <p className="text-xs text-muted-foreground">
                                         Set the status for each approved day.
-                                        Only &quot;{isVl ? 'VL' : 'SL'}{' '}
+                                        Only &quot;{dayCreditLabel}{' '}
                                         Credited&quot; days use leave credits.
                                         {creditPreview && (
                                             <span className="font-medium">
@@ -3519,26 +3548,13 @@ export default function Show({
                                             </AlertDescription>
                                         </Alert>
                                     )}
+                                    {loaCreditReminder}
                                     <DayStatusAssignment
                                         dayStatuses={partialDenySlDayStatuses}
                                         onChange={setPartialDenySlDayStatuses}
-                                        creditPreviewInfo={
-                                            creditPreview
-                                                ? {
-                                                      availableCredits:
-                                                          Math.floor(
-                                                              creditPreview.credits_to_deduct ??
-                                                                  0,
-                                                          ),
-                                                  }
-                                                : null
-                                        }
-                                        statusOptions={
-                                            isVl
-                                                ? [...VL_STATUS_OPTIONS]
-                                                : slStatusOptions
-                                        }
-                                        creditLabel={isVl ? 'VL' : 'SL'}
+                                        creditPreviewInfo={dayCreditPreviewInfo}
+                                        statusOptions={dayStatusOptions}
+                                        creditLabel={dayCreditLabel}
                                         onCreditValidation={
                                             setPartialDenyDayStatusInvalid
                                         }
@@ -4367,7 +4383,7 @@ export default function Show({
                                     </div>
                                 )}
 
-                            {/* SL/VL Per-Day Status Assignment */}
+                            {/* SL/VL/LOA Per-Day Status Assignment */}
                             {hasDayStatuses && (
                                 <div className="space-y-2">
                                     <Label className="text-sm font-medium">
@@ -4375,7 +4391,7 @@ export default function Show({
                                     </Label>
                                     <p className="text-xs text-muted-foreground">
                                         Set the status for each day of this
-                                        leave. Only &quot;{isVl ? 'VL' : 'SL'}{' '}
+                                        leave. Only &quot;{dayCreditLabel}{' '}
                                         Credited&quot; days use leave credits.
                                         {creditPreview && (
                                             <span className="font-medium">
@@ -4400,6 +4416,7 @@ export default function Show({
                                             </AlertDescription>
                                         </Alert>
                                     )}
+                                    {loaCreditReminder}
                                     <DayStatusAssignment
                                         dayStatuses={
                                             forceApprovePartialMode &&
@@ -4411,23 +4428,9 @@ export default function Show({
                                                   : forceApproveAllSlDayStatuses
                                         }
                                         onChange={setForceApproveSlDayStatuses}
-                                        creditPreviewInfo={
-                                            creditPreview
-                                                ? {
-                                                      availableCredits:
-                                                          Math.floor(
-                                                              creditPreview.credits_to_deduct ??
-                                                                  0,
-                                                          ),
-                                                  }
-                                                : null
-                                        }
-                                        statusOptions={
-                                            isVl
-                                                ? [...VL_STATUS_OPTIONS]
-                                                : slStatusOptions
-                                        }
-                                        creditLabel={isVl ? 'VL' : 'SL'}
+                                        creditPreviewInfo={dayCreditPreviewInfo}
+                                        statusOptions={dayStatusOptions}
+                                        creditLabel={dayCreditLabel}
                                         onCreditValidation={
                                             setForceApproveDayStatusInvalid
                                         }
@@ -5126,7 +5129,7 @@ export default function Show({
                 </DialogContent>
             </Dialog>
 
-            {/* Edit Day Statuses Dialog (post-approval editing for SL/VL) */}
+            {/* Edit Day Statuses Dialog (post-approval editing for SL/VL/LOA) */}
             <Dialog
                 open={showEditDayStatusesDialog}
                 onOpenChange={(open) => {
@@ -5155,29 +5158,28 @@ export default function Show({
                                 </AlertDescription>
                             </Alert>
                         )}
+                        {loaCreditReminder}
                         {editDayStatuses.length > 0 && (
                             <DayStatusAssignment
                                 dayStatuses={editDayStatuses}
                                 onChange={setEditDayStatuses}
                                 creditPreviewInfo={
-                                    creditPreview
-                                        ? {
-                                              availableCredits:
-                                                  Math.floor(
-                                                      creditPreview.credits_to_deduct ??
-                                                          0,
-                                                  ) +
-                                                  (leaveRequest.credits_deducted ??
-                                                      0),
-                                          }
-                                        : null
+                                    isLoa
+                                        ? dayCreditPreviewInfo
+                                        : creditPreview
+                                          ? {
+                                                availableCredits:
+                                                    Math.floor(
+                                                        creditPreview.credits_to_deduct ??
+                                                            0,
+                                                    ) +
+                                                    (leaveRequest.credits_deducted ??
+                                                        0),
+                                            }
+                                          : null
                                 }
-                                statusOptions={
-                                    isVl
-                                        ? [...VL_STATUS_OPTIONS]
-                                        : slStatusOptions
-                                }
-                                creditLabel={isVl ? 'VL' : 'SL'}
+                                statusOptions={dayStatusOptions}
+                                creditLabel={dayCreditLabel}
                             />
                         )}
                     </div>

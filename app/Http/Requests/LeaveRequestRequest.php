@@ -74,6 +74,15 @@ class LeaveRequestRequest extends FormRequest
             $rules['spl_day_settings.*.is_half_day'] = ['required', 'boolean'];
         }
 
+        // LOA per-day credit selection (approved LOA edits): only dates an admin
+        // marks as LOA Credited use leave credits
+        if ($leaveType === 'LOA') {
+            $rules['day_statuses'] = ['nullable', 'array'];
+            $rules['day_statuses.*.date'] = ['required', 'date'];
+            $rules['day_statuses.*.status'] = ['required', Rule::in(['loa_credited', 'loa_unpaid'])];
+            $rules['day_statuses.*.notes'] = ['nullable', 'string', 'max:500'];
+        }
+
         // Allow employee_id for admins and team leads
         $user = $this->user();
         if ($user && in_array($user->role, ['Super Admin', 'Admin', 'Team Lead'])) {

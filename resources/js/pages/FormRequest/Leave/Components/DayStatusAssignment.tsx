@@ -130,8 +130,18 @@ const SPL_STATUS_OPTIONS = [
     },
 ] as const;
 
-/** LOA-specific status options (used internally for ReadOnlyView lookups). */
+/** LOA status options: unpaid by default, credited only for dates an admin selects. */
 const LOA_STATUS_OPTIONS = [
+    {
+        value: 'loa_unpaid',
+        label: 'LOA Unpaid',
+        shortLabel: 'LOA Unpaid',
+        description: 'Unpaid LOA day - no leave credits used',
+        color: 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800',
+        dotColor: 'bg-amber-500',
+        tag: 'Unpaid',
+        tagColor: 'text-amber-600 dark:text-amber-400',
+    },
     {
         value: 'loa_credited',
         label: 'LOA Credited',
@@ -141,16 +151,6 @@ const LOA_STATUS_OPTIONS = [
         dotColor: 'bg-green-500',
         tag: 'Paid',
         tagColor: 'text-green-600 dark:text-green-400',
-    },
-    {
-        value: 'loa_unpaid',
-        label: 'LOA Unpaid',
-        shortLabel: 'LOA Unpaid',
-        description: 'Unpaid LOA day - no credits remaining',
-        color: 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800',
-        dotColor: 'bg-amber-500',
-        tag: 'Unpaid',
-        tagColor: 'text-amber-600 dark:text-amber-400',
     },
 ] as const;
 
@@ -271,7 +271,10 @@ export default function DayStatusAssignment({
             .reduce((sum, d) => sum + (d.is_half_day ? 0.5 : 1), 0);
         const ncns = dayStatuses.filter((d) => d.status === 'ncns').length;
         const advised = dayStatuses.filter(
-            (d) => d.status === 'advised_absence' || d.status === 'upto',
+            (d) =>
+                d.status === 'advised_absence' ||
+                d.status === 'upto' ||
+                d.status === 'loa_unpaid',
         ).length;
         const partialDay = dayStatuses.filter(
             (d) => d.status === 'partial_day_absence',
@@ -349,7 +352,11 @@ export default function DayStatusAssignment({
                 {summary.advised > 0 && (
                     <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-400">
                         <AlertTriangle className="h-3 w-3" /> {summary.advised}{' '}
-                        {creditLabel === 'VL' ? 'UPTO' : 'Advised Absence'}
+                        {creditLabel === 'VL'
+                            ? 'UPTO'
+                            : creditLabel === 'LOA'
+                              ? 'LOA Unpaid'
+                              : 'Advised Absence'}
                     </span>
                 )}
                 {summary.partialDay > 0 && (
@@ -385,7 +392,9 @@ export default function DayStatusAssignment({
                             ? 'Advised Absence / NCNS'
                             : creditLabel === 'SPL'
                               ? 'Absent'
-                              : 'UPTO'}{' '}
+                              : creditLabel === 'LOA'
+                                ? 'LOA Unpaid'
+                                : 'UPTO'}{' '}
                         to proceed.
                     </AlertDescription>
                 </Alert>
@@ -445,14 +454,16 @@ export default function DayStatusAssignment({
                                 'transition-colors',
                                 (day.status === 'sl_credited' ||
                                     day.status === 'vl_credited' ||
-                                    day.status === 'spl_credited') &&
+                                    day.status === 'spl_credited' ||
+                                    day.status === 'loa_credited') &&
                                     'bg-green-50/40 dark:bg-green-950/10',
                                 day.status === 'ncns' &&
                                     'bg-red-50/40 dark:bg-red-950/10',
                                 day.status === 'absent' &&
                                     'bg-red-50/40 dark:bg-red-950/10',
                                 (day.status === 'advised_absence' ||
-                                    day.status === 'upto') &&
+                                    day.status === 'upto' ||
+                                    day.status === 'loa_unpaid') &&
                                     'bg-amber-50/40 dark:bg-amber-950/10',
                                 day.status === 'pending' && 'bg-background',
                             )}
@@ -769,6 +780,7 @@ function ReadOnlyView({ records }: { records: ExistingDayRecord[] }) {
 
 export {
     ALL_STATUS_OPTIONS,
+    LOA_STATUS_OPTIONS,
     SL_STATUS_OPTIONS,
     SL_STATUS_OPTIONS as STATUS_OPTIONS,
     StatusBadge,

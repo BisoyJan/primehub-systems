@@ -1422,6 +1422,223 @@ class LeaveRequestControllerTest extends TestCase
         $this->assertEquals(3, (float) $credit->credits_balance);
     }
 
+    /**
+     * Create an approved Mon–Fri LOA whose first two days consumed credits via FIFO.
+     *
+     * @return array{0: LeaveRequest, 1: LeaveCredit, 2: Carbon}
+     */
+    private function createApprovedLoaWithTwoCreditedDays(User $agent): array
+    {
+        $credit = LeaveCredit::create([
+            'user_id' => $agent->id,
+            'year' => now()->year,
+            'month' => now()->month,
+            'credits_earned' => 5,
+            'credits_used' => 2,
+            'credits_balance' => 3,
+            'accrued_at' => now(),
+        ]);
+
+        $monday = now()->addWeeks(2)->startOfWeek();
+
+        $leaveRequest = LeaveRequest::factory()->create([
+            'user_id' => $agent->id,
+            'leave_type' => 'LOA',
+            'start_date' => $monday,
+            'end_date' => $monday->copy()->addDays(4),
+            'days_requested' => 5,
+            'status' => 'approved',
+            'credits_deducted' => 2,
+            'credits_year' => now()->year,
+            'campaign_department' => 'Sales',
+            'reason' => 'Extended leave of absence for family matters.',
+        ]);
+
+        foreach (range(0, 4) as $offset) {
+            LeaveRequestDay::create([
+                'leave_request_id' => $leaveRequest->id,
+                'date' => $monday->copy()->addDays($offset)->format('Y-m-d'),
+                'day_status' => $offset < 2 ? LeaveRequestDay::STATUS_LOA_CREDITED : LeaveRequestDay::STATUS_LOA_UNPAID,
+            ]);
+        }
+
+        return [$leaveRequest, $credit, $monday];
+    }
+
+    #[Test]
+    public function editing_approved_loa_dates_refunds_credits_and_rebuilds_days_as_unpaid()
+    {
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+        $agent = $this->createAgentWithSchedule();
+        [$leaveRequest, $credit, $monday] = $this->createApprovedLoaWithTwoCreditedDays($agent);
+        $wednesday = $monday->copy()->addDays(2);
+
+        $response = $this->actingAs($admin)->put(route('leave-requests.update', $leaveRequest), [
+            'leave_type' => 'LOA',
+            'start_date' => $wednesday->format('Y-m-d'),
+            'end_date' => $leaveRequest->end_date->format('Y-m-d'),
+            'reason' => $leaveRequest->reason,
+            'campaign_department' => 'Sales',
+            'date_modification_reason' => 'Moving LOA start for VL credit usage.',
+        ]);
+
+        $response->assertRedirect(route('leave-requests.show', $leaveRequest));
+        $response->assertSessionDoesntHaveErrors();
+
+        $leaveRequest->refresh();
+        $credit->refresh();
+        $this->assertEquals(0, (float) $leaveRequest->credits_deducted);
+        $this->assertEquals(0, (float) $credit->credits_used);
+        $this->assertEquals(5, (float) $credit->credits_balance);
+
+        $days = $leaveRequest->days()->orderBy('date')->get();
+        $this->assertCount(3, $days);
+        $this->assertEquals($wednesday->format('Y-m-d'), $days->first()->date->format('Y-m-d'));
+        $this->assertTrue($days->every(fn ($day) => $day->day_status === LeaveRequestDay::STATUS_LOA_UNPAID));
+    }
+
+    #[Test]
+    public function editing_approved_loa_applies_credits_to_dates_selected_by_admin()
+    {
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+        $agent = $this->createAgentWithSchedule();
+        [$leaveRequest, $credit, $monday] = $this->createApprovedLoaWithTwoCreditedDays($agent);
+        $wednesday = $monday->copy()->addDays(2);
+        $friday = $monday->copy()->addDays(4);
+
+        $response = $this->actingAs($admin)->put(route('leave-requests.update', $leaveRequest), [
+            'leave_type' => 'LOA',
+            'start_date' => $wednesday->format('Y-m-d'),
+            'end_date' => $friday->format('Y-m-d'),
+            'reason' => $leaveRequest->reason,
+            'campaign_department' => 'Sales',
+            'date_modification_reason' => 'Moving LOA start and paying the last day.',
+            'day_statuses' => [
+                ['date' => $wednesday->format('Y-m-d'), 'status' => 'loa_unpaid'],
+                ['date' => $wednesday->copy()->addDay()->format('Y-m-d'), 'status' => 'loa_unpaid'],
+                ['date' => $friday->format('Y-m-d'), 'status' => 'loa_credited'],
+            ],
+        ]);
+
+        $response->assertSessionDoesntHaveErrors();
+
+        $leaveRequest->refresh();
+        $credit->refresh();
+        $this->assertEquals(1, (float) $leaveRequest->credits_deducted);
+        $this->assertEquals(1, (float) $credit->credits_used);
+        $this->assertEquals(4, (float) $credit->credits_balance);
+        $this->assertSame(
+            [LeaveRequestDay::STATUS_LOA_UNPAID, LeaveRequestDay::STATUS_LOA_UNPAID, LeaveRequestDay::STATUS_LOA_CREDITED],
+            $leaveRequest->days()->orderBy('date')->pluck('day_status')->all()
+        );
+    }
+
+    #[Test]
+    public function editing_approved_loa_rejects_selected_dates_beyond_available_credits()
+    {
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+        $agent = $this->createAgentWithSchedule();
+        [$leaveRequest, $credit, $monday] = $this->createApprovedLoaWithTwoCreditedDays($agent);
+        $credit->update(['credits_earned' => 3, 'credits_balance' => 1]);
+
+        $response = $this->actingAs($admin)->put(route('leave-requests.update', $leaveRequest), [
+            'leave_type' => 'LOA',
+            'start_date' => $leaveRequest->start_date->format('Y-m-d'),
+            'end_date' => $leaveRequest->end_date->format('Y-m-d'),
+            'reason' => $leaveRequest->reason,
+            'campaign_department' => 'Sales',
+            'day_statuses' => collect(range(0, 3))->map(fn ($offset) => [
+                'date' => $monday->copy()->addDays($offset)->format('Y-m-d'),
+                'status' => 'loa_credited',
+            ])->all(),
+        ]);
+
+        $response->assertSessionHasErrors('error');
+        $this->assertEquals(2, (float) $leaveRequest->refresh()->credits_deducted);
+        $this->assertEquals(2, (float) $credit->refresh()->credits_used);
+    }
+
+    #[Test]
+    public function resaving_approved_loa_with_stale_day_rows_refunds_credits_and_rebuilds_days()
+    {
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+        $agent = $this->createAgentWithSchedule();
+        [$leaveRequest, $credit, $monday] = $this->createApprovedLoaWithTwoCreditedDays($agent);
+        $wednesday = $monday->copy()->addDays(2);
+
+        // Dates already moved, but day rows and credits were left behind
+        $leaveRequest->update(['start_date' => $wednesday, 'days_requested' => 3]);
+
+        $response = $this->actingAs($admin)->put(route('leave-requests.update', $leaveRequest), [
+            'leave_type' => 'LOA',
+            'start_date' => $wednesday->format('Y-m-d'),
+            'end_date' => $leaveRequest->end_date->format('Y-m-d'),
+            'reason' => $leaveRequest->reason,
+            'campaign_department' => 'Sales',
+        ]);
+
+        $response->assertRedirect(route('leave-requests.show', $leaveRequest));
+        $response->assertSessionDoesntHaveErrors();
+
+        $leaveRequest->refresh();
+        $credit->refresh();
+        $this->assertEquals(0, (float) $leaveRequest->credits_deducted);
+        $this->assertEquals(0, (float) $credit->credits_used);
+        $this->assertEquals(5, (float) $credit->credits_balance);
+
+        $days = $leaveRequest->days()->orderBy('date')->get();
+        $this->assertCount(3, $days);
+        $this->assertEquals($wednesday->format('Y-m-d'), $days->first()->date->format('Y-m-d'));
+        $this->assertTrue($days->every(fn ($day) => $day->day_status === LeaveRequestDay::STATUS_LOA_UNPAID));
+    }
+
+    #[Test]
+    public function resaving_approved_loa_with_matching_day_rows_keeps_credited_days()
+    {
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+        $agent = $this->createAgentWithSchedule();
+        [$leaveRequest, $credit] = $this->createApprovedLoaWithTwoCreditedDays($agent);
+
+        $this->actingAs($admin)->put(route('leave-requests.update', $leaveRequest), [
+            'leave_type' => 'LOA',
+            'start_date' => $leaveRequest->start_date->format('Y-m-d'),
+            'end_date' => $leaveRequest->end_date->format('Y-m-d'),
+            'reason' => $leaveRequest->reason,
+            'campaign_department' => 'Sales',
+        ])->assertSessionDoesntHaveErrors();
+
+        $this->assertEquals(2, (float) $leaveRequest->refresh()->credits_deducted);
+        $this->assertEquals(2, (float) $credit->refresh()->credits_used);
+        $this->assertSame(2, $leaveRequest->days()->where('day_status', LeaveRequestDay::STATUS_LOA_CREDITED)->count());
+    }
+
+    #[Test]
+    public function super_admin_changing_leave_type_from_loa_restores_loa_credits_and_clears_days()
+    {
+        $superAdmin = User::factory()->create(['role' => 'Super Admin', 'is_approved' => true]);
+        $agent = $this->createAgentWithSchedule();
+        [$leaveRequest, $credit] = $this->createApprovedLoaWithTwoCreditedDays($agent);
+
+        $response = $this->actingAs($superAdmin)->put(route('leave-requests.update', $leaveRequest), [
+            'leave_type' => 'BL',
+            'start_date' => $leaveRequest->start_date->format('Y-m-d'),
+            'end_date' => $leaveRequest->end_date->format('Y-m-d'),
+            'reason' => $leaveRequest->reason,
+            'campaign_department' => 'Sales',
+            'date_modification_reason' => 'Employee clarified this was bereavement leave.',
+        ]);
+
+        $response->assertRedirect(route('leave-requests.show', $leaveRequest));
+
+        $leaveRequest->refresh();
+        $credit->refresh();
+        $this->assertEquals('BL', $leaveRequest->leave_type);
+        $this->assertEquals(0, (float) $leaveRequest->credits_deducted);
+        $this->assertEquals(0, (float) $credit->credits_used);
+        $this->assertEquals(5, (float) $credit->credits_balance);
+        $this->assertSame(0, $leaveRequest->days()->count());
+    }
+
     #[Test]
     public function admin_cannot_change_leave_type_or_reason_of_approved_leave_request()
     {
