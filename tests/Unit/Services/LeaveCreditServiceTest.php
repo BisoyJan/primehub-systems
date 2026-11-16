@@ -318,6 +318,111 @@ class LeaveCreditServiceTest extends TestCase
     }
 
     #[Test]
+    public function it_accrues_on_hire_day_until_year_after_same_year_regularization(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'Agent',
+            'hired_date' => Carbon::parse('2026-04-13'),
+        ]);
+
+        Carbon::setTestNow(Carbon::parse('2026-11-12'));
+        $this->assertNull($this->service->accrueMonthly($user, 2026, 11));
+
+        Carbon::setTestNow(Carbon::parse('2026-11-13'));
+        $november = $this->service->accrueMonthly($user, 2026, 11);
+        $this->assertInstanceOf(LeaveCredit::class, $november);
+        $this->assertEquals('2026-11-13', $november->accrued_at->format('Y-m-d'));
+
+        Carbon::setTestNow(Carbon::parse('2026-12-13'));
+        $december = $this->service->accrueMonthly($user, 2026, 12);
+        $this->assertEquals('2026-12-13', $december->accrued_at->format('Y-m-d'));
+
+        Carbon::setTestNow(Carbon::parse('2027-01-30'));
+        $this->assertNull($this->service->accrueMonthly($user, 2027, 1));
+
+        Carbon::setTestNow(Carbon::parse('2027-01-31'));
+        $january = $this->service->accrueMonthly($user, 2027, 1);
+        $this->assertEquals('2027-01-31', $january->accrued_at->format('Y-m-d'));
+
+        Carbon::setTestNow(Carbon::parse('2027-02-28'));
+        $february = $this->service->accrueMonthly($user, 2027, 2);
+        $this->assertEquals('2027-02-28', $february->accrued_at->format('Y-m-d'));
+    }
+
+    #[Test]
+    public function it_accrues_on_hire_day_until_year_after_next_year_regularization(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'Agent',
+            'hired_date' => Carbon::parse('2026-11-14'),
+        ]);
+
+        $expectedAccrualDates = [
+            '2026-11' => null,
+            '2026-12' => '2026-12-14',
+            '2027-05' => '2027-05-14',
+            '2027-06' => '2027-06-14',
+            '2027-12' => '2027-12-14',
+            '2028-01' => '2028-01-31',
+            '2028-02' => '2028-02-29',
+        ];
+
+        foreach ($expectedAccrualDates as $yearMonth => $expected) {
+            [$year, $month] = array_map('intval', explode('-', $yearMonth));
+
+            $this->assertSame(
+                $expected,
+                $this->service->getAccrualDate($user, $year, $month)?->format('Y-m-d'),
+                "Unexpected accrual date for {$yearMonth}"
+            );
+        }
+
+        Carbon::setTestNow(Carbon::parse('2027-06-13'));
+        $this->assertNull($this->service->accrueMonthly($user, 2027, 6));
+
+        Carbon::setTestNow(Carbon::parse('2027-06-14'));
+        $june = $this->service->accrueMonthly($user, 2027, 6);
+        $this->assertEquals('2027-06-14', $june->accrued_at->format('Y-m-d'));
+
+        Carbon::setTestNow(Carbon::parse('2028-01-14'));
+        $this->assertNull($this->service->accrueMonthly($user, 2028, 1));
+    }
+
+    #[Test]
+    public function it_clamps_hire_day_accrual_to_shorter_months(): void
+    {
+        $user = User::factory()->create([
+            'hired_date' => Carbon::parse('2026-01-31'),
+        ]);
+
+        $this->assertSame('2026-02-28', $this->service->getAccrualDate($user, 2026, 2)->format('Y-m-d'));
+        $this->assertSame('2026-04-30', $this->service->getAccrualDate($user, 2026, 4)->format('Y-m-d'));
+    }
+
+    #[Test]
+    public function it_dates_pre_created_future_credits_on_the_hire_day_in_the_regularization_year(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'Agent',
+            'hired_date' => Carbon::parse('2026-04-13'),
+        ]);
+
+        Carbon::setTestNow(Carbon::parse('2026-11-01'));
+        $created = $this->service->ensureFutureCreditsExist($user, Carbon::parse('2026-12-20'));
+
+        $this->assertSame(2, $created);
+        $this->assertSame(
+            ['2026-11-13', '2026-12-13'],
+            LeaveCredit::forUser($user->id)
+                ->forYear(2026)
+                ->orderBy('month')
+                ->get()
+                ->map(fn (LeaveCredit $credit) => $credit->accrued_at->format('Y-m-d'))
+                ->all()
+        );
+    }
+
+    #[Test]
     public function it_does_not_accrue_before_hire_date(): void
     {
         $user = User::factory()->create([
@@ -2201,5 +2306,88 @@ class LeaveCreditServiceTest extends TestCase
             'month' => 2,
             'adjusted_earned' => 1.50,
         ]);
+    }
+
+    #[Test]
+    public function recalculate_does_not_create_a_first_regularization_carryover_for_same_year_regularization(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2027-02-10'));
+
+        $user = User::factory()->create([
+            'role' => 'Agent',
+            'hired_date' => Carbon::parse('2026-04-13'),
+        ]);
+
+        $result = $this->service->recalculateCreditsForUser($user, deleteExisting: true);
+
+        $this->assertFalse($result['details']['first_reg_transfer']);
+        $this->assertSame(0, LeaveCreditCarryover::forUser($user->id)->count());
+        $this->assertSame(0, LeaveCredit::forUser($user->id)->where('month', 0)->count());
+        $this->assertEquals(10.0, $this->service->getBalance($user, 2026));
+        $this->assertEquals(1.25, $this->service->getBalance($user, 2027));
+        $this->assertSame(
+            '2026-12-13',
+            LeaveCredit::forUser($user->id)->forMonth(2026, 12)->first()->accrued_at->format('Y-m-d')
+        );
+        $this->assertSame(
+            '2027-01-31',
+            LeaveCredit::forUser($user->id)->forMonth(2027, 1)->first()->accrued_at->format('Y-m-d')
+        );
+    }
+
+    #[Test]
+    public function recalculate_transfers_hire_year_credits_for_next_year_regularization(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2028-02-10'));
+
+        $user = User::factory()->create([
+            'role' => 'Agent',
+            'hired_date' => Carbon::parse('2026-11-14'),
+        ]);
+
+        $result = $this->service->recalculateCreditsForUser($user, deleteExisting: true);
+
+        $this->assertTrue($result['details']['first_reg_transfer']);
+        $this->assertDatabaseHas('leave_credit_carryovers', [
+            'user_id' => $user->id,
+            'from_year' => 2026,
+            'to_year' => 2027,
+            'carryover_credits' => 1.25,
+            'is_first_regularization' => true,
+        ]);
+        $this->assertEquals(16.25, $this->service->getBalance($user, 2027));
+        $this->assertSame(
+            '2027-12-14',
+            LeaveCredit::forUser($user->id)->forMonth(2027, 12)->first()->accrued_at->format('Y-m-d')
+        );
+        $this->assertSame(
+            '2028-01-31',
+            LeaveCredit::forUser($user->id)->forMonth(2028, 1)->first()->accrued_at->format('Y-m-d')
+        );
+    }
+
+    #[Test]
+    public function recalculate_uses_a_corrected_hire_date_on_a_reused_service_instance(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-11-17'));
+
+        $user = User::factory()->create([
+            'role' => 'Agent',
+            'hired_date' => Carbon::parse('2026-04-13'),
+        ]);
+
+        $this->service->recalculateCreditsForUser($user, deleteExisting: true);
+
+        $user->update(['hired_date' => Carbon::parse('2026-06-20')]);
+        $this->service->recalculateCreditsForUser($user->refresh(), deleteExisting: true);
+
+        $this->assertSame(
+            ['2026-07-20', '2026-08-20', '2026-09-20', '2026-10-20'],
+            LeaveCredit::forUser($user->id)
+                ->orderBy('month')
+                ->get()
+                ->map(fn (LeaveCredit $credit) => $credit->accrued_at->format('Y-m-d'))
+                ->all()
+        );
     }
 }

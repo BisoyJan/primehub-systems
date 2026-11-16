@@ -96,7 +96,7 @@ The Leave Management System handles:
 - **Employees** (Agent, IT, Utility): **1.25 credits/month**
 
 **Key Rules:**
-- Credits accrue on the last day of each month
+- Credits accrue on the hire day of each month through December of the regularization year, then on the last day of each month from the following January
 - New employees: Credits calculated from hire date to present
 - Automatic backfilling for existing employees
 - 6-month eligibility: Can't use credits until 6 months after hire date
@@ -297,7 +297,7 @@ Routes:
 php artisan leave:accrue-credits [--year=YYYY] [--month=MM]
 ```
 
-**Scheduled:** Last day of month at 11:00 PM
+**Scheduled:** Daily at 8:28 AM (accrues only credits that have fallen due)
 
 **What it does:**
 - Loops through all users with `hired_date`
@@ -494,10 +494,10 @@ This command shows:
 **Best Practice:** Run this command in November and December to remind employees to use their remaining credits before year-end.
 
 ### 5. Verify Cron Job
-Check `app/Console/Kernel.php`:
+Check `routes/console.php`:
 ```php
-$schedule->command('leave:accrue-credits')
-    ->monthlyOn(date('t'), '23:00') // Last day of month at 11 PM
+Schedule::command('leave:accrue-credits')
+    ->dailyAt('08:28')
     ->withoutOverlapping()
     ->onOneServer();
 ```

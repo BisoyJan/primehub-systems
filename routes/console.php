@@ -117,9 +117,11 @@ Schedule::command('leave:process-regularization')
     ->withoutOverlapping()
     ->onOneServer();
 
-// Accrue monthly leave credits - runs on last day of month at 8:28 AM
+// Accrue monthly leave credits - runs daily at 8:28 AM
+// Daily because credits fall due on each employee's hire day through the end of their
+// regularization year, and on the last day of the month after that. Already-accrued months are skipped.
 Schedule::command('leave:accrue-credits')
-    ->monthlyOn((int) date('t'), '08:28')
+    ->dailyAt('08:28')
     ->withoutOverlapping()
     ->onOneServer();
 

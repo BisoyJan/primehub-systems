@@ -493,7 +493,7 @@ See: [accounts/README.md](accounts/README.md)
 - **Leave Types:** 7 (VL, SL, BL, SPL, LOA, LDV, UPTO)
 - **Monthly Accrual:** 1.5 days (managers), 1.25 days (employees)
 - **Eligibility:** 6 months from hire date
-- **Accrual Schedule:** Last day of month at 11:00 PM
+- **Accrual Schedule:** Hire day of each month through the regularization year, then last day of month (checked daily at 8:28 AM)
 - **⚠️ Annual Reset:** Credits expire on Dec 31
 
 ### Computer & Hardware 

@@ -270,11 +270,11 @@ Used both in the initial Approve dialog and in the standalone **Edit Day Statuse
 - Click the **convert-to-cash** icon (⇄) next to an employee's carryover to convert their remaining carryover credits to cash. *(Only shown once carryover has been received, and it hasn't already been converted or come from a first regularization.)*
 - Click the **Download** icon to open **Export Leave Credits Summary** — pick a year and export all employees' leave credits to Excel. Runs as a background job with a progress bar; the file downloads automatically when finished.
 - Click the **Settings** icon to open **Leave Credits Management** *(Admin only)*. Pick a target year to see Pending Regularization / Total Eligible / Already Processed counts, then run:
-  - **Process Monthly Accruals** — Accrues the current month's credits for all users.
+  - **Process Monthly Accruals** — Backfills every missing credit that has fallen due, from hire date to today, for all active approved users. Credits not yet due under the accrual schedule (see the note below) are left for a later run.
   - **Process Year-End Carryovers** — Calculates and stores carryover credits from the previous year into the target year.
   - **Convert Carryover to Cash** — Batch-converts all eligible carryover credits for the target year to cash.
-  - **Preview Transfer (Dry Run)** / **Process Regularization Transfers** — Preview or execute the first-time credit transfer for newly regularized employees (6 months after hire; all accrued credits transfer, no cap).
-- Click **Fix Credits Year Mismatch** *(Admin only)* to scan for approved leave requests where credits were deducted from the wrong year, review the affected users/requests, then confirm the fix to restore credits to the wrong year and re-deduct from the correct year.
+  - **Preview Transfer (Dry Run)** / **Process Regularization Transfers** — Preview or execute the first-time credit transfer for employees regularized in the year after their hire year (6 months after hire; all credits accrued in the hire year transfer, no cap).
+- Click **Fix Credits Year Mismatch** *(Admin only)* to scan for approved **Vacation Leave** requests where credits were deducted from a year other than the year the leave was filed, review the affected users/requests, then confirm the fix to restore credits to the wrong year and re-deduct the same amount from the correct year. Requests the correct year cannot fully cover are flagged in the preview, skipped, and left unchanged. *(SL and LOA are not scanned because they deduct from the leave's start year; SPL uses its own credit pool.)*
 
 **Edit Monthly Credits (Admin):**
 1. Click the pencil icon on a month.
@@ -290,7 +290,7 @@ Used both in the initial Approve dialog and in the standalone **Edit Day Statuse
 5. **Notes** — Optional.
 6. Click **Save**.
 
-*Regularization notes: during probation, credits accrue on the hire-date anniversary each month (the hire month itself does not accrue). Once regularized (6+ months), all accrued credits transfer to the regularization year with no cap. Afterward, regular employees can carry over a maximum of 4 credits to the next year, usable until March 31 before expiring.*
+*Regularization notes: credits accrue on the hire day of each month through December of the year the employee is regularized, then at the end of each month from the following January (the hire month itself does not accrue). When regularization (6 months after hire) falls in the year after the hire year, all credits accrued in the hire year transfer to the regularization year with no cap; employees regularized within their hire year have no such transfer. Afterward, regular employees can carry over a maximum of 4 credits to the next year, usable until March 31 before expiring.*
 
 ### Employee Credits Detail
 

@@ -28,16 +28,21 @@ Leave credits are accrued monthly based on the employee's role:
 
 ### Accrual Timing
 
-- **Probationary Employees**: Credits accrue on their **anniversary date** (same day of month as hire date)
-- **Regular Employees**: Credits accrue on the **last day of each month**
+- **Through the regularization year**: Credits accrue on the **hire day of each month** (same day of month as hire date), both during probation and after regularization, until December of the calendar year in which the employee is regularized. If the month is shorter than the hire day (e.g., hired on the 31st), the credit accrues on the last day of that month.
+- **From the following January**: Credits accrue on the **last day of each month**
+- The hire month itself does not earn a credit; the first accrual is one month after hire.
 
-### Example
+### Examples
 
-An agent hired on March 15, 2025:
-- **March 2025**: First credit (1.25) accrues on March 15
-- **April 2025**: Credit accrues on April 15 (still probationary)
-- **September 2025**: Credit accrues on September 15 (regularization date)
-- **October 2025**: Credit accrues on October 31 (now regular, monthly accrual)
+Regularized within the same calendar year — agent hired on April 13, 2026:
+- **May 13 – October 13, 2026**: Credit accrues on the 13th (probationary; October 13 is the regularization date)
+- **November 13, December 13, 2026**: Credit accrues on the 13th (regular, still the regularization year)
+- **January 31, 2027 onward**: Credit accrues on the last day of each month
+
+Regularized in the following calendar year — agent hired on November 14, 2026:
+- **December 14, 2026 – May 14, 2027**: Credit accrues on the 14th (probationary; May 14 is the regularization date)
+- **June 14 – December 14, 2027**: Credit accrues on the 14th (regular, still the regularization year)
+- **January 31, 2028 onward**: Credit accrues on the last day of each month
 
 ---
 
@@ -250,7 +255,7 @@ php artisan leave-credits:first-regularization --user=USER_ID
 1. Verify user has `hired_date` set
 2. Verify user is `is_approved = true`
 3. Verify user is `is_active = true`
-4. Check accrual date logic (anniversary vs end-of-month)
+4. Check accrual date logic (hire day through the regularization year vs end-of-month afterwards)
 
 ### First Regularization Not Applied
 

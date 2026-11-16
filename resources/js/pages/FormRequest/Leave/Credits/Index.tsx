@@ -199,6 +199,7 @@ interface Props {
     };
     availableYears: number[];
     canEdit: boolean;
+    canFixYearMismatch: boolean;
 }
 
 interface MismatchRequest {
@@ -211,6 +212,8 @@ interface MismatchRequest {
     current_credits_year: number;
     correct_credits_year: number;
     filed_date: string;
+    can_fix: boolean;
+    available_in_correct_year: number;
 }
 
 interface MismatchUser {
@@ -223,6 +226,8 @@ interface MismatchUser {
 
 interface MismatchScanResult {
     total_requests: number;
+    fixable_requests: number;
+    skipped_requests: number;
     total_users: number;
     total_credits: number;
     users: MismatchUser[];
@@ -236,6 +241,7 @@ export default function Index({
     filters,
     availableYears,
     canEdit = false,
+    canFixYearMismatch = false,
 }: Props) {
     const { title, breadcrumbs } = usePageMeta({
         title: 'Leave Credits',
@@ -1127,23 +1133,27 @@ export default function Index({
                                 Export Credits
                             </Button>
 
-                            <Button
-                                variant="outline"
-                                onClick={openManagementDialog}
-                                className="flex-1 sm:flex-none"
-                            >
-                                <Settings className="mr-2 h-4 w-4" />
-                                Management
-                            </Button>
+                            {canEdit && (
+                                <Button
+                                    variant="outline"
+                                    onClick={openManagementDialog}
+                                    className="flex-1 sm:flex-none"
+                                >
+                                    <Settings className="mr-2 h-4 w-4" />
+                                    Management
+                                </Button>
+                            )}
 
-                            <Button
-                                variant="outline"
-                                onClick={openMismatchDialog}
-                                className="flex-1 sm:flex-none"
-                            >
-                                <AlertTriangle className="mr-2 h-4 w-4" />
-                                Fix Credits Year
-                            </Button>
+                            {canFixYearMismatch && (
+                                <Button
+                                    variant="outline"
+                                    onClick={openMismatchDialog}
+                                    className="flex-1 sm:flex-none"
+                                >
+                                    <AlertTriangle className="mr-2 h-4 w-4" />
+                                    Fix Credits Year
+                                </Button>
+                            )}
                         </div>
                     </div>
 
@@ -2342,20 +2352,24 @@ export default function Index({
                             </div>
                         )}
 
-                        {/* Info Notice - Probationary Accrual */}
+                        {/* Info Notice - Accrual Schedule */}
                         <div className="flex items-start gap-2 rounded-lg border border-purple-200 bg-purple-50 p-3 dark:border-purple-800 dark:bg-purple-950">
                             <TrendingUp className="mt-0.5 h-5 w-5 shrink-0 text-purple-600 dark:text-purple-400" />
                             <div className="text-sm text-purple-700 dark:text-purple-300">
                                 <p className="mb-1 font-medium">
-                                    Probationary Accrual (6 Months)
+                                    Accrual Schedule
                                 </p>
                                 <p>
-                                    During probation, leave credits accrue on
-                                    the <strong>hire date anniversary</strong>{' '}
-                                    each month (e.g., hired July 11 → Aug 11
-                                    +1.25, Sep 11 +1.25, etc.). Hire month does
-                                    not receive credit. After 6 months, employee
-                                    becomes regularized.
+                                    Leave credits accrue on the{' '}
+                                    <strong>hire day of each month</strong>{' '}
+                                    through December of the year the employee is
+                                    regularized (e.g., hired Apr 13 →
+                                    regularized Oct 13 → Nov 13 +1.25, Dec 13
+                                    +1.25). From the following January, credits
+                                    accrue at the{' '}
+                                    <strong>end of each month</strong>. Hire
+                                    month does not receive credit. Employees are
+                                    regularized after 6 months.
                                 </p>
                             </div>
                         </div>
@@ -2556,11 +2570,11 @@ export default function Index({
                             Fix Credits Year Mismatch
                         </DialogTitle>
                         <DialogDescription>
-                            Scans for approved leave requests where the credits
-                            were deducted from the wrong year (e.g., filed in
-                            2025 but credits deducted from 2026). This will
-                            restore credits to the wrong year and re-deduct from
-                            the correct year.
+                            Scans for approved Vacation Leave requests where the
+                            credits were deducted from the wrong year (e.g.,
+                            filed in 2025 but credits deducted from 2026). This
+                            will restore credits to the wrong year and re-deduct
+                            the same amount from the correct year.
                         </DialogDescription>
                     </DialogHeader>
 
@@ -2752,6 +2766,22 @@ export default function Index({
                                                                                             req.correct_credits_year
                                                                                         }
                                                                                     </span>
+                                                                                    {!req.can_fix && (
+                                                                                        <p className="mt-0.5 text-amber-600 dark:text-amber-400">
+                                                                                            Will
+                                                                                            be
+                                                                                            skipped:
+                                                                                            only{' '}
+                                                                                            {
+                                                                                                req.available_in_correct_year
+                                                                                            }{' '}
+                                                                                            available
+                                                                                            in{' '}
+                                                                                            {
+                                                                                                req.correct_credits_year
+                                                                                            }
+                                                                                        </p>
+                                                                                    )}
                                                                                 </TableCell>
                                                                             </TableRow>
                                                                         ),
@@ -2783,6 +2813,26 @@ export default function Index({
                                                 are executed in a single
                                                 database transaction.
                                             </p>
+                                            {mismatchData.skipped_requests >
+                                                0 && (
+                                                <p className="mt-2">
+                                                    <strong>
+                                                        {
+                                                            mismatchData.skipped_requests
+                                                        }{' '}
+                                                        request
+                                                        {mismatchData.skipped_requests !==
+                                                        1
+                                                            ? 's'
+                                                            : ''}{' '}
+                                                        will be skipped
+                                                    </strong>{' '}
+                                                    and left unchanged because
+                                                    the correct year does not
+                                                    have enough credits to cover
+                                                    the deduction.
+                                                </p>
+                                            )}
                                         </div>
                                     </div>
                                 </>
@@ -2820,15 +2870,15 @@ export default function Index({
                                 </>
                             )}
                         </Button>
-                        {mismatchData && mismatchData.total_requests > 0 && (
+                        {mismatchData && mismatchData.fixable_requests > 0 && (
                             <Button
                                 variant="destructive"
                                 onClick={() => setConfirmMismatchFix(true)}
                                 disabled={isFixingMismatch}
                             >
                                 <AlertTriangle className="mr-2 h-4 w-4" />
-                                Fix {mismatchData.total_requests} Request
-                                {mismatchData.total_requests !== 1 ? 's' : ''}
+                                Fix {mismatchData.fixable_requests} Request
+                                {mismatchData.fixable_requests !== 1 ? 's' : ''}
                             </Button>
                         )}
                     </DialogFooter>
@@ -2847,15 +2897,12 @@ export default function Index({
                         </AlertDialogTitle>
                         <AlertDialogDescription>
                             This will fix{' '}
-                            <strong>{mismatchData?.total_requests}</strong>{' '}
+                            <strong>{mismatchData?.fixable_requests}</strong>{' '}
                             leave request
-                            {(mismatchData?.total_requests ?? 0) !== 1
+                            {(mismatchData?.fixable_requests ?? 0) !== 1
                                 ? 's'
-                                : ''}{' '}
-                            across <strong>{mismatchData?.total_users}</strong>{' '}
-                            user
-                            {(mismatchData?.total_users ?? 0) !== 1 ? 's' : ''},
-                            moving a total of{' '}
+                                : ''}
+                            , moving a total of{' '}
                             <strong>{mismatchData?.total_credits}</strong>{' '}
                             credits to their correct year.
                             <br />
@@ -2938,12 +2985,12 @@ export default function Index({
                                     <br />
                                     <br />
                                     <strong>
-                                        Probationary employees:
+                                        Through the regularization year:
                                     </strong>{' '}
-                                    Credits accrue on their hire date
-                                    anniversary each month.
+                                    Credits accrue on the hire day of each
+                                    month.
                                     <br />
-                                    <strong>Regular employees:</strong> Credits
+                                    <strong>Following years:</strong> Credits
                                     accrue at the end of each month.
                                     <br />
                                     <br />

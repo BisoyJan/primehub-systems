@@ -100,12 +100,14 @@ export default function RecalculateCreditsDialog({
                 0,
             ).getDate();
             const anniversaryDay = Math.min(hd.getDate(), daysInMonth);
-            const anniversaryDate = new Date(
+            const accrualDate = new Date(
                 cursor.getFullYear(),
                 cursor.getMonth(),
-                anniversaryDay,
+                cursor.getFullYear() > regDate.getFullYear()
+                    ? daysInMonth
+                    : anniversaryDay,
             );
-            if (anniversaryDate <= today) monthsEarned++;
+            if (accrualDate <= today) monthsEarned++;
             cursor.setMonth(cursor.getMonth() + 1);
         }
         return {

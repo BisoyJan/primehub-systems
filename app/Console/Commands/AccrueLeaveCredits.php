@@ -54,11 +54,11 @@ class AccrueLeaveCredits extends Command
             try {
                 $credit = $this->leaveCreditService->accrueMonthly($user, $year, $month);
 
-                if ($credit) {
+                if ($credit?->wasRecentlyCreated) {
                     $this->info("✓ {$user->name}: {$credit->credits_earned} credits");
                     $accrued++;
                 } else {
-                    $this->warn("⊘ {$user->name}: Skipped (no hire date or already accrued)");
+                    $this->warn("⊘ {$user->name}: Skipped (not yet due or already accrued)");
                     $skipped++;
                 }
             } catch (\Exception $e) {

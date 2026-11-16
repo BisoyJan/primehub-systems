@@ -69,7 +69,7 @@ A complete leave management system with automatic credit accrual, multiple leave
 - Employees (Agent, IT, Utility): **1.25 credits/month**
 
 **Rules:**
-- Accrues on last day of each month
+- Accrues on the hire day of each month through December of the regularization year, then on the last day of each month
 - 6-month eligibility from hire date
 - Credits don't carry over (annual reset Dec 31)
 - Automatic backfilling for existing employees
@@ -159,7 +159,7 @@ POST   /form-requests/leave-requests/{id}/cancel  - Cancel
 ## Console Commands
 
 ```bash
-# Monthly accrual (scheduled last day of month 11 PM)
+# Monthly accrual (scheduled daily at 8:28 AM)
 php artisan leave:accrue-credits
 
 # Backfill for all employees
@@ -240,9 +240,9 @@ resources/js/pages/FormRequest/Leave/
 ## Scheduled Tasks
 
 ```php
-// Kernel.php
-$schedule->command('leave:accrue-credits')
-    ->monthlyOn(date('t'), '23:00');
+// routes/console.php
+Schedule::command('leave:accrue-credits')
+    ->dailyAt('08:28');
 ```
 
 ## Integration Points

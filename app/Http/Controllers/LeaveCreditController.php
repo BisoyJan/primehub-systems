@@ -14,6 +14,7 @@ use App\Services\LeaveCreditService;
 use App\Services\PermissionService;
 use App\Services\SplCreditService;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -287,7 +288,16 @@ class LeaveCreditController extends Controller
             ],
             'availableYears' => range(now()->year, 2024, -1),
             'canEdit' => app(PermissionService::class)->userHasPermission(auth()->user(), 'leave_credits.edit'),
+            'canFixYearMismatch' => $this->canFixYearMismatch($user),
         ]);
+    }
+
+    /**
+     * Whether the user may scan for and fix credits-year mismatches.
+     */
+    private function canFixYearMismatch(User $user): bool
+    {
+        return in_array($user->role, ['Super Admin', 'Admin']);
     }
 
     /**
@@ -1101,33 +1111,59 @@ class LeaveCreditController extends Controller
     }
 
     /**
-     * Scan for leave requests with mismatched credits_year (filed in one year, deducted from another).
-     * Returns a preview of affected requests and users.
+     * Approved VL requests whose credits were deducted from a year other than the filing year.
+     *
+     * Only VL is covered: its approval keeps the filing year, whereas SL and LOA
+     * deduct from the leave's start year and SPL draws from its own credit pool.
+     *
+     * @return Collection<int, LeaveRequest>
+     */
+    private function yearMismatchedLeaveRequests(): Collection
+    {
+        return LeaveRequest::whereColumn(DB::raw('YEAR(created_at)'), '!=', 'credits_year')
+            ->where('leave_type', 'VL')
+            ->where('status', 'approved')
+            ->whereNotNull('credits_deducted')
+            ->where('credits_deducted', '>', 0)
+            ->with('user')
+            ->orderBy('user_id')
+            ->orderBy('start_date')
+            ->orderBy('id')
+            ->get();
+    }
+
+    /**
+     * Scan for VL requests with mismatched credits_year (filed in one year, deducted from another).
+     * Returns a preview of affected requests and users, flagging requests the correct
+     * year cannot cover; those are skipped by the fix.
      */
     public function yearMismatchScan(Request $request): JsonResponse
     {
         $user = auth()->user();
-        if (! in_array($user->role, ['Super Admin', 'Admin'])) {
+        if (! $this->canFixYearMismatch($user)) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
-        $affected = LeaveRequest::whereColumn(DB::raw('YEAR(created_at)'), '!=', 'credits_year')
-            ->where('status', 'approved')
-            ->whereNotNull('credits_deducted')
-            ->where('credits_deducted', '>', 0)
-            ->with('user:id,first_name,last_name,email')
-            ->orderBy('user_id')
-            ->orderBy('start_date')
-            ->get();
+        $affected = $this->yearMismatchedLeaveRequests();
+        $planned = [];
 
-        $grouped = $affected->groupBy('user_id')->map(function ($requests) {
+        $grouped = $affected->groupBy('user_id')->map(function ($requests) use (&$planned) {
             $user = $requests->first()->user;
 
-            return [
-                'user_id' => $user->id,
-                'name' => $user->first_name.' '.$user->last_name,
-                'email' => $user->email,
-                'requests' => $requests->map(fn ($lr) => [
+            $rows = $requests->map(function (LeaveRequest $lr) use (&$planned) {
+                $correctYear = $lr->created_at->year;
+                $amount = (float) $lr->credits_deducted;
+                $key = "{$lr->user_id}:{$correctYear}";
+
+                $available = $this->leaveCreditService->getDeductibleBalance($lr->user_id, $correctYear, $lr->start_date)
+                    - ($planned[$key] ?? 0);
+                $canFix = $available + 0.0001 >= $amount;
+
+                if ($canFix) {
+                    $planned[$key] = ($planned[$key] ?? 0) + $amount;
+                }
+
+                return [
                     'id' => $lr->id,
                     'leave_type' => $lr->leave_type,
                     'start_date' => $lr->start_date->format('M d, Y'),
@@ -1135,43 +1171,53 @@ class LeaveCreditController extends Controller
                     'days_requested' => $lr->days_requested,
                     'credits_deducted' => $lr->credits_deducted,
                     'current_credits_year' => $lr->credits_year,
-                    'correct_credits_year' => $lr->created_at->year,
+                    'correct_credits_year' => $correctYear,
                     'filed_date' => $lr->created_at->format('M d, Y'),
-                ])->values()->toArray(),
-                'total_to_restore' => $requests->sum('credits_deducted'),
+                    'can_fix' => $canFix,
+                    'available_in_correct_year' => round(max(0, $available), 2),
+                ];
+            })->values();
+
+            return [
+                'user_id' => $user->id,
+                'name' => $user->first_name.' '.$user->last_name,
+                'email' => $user->email,
+                'requests' => $rows->toArray(),
+                'total_to_restore' => round((float) $rows->where('can_fix', true)->sum('credits_deducted'), 2),
             ];
-        })->values()->toArray();
+        })->values();
+
+        $fixableRequests = $grouped->sum(fn (array $group) => collect($group['requests'])->where('can_fix', true)->count());
 
         return response()->json([
             'total_requests' => $affected->count(),
-            'total_users' => count($grouped),
-            'total_credits' => $affected->sum('credits_deducted'),
-            'users' => $grouped,
+            'fixable_requests' => $fixableRequests,
+            'skipped_requests' => $affected->count() - $fixableRequests,
+            'total_users' => $grouped->count(),
+            'total_credits' => round((float) $grouped->sum('total_to_restore'), 2),
+            'users' => $grouped->toArray(),
         ]);
     }
 
     /**
-     * Fix leave requests with mismatched credits_year by restoring credits
-     * from the wrong year and re-deducting from the correct year.
+     * Fix VL requests with mismatched credits_year by restoring credits to the wrong
+     * year and re-deducting the same amount from the correct year. Requests the
+     * correct year cannot fully cover are left untouched and reported as skipped.
      */
     public function yearMismatchFix(Request $request): JsonResponse
     {
         $user = auth()->user();
-        if (! in_array($user->role, ['Super Admin', 'Admin'])) {
+        if (! $this->canFixYearMismatch($user)) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
-        $affected = LeaveRequest::whereColumn(DB::raw('YEAR(created_at)'), '!=', 'credits_year')
-            ->where('status', 'approved')
-            ->whereNotNull('credits_deducted')
-            ->where('credits_deducted', '>', 0)
-            ->get();
+        $affected = $this->yearMismatchedLeaveRequests();
 
         if ($affected->isEmpty()) {
             return response()->json([
                 'success' => true,
                 'message' => 'No mismatched leave requests found.',
-                'summary' => ['fixed' => 0, 'total_credits_moved' => 0],
+                'summary' => ['fixed' => 0, 'skipped' => 0, 'total_credits_moved' => 0],
             ]);
         }
 
@@ -1180,29 +1226,37 @@ class LeaveCreditController extends Controller
             $fixed = 0;
             $totalCreditsMoved = 0;
             $details = [];
+            $skippedDetails = [];
 
             foreach ($affected as $lr) {
                 $correctYear = $lr->created_at->year;
                 $wrongYear = $lr->credits_year;
-                $creditsMoved = (float) $lr->credits_deducted;
+                $amount = (float) $lr->credits_deducted;
+                $userName = $lr->user->first_name.' '.$lr->user->last_name;
 
-                // 1. Restore credits from the wrong year
+                $available = $this->leaveCreditService->getDeductibleBalance($lr->user_id, $correctYear, $lr->start_date);
+
+                if ($available + 0.0001 < $amount) {
+                    $skippedDetails[] = [
+                        'leave_request_id' => $lr->id,
+                        'user_name' => $userName,
+                        'credits_needed' => $amount,
+                        'credits_available' => round(max(0, $available), 2),
+                        'correct_year' => $correctYear,
+                    ];
+
+                    continue;
+                }
+
                 $this->leaveCreditService->restoreCredits($lr);
+                $creditsMoved = $this->leaveCreditService->deductCreditsByAmount($lr, $amount, $correctYear);
 
-                // 2. Update credits_year to the correct year
-                $lr->update(['credits_year' => $correctYear]);
-
-                // 3. Re-deduct from the correct year
-                $lr->refresh();
-                $this->leaveCreditService->deductCredits($lr, $correctYear);
-
-                $lr->refresh();
                 $fixed++;
                 $totalCreditsMoved += $creditsMoved;
 
                 $details[] = [
                     'leave_request_id' => $lr->id,
-                    'user_name' => $lr->user->first_name.' '.$lr->user->last_name,
+                    'user_name' => $userName,
                     'credits_moved' => $creditsMoved,
                     'from_year' => $wrongYear,
                     'to_year' => $correctYear,
@@ -1211,20 +1265,31 @@ class LeaveCreditController extends Controller
 
             DB::commit();
 
+            $skipped = count($skippedDetails);
+
             Log::info('Credits year mismatch fix completed', [
                 'fixed_by' => $user->id,
                 'fixed_count' => $fixed,
+                'skipped_count' => $skipped,
                 'total_credits_moved' => $totalCreditsMoved,
                 'details' => $details,
+                'skipped_details' => $skippedDetails,
             ]);
+
+            $message = "Fixed {$fixed} leave request(s). {$totalCreditsMoved} credits moved to correct year.";
+            if ($skipped > 0) {
+                $message .= " Skipped {$skipped} request(s): not enough credits in the correct year.";
+            }
 
             return response()->json([
                 'success' => true,
-                'message' => "Fixed {$fixed} leave request(s). {$totalCreditsMoved} credits moved to correct year.",
+                'message' => $message,
                 'summary' => [
                     'fixed' => $fixed,
+                    'skipped' => $skipped,
                     'total_credits_moved' => $totalCreditsMoved,
                     'details' => $details,
+                    'skipped_details' => $skippedDetails,
                 ],
             ]);
         } catch (\Exception $e) {

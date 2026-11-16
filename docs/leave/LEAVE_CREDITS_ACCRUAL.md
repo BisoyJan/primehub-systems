@@ -22,8 +22,9 @@ public function getMonthlyRate(User $user): float
 ```
 
 **Accrual Schedule:**
-- **Frequency:** Monthly
-- **Execution:** Last day of each month at 11:00 PM
+- **Frequency:** Monthly, one credit record per employee per month
+- **Accrual date:** The hire day of each month through December of the year the employee is regularized (hire date + 6 months); the last day of each month from the following January
+- **Execution:** Daily at 8:28 AM; each run accrues only the credits that have fallen due
 - **Method:** Automated via Laravel scheduler
 
 ---
@@ -32,30 +33,46 @@ public function getMonthlyRate(User $user): float
 
 ### Step 1: Eligibility Check
 ```php
-public function accrueMonthly(User $user, int $year = null, int $month = null): ?LeaveCredit
+public function getAccrualDate(User $user, int $year, int $month): ?Carbon
 {
-    // Don't accrue if user doesn't have a hire date
-    if (!$user->hired_date) {
+    $hireDate = $this->getHireDate($user);
+    if (! $hireDate) {
         return null;
     }
-    
-    // Don't accrue if the month hasn't ended yet
-    $targetDate = Carbon::create($year, $month, 1)->endOfMonth();
-    if (now()->lt($targetDate)) {
+
+    // No credit for the hire month or any earlier month
+    $monthStart = Carbon::create($year, $month, 1);
+    if ($monthStart->lte($hireDate->copy()->startOfMonth())) {
         return null;
     }
-    
-    // Don't accrue before hire date
-    $hireDate = Carbon::parse($user->hired_date);
-    if ($targetDate->lt($hireDate)) {
+
+    // Years after the regularization year: last day of the month
+    if ($this->usesMonthEndAccrual($user, $year)) {
+        return $monthStart->endOfMonth()->startOfDay();
+    }
+
+    // Up to and including the regularization year: hire day of the month
+    return Carbon::create($year, $month, min($hireDate->day, $monthStart->daysInMonth));
+}
+
+public function accrueMonthly(User $user, ?int $year = null, ?int $month = null): ?LeaveCredit
+{
+    $accrualDate = $this->getAccrualDate($user, $year, $month);
+
+    if (! $accrualDate) {
+        return null;
+    }
+
+    // Don't accrue before the accrual date
+    if (now()->startOfDay()->lt($accrualDate)) {
         return null;
     }
 ```
 
 **Rules:**
 1. ✅ User must have `hired_date` set
-2. ✅ Month must be completed (run on last day)
-3. ✅ Target month must be on or after hire date
+2. ✅ Target month must be after the hire month
+3. ✅ The month's accrual date must have arrived (hire day through the regularization year, month-end afterwards)
 
 ### Step 2: Duplicate Prevention
 ```php
@@ -253,19 +270,17 @@ public function getSummary(User $user, int $year = null): array
 
 ### Cron Job Configuration
 ```php
-// app/Console/Kernel.php
-protected function schedule(Schedule $schedule): void
-{
-    $schedule->command('leave:accrue-credits')
-        ->monthlyOn(date('t'), '23:00') // Last day of month at 11 PM
-        ->withoutOverlapping()
-        ->onOneServer();
-}
+// routes/console.php
+Schedule::command('leave:accrue-credits')
+    ->dailyAt('08:28')
+    ->withoutOverlapping()
+    ->onOneServer();
 ```
 
 **Schedule Details:**
-- **Trigger:** `date('t')` = Last day of month (28-31 depending on month)
-- **Time:** 23:00 (11:00 PM)
+- **Trigger:** Every day, because accrual dates differ per employee (hire day or month-end)
+- **Time:** 08:28 (8:28 AM)
+- **Idempotent:** Months already accrued or not yet due are skipped
 - **Safety:** `withoutOverlapping()` prevents concurrent runs
 - **Scalability:** `onOneServer()` for multi-server environments
 

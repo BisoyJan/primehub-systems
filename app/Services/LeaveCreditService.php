@@ -336,68 +336,74 @@ class LeaveCreditService
     }
 
     /**
+     * Whether credits for the given year accrue at month-end rather than on the hire day.
+     *
+     * Month-end accrual starts in January of the calendar year after the one in which
+     * the user is regularized.
+     */
+    public function usesMonthEndAccrual(User $user, int $year): bool
+    {
+        $regularizationDate = $this->getRegularizationDate($user);
+
+        return $regularizationDate !== null && $year > $regularizationDate->year;
+    }
+
+    /**
+     * Get the date on which a month's leave credit accrues for a user.
+     *
+     * Through the end of the calendar year in which the user is regularized, the credit
+     * accrues on the hire day of the month (clamped to the month's length, so a hire on
+     * the 31st accrues on Feb 28). In later years it accrues on the last day of the month.
+     *
+     * @return Carbon|null Null when the month earns no credit: no hire date, the hire month, or any earlier month.
+     */
+    public function getAccrualDate(User $user, int $year, int $month): ?Carbon
+    {
+        $hireDate = $this->getHireDate($user);
+        if (! $hireDate) {
+            return null;
+        }
+
+        $monthStart = Carbon::create($year, $month, 1);
+        if ($monthStart->lte($hireDate->copy()->startOfMonth())) {
+            return null;
+        }
+
+        if ($this->usesMonthEndAccrual($user, $year)) {
+            return $monthStart->endOfMonth()->startOfDay();
+        }
+
+        return Carbon::create($year, $month, min($hireDate->day, $monthStart->daysInMonth));
+    }
+
+    /**
      * Accrue monthly leave credits for a user.
      *
-     * Accrual rules:
-     * - Probationary period (first 6 months): Credits accrue on hire date anniversary
-     *   (e.g., hired July 11 → Aug 11 +1.25, Sep 11 +1.25, etc.)
-     * - Post-regularization: Credits accrue at end of month
-     *   (first post-reg accrual is at end of the month AFTER regularization month)
+     * Accrual rules (see getAccrualDate):
+     * - Up to December of the year the user is regularized: credits accrue on the hire day
+     *   of each month, during probation and after regularization alike.
+     * - From January of the following year: credits accrue at end of month.
      * - Hire month does NOT get credit (first accrual is 1 month after hire)
      *
-     * Example (hired July 11, 2025, regularized Jan 11, 2026):
-     * - Aug 11, 2025: +1.25 (probation month 1)
-     * - Sep 11, 2025: +1.25 (probation month 2)
-     * - Oct 11, 2025: +1.25 (probation month 3)
-     * - Nov 11, 2025: +1.25 (probation month 4)
-     * - Dec 11, 2025: +1.25 (probation month 5)
-     * - Jan 11, 2026: +1.25 (probation month 6 = regularization)
-     * - Feb 28, 2026: +1.25 (first post-reg at end of month)
+     * Example (hired April 13, 2026, regularized October 13, 2026):
+     * - May 13 – Oct 13, 2026: +1.25 each (probation)
+     * - Nov 13, Dec 13, 2026: +1.25 each (regularized, still the regularization year)
+     * - Jan 31, 2027 onward: +1.25 at end of month
+     *
+     * Example (hired November 14, 2026, regularized May 14, 2027):
+     * - Dec 14, 2026 – May 14, 2027: +1.25 each (probation)
+     * - Jun 14 – Dec 14, 2027: +1.25 each (regularized, still the regularization year)
+     * - Jan 31, 2028 onward: +1.25 at end of month
      */
     public function accrueMonthly(User $user, ?int $year = null, ?int $month = null): ?LeaveCredit
     {
         $year = $year ?? now()->year;
         $month = $month ?? now()->month;
 
-        // Don't accrue if user doesn't have a hire date
-        if (! $user->hired_date) {
+        $accrualDate = $this->getAccrualDate($user, $year, $month);
+
+        if (! $accrualDate) {
             return null;
-        }
-
-        $hireDate = $this->getHireDate($user);
-        $hireDay = $hireDate->day;
-        $regularizationDate = $this->getRegularizationDate($user);
-
-        // The target month we're trying to accrue
-        $targetMonthStart = Carbon::create($year, $month, 1);
-        $targetMonthEnd = $targetMonthStart->copy()->endOfMonth();
-
-        // Calculate the hire anniversary date for this month
-        // Handle months with fewer days (e.g., hired on 31st, February only has 28)
-        $anniversaryDay = min($hireDay, $targetMonthStart->daysInMonth);
-        $anniversaryDate = Carbon::create($year, $month, $anniversaryDay);
-
-        // Don't accrue for the hire month - first accrual is 1 month after hire
-        if ($year == $hireDate->year && $month == $hireDate->month) {
-            return null;
-        }
-
-        // Don't accrue before hire date
-        if ($targetMonthEnd->lt($hireDate)) {
-            return null;
-        }
-
-        // Determine when this month's credit should accrue
-        // If regularization happens IN this month or hasn't happened yet, use anniversary date
-        // If already regularized BEFORE this month started, use end of month
-        $regularizedBeforeThisMonth = $regularizationDate && $regularizationDate->lt($targetMonthStart);
-
-        if ($regularizedBeforeThisMonth) {
-            // Regular employee: accrue at end of month (start of day to avoid time comparison issues)
-            $accrualDate = $targetMonthEnd->startOfDay();
-        } else {
-            // Probationary or regularizing this month: accrue on anniversary
-            $accrualDate = $anniversaryDate;
         }
 
         // Check if accrual date has passed (compare dates only, not times)
@@ -433,7 +439,7 @@ class LeaveCreditService
             'credits_earned' => $rate,
             'year' => $year,
             'month' => $month,
-            'accrual_type' => $regularizedBeforeThisMonth ? 'end_of_month' : 'anniversary',
+            'accrual_type' => $this->usesMonthEndAccrual($user, $year) ? 'end_of_month' : 'anniversary',
             'accrued_at' => $accrualDate->format('Y-m-d'),
         ]);
 
@@ -517,7 +523,7 @@ class LeaveCreditService
         $currentDate = $startDate->copy();
 
         // Iterate through current month — accrueMonthly() handles whether the
-        // accrual date (anniversary for probation, end-of-month for regular) has passed.
+        // accrual date (hire day through the regularization year, end-of-month after) has passed.
         while ($currentDate->startOfMonth()->lte($today)) {
             $key = "{$currentDate->year}-{$currentDate->month}";
 
@@ -592,7 +598,8 @@ class LeaveCreditService
 
             if (! $existing) {
                 // Pre-create the credit record for this future month
-                $monthEnd = Carbon::create($checkYear, $checkMonth, 1)->endOfMonth();
+                $accrualDate = $this->getAccrualDate($user, $checkYear, $checkMonth)
+                    ?? Carbon::create($checkYear, $checkMonth, 1)->endOfMonth();
 
                 LeaveCredit::create([
                     'user_id' => $user->id,
@@ -601,7 +608,7 @@ class LeaveCreditService
                     'credits_balance' => $rate,
                     'year' => $checkYear,
                     'month' => $checkMonth,
-                    'accrued_at' => $monthEnd,
+                    'accrued_at' => $accrualDate,
                 ]);
 
                 $created++;
@@ -1464,6 +1471,35 @@ class LeaveCreditService
     }
 
     /**
+     * Get the balance a leave starting on the given date can draw from a credit year.
+     *
+     * Mirrors the pool used by deductCreditsByAmount() without writing anything:
+     * monthly credits, plus the carryover while it is still usable on the leave date.
+     */
+    public function getDeductibleBalance(int $userId, int $year, Carbon $leaveStartDate): float
+    {
+        $monthlyBalance = (float) LeaveCredit::forUser($userId)
+            ->forYear($year)
+            ->where('month', '>', 0)
+            ->sum('credits_balance');
+
+        if (! $this->canUseCarryoverForLeaveDate($userId, $year, $leaveStartDate)) {
+            return $monthlyBalance;
+        }
+
+        $carryoverCredit = LeaveCredit::forUser($userId)
+            ->forYear($year)
+            ->where('month', 0)
+            ->first();
+
+        $carryoverBalance = $carryoverCredit
+            ? (float) $carryoverCredit->credits_balance
+            : (float) LeaveCreditCarryover::forUser($userId)->toYear($year)->value('carryover_credits');
+
+        return $monthlyBalance + $carryoverBalance;
+    }
+
+    /**
      * Determine whether prior-year carryover can be used for a leave date.
      *
      * Regular carryover is usable only until Mar 31 of the carryover year.
@@ -1932,13 +1968,17 @@ class LeaveCreditService
         // Must be hired in a previous year (credits to transfer from)
         $hiredInPreviousYear = $hireDate->year < $toYear;
 
+        // Must regularize in a later year than hire. Same-year regularization has no
+        // cross-year transfer; those users get the regular year-end carryover instead.
+        $regularizesAfterHireYear = $regularizationDate->year > $hireDate->year;
+
         // Must be regularized (6 months have passed since hire)
         $isRegularized = $this->isRegularized($user);
 
         // Has NOT already had first regularization carryover processed
         $hasNotHadFirstRegularization = ! LeaveCreditCarryover::hasFirstRegularization($user->id);
 
-        return $hiredInPreviousYear && $isRegularized && $hasNotHadFirstRegularization;
+        return $hiredInPreviousYear && $regularizesAfterHireYear && $isRegularized && $hasNotHadFirstRegularization;
     }
 
     /**
@@ -2414,6 +2454,9 @@ class LeaveCreditService
         }
 
         $details = [];
+
+        // The hire date may have just been corrected; drop dates memoised from the old value.
+        $this->clearCache();
 
         if ($deleteExisting) {
             // Delete all credits and carryovers for user (fresh start)

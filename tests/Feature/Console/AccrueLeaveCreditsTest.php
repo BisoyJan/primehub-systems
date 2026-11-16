@@ -117,6 +117,7 @@ class AccrueLeaveCreditsTest extends TestCase
         ]);
 
         $this->artisan('leave:accrue-credits')
+            ->expectsOutput('  Accrued: 0')
             ->assertExitCode(0);
 
         // Should still have only 1 credit record

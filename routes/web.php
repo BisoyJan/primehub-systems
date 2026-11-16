@@ -459,10 +459,19 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
         ->group(function () {
             Route::get('/', [LeaveCreditController::class, 'index'])->name('index');
             Route::get('/regularization/stats', [LeaveCreditController::class, 'getRegularizationStats'])->name('regularization.stats');
-            Route::post('/regularization/process', [LeaveCreditController::class, 'processRegularization'])->name('regularization.process');
-            Route::post('/accruals/process', [LeaveCreditController::class, 'processMonthlyAccruals'])->name('accruals.process');
-            Route::post('/carryovers/process', [LeaveCreditController::class, 'processYearEndCarryovers'])->name('carryovers.process');
-            Route::post('/cash-conversion/process', [LeaveCreditController::class, 'processCashConversions'])->name('cash-conversion.process');
+            // Bulk management actions (requires leave_credits.edit permission)
+            Route::post('/regularization/process', [LeaveCreditController::class, 'processRegularization'])
+                ->name('regularization.process')
+                ->middleware('permission:leave_credits.edit');
+            Route::post('/accruals/process', [LeaveCreditController::class, 'processMonthlyAccruals'])
+                ->name('accruals.process')
+                ->middleware('permission:leave_credits.edit');
+            Route::post('/carryovers/process', [LeaveCreditController::class, 'processYearEndCarryovers'])
+                ->name('carryovers.process')
+                ->middleware('permission:leave_credits.edit');
+            Route::post('/cash-conversion/process', [LeaveCreditController::class, 'processCashConversions'])
+                ->name('cash-conversion.process')
+                ->middleware('permission:leave_credits.edit');
             Route::get('/mismatch/scan', [LeaveCreditController::class, 'yearMismatchScan'])->name('mismatch.scan');
             Route::post('/mismatch/fix', [LeaveCreditController::class, 'yearMismatchFix'])->name('mismatch.fix');
 
