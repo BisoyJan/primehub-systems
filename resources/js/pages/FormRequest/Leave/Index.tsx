@@ -60,6 +60,7 @@ import { Progress } from '@/components/ui/progress';
 import { Textarea } from '@/components/ui/textarea';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
 import { usePermission } from '@/hooks/use-permission';
+import { formatLeaveDays } from '@/lib/leave-utils';
 import {
     cancel as leaveCancelRoute,
     create as leaveCreateRoute,
@@ -1188,33 +1189,19 @@ export default function Index({
                                                                         null ? (
                                                                         <span
                                                                             className="text-orange-600"
-                                                                            title={`${request.approved_days} of ${Math.floor(request.days_requested)} days approved`}
+                                                                            title={`${formatLeaveDays(request.approved_days)} of ${formatLeaveDays(request.days_requested)} approved`}
                                                                         >
-                                                                            {Math.floor(
+                                                                            {formatLeaveDays(
                                                                                 request.approved_days,
-                                                                            )}{' '}
-                                                                            {Math.floor(
-                                                                                request.approved_days,
-                                                                            ) ===
-                                                                            1
-                                                                                ? 'day'
-                                                                                : 'days'}
+                                                                            )}
                                                                             <span className="ml-1 text-xs text-muted-foreground">
                                                                                 (partial)
                                                                             </span>
                                                                         </span>
                                                                     ) : (
-                                                                        <>
-                                                                            {Math.floor(
-                                                                                request.days_requested,
-                                                                            )}{' '}
-                                                                            {Math.floor(
-                                                                                request.days_requested,
-                                                                            ) ===
-                                                                            1
-                                                                                ? 'day'
-                                                                                : 'days'}
-                                                                        </>
+                                                                        formatLeaveDays(
+                                                                            request.days_requested,
+                                                                        )
                                                                     )}
                                                                 </TableCell>
                                                                 <TableCell>
@@ -1547,27 +1534,19 @@ export default function Index({
                                                 request.approved_days !==
                                                     null ? (
                                                     <span className="font-medium text-orange-600">
-                                                        {request.approved_days}{' '}
-                                                        of{' '}
-                                                        {Math.floor(
-                                                            request.days_requested,
+                                                        {formatLeaveDays(
+                                                            request.approved_days,
                                                         )}{' '}
-                                                        {Math.floor(
+                                                        of{' '}
+                                                        {formatLeaveDays(
                                                             request.days_requested,
-                                                        ) === 1
-                                                            ? 'day'
-                                                            : 'days'}
+                                                        )}
                                                     </span>
                                                 ) : (
                                                     <span className="font-medium">
-                                                        {Math.floor(
+                                                        {formatLeaveDays(
                                                             request.days_requested,
-                                                        )}{' '}
-                                                        {Math.floor(
-                                                            request.days_requested,
-                                                        ) === 1
-                                                            ? 'day'
-                                                            : 'days'}
+                                                        )}
                                                     </span>
                                                 )}
                                             </div>

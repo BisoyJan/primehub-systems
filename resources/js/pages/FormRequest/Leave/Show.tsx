@@ -35,6 +35,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useInitials } from '@/hooks/use-initials';
 import { usePermission } from '@/hooks/use-permission';
 import AppLayout from '@/layouts/app-layout';
+import { formatLeaveDays } from '@/lib/leave-utils';
 import {
     approve as leaveApproveRoute,
     cancel as leaveCancelRoute,
@@ -1561,19 +1562,26 @@ export default function Show({
                                     {leaveRequest.has_partial_denial ? (
                                         <>
                                             <span className="font-medium text-green-600">
-                                                {leaveRequest.approved_days}{' '}
-                                                days approved
+                                                {formatLeaveDays(
+                                                    leaveRequest.approved_days,
+                                                )}{' '}
+                                                approved
                                             </span>
                                             <span className="text-muted-foreground">
                                                 {' '}
-                                                / {
-                                                    leaveRequest.days_requested
-                                                }{' '}
-                                                days requested
+                                                /{' '}
+                                                {formatLeaveDays(
+                                                    leaveRequest.days_requested,
+                                                )}{' '}
+                                                requested
                                             </span>
                                         </>
                                     ) : (
-                                        <>{leaveRequest.days_requested} days</>
+                                        <>
+                                            {formatLeaveDays(
+                                                leaveRequest.days_requested,
+                                            )}
+                                        </>
                                     )}
                                 </p>
                             </div>

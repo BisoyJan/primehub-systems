@@ -78,6 +78,15 @@ export function getDayName(dateString: string): string {
     return date.toLocaleDateString('en-US', { weekday: 'long' });
 }
 
+/** Format decimal leave durations without rounding half days down. */
+export function formatLeaveDays(
+    value: number | string | null | undefined,
+): string {
+    const days = Number(value ?? 0);
+    if (days === 0.5) return 'Half day';
+    return `${days} ${days === 1 ? 'day' : 'days'}`;
+}
+
 /** Solo Parent Leave: minimum start date (2 weeks ago) */
 export function getSplMinDate(): string {
     const date = new Date();
