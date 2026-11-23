@@ -19,6 +19,17 @@ interface UseItConcernNotificationsOptions {
     onConcern?: () => void;
 }
 
+const CHANNEL = 'it-concerns';
+const EVENT = '.concern.created';
+
+// Every page renders its own AppLayout, so this hook unmounts and remounts on
+// each Inertia visit. Leaving the channel right away would unsubscribe and
+// re-authorize on every navigation, dropping any concern broadcast in between.
+// The leave is deferred so the next page can reuse the live subscription; it
+// still runs once no page needs it (e.g. after logout).
+const LEAVE_DELAY_MS = 2000;
+let pendingLeave: ReturnType<typeof setTimeout> | null = null;
+
 /**
  * Subscribes to the `it-concerns` private channel and shows a browser desktop
  * notification whenever a new IT concern is created. Because it reacts to a
@@ -72,15 +83,23 @@ export function useItConcernNotifications({
         const echoInstance = getEcho();
         if (!echoInstance) return;
 
-        echoInstance
-            .private('it-concerns')
-            .listen('.concern.created', (concern: ItConcernBroadcast) => {
-                showNotification(concern);
-                onConcernRef.current?.();
-            });
+        if (pendingLeave) {
+            clearTimeout(pendingLeave);
+            pendingLeave = null;
+        }
+
+        const listener = (concern: ItConcernBroadcast) => {
+            showNotification(concern);
+            onConcernRef.current?.();
+        };
+        const channel = echoInstance.private(CHANNEL).listen(EVENT, listener);
 
         return () => {
-            echoInstance.leave('it-concerns');
+            channel.stopListening(EVENT, listener);
+            pendingLeave = setTimeout(() => {
+                pendingLeave = null;
+                echoInstance.leave(CHANNEL);
+            }, LEAVE_DELAY_MS);
         };
     }, [enabled, showNotification]);
 }
