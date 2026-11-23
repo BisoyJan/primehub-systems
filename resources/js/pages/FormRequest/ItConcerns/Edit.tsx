@@ -1,6 +1,7 @@
 import { Can } from '@/components/authorization';
 import {
     ItConcernEditHistory,
+    StationNumberHistory,
     type ItConcernEditEntry,
 } from '@/components/it-concern-edit-history';
 import {
@@ -56,6 +57,7 @@ interface ItConcern {
     } | null;
     site_id: number;
     station_number: string;
+    reported_station_number: string | null;
     category: string;
     description: string;
     status: string;
@@ -144,8 +146,7 @@ export default function ItConcernEdit() {
                                 <CardHeader>
                                     <CardTitle>Basic Information</CardTitle>
                                     <CardDescription>
-                                        Original concern details submitted by
-                                        the agent
+                                        Current details of the reported issue
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent className="space-y-4">
@@ -198,7 +199,7 @@ export default function ItConcernEdit() {
 
                                     <div className="space-y-2">
                                         <Label htmlFor="station_number">
-                                            Station #{' '}
+                                            Current Station #{' '}
                                             <span className="text-red-500">
                                                 *
                                             </span>
@@ -225,6 +226,12 @@ export default function ItConcernEdit() {
                                                 {errors.station_number}
                                             </p>
                                         )}
+                                        <StationNumberHistory
+                                            reportedStation={
+                                                concern.reported_station_number
+                                            }
+                                            entries={editHistory}
+                                        />
                                     </div>
 
                                     <div className="space-y-2">

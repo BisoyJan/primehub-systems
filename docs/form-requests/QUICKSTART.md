@@ -77,6 +77,10 @@
 4. Work on the issue
 5. Click "Resolve" and add resolution notes
 
+### Correct a station number
+
+If the agent reported the wrong station, open **Edit**, change **Current Station #** under **Basic Information**, and save. The ticket uses the corrected station. **Originally reported** stays read-only on the edit and detail pages. Station changes show who changed the number, when, and the old and new values; edits to notes or other fields do not count as station corrections. For older tickets without a submission record, the original is shown as **Not recorded**.
+
 ### Priority Levels
 
 | Priority | Response Time | Color |

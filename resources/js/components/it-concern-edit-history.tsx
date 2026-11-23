@@ -76,6 +76,35 @@ interface ItConcernEditHistoryProps {
     initialVisible?: number;
 }
 
+export function StationNumberHistory({
+    reportedStation,
+    entries,
+}: {
+    reportedStation: string | null;
+    entries: ItConcernEditEntry[];
+}) {
+    const corrections = entries.flatMap((entry) => {
+        const changes = entry.changes.filter(
+            (change) => change.field === 'station_number',
+        );
+        return changes.length ? [{ ...entry, changes }] : [];
+    });
+
+    return (
+        <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+                Originally reported: {reportedStation ?? 'Not recorded'}
+            </p>
+            {corrections.length > 0 && (
+                <ItConcernEditHistory
+                    entries={corrections}
+                    initialVisible={1}
+                />
+            )}
+        </div>
+    );
+}
+
 export function ItConcernEditHistory({
     entries,
     initialVisible = 3,

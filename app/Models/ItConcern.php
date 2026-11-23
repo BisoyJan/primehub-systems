@@ -5,12 +5,19 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 class ItConcern extends Model
 {
     use HasFactory, LogsActivity;
+
+    protected static function booted(): void
+    {
+        static::creating(function (ItConcern $concern): void {
+            $concern->reported_station_number = $concern->station_number;
+        });
+    }
 
     public function getActivitylogOptions(): LogOptions
     {

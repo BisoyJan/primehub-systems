@@ -402,6 +402,59 @@ class ItConcernControllerTest extends TestCase
     }
 
     #[Test]
+    public function it_shows_station_number_changes_in_the_edit_history(): void
+    {
+        $firstIt = User::factory()->create(['role' => 'IT', 'is_approved' => true]);
+        $secondIt = User::factory()->create(['role' => 'IT', 'is_approved' => true]);
+        $concern = ItConcern::factory()->create([
+            'user_id' => User::factory()->create(['role' => 'Agent', 'is_approved' => true])->id,
+            'site_id' => Site::factory()->create()->id,
+            'station_number' => 'PC-OLD',
+            'status' => 'in_progress',
+        ]);
+
+        $this->actingAs($firstIt)->put(route('it-concerns.update', $concern), [
+            'site_id' => $concern->site_id,
+            'station_number' => 'PC-NEW',
+            'reported_station_number' => 'PC-NEW',
+            'category' => $concern->category,
+            'priority' => $concern->priority,
+            'description' => $concern->description,
+            'status' => 'in_progress',
+        ])->assertRedirect();
+
+        $this->actingAs($secondIt)->get(route('it-concerns.show', $concern))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('FormRequest/ItConcerns/Show')
+                ->where('concern.reported_station_number', 'PC-OLD')
+                ->where('concern.station_number', 'PC-NEW')
+                ->where('editHistory.0.name', $firstIt->name)
+                ->where('editHistory.0.changes', fn ($changes) => collect($changes)->contains(
+                    fn ($change) => $change['field'] === 'station_number'
+                        && $change['old'] === 'PC-OLD'
+                        && $change['new'] === 'PC-NEW'
+                ))
+            );
+
+        $this->actingAs($secondIt)->put(route('it-concerns.update', $concern), [
+            'site_id' => $concern->site_id,
+            'station_number' => 'PC-FINAL',
+            'category' => $concern->category,
+            'priority' => $concern->priority,
+            'description' => $concern->description,
+        ])->assertSessionHasNoErrors();
+
+        $this->get(route('it-concerns.edit', $concern))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('concern.reported_station_number', 'PC-OLD')
+                ->where('concern.station_number', 'PC-FINAL')
+                ->where('editHistory.0.name', $secondIt->name)
+                ->where('editHistory.1.name', $firstIt->name)
+            );
+    }
+
+    #[Test]
     public function it_allows_admin_to_create_concern_for_another_user()
     {
         $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);

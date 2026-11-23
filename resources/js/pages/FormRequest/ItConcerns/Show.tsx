@@ -1,6 +1,7 @@
 import { PageHeader } from '@/components/PageHeader';
 import {
     ItConcernEditHistory,
+    StationNumberHistory,
     type ItConcernEditEntry,
 } from '@/components/it-concern-edit-history';
 import {
@@ -69,6 +70,7 @@ interface ItConcern {
     user?: UserType;
     site: Site;
     station_number: string;
+    reported_station_number: string | null;
     category: string;
     description: string;
     status: 'pending' | 'in_progress' | 'resolved' | 'cancelled';
@@ -347,10 +349,20 @@ export default function Show() {
                                 <span className="font-medium">Site:</span>
                                 <span>{concern.site.name}</span>
                             </div>
-                            <div className="flex items-center gap-2">
-                                <Monitor className="h-4 w-4 text-muted-foreground" />
-                                <span className="font-medium">Station:</span>
-                                <span>{concern.station_number}</span>
+                            <div className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                    <Monitor className="h-4 w-4 text-muted-foreground" />
+                                    <span className="font-medium">
+                                        Current Station:
+                                    </span>
+                                    <span>{concern.station_number}</span>
+                                </div>
+                                <StationNumberHistory
+                                    reportedStation={
+                                        concern.reported_station_number
+                                    }
+                                    entries={editHistory}
+                                />
                             </div>
                             <div className="flex items-center gap-2">
                                 <span className="font-medium">Category:</span>
