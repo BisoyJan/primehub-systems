@@ -14,6 +14,7 @@ use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
+use Spatie\Activitylog\Models\Activity;
 
 class ItConcernController extends Controller
 {
@@ -186,6 +187,100 @@ class ItConcernController extends Controller
     }
 
     /**
+     * Keep the first IT user who resolved the concern. Later edits on an already
+     * resolved concern never change the resolver; reopening clears it so the
+     * next IT user who resolves the concern gets the credit.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    protected function applyResolutionTracking(ItConcern $itConcern, ?string $newStatus, array $data): array
+    {
+        if ($newStatus === null) {
+            return $data;
+        }
+
+        $wasResolved = $itConcern->status === 'resolved';
+
+        if ($newStatus === 'resolved' && ! $wasResolved) {
+            $data['resolved_at'] = now();
+
+            if (in_array(auth()->user()->role, ['IT', 'Super Admin'], true)) {
+                $data['resolved_by'] = auth()->id();
+            }
+        } elseif ($newStatus !== 'resolved' && $wasResolved) {
+            $data['resolved_at'] = null;
+            $data['resolved_by'] = null;
+        }
+
+        return $data;
+    }
+
+    /**
+     * Get every edit made to the concern (newest first) from the activity log,
+     * with user/site IDs swapped for readable names.
+     *
+     * @return list<array{id: int, name: string, at: string, changes: list<array{field: string, old: mixed, new: mixed}>}>
+     */
+    protected function getEditHistory(ItConcern $itConcern): array
+    {
+        $activities = $itConcern->activities()
+            ->where('event', 'updated')
+            ->with('causer')
+            ->latest('id')
+            ->get();
+
+        $userIds = collect();
+        $siteIds = collect();
+        foreach ($activities as $activity) {
+            foreach (['old', 'attributes'] as $key) {
+                $values = $activity->properties->get($key, []);
+                $userIds->push($values['resolved_by'] ?? null, $values['user_id'] ?? null);
+                $siteIds->push($values['site_id'] ?? null);
+            }
+        }
+
+        $userNames = User::query()
+            ->whereIn('id', $userIds->filter()->unique())
+            ->get()
+            ->mapWithKeys(fn (User $user) => [$user->id => $user->name]);
+        $siteNames = Site::query()
+            ->whereIn('id', $siteIds->filter()->unique())
+            ->pluck('name', 'id');
+
+        $displayValue = fn (string $field, mixed $value): mixed => match ($field) {
+            'resolved_by', 'user_id' => $value ? ($userNames[$value] ?? "User #{$value}") : null,
+            'site_id' => $value ? ($siteNames[$value] ?? "Site #{$value}") : null,
+            default => $value,
+        };
+
+        return $activities
+            ->map(function (Activity $activity) use ($displayValue): array {
+                $old = $activity->properties->get('old', []);
+
+                $changes = collect($activity->properties->get('attributes', []))
+                    ->except('updated_at')
+                    ->map(fn (mixed $value, string $field): array => [
+                        'field' => $field,
+                        'old' => $displayValue($field, $old[$field] ?? null),
+                        'new' => $displayValue($field, $value),
+                    ])
+                    ->values()
+                    ->all();
+
+                return [
+                    'id' => $activity->id,
+                    'name' => $activity->causer?->name ?? 'System',
+                    'at' => $activity->created_at->toIso8601String(),
+                    'changes' => $changes,
+                ];
+            })
+            ->filter(fn (array $entry): bool => $entry['changes'] !== [])
+            ->values()
+            ->all();
+    }
+
+    /**
      * Push a live update to anyone with the ticket open. A broadcast failure
      * must never break the underlying write, so errors are only logged.
      *
@@ -211,6 +306,7 @@ class ItConcernController extends Controller
 
         return Inertia::render('FormRequest/ItConcerns/Show', [
             'concern' => $itConcern,
+            'editHistory' => $this->getEditHistory($itConcern),
         ]);
     }
 
@@ -225,6 +321,7 @@ class ItConcernController extends Controller
         return Inertia::render('FormRequest/ItConcerns/Edit', [
             'concern' => $itConcern,
             'sites' => $sites,
+            'editHistory' => $this->getEditHistory($itConcern),
         ]);
     }
 
@@ -236,17 +333,7 @@ class ItConcernController extends Controller
         $validated = $request->validated();
         $oldStatus = $itConcern->status;
 
-        // If status is being changed to resolved, set resolved_at timestamp and resolved_by
-        if (isset($validated['status']) && $validated['status'] === 'resolved') {
-            // Only set resolved_at if not already resolved
-            if ($itConcern->status !== 'resolved') {
-                $validated['resolved_at'] = now();
-            }
-            // Auto-fill resolved_by if user is IT role and not already set
-            if (auth()->user()->role === 'IT' || auth()->user()->role === 'Super Admin' && ! $itConcern->resolved_by) {
-                $validated['resolved_by'] = auth()->id();
-            }
-        }
+        $validated = $this->applyResolutionTracking($itConcern, $validated['status'] ?? null, $validated);
 
         $itConcern->update($validated);
 
@@ -310,11 +397,7 @@ class ItConcernController extends Controller
         ]);
 
         $oldStatus = $itConcern->status;
-        $data = ['status' => $request->status];
-
-        if ($request->status === 'resolved') {
-            $data['resolved_at'] = now();
-        }
+        $data = $this->applyResolutionTracking($itConcern, $request->status, ['status' => $request->status]);
 
         $itConcern->update($data);
 
@@ -359,14 +442,7 @@ class ItConcernController extends Controller
             $data['priority'] = $request->priority;
         }
 
-        // Set resolved_at timestamp if status is resolved
-        if ($data['status'] === 'resolved' && $itConcern->status !== 'resolved') {
-            $data['resolved_at'] = now();
-            // Auto-fill resolved_by if user is IT role and not already set
-            if ((auth()->user()->role === 'IT' || auth()->user()->role === 'Super Admin') && ! $itConcern->resolved_by) {
-                $data['resolved_by'] = auth()->id();
-            }
-        }
+        $data = $this->applyResolutionTracking($itConcern, $data['status'], $data);
 
         $itConcern->update($data);
 

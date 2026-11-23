@@ -36,6 +36,7 @@ type RawFocusMap = Record<number, Record<string, ConcernViewer>>;
 
 const CHANNEL = 'it-concerns.presence';
 const FOCUS_EVENT = 'concern-focus';
+const SYNC_EVENT = 'concern-sync';
 
 export interface ItConcernPresence {
     /** False when the current user cannot resolve concerns (no channel access). */
@@ -198,6 +199,12 @@ export function useItConcernPresence(): ItConcernPresence {
             .here((users: PresenceUser[]) => {
                 setActiveUsers(users);
                 announceFocus();
+                // `joining` only fires for a user's first connection, so a new
+                // tab of someone already online would never hear existing
+                // focus. Ask every other tab to re-announce explicitly.
+                channel.whisper(SYNC_EVENT, {
+                    client_id: clientIdRef.current,
+                });
             })
             .joining((user: PresenceUser) => {
                 setActiveUsers((prev) => [
@@ -211,6 +218,7 @@ export function useItConcernPresence(): ItConcernPresence {
                 setActiveUsers((prev) => prev.filter((u) => u.id !== user.id));
                 setRawFocus((prev) => withoutUser(prev, user.id));
             })
+            .listenForWhisper(SYNC_EVENT, () => announceFocus())
             .listenForWhisper(FOCUS_EVENT, (payload: ConcernFocusPayload) => {
                 if (payload.user.id === selfRef.current?.id) return;
                 setRawFocus((prev) => {

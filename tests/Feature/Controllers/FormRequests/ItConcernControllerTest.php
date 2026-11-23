@@ -277,6 +277,131 @@ class ItConcernControllerTest extends TestCase
     }
 
     #[Test]
+    public function it_keeps_the_first_resolver_when_another_it_user_edits_a_resolved_concern(): void
+    {
+        $firstIt = User::factory()->create(['role' => 'IT', 'is_approved' => true]);
+        $secondIt = User::factory()->create(['role' => 'IT', 'is_approved' => true]);
+        $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        $site = Site::factory()->create();
+        $concern = ItConcern::factory()->create([
+            'user_id' => $agent->id,
+            'site_id' => $site->id,
+            'status' => 'in_progress',
+        ]);
+
+        $this->actingAs($firstIt)->post(route('it-concerns.resolve', $concern), [
+            'resolution_notes' => 'Replaced cable',
+            'status' => 'resolved',
+        ]);
+
+        $resolvedAt = $concern->fresh()->resolved_at;
+        $this->travel(2)->hours();
+
+        $this->actingAs($secondIt)->put(route('it-concerns.update', $concern), [
+            'site_id' => $site->id,
+            'station_number' => (string) $concern->station_number,
+            'category' => $concern->category,
+            'priority' => 'high',
+            'description' => 'Edited by second IT',
+            'status' => 'resolved',
+            'resolution_notes' => 'Replaced cable and router',
+        ])->assertRedirect();
+
+        $this->actingAs($secondIt)->post(route('it-concerns.resolve', $concern), [
+            'resolution_notes' => 'Updated notes again',
+            'status' => 'resolved',
+        ])->assertRedirect();
+
+        $concern->refresh();
+        $this->assertSame($firstIt->id, $concern->resolved_by);
+        $this->assertTrue($resolvedAt->equalTo($concern->resolved_at));
+        $this->assertSame('Updated notes again', $concern->resolution_notes);
+    }
+
+    #[Test]
+    public function it_clears_the_resolver_on_reopen_and_credits_the_next_it_user_who_resolves(): void
+    {
+        $firstIt = User::factory()->create(['role' => 'IT', 'is_approved' => true]);
+        $secondIt = User::factory()->create(['role' => 'IT', 'is_approved' => true]);
+        $concern = ItConcern::factory()->create([
+            'user_id' => User::factory()->create(['role' => 'Agent', 'is_approved' => true])->id,
+            'site_id' => Site::factory()->create()->id,
+            'status' => 'resolved',
+            'resolved_by' => $firstIt->id,
+            'resolved_at' => now(),
+        ]);
+
+        $this->actingAs($secondIt)->post(route('it-concerns.updateStatus', $concern), [
+            'status' => 'in_progress',
+        ])->assertRedirect();
+
+        $concern->refresh();
+        $this->assertNull($concern->resolved_by);
+        $this->assertNull($concern->resolved_at);
+
+        $this->actingAs($secondIt)->post(route('it-concerns.updateStatus', $concern), [
+            'status' => 'resolved',
+        ])->assertRedirect();
+
+        $concern->refresh();
+        $this->assertSame($secondIt->id, $concern->resolved_by);
+        $this->assertNotNull($concern->resolved_at);
+    }
+
+    #[Test]
+    public function it_lists_every_edit_with_editor_and_timestamp_on_show_and_edit_pages(): void
+    {
+        $firstIt = User::factory()->create(['role' => 'IT', 'is_approved' => true]);
+        $secondIt = User::factory()->create(['role' => 'IT', 'is_approved' => true]);
+        $concern = ItConcern::factory()->create([
+            'user_id' => User::factory()->create(['role' => 'Agent', 'is_approved' => true])->id,
+            'site_id' => Site::factory()->create()->id,
+            'status' => 'in_progress',
+        ]);
+
+        $this->actingAs($firstIt)->post(route('it-concerns.resolve', $concern), [
+            'resolution_notes' => 'Fixed',
+            'status' => 'resolved',
+        ]);
+        $this->travel(5)->minutes();
+        $this->actingAs($secondIt)->post(route('it-concerns.resolve', $concern), [
+            'resolution_notes' => 'Fixed (details added)',
+            'status' => 'resolved',
+        ]);
+        $this->travel(5)->minutes();
+        $this->actingAs($firstIt)->post(route('it-concerns.resolve', $concern), [
+            'resolution_notes' => 'Fixed (final)',
+            'status' => 'resolved',
+        ]);
+
+        $this->actingAs($firstIt)->get(route('it-concerns.show', $concern))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('FormRequest/ItConcerns/Show')
+                ->where('concern.resolved_by.id', $firstIt->id)
+                ->has('editHistory', 3)
+                ->where('editHistory.0.name', $firstIt->name)
+                ->where('editHistory.0.changes.0.field', 'resolution_notes')
+                ->where('editHistory.0.changes.0.old', 'Fixed (details added)')
+                ->where('editHistory.0.changes.0.new', 'Fixed (final)')
+                ->where('editHistory.1.name', $secondIt->name)
+                ->where('editHistory.2.name', $firstIt->name)
+                ->where('editHistory.2.changes', fn ($changes) => collect($changes)->contains(
+                    fn ($change) => $change['field'] === 'resolved_by' && $change['old'] === null && $change['new'] === $firstIt->name
+                ))
+                ->where('editHistory', fn ($entries) => collect($entries)->pluck('at')->unique()->count() === 3)
+            );
+
+        $this->actingAs($firstIt)->get(route('it-concerns.edit', $concern))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('FormRequest/ItConcerns/Edit')
+                ->has('editHistory', 3)
+                ->where('editHistory.1.name', $secondIt->name)
+            );
+    }
+
+    #[Test]
     public function it_allows_admin_to_create_concern_for_another_user()
     {
         $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);

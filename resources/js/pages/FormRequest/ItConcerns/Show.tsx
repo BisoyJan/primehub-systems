@@ -1,5 +1,9 @@
 import { PageHeader } from '@/components/PageHeader';
 import {
+    ItConcernEditHistory,
+    type ItConcernEditEntry,
+} from '@/components/it-concern-edit-history';
+import {
     ActiveItStaffPanel,
     ConcernViewerBanner,
 } from '@/components/it-concern-presence';
@@ -79,6 +83,7 @@ interface ItConcern {
 
 interface PageProps extends SharedData {
     concern: ItConcern;
+    editHistory: ItConcernEditEntry[];
 }
 
 const getStatusBadge = (status: string) => {
@@ -166,7 +171,8 @@ const formatDate = (dateString: string) => {
 };
 
 export default function Show() {
-    const { concern, auth } = usePage<PageProps>().props;
+    const { concern, editHistory, auth } = usePage<PageProps>().props;
+    const lastUpdate = editHistory[0] ?? null;
     const { can } = usePermission();
 
     const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
@@ -224,7 +230,7 @@ export default function Show() {
                   ? 'cancelled'
                   : 'updated';
         toast.info(`${payload.updated_by.name} ${verb} this IT concern.`);
-        router.reload({ only: ['concern'] });
+        router.reload({ only: ['concern', 'editHistory'] });
     });
 
     const { title, breadcrumbs } = usePageMeta({
@@ -363,6 +369,18 @@ export default function Show() {
                                 <span className="font-medium">Created:</span>
                                 <span>{formatDate(concern.created_at)}</span>
                             </div>
+                            {lastUpdate && (
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <User className="h-4 w-4 text-muted-foreground" />
+                                    <span className="font-medium">
+                                        Last Updated By:
+                                    </span>
+                                    <span>{lastUpdate.name}</span>
+                                    <span className="text-sm text-muted-foreground">
+                                        ({formatDate(lastUpdate.at)})
+                                    </span>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
 
@@ -379,7 +397,7 @@ export default function Show() {
                         </CardContent>
                     </Card>
 
-                    {concern.resolution_notes && (
+                    {(concern.resolution_notes || concern.resolved_by) && (
                         <Card className="md:col-span-2">
                             <CardHeader>
                                 <CardTitle className="text-lg">
@@ -407,14 +425,32 @@ export default function Show() {
                                         </span>
                                     </div>
                                 )}
-                                <div>
-                                    <span className="font-medium">
-                                        Resolution Notes:
-                                    </span>
-                                    <p className="mt-2 text-sm whitespace-pre-wrap text-muted-foreground">
-                                        {concern.resolution_notes}
-                                    </p>
-                                </div>
+                                {concern.resolution_notes && (
+                                    <div>
+                                        <span className="font-medium">
+                                            Resolution Notes:
+                                        </span>
+                                        <p className="mt-2 text-sm whitespace-pre-wrap text-muted-foreground">
+                                            {concern.resolution_notes}
+                                        </p>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {editHistory.length > 0 && (
+                        <Card className="md:col-span-2">
+                            <CardHeader>
+                                <CardTitle className="text-lg">
+                                    Edit History
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <ItConcernEditHistory
+                                    entries={editHistory}
+                                    initialVisible={5}
+                                />
                             </CardContent>
                         </Card>
                     )}

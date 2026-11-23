@@ -1,5 +1,9 @@
 import { Can } from '@/components/authorization';
 import {
+    ItConcernEditHistory,
+    type ItConcernEditEntry,
+} from '@/components/it-concern-edit-history';
+import {
     ActiveItStaffPanel,
     ConcernViewerBanner,
 } from '@/components/it-concern-presence';
@@ -62,11 +66,12 @@ interface ItConcern {
 interface PageProps extends SharedData {
     concern: ItConcern;
     sites: Site[];
+    editHistory: ItConcernEditEntry[];
     [key: string]: unknown;
 }
 
 export default function ItConcernEdit() {
-    const { concern, sites } = usePage<PageProps>().props;
+    const { concern, sites, editHistory } = usePage<PageProps>().props;
 
     const { title, breadcrumbs } = usePageMeta({
         title: 'Edit IT Concern',
@@ -406,6 +411,15 @@ export default function ItConcernEdit() {
                                                 <div className="text-sm font-medium">
                                                     {concern.resolved_by.name}
                                                 </div>
+                                            </div>
+                                        )}
+
+                                        {editHistory.length > 0 && (
+                                            <div className="space-y-2">
+                                                <Label>Edit History</Label>
+                                                <ItConcernEditHistory
+                                                    entries={editHistory}
+                                                />
                                             </div>
                                         )}
 
