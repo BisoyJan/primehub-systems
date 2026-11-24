@@ -20,16 +20,17 @@ import {
     update as sessionsUpdate,
 } from '@/routes/coaching/sessions';
 
-import type { CoachingPurposeLabels, CoachingSession } from '@/types';
+import type { CoachingPurposeLabels, CoachingSession, User } from '@/types';
 
 interface Props extends InertiaPageProps {
     session: CoachingSession;
+    agents: User[] | null;
     purposes: CoachingPurposeLabels;
     severityFlags: string[];
 }
 
 export default function CoachingSessionsEdit() {
-    const { session, purposes, severityFlags } = usePage<Props>().props;
+    const { session, agents, purposes, severityFlags } = usePage<Props>().props;
 
     const { title, breadcrumbs } = usePageMeta({
         title: 'Edit Coaching Session',
@@ -42,7 +43,8 @@ export default function CoachingSessionsEdit() {
     useFlashMessage();
     const isPageLoading = usePageLoading();
 
-    const { data, setData, put, patch, errors, processing } = useForm({
+    const { data, setData, post, transform, errors, processing } = useForm({
+        coachee_id: session.coachee_id,
         session_date: session.session_date
             ? session.session_date.split('T')[0]
             : '',
@@ -119,11 +121,27 @@ export default function CoachingSessionsEdit() {
 
     const [submittingDraft, setSubmittingDraft] = useState(false);
 
+    const submitSession = (submitDraft: boolean) => {
+        const route = submitDraft
+            ? sessionsSubmit(session.id)
+            : sessionsUpdate(session.id);
+        transform(({ coachee_id, ...fields }) => ({
+            ...fields,
+            ...(agents !== null && coachee_id !== session.coachee_id
+                ? { coachee_id }
+                : {}),
+            _method: route.method,
+        }));
+        setSubmittingDraft(submitDraft);
+        post(route.url, {
+            forceFormData: true,
+            onFinish: () => setSubmittingDraft(false),
+        });
+    };
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        put(sessionsUpdate(session.id).url, {
-            forceFormData: true,
-        });
+        submitSession(false);
     };
 
     const handleSubmitDraft = () => {
@@ -186,12 +204,10 @@ export default function CoachingSessionsEdit() {
             return;
         }
 
-        setSubmittingDraft(true);
-        patch(sessionsSubmit(session.id).url, {
-            forceFormData: true,
-            onFinish: () => setSubmittingDraft(false),
-        });
+        submitSession(true);
     };
+
+    const selectedAgent = agents?.find((agent) => agent.id === data.coachee_id);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -205,7 +221,7 @@ export default function CoachingSessionsEdit() {
 
                 <PageHeader
                     title="Edit Coaching Session"
-                    description={`Editing session for ${formatName(session.coachee)} on ${formatDate(session.session_date)}`}
+                    description={`Editing session for ${formatName(selectedAgent ?? session.coachee)} on ${formatDate(session.session_date)}`}
                     actions={
                         <Link href={sessionsShow.url(session.id)}>
                             <Button variant="outline">
@@ -217,13 +233,26 @@ export default function CoachingSessionsEdit() {
                 />
 
                 <form onSubmit={handleSubmit} className="space-y-2">
+                    {agents === null && session.coach?.role === 'Team Lead' && (
+                        <p className="text-sm text-muted-foreground">
+                            The agent can only be changed on a draft or a
+                            session still awaiting acknowledgement.
+                        </p>
+                    )}
+                    {agents === null && errors.coachee_id && (
+                        <p role="alert" className="text-sm text-destructive">
+                            {errors.coachee_id}
+                        </p>
+                    )}
                     <CoachingFormFields
                         data={data}
                         setData={setData}
                         errors={errors}
                         purposes={purposes}
                         severityFlags={severityFlags}
-                        showAgentSelect={false}
+                        agents={agents ?? []}
+                        currentAgent={session.coachee}
+                        showAgentSelect={agents !== null}
                         existingAttachments={session.attachments ?? []}
                         removedAttachmentIds={removedAttachmentIds}
                         onRemoveExistingAttachment={

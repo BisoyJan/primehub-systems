@@ -273,6 +273,36 @@ class CoachingSessionDraftTest extends TestCase
     // ─── Submit Draft Tests ─────────────────────────────────────────
 
     #[Test]
+    public function draft_save_and_submit_both_use_the_selected_agent(): void
+    {
+        $team = $this->createTeamWithCampaign();
+        $original = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        $session = CoachingSession::factory()->draft()->create([
+            'coach_id' => $team['teamLead']->id, 'coachee_id' => $original->id,
+        ]);
+        $this->mock(NotificationService::class)->shouldReceive('notifyCoachingSessionCreated')
+            ->once()->with($original->id, $team['teamLead']->name, now()->toDateString(), $session->id);
+
+        $this->actingAs($team['teamLead'])->put(route('coaching.sessions.update', $session), [
+            'coachee_id' => $team['agent']->id,
+        ])->assertRedirect(route('coaching.sessions.show', $session))->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('coaching_sessions', [
+            'id' => $session->id, 'coachee_id' => $team['agent']->id, 'is_draft' => true,
+        ]);
+
+        $data = $this->validSessionData($original->id);
+        $this->patch(route('coaching.sessions.submit', $session), $data)->assertSessionHasErrors('coachee_id');
+        EmployeeSchedule::factory()->create([
+            'user_id' => $original->id, 'campaign_id' => $team['campaign']->id, 'is_active' => true,
+        ]);
+        $this->post(route('coaching.sessions.submit', $session), [...$data, '_method' => 'PATCH'])
+            ->assertRedirect(route('coaching.sessions.show', $session))->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('coaching_sessions', [
+            'id' => $session->id, 'coachee_id' => $original->id, 'is_draft' => false,
+        ]);
+    }
+
+    #[Test]
     public function team_lead_can_submit_draft_with_full_data(): void
     {
         $team = $this->createTeamWithCampaign();

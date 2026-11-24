@@ -204,14 +204,14 @@ If the session is still a draft, an amber banner shows a **Draft** label and the
 [Insert Screenshot: 'Edit Coaching Session' Form]
 
 1. The form is pre-filled with existing session data.
-2. Modify any field. *(Same fields and rules as Create.)*
+2. If the wrong agent was selected, use **Session Details → Agent** to choose another eligible agent for the same team lead. You can do this on a draft or while a submitted session is still awaiting acknowledgement. The coach stays the same. Acknowledged, disputed, reviewed, and archived logs cannot be reassigned.
 3. **Remove** existing attachments by clicking the **X** on them. Upload new ones as needed.
 4. For draft sessions:
    - Click **Save Draft** to keep as draft.
    - Click **Submit Coaching Session** to finalize.
    - *Before submit, the system checks that performance description and SMART action plan are at least 10 characters, and that purpose, date, profile, focus, and root causes are filled in.*
 5. For non-draft sessions:
-   - Click **Update Coaching Session** to save changes.
+   - Click **Update Coaching Session** to save changes. If you changed the agent, the new agent receives the coaching notification and the original agent no longer has access to the log.
 6. Click **Cancel** to go back to the details page.
 
 ---

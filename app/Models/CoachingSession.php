@@ -184,6 +184,19 @@ class CoachingSession extends Model
         return $this->belongsTo(User::class, 'coach_id');
     }
 
+    public function canChangeAgent(): bool
+    {
+        return $this->ack_status === 'Pending'
+            && $this->compliance_status === 'Awaiting_Agent_Ack'
+            && $this->coach?->role === 'Team Lead';
+    }
+
+    public function eligibleAgents(): Builder
+    {
+        return User::whereKey($this->coach?->getManagedAgentIds() ?? [])
+            ->notCoachingExcluded();
+    }
+
     /**
      * Get the compliance reviewer for this session.
      */

@@ -85,10 +85,8 @@ class StoreCoachingSessionRequest extends FormRequest
             'removed_attachments.*' => ['integer'],
         ];
 
-        // When submitting an existing draft, coachee/coach are already on the session
         if ($isSubmittingDraft) {
-            $rules['coach_id'] = ['nullable'];
-            $rules['coachee_id'] = ['nullable'];
+            $rules['coachee_id'] = ['sometimes', 'required', 'integer'];
         } elseif ($coachingMode === 'direct' && $isAdmin) {
             $rules['coach_id'] = ['nullable'];
             $rules['coachee_id'] = ['required', 'exists:users,id'];
@@ -111,6 +109,7 @@ class StoreCoachingSessionRequest extends FormRequest
             'coach_id.required' => 'Please select a team lead.',
             'coach_id.exists' => 'The selected team lead does not exist.',
             'coachee_id.required' => 'Please select a coachee.',
+            'coachee_id.integer' => 'Please select a valid coachee.',
             'coachee_id.exists' => 'The selected coachee does not exist.',
             'session_date.required' => 'Session date is required.',
             'session_date.before_or_equal' => 'Session date cannot be in the future.',
@@ -167,38 +166,8 @@ class StoreCoachingSessionRequest extends FormRequest
                     $validator->errors()->add('root_cause', 'Please select at least one root cause.');
                 }
 
-                $draftSession = $this->route('session');
-                if ($draftSession !== null) {
-                    $coach = User::find((int) $draftSession->coach_id);
-                    if (! $coach || $coach->role !== 'Team Lead') {
-                        return;
-                    }
-
-                    $coachCampaignIds = $coach->getCampaignIds();
-                    if (empty($coachCampaignIds)) {
-                        $validator->errors()->add('coachee_id', 'The selected agent does not belong to the same campaign as the team lead.');
-
-                        return;
-                    }
-
-                    $coacheeId = (int) $draftSession->coachee_id;
-
-                    $coacheeInCampaign = EmployeeSchedule::where('user_id', $coacheeId)
-                        ->whereIn('campaign_id', $coachCampaignIds)
-                        ->where('is_active', true)
-                        ->exists();
-
-                    if (! $coacheeInCampaign) {
-                        $validator->errors()->add('coachee_id', 'The selected agent does not belong to the same campaign as the team lead.');
-
-                        return;
-                    }
-
-                    $managedAgentIds = $coach->getManagedAgentIds($coachCampaignIds);
-                    if (! in_array($coacheeId, $managedAgentIds, true)) {
-                        $validator->errors()->add('coachee_id', 'The selected agent is assigned to another team lead in this campaign.');
-                    }
-
+                // Draft submission checks the final agent against the locked session.
+                if ($this->route('session') !== null) {
                     return;
                 }
 

@@ -36,6 +36,7 @@ class UpdateCoachingSessionRequest extends FormRequest
         $isDraft = $this->route('session')?->is_draft;
 
         return [
+            'coachee_id' => ['sometimes', 'required', 'integer'],
             'session_date' => [$isDraft ? 'nullable' : 'required', 'date', 'before_or_equal:today'],
             // Agent Profile
             'profile_new_hire' => ['sometimes', 'boolean'],
@@ -85,6 +86,8 @@ class UpdateCoachingSessionRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'coachee_id.required' => 'Please select an agent.',
+            'coachee_id.integer' => 'Please select a valid agent.',
             'session_date.required' => 'Session date is required.',
             'session_date.before_or_equal' => 'Session date cannot be in the future.',
             'purpose.required' => 'Please select the purpose of coaching.',

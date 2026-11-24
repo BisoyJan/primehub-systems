@@ -63,6 +63,7 @@ interface CoachingFormFieldsProps {
     purposes: CoachingPurposeLabels;
     severityFlags: string[];
     showAgentSelect?: boolean;
+    currentAgent?: User;
     selectedAgentId?: number | null;
     onAgentAddToQueue?: (agent: User) => void;
     queueAgentIds?: number[];
@@ -541,6 +542,7 @@ export function CoachingFormFields({
     purposes,
     severityFlags,
     showAgentSelect = true,
+    currentAgent,
     selectedAgentId,
     onAgentAddToQueue,
     queueAgentIds = [],
@@ -582,8 +584,11 @@ export function CoachingFormFields({
 
     const selectedAgent = useMemo(() => {
         const id = Number(data.coachee_id || selectedAgentId);
-        return agents.find((a) => a.id === id) ?? null;
-    }, [data.coachee_id, selectedAgentId, agents]);
+        return (
+            agents.find((a) => a.id === id) ??
+            (currentAgent?.id === id ? currentAgent : null)
+        );
+    }, [data.coachee_id, selectedAgentId, agents, currentAgent]);
 
     const selectedCoacheeTl = useMemo(() => {
         if (!isDirectMode) return null;
@@ -906,9 +911,17 @@ export function CoachingFormFields({
                             >
                                 <PopoverTrigger asChild>
                                     <Button
+                                        id="coachee_id"
+                                        type="button"
                                         variant="outline"
                                         role="combobox"
                                         aria-expanded={agentSearchOpen}
+                                        aria-invalid={!!errors.coachee_id}
+                                        aria-describedby={
+                                            errors.coachee_id
+                                                ? 'coachee_id-error'
+                                                : undefined
+                                        }
                                         className="w-full justify-between font-normal"
                                         disabled={isAdmin && !selectedTeamLead}
                                     >
@@ -1040,7 +1053,10 @@ export function CoachingFormFields({
                                 </PopoverContent>
                             </Popover>
                             {errors.coachee_id && (
-                                <p className="mt-1 text-sm text-red-600">
+                                <p
+                                    id="coachee_id-error"
+                                    className="mt-1 text-sm text-red-600"
+                                >
                                     {errors.coachee_id}
                                 </p>
                             )}

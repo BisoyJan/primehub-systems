@@ -3,6 +3,7 @@
 namespace Tests\Feature\Controllers\Coaching;
 
 use App\Models\Campaign;
+use App\Models\CoachingExclusion;
 use App\Models\CoachingSession;
 use App\Models\EmployeeSchedule;
 use App\Models\Notification;
@@ -12,6 +13,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia as Assert;
 use PHPUnit\Framework\Attributes\Test;
+use PHPUnit\Framework\Attributes\TestWith;
 use Tests\TestCase;
 
 class CoachingSessionControllerTest extends TestCase
@@ -610,6 +612,80 @@ class CoachingSessionControllerTest extends TestCase
     }
 
     // ─── Update Tests ───────────────────────────────────────────────
+
+    #[Test]
+    public function team_lead_can_correct_the_agent_on_a_pending_log(): void
+    {
+        $team = $this->createTeamWithCampaign();
+        $oldAgent = $this->createTeamWithCampaign()['agent'];
+        $session = CoachingSession::factory()->create([
+            'coach_id' => $team['teamLead']->id, 'coachee_id' => $oldAgent->id,
+        ]);
+        $this->mock(NotificationService::class)->shouldReceive('notifyCoachingSessionCreated')
+            ->once()->with($team['agent']->id, $team['teamLead']->name, now()->toDateString(), $session->id);
+
+        $this->actingAs($team['teamLead'])->get(route('coaching.sessions.edit', $session))
+            ->assertInertia(fn (Assert $page) => $page->where('session.coachee_id', $oldAgent->id)
+                ->has('agents', 1)->where('agents.0.id', $team['agent']->id));
+        $this->post(route('coaching.sessions.update', $session), [
+            ...$this->validSessionData($team['agent']->id), '_method' => 'PUT',
+        ])->assertRedirect(route('coaching.sessions.show', $session))->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('coaching_sessions', [
+            'id' => $session->id, 'coach_id' => $team['teamLead']->id, 'coachee_id' => $team['agent']->id,
+        ]);
+        $this->actingAs($oldAgent)->get(route('coaching.sessions.show', $session))->assertForbidden();
+        $this->actingAs($team['agent'])->get(route('coaching.sessions.show', $session))
+            ->assertInertia(fn (Assert $page) => $page->where('canAcknowledge', true));
+    }
+
+    #[Test]
+    public function replacements_must_be_eligible_for_the_original_coach(): void
+    {
+        $team = $this->createTeamWithCampaign();
+        $other = $this->createTeamWithCampaign();
+        $session = CoachingSession::factory()->create([
+            'coach_id' => $team['teamLead']->id, 'coachee_id' => $team['agent']->id,
+        ]);
+        $excluded = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create([
+            'campaign_id' => $team['campaign']->id, 'user_id' => $excluded->id, 'is_active' => true,
+        ]);
+        CoachingExclusion::create([
+            'user_id' => $excluded->id, 'excluded_by' => $team['teamLead']->id,
+            'excluded_at' => now(), 'reason' => CoachingExclusion::REASON_OTHER,
+        ]);
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+
+        $this->actingAs($admin)->get(route('coaching.sessions.edit', $session))
+            ->assertInertia(fn (Assert $page) => $page->has('agents', 1)->where('agents.0.id', $team['agent']->id));
+        foreach ([$excluded->id, $other['agent']->id, $team['teamLead']->id] as $id) {
+            $this->put(route('coaching.sessions.update', $session), [
+                ...$this->validSessionData($id), 'coach_id' => $other['teamLead']->id,
+            ])->assertSessionHasErrors('coachee_id');
+        }
+        $this->assertEquals($team['agent']->id, $session->fresh()->coachee_id);
+    }
+
+    #[Test]
+    #[TestWith(['Acknowledged', 'For_Review'])]
+    #[TestWith(['Disputed', 'Awaiting_Agent_Ack'])]
+    #[TestWith(['Archived', 'Archived'])]
+    #[TestWith(['Acknowledged', 'Verified'])]
+    public function a_completed_or_disputed_log_cannot_be_reassigned(string $ack, string $compliance): void
+    {
+        $team = $this->createTeamWithCampaign();
+        $session = CoachingSession::factory()->create([
+            'coach_id' => $team['teamLead']->id, 'ack_status' => $ack, 'compliance_status' => $compliance,
+        ]);
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+
+        $this->actingAs($admin)->get(route('coaching.sessions.edit', $session))
+            ->assertInertia(fn (Assert $page) => $page->where('agents', null));
+        $this->put(route('coaching.sessions.update', $session), $this->validSessionData($team['agent']->id))
+            ->assertSessionHasErrors('coachee_id');
+        $this->assertEquals($session->coachee_id, $session->fresh()->coachee_id);
+    }
 
     #[Test]
     public function team_lead_can_update_own_coaching_session(): void

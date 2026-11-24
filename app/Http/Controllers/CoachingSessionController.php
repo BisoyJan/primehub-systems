@@ -22,6 +22,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class CoachingSessionController extends Controller
@@ -684,25 +685,9 @@ class CoachingSessionController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($request, $session) {
-                $validated = $request->validated();
-
-                unset($validated['coaching_mode'], $validated['attachments'], $validated['coach_id'], $validated['coachee_id']);
-
-                $validated['is_draft'] = false;
-                $validated['submitted_at'] = now();
-
-                // Atomic update: only submit if still a draft (prevents double-submit race)
-                $affected = CoachingSession::where('id', $session->id)
-                    ->where('is_draft', true)
-                    ->update($validated);
-
-                if ($affected === 0) {
-                    throw new \RuntimeException('ALREADY_SUBMITTED');
-                }
-
-                $session->refresh();
-            });
+            $session = $this->saveSessionEdits($session, $request->safe()->except([
+                'attachments', 'removed_attachments', 'coaching_mode',
+            ]), submitDraft: true);
 
             // Handle removed attachments
             if ($request->filled('removed_attachments')) {
@@ -743,6 +728,8 @@ class CoachingSessionController extends Controller
             return redirect()->route('coaching.sessions.show', $session)
                 ->with('message', 'Draft submitted successfully.')
                 ->with('type', 'success');
+        } catch (ValidationException $e) {
+            throw $e;
         } catch (\RuntimeException $e) {
             if ($e->getMessage() === 'ALREADY_SUBMITTED') {
                 return $this->backWithFlash('This session has already been submitted.', 'error');
@@ -830,6 +817,11 @@ class CoachingSessionController extends Controller
 
         return Inertia::render('Coaching/Sessions/Edit', [
             'session' => $session,
+            'agents' => $session->canChangeAgent()
+                ? $session->eligibleAgents()->with('activeSchedule.campaign:id,name')
+                    ->orderBy('first_name')->orderBy('last_name')
+                    ->get(['id', 'first_name', 'middle_name', 'last_name'])
+                : null,
             'purposes' => CoachingSession::PURPOSE_LABELS,
             'severityFlags' => CoachingSession::SEVERITY_FLAGS,
         ]);
@@ -843,11 +835,9 @@ class CoachingSessionController extends Controller
         $this->authorize('update', $session);
 
         try {
-            DB::transaction(function () use ($request, $session) {
-                $validated = $request->validated();
-                unset($validated['attachments'], $validated['removed_attachments']);
-                $session->update($validated);
-            });
+            $session = $this->saveSessionEdits($session, $request->safe()->except([
+                'attachments', 'removed_attachments',
+            ]));
 
             // Handle removed attachments
             if ($request->filled('removed_attachments')) {
@@ -876,14 +866,54 @@ class CoachingSessionController extends Controller
                 }
             }
 
+            if (! $session->is_draft && $session->wasChanged('coachee_id')) {
+                $this->notificationService->notifyCoachingSessionCreated(
+                    $session->coachee_id,
+                    $session->coach->name,
+                    $session->session_date->format('Y-m-d'),
+                    $session->id,
+                );
+            }
+
             return redirect()->route('coaching.sessions.show', $session)
                 ->with('message', 'Coaching session updated successfully.')
                 ->with('type', 'success');
+        } catch (ValidationException $e) {
+            throw $e;
         } catch (\Exception $e) {
             Log::error('CoachingSessionController@update Error: '.$e->getMessage());
 
             return $this->backWithFlash('Failed to update coaching session.', 'error');
         }
+    }
+
+    private function saveSessionEdits(CoachingSession $session, array $fields, bool $submitDraft = false): CoachingSession
+    {
+        return DB::transaction(function () use ($session, $fields, $submitDraft) {
+            $session = CoachingSession::lockForUpdate()->findOrFail($session->id);
+            if ($submitDraft && ! $session->is_draft) {
+                throw new \RuntimeException('ALREADY_SUBMITTED');
+            }
+
+            $agentId = (int) ($fields['coachee_id'] ?? $session->coachee_id);
+            $changingAgent = $agentId !== (int) $session->coachee_id;
+            if ($changingAgent && ! $session->canChangeAgent()) {
+                throw ValidationException::withMessages(['coachee_id' => 'The agent can no longer be changed for this session.']);
+            }
+
+            if (($changingAgent || ($submitDraft && $session->coach?->role === 'Team Lead'))
+                && ! $session->eligibleAgents()->whereKey($agentId)->exists()) {
+                throw ValidationException::withMessages(['coachee_id' => 'Select an eligible agent managed by the team lead for this session.']);
+            }
+
+            if ($submitDraft) {
+                $fields['is_draft'] = false;
+                $fields['submitted_at'] = now();
+            }
+            $session->update($fields);
+
+            return $session;
+        });
     }
 
     /**
@@ -948,8 +978,9 @@ class CoachingSessionController extends Controller
 
         try {
             DB::transaction(function () use ($request, $session) {
-                // Atomic update: only acknowledge if still Pending
+                // A correction may have changed the coachee since authorization.
                 $affected = CoachingSession::where('id', $session->id)
+                    ->where('coachee_id', $request->user()->id)
                     ->where('ack_status', 'Pending')
                     ->update([
                         'ack_status' => 'Acknowledged',
